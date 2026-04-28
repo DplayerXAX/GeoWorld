@@ -1,0 +1,18 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b7c60076e3871e8428630e6c0e8e94bd, type: 3}
+  m_Name: 9F0FC09E-EFE1-4273-BE8D-938E9B2D5ABB
+  m_EditorClassIdentifier: AK.Wwise.Unity.API.WwiseTypes::WwiseEventReference
+  objectName: rotate
+  id: 1302771492
+  guid: 9F0FC09E-EFE1-4273-BE8D-938E9B2D5ABB
+  IsInUserDefinedSoundBank: 1

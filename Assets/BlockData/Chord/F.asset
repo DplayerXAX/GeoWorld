@@ -1,0 +1,22 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3ac2ea692217d514189d92fb88697194, type: 3}
+  m_Name: F
+  m_EditorClassIdentifier: Assembly-CSharp::ChordData
+  chordName: F
+  notes: 040000000600000001000000
+  function: 1
+  myChord:
+    idInternal: 0
+    valueGuidInternal: 
+    WwiseObjectReference: {fileID: 11400000, guid: e0253459e2208e54892432e5bc123853, type: 2}
+  tension: 0

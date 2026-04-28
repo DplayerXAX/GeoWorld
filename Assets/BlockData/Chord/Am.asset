@@ -1,0 +1,22 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3ac2ea692217d514189d92fb88697194, type: 3}
+  m_Name: Am
+  m_EditorClassIdentifier: Assembly-CSharp::ChordData
+  chordName: Am
+  notes: 060000000100000003000000
+  function: 0
+  myChord:
+    idInternal: 0
+    valueGuidInternal: 
+    WwiseObjectReference: {fileID: 11400000, guid: d453620c9fff51844b47b46ee1bdefb9, type: 2}
+  tension: 0
