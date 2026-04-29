@@ -238,7 +238,11 @@ public class PlacementController : MonoBehaviour
         if (lastHighlightedObject != null && lastHighlightedObject != target)
         {
             var old = lastHighlightedObject.GetComponent<Outline>();
-            if (old) Destroy(old);
+            if (old != null)
+            {
+                old.enabled = false; // fires OnDisable immediately → materials restored this frame
+                Destroy(old);
+            }
         }
 
         if (target != null && target != lastHighlightedObject)

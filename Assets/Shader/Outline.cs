@@ -8,7 +8,7 @@ public class Outline : MonoBehaviour
     public float OutlineWidth { get => outlineWidth; set { outlineWidth = value; ApplyProperties(); } }
 
     [SerializeField] private Color outlineColor = Color.yellow;
-    [SerializeField, Range(0f, 0.05f)] private float outlineWidth = 0.015f;
+    [SerializeField, Range(0f, 0.1f)] private float outlineWidth = 0.04f;
 
     private List<Renderer> _renderers;
     private List<Material[]> _originals = new();
@@ -21,7 +21,7 @@ public class Outline : MonoBehaviour
         ApplyProperties();
     }
 
-    void OnEnable() => AddOutline();
+    void OnEnable()  => AddOutline();
     void OnDisable() => RemoveOutline();
     void OnDestroy() { if (_outlineMat != null) Destroy(_outlineMat); }
 
@@ -30,8 +30,10 @@ public class Outline : MonoBehaviour
         _originals.Clear();
         foreach (var r in _renderers)
         {
-            _originals.Add(r.sharedMaterials);
-            var mats = r.sharedMaterials.ToList();
+            // Use r.materials (instances) not r.sharedMaterials (assets),
+            // so any per-instance color changes (e.g. random block colors) are preserved.
+            _originals.Add(r.materials);
+            var mats = r.materials.ToList();
             mats.Add(_outlineMat);
             r.materials = mats.ToArray();
         }
@@ -40,7 +42,10 @@ public class Outline : MonoBehaviour
     private void RemoveOutline()
     {
         for (int i = 0; i < _renderers.Count && i < _originals.Count; i++)
-            _renderers[i].materials = _originals[i];
+        {
+            if (_renderers[i] != null)
+                _renderers[i].materials = _originals[i];
+        }
         _originals.Clear();
     }
 

@@ -3,7 +3,7 @@ Shader "Custom/ObjectOutline"
     Properties
     {
         _OutlineColor ("Outline Color", Color) = (1, 1, 0, 1)
-        _OutlineWidth ("Outline Width", Range(0, 0.05)) = 0.015
+        _OutlineWidth ("Outline Width", Range(0, 0.1)) = 0.04
     }
     SubShader
     {
