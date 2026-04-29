@@ -112,13 +112,6 @@ public class PlacementController : MonoBehaviour
         }
 
         currentGridPos = baseGridPos + manualOffset;
-
-        // Keep edit anchor at preview position so camera orbits around the block being placed
-        if (mode == PlacementMode.Edit && currentBlock != null)
-        {
-            editFocusAnchor.position = grid.GridToWorld(currentGridPos);
-            cam.SetFocus(editFocusAnchor);
-        }
     }
 
     // =========================
@@ -171,19 +164,17 @@ public class PlacementController : MonoBehaviour
             return dir.z >= 0 ? new Vector3Int(0, 0, 1) : new Vector3Int(0, 0, -1);
     }
 
-    // R             → rotate 90° around Y (spin in place, most common)
-    // Shift + R     → rotate 90° around X (tilt forward)
-    // F             → rotate 90° around Z (roll)
     void HandleRotate()
     {
         bool shift = Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift);
 
-        if (Input.GetKeyDown(KeyCode.R))
-            _targetRotation *= shift
-                ? Quaternion.Euler(90, 0, 0)
-                : Quaternion.Euler(0, 90, 0);
+        if (Input.GetKeyDown(KeyCode.Alpha1))
+            _targetRotation *= Quaternion.Euler(90, 0, 0);
 
-        if (Input.GetKeyDown(KeyCode.F))
+        if (Input.GetKeyDown(KeyCode.Alpha2))
+            _targetRotation *= Quaternion.Euler(0, 90, 0);
+
+        if (Input.GetKeyDown(KeyCode.Alpha3))
             _targetRotation *= Quaternion.Euler(0, 0, 90);
     }
 
@@ -196,17 +187,21 @@ public class PlacementController : MonoBehaviour
             if (selectedInstance != null)
             {
                 isPickingUpObject = true;
-                lastObjectPos  = selectedInstance.visualObject.transform.position;
-                lastObjectRot  = selectedInstance.visualObject.transform.rotation;
+                lastObjectPos   = selectedInstance.visualObject.transform.position;
+                lastObjectRot   = selectedInstance.visualObject.transform.rotation;
                 lastObjectCells = selectedInstance.occupiedCells.ToArray();
+
+                // Snap depth so the preview block materialises where the picked-up block was.
+                // This also prevents the camera from flying when editFocusAnchor is set below.
+                SnapDepthToWorldPos(lastObjectPos);
 
                 grid.RemoveInstance(selectedInstance);
                 selectedInstance = null;
-                EnterEditMode();
+                EnterEditMode(lastObjectPos);
             }
             else
             {
-                EnterEditMode();
+                EnterEditMode(null);
             }
         }
         else
@@ -286,12 +281,29 @@ public class PlacementController : MonoBehaviour
     // EDIT
     // =========================
 
-    void EnterEditMode()
+    // Adjusts _depth so the mouse ray lands at worldPos, then sets manualOffset
+    // to shift the preview to that exact grid cell.
+    void SnapDepthToWorldPos(Vector3 worldPos)
+    {
+        Ray r    = cam.myCam.ScreenPointToRay(Input.mousePosition);
+        _depth   = Mathf.Clamp(Vector3.Dot(worldPos - r.origin, r.direction), minDepth, maxDepth);
+        baseGridPos  = grid.WorldToGrid(r.origin + r.direction * _depth);
+        manualOffset = grid.WorldToGrid(worldPos) - baseGridPos;
+    }
+
+    // focusPos: if provided, camera pivots there once. Pass null to leave camera in place.
+    void EnterEditMode(Vector3? focusPos)
     {
         mode = PlacementMode.Edit;
         previewParent.gameObject.SetActive(currentBlock != null);
-        manualOffset = Vector3Int.zero;
+        if (focusPos == null) manualOffset = Vector3Int.zero;
         UpdateHighlight(null);
+
+        if (focusPos.HasValue)
+        {
+            editFocusAnchor.position = focusPos.Value;
+            cam.SetFocus(editFocusAnchor);
+        }
     }
 
     void TryPlace()
