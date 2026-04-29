@@ -3,19 +3,19 @@ using UnityEngine;
 
 public enum HarmonicFunction
 {
-    Tonic,        // �ȶ���I / vi��
-    Subdominant,  // չ����ii / IV��
-    Dominant,     // ���ţ�V / vii�㣩
-    Color         // ɫ��/��չ��sus, add9, open��
+    Tonic,      
+    Subdominant, 
+    Dominant,    
+    Color        
 }
 [CreateAssetMenu(menuName = "Music/Block Music Data")]
 public class BlockMusicData : ScriptableObject
 {
     
     public HarmonicFunction function;
-    public int weight;        // Ӱ��ǿ�ȣ���ѡ��
-    public int inversion;     // תλ��0,1,2��
-    public bool useSeventh;   // �Ƿ��7��
+    public int weight;      
+    public int inversion;     
+    public bool useSeventh;   
 }
 public class BlockRenderer : MonoBehaviour
 {

@@ -1,4 +1,5 @@
-﻿using UnityEngine;
+﻿using System.Collections.Generic;
+using UnityEngine;
 
 public enum GamePhase
 {
@@ -14,19 +15,19 @@ public class GameFlowManager : MonoBehaviour
     public LevelEndpointGenerator endpoints;
     public SurfaceUnit unitPrefab;
     public GridSystem gridSystem;
+    public PlacementController placement;
 
-    SurfaceUnit currentUnit;
-
+    private SurfaceUnit currentUnit;
     public GamePhase phase;
 
     void Start()
     {
         graph = new SurfaceGraphBuilder();
         endpoints.gridSystem = gridSystem;
-        //generate endpoints first
         endpoints.Generate();
 
         phase = GamePhase.Build;
+        StartTurn();
     }
 
     void Update()
@@ -37,6 +38,11 @@ public class GameFlowManager : MonoBehaviour
             {
                 BuildGraph();
             }
+
+            if (placement.currentBlock == null && FindObjectsOfType<SelectableBlock>().Length == 0)
+            {
+                StartTurn();
+            }
         }
 
         if (phase == GamePhase.ReadyToRun)
@@ -45,14 +51,26 @@ public class GameFlowManager : MonoBehaviour
             {
                 Run();
             }
+
+            if (Input.GetKeyDown(KeyCode.B))
+            {
+                phase = GamePhase.Build;
+                StartTurn();
+            }
         }
+    }
+
+    public void StartTurn()
+    {
+        placement.currentBlock = null;
+        placement.mode = PlacementMode.Select;
+        placement.SpawnRoundBlocks(Random.Range(2, 5));
     }
 
     void BuildGraph()
     {
         graph.SetData(gridSystem);
         graph.Build();
-
         phase = GamePhase.ReadyToRun;
     }
 
@@ -61,18 +79,33 @@ public class GameFlowManager : MonoBehaviour
         var startFaces = graph.GetFaceNodes(endpoints.startCell);
         var endFaces = graph.GetFaceNodes(endpoints.endCell);
 
-        if (startFaces == null) { Debug.Log("Invalid start face"); return; }
-        if (endFaces == null) { Debug.Log("Invalid end face"); return; }
+        if (startFaces == null || startFaces.Count == 0) { Debug.Log("Invalid start face"); return; }
+        if (endFaces == null || endFaces.Count == 0) { Debug.Log("Invalid end face"); return; }
 
         var path = SurfacePathfinding.FindPath(startFaces, endFaces);
 
-        if (path == null) { Debug.Log("No path"); return; }
+        if (path == null)
+        {
+            Debug.Log("No path found - Back to Build Mode");
+            phase = GamePhase.Build;
+            return;
+        }
 
         if (currentUnit != null) Destroy(currentUnit.gameObject);
 
         currentUnit = Instantiate(unitPrefab);
         currentUnit.transform.position = startFaces[0].worldPos;
         currentUnit.SetPath(path);
-        //phase = GamePhase.Running;
+
+        phase = GamePhase.Running;
+    }
+
+    public void EndRunningPhase()
+    {
+        if (phase == GamePhase.Running)
+        {
+            phase = GamePhase.Build;
+            StartTurn();
+        }
     }
 }
