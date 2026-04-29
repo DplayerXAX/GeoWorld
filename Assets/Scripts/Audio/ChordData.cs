@@ -7,7 +7,7 @@ public class ChordData : ScriptableObject
 
     public int[] notes; // e.g. C major = 60, 64, 67
 
-    public ChordFunction function;
+    //public ChordFunction function;
 
     public AK.Wwise.Event myChord;
     public float tension;

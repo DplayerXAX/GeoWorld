@@ -12,13 +12,17 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: fbe5136a9b37fed449b8e7de0efe530a, type: 3}
   m_Name: piece_L
   m_EditorClassIdentifier: Assembly-CSharp::BlockData
+  blockType: 1
   cells:
   - {x: -1, y: 0, z: 0}
   - {x: 0, y: 0, z: 0}
   - {x: 1, y: 1, z: 0}
   - {x: 1, y: 0, z: 0}
-  isSolid: 0
-  function: 0
-  chords:
-  - {fileID: 11400000, guid: dc481795bf4c5964dab3c842a56e0296, type: 2}
-  - {fileID: 11400000, guid: 171f97b20c73e234eaeb404e12dd4495, type: 2}
+  onStepEvent:
+    idInternal: 0
+    valueGuidInternal: 
+    WwiseObjectReference: {fileID: 0}
+  previewEvent:
+    idInternal: 0
+    valueGuidInternal: 
+    WwiseObjectReference: {fileID: 0}

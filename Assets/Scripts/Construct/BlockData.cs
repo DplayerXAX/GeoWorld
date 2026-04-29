@@ -1,30 +1,25 @@
 using UnityEngine;
-using System.Collections.Generic;
-using UnityEngine;
 
-
-public enum ChordFunction
+public enum BlockType
 {
-    Tonic,
-    Subdominant,
-    Dominant
+    Home,       // I  - 稳定
+    Lift,       // IV - 上扬
+    Pull,       // V  - 张力
+    Shadow,     // vi - 情绪
+    Turret,     // 炮台 - 触发鼓点
+    Empty       // 纯路径，不触发音乐
 }
 
 [CreateAssetMenu(menuName = "Game/Block")]
 public class BlockData : ScriptableObject
 {
+    [Header("Type")]
+    public BlockType blockType;
+
     [Header("Shape")]
     public Vector3Int[] cells;
 
-    [Header("Placement")]
-    public bool isSolid;
-
-    [Header("Music Function")]
-    public ChordFunction function;
-
-    [Header("Chord Pool (scale-degree based)")]
-    public List<ChordData> chords;
-
-    public GameObject selfRef;
-
+    [Header("Audio")]
+    public AK.Wwise.Event onStepEvent;   
+    public AK.Wwise.Event previewEvent;   
 }

@@ -58,6 +58,14 @@ public class AudioManager : MonoBehaviour
         }
     }
 
+    public void PlayArpNote(int semitone)
+    {
+
+        AkSoundEngine.SetRTPCValue("NoteValue", semitone, audioEmitter);
+        Note.Post(audioEmitter);
+        //AkSoundEngine.PostEvent("Play_Arp_Note", audioEmitter);
+    }
+
     // ===== BGM CONTROL =====
     public void SetHarmony(string key)
     {

@@ -10,7 +10,7 @@ public class LevelEndpointGenerator : MonoBehaviour
     public Vector3Int endCell;
 
     public float minDistance = 5f;
-    public float maxDistance = 20f;
+    public float maxDistance = 10f;
 
     [Header("Visual")]
     public GameObject startPrefab;

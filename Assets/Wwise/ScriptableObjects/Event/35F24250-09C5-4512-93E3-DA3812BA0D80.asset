@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: b7c60076e3871e8428630e6c0e8e94bd, type: 3}
   m_Name: 35F24250-09C5-4512-93E3-DA3812BA0D80
   m_EditorClassIdentifier: AK.Wwise.Unity.API.WwiseTypes::WwiseEventReference
-  objectName: Play_Note
-  id: 204959014
+  objectName: Play_Arp_Note
+  id: 2050041828
   guid: 35F24250-09C5-4512-93E3-DA3812BA0D80
   IsInUserDefinedSoundBank: 1
