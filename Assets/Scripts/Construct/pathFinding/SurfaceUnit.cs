@@ -82,8 +82,9 @@ public class SurfaceUnit : MonoBehaviour
         moveTimer = 0f;
         isMoving = true;
 
-        BlockData block = GridSystem.instance.GetBlock(node.cell);
-        if (block == null) return;
+        var instance = GridSystem.instance.GetInstanceAt(node.cell);
+        if (instance == null || instance.data == null) return;
+        BlockData block = instance.data;
 
         float progress = (float)index / path.Count;
 
@@ -93,11 +94,12 @@ public class SurfaceUnit : MonoBehaviour
             case BlockType.Lift:
             case BlockType.Pull:
             case BlockType.Shadow:
-                if (block != currentBlock)
-                {
-                    ArpeggiatorManager.Instance.PlayArp(block.blockType);
-                    currentBlock = block;
-                }
+                // Local cell position within the block → different cells produce different notes,
+                // so the block's spatial shape shapes the melody.
+                Vector3Int origin = MinCell(instance.occupiedCells);
+                Vector3Int local  = node.cell - origin;
+                ArpeggiatorManager.Instance.PlayCellNote(block.blockType, local);
+                currentBlock = block;
                 break;
 
             case BlockType.Turret:
@@ -106,6 +108,18 @@ public class SurfaceUnit : MonoBehaviour
         }
 
         AudioManager.Instance.SetIntensity(progress * 100f);
+    }
+
+    static Vector3Int MinCell(List<Vector3Int> cells)
+    {
+        Vector3Int m = cells[0];
+        foreach (var c in cells)
+        {
+            m.x = Mathf.Min(m.x, c.x);
+            m.y = Mathf.Min(m.y, c.y);
+            m.z = Mathf.Min(m.z, c.z);
+        }
+        return m;
     }
 
     void OnPathFinished()
