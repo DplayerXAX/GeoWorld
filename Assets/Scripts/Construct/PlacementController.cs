@@ -299,6 +299,7 @@ public class PlacementController : MonoBehaviour
 
         grid.RegisterInstance(ins);
 
+        isPickingUpObject = false;
         currentBlock = GetRandomBlock();
         mode = PlacementMode.Select;
         previewParent.gameObject.SetActive(false);

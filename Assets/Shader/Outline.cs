@@ -8,52 +8,46 @@ public class Outline : MonoBehaviour
     public float OutlineWidth { get => outlineWidth; set { outlineWidth = value; ApplyProperties(); } }
 
     [SerializeField] private Color outlineColor = Color.yellow;
-    [SerializeField, Range(0f, 10f)] private float outlineWidth = 4f;
+    [SerializeField, Range(0f, 0.05f)] private float outlineWidth = 0.015f;
 
     private List<Renderer> _renderers;
-    private Material _outlineMaterial;
+    private List<Material[]> _originals = new();
+    private Material _outlineMat;
 
     void Awake()
     {
         _renderers = GetComponentsInChildren<Renderer>().ToList();
-        // 动态创建一个简单的描边Shader，防止紫色报错
-        _outlineMaterial = new Material(Shader.Find("Hidden/Internal-Colored"));
-        _outlineMaterial.SetInt("_ZWrite", 0);
-        _outlineMaterial.SetInt("_ZTest", 8); // Always
+        _outlineMat = new Material(Shader.Find("Custom/ObjectOutline"));
+        ApplyProperties();
     }
 
     void OnEnable() => AddOutline();
     void OnDisable() => RemoveOutline();
+    void OnDestroy() { if (_outlineMat != null) Destroy(_outlineMat); }
 
     private void AddOutline()
     {
+        _originals.Clear();
         foreach (var r in _renderers)
         {
+            _originals.Add(r.sharedMaterials);
             var mats = r.sharedMaterials.ToList();
-            // 这里使用简易的颜色叠加方案实现高亮效果
-            Material highlightMat = new Material(Shader.Find("Unlit/Color"));
-            highlightMat.color = outlineColor;
-            mats.Add(highlightMat);
+            mats.Add(_outlineMat);
             r.materials = mats.ToArray();
         }
     }
 
     private void RemoveOutline()
     {
-        foreach (var r in _renderers)
-        {
-            var mats = r.sharedMaterials.ToList();
-            if (mats.Count > 1) mats.RemoveAt(mats.Count - 1);
-            r.materials = mats.ToArray();
-        }
+        for (int i = 0; i < _renderers.Count && i < _originals.Count; i++)
+            _renderers[i].materials = _originals[i];
+        _originals.Clear();
     }
 
     private void ApplyProperties()
     {
-        foreach (var r in _renderers)
-        {
-            if (r.materials.Length > 1)
-                r.materials[r.materials.Length - 1].color = outlineColor;
-        }
+        if (_outlineMat == null) return;
+        _outlineMat.SetColor("_OutlineColor", outlineColor);
+        _outlineMat.SetFloat("_OutlineWidth", outlineWidth);
     }
 }
