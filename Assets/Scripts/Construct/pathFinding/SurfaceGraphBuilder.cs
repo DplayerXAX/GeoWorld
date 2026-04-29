@@ -18,13 +18,6 @@ public class SurfaceGraphBuilder
     public void Build()
     {
         var blocks = gridSystem.GetGrid();
-        Debug.Log("Start building!");
-        if (blocks == null)
-        {
-            Debug.LogError("No block data");
-            return;
-        }
-
         allFaces.Clear();
         cellFaces.Clear();
 
@@ -32,10 +25,21 @@ public class SurfaceGraphBuilder
         {
             if (!kv.Value) continue;
 
-            var faces = FaceBuilder.BuildFaces(kv.Key, gridSystem.cellSize);
+            var allCellFaces = FaceBuilder.BuildFaces(kv.Key, gridSystem.cellSize);
+            var exposedFaces = new List<FaceNode>();
 
-            cellFaces[kv.Key] = faces;
-            allFaces.AddRange(faces);
+            foreach (var face in allCellFaces)
+            {
+                Vector3Int neighborCell = face.cell + Vector3Int.RoundToInt(face.normal);
+                if (!gridSystem.IsOccupied(neighborCell))
+                    exposedFaces.Add(face);
+            }
+
+            if (exposedFaces.Count > 0)
+            {
+                cellFaces[kv.Key] = exposedFaces;
+                allFaces.AddRange(exposedFaces);
+            }
         }
 
         BuildNeighbors();
@@ -56,19 +60,49 @@ public class SurfaceGraphBuilder
             }
         }
     }
-    public FaceNode GetFaceNode(Vector3Int cell)
+
+    public List<FaceNode> GetFaceNodes(Vector3Int cell)
     {
-        if (!cellFaces.ContainsKey(cell)) 
+        if (!cellFaces.TryGetValue(cell, out var faces) || faces.Count == 0)
         {
-            Debug.Log("Cant find!");
+            Debug.Log("Can't find exposed faces for: " + cell);
+            return null;
+        }
+        return faces;
+    }
+
+    public FaceNode GetFaceNode(Vector3Int cell, Vector3 preferredNormal = default)
+    {
+        if (!cellFaces.TryGetValue(cell, out var faces) || faces.Count == 0)
+        {
+            Debug.Log("Can't find exposed faces for: " + cell);
             return null;
         }
 
-        return cellFaces[cell][0];
+        if (preferredNormal == default)
+            return faces[0];
+
+        FaceNode best = faces[0];
+        float bestDot = Vector3.Dot(best.normal, preferredNormal);
+        foreach (var f in faces)
+        {
+            float d = Vector3.Dot(f.normal, preferredNormal);
+            if (d > bestDot) { bestDot = d; best = f; }
+        }
+        return best;
     }
 
     bool IsNeighbor(FaceNode a, FaceNode b)
     {
-        return Vector3.Distance(a.worldPos, b.worldPos) < cachedSize * 1.1f;
+        float dist = Vector3.Distance(a.worldPos, b.worldPos);
+        float eps = cachedSize * 0.05f;
+
+        if (Mathf.Abs(dist - cachedSize) < eps)
+            return Vector3.Dot(a.normal, b.normal) > 0.9f;
+
+        if (Mathf.Abs(dist - cachedSize * 0.7072f) < eps)
+            return Mathf.Abs(Vector3.Dot(a.normal, b.normal)) < 0.1f;
+
+        return false;
     }
 }

@@ -1,103 +1,126 @@
 using System.Collections.Generic;
-using System.Net;
 using UnityEngine;
 
 public class SurfaceUnit : MonoBehaviour
 {
-    public float speed = 5f;
+    [Header("Movement")]
+    public float bpm = 120f;
+    [Range(0.5f, 0.95f)]
+    public float moveRatio = 0.8f; 
 
     [Header("Music")]
     public GridSystem grid;
-    public System.Func<Vector3Int, BlockData> getBlockFromCell;
-    BlockData lastCheckedBlock;
+
     List<FaceNode> path;
     int index;
 
-    BlockData currentBlock;
+    float secPerBeat;
+    float beatTimer;
+    bool isMoving;
 
-    private void Start()
+    Vector3 moveFrom;
+    Vector3 moveTo;
+    float moveDuration;
+    float moveTimer;
+
+    BlockData currentBlock;
+    ChordData currentChord;
+
+    void Start()
     {
-        getBlockFromCell = GridSystem.instance.GetBlock;
+        secPerBeat = 60f / bpm;
+        //getBlockFromCell = GridSystem.instance.GetBlock;
         grid = GridSystem.instance;
     }
-
 
     public void SetPath(List<FaceNode> newPath)
     {
         path = newPath;
         index = 0;
         currentBlock = null;
+        currentChord = null;
+        beatTimer = 0f;
+
+        StepToNode(path[0]);
+        index = 1;
     }
 
     void Update()
     {
-        if (path == null || index >= path.Count)
-            return;
+        if (path == null) return;
 
-        FaceNode node = path[index];
-
-        MoveTo(node);
-
-        if (Vector3.Distance(transform.position, node.worldPos) < 0.01f)
+        beatTimer += Time.deltaTime;
+        if (beatTimer >= secPerBeat)
         {
-            OnReachNode(node); 
-            index++;
+            beatTimer -= secPerBeat;
+
+            if (index < path.Count)
+            {
+                StepToNode(path[index]);
+                index++;
+            }
+        }
+
+        if (isMoving)
+        {
+            moveTimer += Time.deltaTime;
+            float t = Mathf.Clamp01(moveTimer / moveDuration);
+            t = t * t * (3f - 2f * t);
+            transform.position = Vector3.Lerp(moveFrom, moveTo, t);
+
+            if (moveTimer >= moveDuration)
+                isMoving = false;
         }
     }
 
-    void MoveTo(FaceNode node)
+    void StepToNode(FaceNode node)
     {
-        transform.position = Vector3.MoveTowards(
-            transform.position,
-            node.worldPos,
-            speed * Time.deltaTime
-        );
+        moveFrom = transform.position;
+        moveTo = node.worldPos;
+        moveDuration = secPerBeat * moveRatio;
+        moveTimer = 0f;
+        isMoving = true;
+
+        BlockData block = GridSystem.instance.GetBlock(node.cell);
+        if (block != null && block != currentBlock)
+        {
+            currentBlock = block;
+            TriggerChord(block, node);
+        }
     }
 
-    void OnReachNode(FaceNode node)
+    void TriggerChord(BlockData block, FaceNode node)
     {
-        if (grid == null || getBlockFromCell == null) 
-        {
-            Debug.LogWarning("No grid system");
-            return;
-        }
-
-        Vector3Int cell = node.cell;
-        BlockData block = getBlockFromCell(node.cell);
-
-        if (block == null)
-        {
-            Debug.LogWarning("Can't find right block");
-            return;
-        }
-
-        if (block == currentBlock)
-            return;
-
-        currentBlock = block;
-
-        OnEnterBlock(block, cell);
-    }
-
-    void OnEnterBlock(BlockData block, Vector3Int cell)
-    {
-        //GameObject blockObj = grid.GetBlockObject(cell);
-
-        //if (blockObj == null) return;
-
         ChordData chord = PickChord(block);
-        if (chord == null) Debug.LogWarning("chord is null!");
+        if (chord == null) return;
+
         chord.myChord.Post(this.gameObject);
-        //AudioManager.Instance.PlayChord(chord);
-       
-        Debug.Log("Play chord at block: " + cell);
+        currentChord = chord;
+
+        float progress = (float)index / path.Count;
+        AudioManager.Instance.SetIntensity(progress);
     }
 
     ChordData PickChord(BlockData block)
     {
-        if (block.chords == null || block.chords.Count == 0)
-            return null;
+        if (block.chords == null || block.chords.Count == 0) return null;
+        if (currentChord?.notes == null)
+            return block.chords[Random.Range(0, block.chords.Count)];
 
-        return block.chords[Random.Range(0, block.chords.Count)];
+        ChordData best = block.chords[0];
+        int bestShared = -1;
+
+        foreach (var c in block.chords)
+        {
+            if (c.notes == null) continue;
+            int shared = 0;
+            foreach (int n in c.notes)
+                foreach (int m in currentChord.notes)
+                    if ((n % 12) == (m % 12)) shared++;
+
+            if (shared > bestShared) { bestShared = shared; best = c; }
+        }
+
+        return best;
     }
 }

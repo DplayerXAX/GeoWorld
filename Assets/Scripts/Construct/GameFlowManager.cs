@@ -58,38 +58,21 @@ public class GameFlowManager : MonoBehaviour
 
     void Run()
     {
-        var startNode = graph.GetFaceNode(endpoints.startCell);
-        var endNode = graph.GetFaceNode(endpoints.endCell);
+        var startFaces = graph.GetFaceNodes(endpoints.startCell);
+        var endFaces = graph.GetFaceNodes(endpoints.endCell);
 
-        if (startNode == null)
-        {
-            Debug.Log("Invalid start face");
-            return;
-        }
+        if (startFaces == null) { Debug.Log("Invalid start face"); return; }
+        if (endFaces == null) { Debug.Log("Invalid end face"); return; }
 
-        if (endNode == null)
-        {
-            Debug.Log("Invalid end face");
-            return;
-        }
+        var path = SurfacePathfinding.FindPath(startFaces, endFaces);
 
-        var path = SurfacePathfinding.FindPath(startNode, endNode);
+        if (path == null) { Debug.Log("No path"); return; }
 
-        if (path == null)
-        {
-            Debug.Log("No path");
-            return;
-        }
+        if (currentUnit != null) Destroy(currentUnit.gameObject);
 
-        if (currentUnit != null)
-            Destroy(currentUnit.gameObject);
-
-
-        Debug.Log("Start running!");
         currentUnit = Instantiate(unitPrefab);
-        currentUnit.transform.position = startNode.worldPos;
+        currentUnit.transform.position = startFaces[0].worldPos;
         currentUnit.SetPath(path);
-
         //phase = GamePhase.Running;
     }
 }

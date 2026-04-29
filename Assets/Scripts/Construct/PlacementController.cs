@@ -338,7 +338,10 @@ public class PlacementController : MonoBehaviour
 
             previewCubes[i].GetComponent<Renderer>().material.color = tint;
         }
+
     }
+
+
 
     void OnGUI()
     {
