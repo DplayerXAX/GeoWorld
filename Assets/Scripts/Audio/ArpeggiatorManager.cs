@@ -1,4 +1,4 @@
-// ArpeggiatorManager.cs ÐÂ½¨Ò»¸ö×¨ÃÅ¹ÜÅÃÒôµÄ class
+// ArpeggiatorManager.cs ï¿½Â½ï¿½Ò»ï¿½ï¿½×¨ï¿½Å¹ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ class
 using System.Collections;
 using UnityEngine;
 
@@ -6,15 +6,15 @@ public class ArpeggiatorManager : MonoBehaviour
 {
     public static ArpeggiatorManager Instance;
 
-    // C´óµ÷Òô½×°ëÒôÖµ£¨Ïà¶ÔC4£©
+    // Cï¿½ï¿½ï¿½ï¿½ï¿½ï¿½×°ï¿½ï¿½ï¿½Öµï¿½ï¿½ï¿½ï¿½ï¿½C4ï¿½ï¿½
     // C  D  E  F  G  A  B  C5
     // 0  2  4  5  7  9  11 12
 
-    // Ã¿ÖÖ block µÄÅÃÒô pattern£¨°ëÒôÊý×é£©
-    static readonly int[] Pattern_Home = { 0, 4, 7, 12 };      // C E G C5  ÉÏÐÐ
-    static readonly int[] Pattern_Lift = { 5, 9, 12, 17 };     // F A C5 F5 ÉÏÐÐ
-    static readonly int[] Pattern_Pull = { 7, 11, 14, 19 };    // G B D5 G5 ½ôÕÅ
-    static readonly int[] Pattern_Shadow = { -3, 0, 4, 9 };      // A3 C E A  ´ÓµÍ¿ªÊ¼
+    // Ã¿ï¿½ï¿½ block ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ patternï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½é£©
+    static readonly int[] Pattern_Home = { 0, 4, 7, 12 };      // C E G C5  ï¿½ï¿½ï¿½ï¿½
+    static readonly int[] Pattern_Lift = { 5, 9, 12, 17 };     // F A C5 F5 ï¿½ï¿½ï¿½ï¿½
+    static readonly int[] Pattern_Pull = { 7, 11, 14, 19 };    // G B D5 G5 ï¿½ï¿½ï¿½ï¿½
+    static readonly int[] Pattern_Shadow = { -3, 0, 4, 9 };      // A3 C E A  ï¿½ÓµÍ¿ï¿½Ê¼
 
     float bpm = 120f;
     Coroutine currentArp;
@@ -48,13 +48,14 @@ public class ArpeggiatorManager : MonoBehaviour
 
     IEnumerator ArpRoutine(int[] pattern)
     {
-        // °ÑÒ»¸ö beat ¾ù·Ö¸ø pattern ÀïµÄÃ¿¸öÒô
+        // ï¿½ï¿½Ò»ï¿½ï¿½ beat ï¿½ï¿½ï¿½Ö¸ï¿½ pattern ï¿½ï¿½ï¿½Ã¿ï¿½ï¿½ï¿½ï¿½
         float secPerBeat = 60f / bpm;
         float secPerNote = secPerBeat / pattern.Length;
 
         foreach (int semitone in pattern)
         {
             AudioManager.Instance.PlayArpNote(semitone);
+            BackgroundReactor.Instance?.OnNote(1f);
             yield return new WaitForSeconds(secPerNote);
         }
     }

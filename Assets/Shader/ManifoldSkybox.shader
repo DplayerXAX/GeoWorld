@@ -15,6 +15,11 @@ Shader "Custom/ManifoldSkybox"
 
         _HorizonSharp  ("Horizon Sharpness", Range(1, 20)) = 6.0
         _TimeSpeed     ("Time Speed", Float) = 0.2
+
+        // Music reactivity (set from BackgroundReactor.cs)
+        _BeatPulse     ("Beat Pulse",     Range(0,1)) = 0
+        _MusicIntensity("Music Intensity",Range(0,1)) = 0.5
+        _ColorShift    ("Color Shift",    Range(0,1)) = 0
     }
 
     SubShader
@@ -33,6 +38,7 @@ Shader "Custom/ManifoldSkybox"
             float _GridScale, _GridThickness;
             float _FogStart, _FogDensity, _HorizonSharp;
             float _TimeSpeed;
+            float _BeatPulse, _MusicIntensity, _ColorShift;
 
             struct Attributes { float4 positionOS : POSITION; };
             struct Varyings
@@ -49,6 +55,7 @@ Shader "Custom/ManifoldSkybox"
                 return OUT;
             }
 
+            // ── Hash & Noise ──────────────────────────────────────────────
             float Hash(float3 p)
             {
                 p = frac(p * 0.3183099 + 0.1);
@@ -60,36 +67,33 @@ Shader "Custom/ManifoldSkybox"
             {
                 float3 i = floor(p);
                 float3 f = frac(p);
-
-                float n000 = Hash(i + float3(0,0,0));
-                float n100 = Hash(i + float3(1,0,0));
-                float n010 = Hash(i + float3(0,1,0));
-                float n110 = Hash(i + float3(1,1,0));
-                float n001 = Hash(i + float3(0,0,1));
-                float n101 = Hash(i + float3(1,0,1));
-                float n011 = Hash(i + float3(0,1,1));
-                float n111 = Hash(i + float3(1,1,1));
-
+                float n000 = Hash(i + float3(0,0,0)); float n100 = Hash(i + float3(1,0,0));
+                float n010 = Hash(i + float3(0,1,0)); float n110 = Hash(i + float3(1,1,0));
+                float n001 = Hash(i + float3(0,0,1)); float n101 = Hash(i + float3(1,0,1));
+                float n011 = Hash(i + float3(0,1,1)); float n111 = Hash(i + float3(1,1,1));
                 float3 u = f * f * (3.0 - 2.0 * f);
-
-                return lerp(lerp(lerp(n000, n100, u.x),
-                                 lerp(n010, n110, u.x), u.y),
-                            lerp(lerp(n001, n101, u.x),
-                                 lerp(n011, n111, u.x), u.y),
-                            u.z);
+                return lerp(lerp(lerp(n000,n100,u.x), lerp(n010,n110,u.x), u.y),
+                            lerp(lerp(n001,n101,u.x), lerp(n011,n111,u.x), u.y), u.z);
             }
 
-            float BlockNoise(float3 p)
+            // ── HSV color rotation for music color shift ──────────────────
+            float3 HsvShift(float3 rgb, float shift)
             {
-                float n = Noise(p);
-                n = floor(n * 4.0) / 4.0;
-                return n;
+                // Fast hue rotation via matrix
+                float c = cos(shift * 6.2832);
+                float s = sin(shift * 6.2832);
+                float3x3 m = float3x3(
+                    0.299 + 0.701*c + 0.168*s,  0.587 - 0.587*c + 0.330*s,  0.114 - 0.114*c - 0.497*s,
+                    0.299 - 0.299*c - 0.328*s,  0.587 + 0.413*c + 0.035*s,  0.114 - 0.114*c + 0.292*s,
+                    0.299 - 0.300*c + 1.250*s,  0.587 - 0.588*c - 1.050*s,  0.114 + 0.886*c - 0.203*s
+                );
+                return saturate(mul(m, rgb));
             }
 
-            float GridLines(float3 dir)
+            // ── Spherical grid (3 axis planes) ────────────────────────────
+            float SphericalGrid(float3 dir)
             {
                 float3 d = normalize(dir);
-
                 float2 uvXY = d.xy * _GridScale;
                 float2 uvXZ = d.xz * _GridScale;
                 float2 uvYZ = d.yz * _GridScale;
@@ -104,15 +108,69 @@ Shader "Custom/ManifoldSkybox"
 
                 float3 w = abs(d);
                 w = pow(w, 6.0);
-                w /= (w.x + w.y + w.z);
+                w /= (w.x + w.y + w.z + 1e-5);
 
-                float grid = lineXZ * w.y
-                           + lineXY * w.z
-                           + lineYZ * w.x;
-
-                return saturate(grid);
+                return saturate(lineXZ * w.y + lineXY * w.z + lineYZ * w.x);
             }
 
+            // ── Perspective floor grid (strong depth cue) ─────────────────
+            // Intersects ray with y = -1 virtual floor plane, draws grid there.
+            float PerspectiveFloor(float3 dir)
+            {
+                if (dir.y >= -0.005) return 0.0;
+
+                float t  = -1.0 / dir.y;
+                float2 xz = dir.xz * t;
+
+                float scale = _GridScale * 0.25;
+                float2 uv   = xz * scale;
+                float2 g    = abs(frac(uv - 0.5) - 0.5) / fwidth(uv);
+                float  line = 1.0 - min(min(g.x, g.y), 1.0 / _GridThickness);
+
+                // Fade at horizon (small -dir.y) and at extreme close-up
+                float elevFade = saturate(-dir.y * 4.0);
+                float distFade = saturate(1.0 - exp(-t * 0.15));  // near → bright, far → fades
+                float distFar  = exp(-t * 0.04);                   // very far → fades out
+
+                return saturate(line) * elevFade * distFade * distFar;
+            }
+
+            // ── Floating cube silhouettes in middle distance ───────────────
+            // Cell-lattice approach: each cell may have a cube, show its edges.
+            float FloatingCubes(float3 dir)
+            {
+                float3 d = normalize(dir);
+                float result = 0.0;
+
+                // Three shells at different virtual depths
+                for (int shell = 0; shell < 3; shell++)
+                {
+                    float depth  = 2.5 + float(shell) * 2.0;
+                    float3 p     = d * depth + float3(0.3, 0.1, 0.7) * _Time.y * _TimeSpeed * 0.15;
+                    float3 cellId  = floor(p);
+                    float3 cellPos = frac(p) - 0.5;
+
+                    float rnd = Hash(cellId + float3(float(shell), 0, 0));
+                    if (rnd < 0.72) continue;   // ~28% of cells have cubes
+
+                    // Show cube edges: high near face boundaries
+                    float3 absP = abs(cellPos);
+                    float cubeSize = 0.18 + rnd * 0.10;
+                    float3 d3 = absP - cubeSize;
+
+                    // Solid SDF inside: d3 < 0; surface: d3 ≈ 0
+                    float sdf = length(max(d3, 0.0)) + min(max(d3.x, max(d3.y, d3.z)), 0.0);
+
+                    // Thin edge glow around cube silhouette
+                    float edge = saturate(1.0 - abs(sdf) * 22.0);
+
+                    float weight = 1.0 - float(shell) * 0.28;
+                    result = max(result, edge * weight * 0.45);
+                }
+                return result;
+            }
+
+            // ── Horizon fog ───────────────────────────────────────────────
             float HorizonFog(float3 dir)
             {
                 float elevation = normalize(dir).y;
@@ -121,38 +179,51 @@ Shader "Custom/ManifoldSkybox"
                 return saturate(fog);
             }
 
+            // ── Fragment ──────────────────────────────────────────────────
             half4 frag(Varyings IN) : SV_Target
             {
                 float3 dir = normalize(IN.dir);
-                float up = dir.y * 0.5 + 0.5;
+                float  up  = dir.y * 0.5 + 0.5;
 
+                // Base sky gradient
                 float t = pow(saturate(up), 1.0 / _HorizonSharp);
-                half4 sky = lerp(_HorizonColor, _ZenithColor, t);
+                half3 sky = lerp(_HorizonColor.rgb, _ZenithColor.rgb, t);
 
-                float grid = GridLines(dir);
-
-                float3 p = dir * 8.0 + _Time.y * _TimeSpeed;
-
-                float n1 = BlockNoise(p);
-                float n2 = BlockNoise(p * 2.0) * 0.5;
-                float n3 = BlockNoise(p * 4.0) * 0.25;
-
-                float fogLayer = saturate(n1 + n2 + n3);
+                // Drifting block-noise fog layer
+                float3 p  = dir * 8.0 + _Time.y * _TimeSpeed;
+                float  n1 = floor(Noise(p)       * 4.0) / 4.0;
+                float  n2 = floor(Noise(p * 2.0) * 4.0) / 4.0 * 0.5;
+                float  n3 = floor(Noise(p * 4.0) * 4.0) / 4.0 * 0.25;
+                float  fogLayer = saturate(n1 + n2 + n3);
 
                 float baseFog = HorizonFog(dir);
-                float fog = saturate(baseFog * (0.6 + fogLayer));
+                float height  = dir.y * 0.5 + 0.5;
+                float fog     = saturate(baseFog * (0.6 + fogLayer)) * smoothstep(0.0, 0.6, 1.0 - height);
 
-                float height = dir.y * 0.5 + 0.5;
-                fog *= smoothstep(0.0, 0.6, 1.0 - height);
-
-                grid *= (1.0 - fog * 0.7);
-
-                half4 fogCol = lerp(_FogColor, _ZenithColor, fogLayer);
+                half3 fogCol = lerp(_FogColor.rgb, _ZenithColor.rgb, fogLayer);
                 sky = lerp(fogCol, sky, 1.0 - fog);
 
-                half4 result = lerp(sky, _GridColor, grid * 0.6);
+                // Grids — beat pulse brightens them
+                float beatBoost = 1.0 + _BeatPulse * 0.8;
+                float intensityBoost = 0.6 + _MusicIntensity * 0.8;
 
-                return result;
+                float sphereGrid = SphericalGrid(dir) * (1.0 - fog * 0.7);
+                float floorGrid  = PerspectiveFloor(dir);
+                float cubes      = FloatingCubes(dir);
+
+                // Depth: floor grid is brighter and warmer at horizon
+                half3 gridCol = _GridColor.rgb * beatBoost * intensityBoost;
+                half3 floorGridCol = gridCol * half3(1.1, 1.0, 0.85);  // slightly warmer
+
+                half3 result = sky;
+                result = lerp(result, gridCol,      sphereGrid * 0.55);
+                result = lerp(result, floorGridCol, floorGrid  * 0.85);
+                result = lerp(result, gridCol * 1.3, cubes     * 0.40);
+
+                // Music color shift — rotate hue of final image
+                result = HsvShift(result, _ColorShift);
+
+                return half4(result, 1.0);
             }
             ENDHLSL
         }
