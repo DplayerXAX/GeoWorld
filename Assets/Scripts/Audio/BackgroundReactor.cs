@@ -25,14 +25,17 @@ public class BackgroundReactor : MonoBehaviour
     private static readonly int IntensityId    = Shader.PropertyToID("_MusicIntensity");
     private static readonly int ColorShiftId   = Shader.PropertyToID("_ColorShift");
 
-    void Awake() => Instance = this;
+    void Awake()
+    {
+        Instance = this;
+        // Auto-grab the active skybox if none assigned in Inspector
+        if (skyboxMaterial == null)
+            skyboxMaterial = RenderSettings.skybox;
+    }
 
     void Update()
     {
-        // Beat decays back to zero
-        _beatPulse = Mathf.Lerp(_beatPulse, 0f, 1f - Mathf.Exp(-beatDecay * Time.deltaTime));
-
-        // Intensity smoothly follows target (target set from game logic)
+        _beatPulse       = Mathf.Lerp(_beatPulse, 0f, 1f - Mathf.Exp(-beatDecay * Time.deltaTime));
         _smoothIntensity = Mathf.Lerp(_smoothIntensity, _targetIntensity, Time.deltaTime * 2f);
 
         if (skyboxMaterial == null) return;

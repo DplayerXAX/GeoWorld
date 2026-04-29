@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using UnityEngine;
 
 public enum PlacementMode { Edit, Select }
@@ -22,13 +22,6 @@ public class PlacementController : MonoBehaviour
     private float _depth = 10f;
     private Quaternion _currentRotation = Quaternion.identity, _targetRotation = Quaternion.identity;
     private List<GameObject> previewCubes = new();
-
-    private static readonly Vector3Int[] Directions =
-    {
-        Vector3Int.up, Vector3Int.down,
-        Vector3Int.left, Vector3Int.right,
-        new(0,0,1), new(0,0,-1)
-    };
 
     private PlacedBlockInstance selectedInstance;
     private GameObject activePhysicsObject;
@@ -69,10 +62,10 @@ public class PlacementController : MonoBehaviour
                 Random.insideUnitSphere * 2f;
 
             GameObject obj = new GameObject("PhysicsBlock");
-
             obj.transform.position = pos;
             obj.transform.rotation = Quaternion.identity;
-            Color co=GetRandomColor();
+
+            Color co = GetRandomColor();
             foreach (var cell in data.cells)
             {
                 GameObject c = Instantiate(cubePrefab, obj.transform);
@@ -82,11 +75,10 @@ public class PlacementController : MonoBehaviour
 
             obj.AddComponent<Rigidbody>();
             obj.AddComponent<SelectableBlock>().data = data;
-
-            var col = obj.AddComponent<BoxCollider>();
-            col.size = Vector3.one * 2.5f;
+            obj.AddComponent<BoxCollider>().size = Vector3.one * 2.5f;
         }
     }
+
     void Update()
     {
         _currentRotation = Quaternion.Slerp(
@@ -97,9 +89,13 @@ public class PlacementController : MonoBehaviour
 
         HandleScroll();
         HandleMouseMove();
-        HandleKeyboardOffset();
         HandleModeSwitch();
-        HandleRotate();
+
+        if (mode == PlacementMode.Edit)
+        {
+            HandleKeyboardOffset();
+            HandleRotate();
+        }
 
         UpdatePreview();
 
@@ -107,8 +103,7 @@ public class PlacementController : MonoBehaviour
         {
             if (mode == PlacementMode.Edit)
             {
-                if (currentBlock != null)
-                    TryPlace();
+                if (currentBlock != null) TryPlace();
             }
             else
             {
@@ -118,8 +113,12 @@ public class PlacementController : MonoBehaviour
 
         currentGridPos = baseGridPos + manualOffset;
 
+        // Keep edit anchor at preview position so camera orbits around the block being placed
         if (mode == PlacementMode.Edit && currentBlock != null)
+        {
+            editFocusAnchor.position = grid.GridToWorld(currentGridPos);
             cam.SetFocus(editFocusAnchor);
+        }
     }
 
     // =========================
@@ -144,19 +143,48 @@ public class PlacementController : MonoBehaviour
         baseGridPos = grid.WorldToGrid(world);
     }
 
+    // Edit mode only.
+    // WASD  → move block relative to camera's horizontal facing (snapped to grid axes)
+    // Q / E → move block down / up in world Y
     void HandleKeyboardOffset()
     {
-        if (Input.GetKeyDown(KeyCode.W)) manualOffset += Vector3Int.up;
-        if (Input.GetKeyDown(KeyCode.S)) manualOffset += Vector3Int.down;
-        if (Input.GetKeyDown(KeyCode.D)) manualOffset += Vector3Int.right;
-        if (Input.GetKeyDown(KeyCode.A)) manualOffset += Vector3Int.left;
+        Vector3Int right   = SnapToHorizontalAxis(cam.transform.right);
+        Vector3Int forward = SnapToHorizontalAxis(cam.transform.forward);
+
+        if (Input.GetKeyDown(KeyCode.A)) manualOffset -= right;
+        if (Input.GetKeyDown(KeyCode.D)) manualOffset += right;
+        if (Input.GetKeyDown(KeyCode.W)) manualOffset += forward;
+        if (Input.GetKeyDown(KeyCode.S)) manualOffset -= forward;
+        if (Input.GetKeyDown(KeyCode.Q)) manualOffset += Vector3Int.down;
+        if (Input.GetKeyDown(KeyCode.E)) manualOffset += Vector3Int.up;
     }
 
+    // Projects a world-space direction onto the XZ plane and snaps to the
+    // nearest cardinal axis (+X, -X, +Z, -Z).
+    Vector3Int SnapToHorizontalAxis(Vector3 dir)
+    {
+        dir.y = 0;
+        dir = dir.normalized;
+        if (Mathf.Abs(dir.x) >= Mathf.Abs(dir.z))
+            return dir.x >= 0 ? Vector3Int.right : Vector3Int.left;
+        else
+            return dir.z >= 0 ? new Vector3Int(0, 0, 1) : new Vector3Int(0, 0, -1);
+    }
+
+    // R             → rotate 90° around Y (spin in place, most common)
+    // Shift + R     → rotate 90° around X (tilt forward)
+    // F             → rotate 90° around Z (roll)
     void HandleRotate()
     {
-        if (Input.GetKeyDown(KeyCode.Alpha1)) _targetRotation *= Quaternion.Euler(90, 0, 0);
-        if (Input.GetKeyDown(KeyCode.Alpha2)) _targetRotation *= Quaternion.Euler(0, 90, 0);
-        if (Input.GetKeyDown(KeyCode.Alpha3)) _targetRotation *= Quaternion.Euler(0, 0, 90);
+        bool shift = Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift);
+
+        if (Input.GetKeyDown(KeyCode.R))
+            _targetRotation *= shift
+                ? Quaternion.Euler(90, 0, 0)
+                : Quaternion.Euler(0, 90, 0);
+
+        if (Input.GetKeyDown(KeyCode.F))
+            _targetRotation *= Quaternion.Euler(0, 0, 90);
     }
 
     void HandleModeSwitch()
@@ -168,8 +196,8 @@ public class PlacementController : MonoBehaviour
             if (selectedInstance != null)
             {
                 isPickingUpObject = true;
-                lastObjectPos = selectedInstance.visualObject.transform.position;
-                lastObjectRot = selectedInstance.visualObject.transform.rotation;
+                lastObjectPos  = selectedInstance.visualObject.transform.position;
+                lastObjectRot  = selectedInstance.visualObject.transform.rotation;
                 lastObjectCells = selectedInstance.occupiedCells.ToArray();
 
                 grid.RemoveInstance(selectedInstance);
@@ -208,26 +236,26 @@ public class PlacementController : MonoBehaviour
         var sb = hit.transform.GetComponentInParent<SelectableBlock>();
         if (sb != null)
         {
-            currentBlock = sb.data;
-            currentColor = sb.GetComponentInChildren<Renderer>().material.color;
+            currentBlock  = sb.data;
+            currentColor  = sb.GetComponentInChildren<Renderer>().material.color;
             activePhysicsObject = sb.gameObject;
-            selectedInstance = null;
+            selectedInstance    = null;
 
             UpdateHighlight(activePhysicsObject);
             cam.SetFocus(sb.transform);
             return;
         }
 
-        Vector3Int gPos = grid.WorldToGrid(hit.point);
-        var instance = grid.GetInstanceAt(gPos);
+        Vector3Int gPos    = grid.WorldToGrid(hit.point);
+        var        instance = grid.GetInstanceAt(gPos);
 
         if (instance != null)
         {
             selectedInstance = instance;
-            currentBlock = instance.data;
-            currentColor = instance.visualObject.GetComponentInChildren<Renderer>().material.color;
-
+            currentBlock     = instance.data;
+            currentColor     = instance.visualObject.GetComponentInChildren<Renderer>().material.color;
             activePhysicsObject = null;
+
             UpdateHighlight(instance.visualObject);
             cam.SetFocus(instance.visualObject.transform);
         }
@@ -240,7 +268,7 @@ public class PlacementController : MonoBehaviour
             var old = lastHighlightedObject.GetComponent<Outline>();
             if (old != null)
             {
-                old.enabled = false; // fires OnDisable immediately → materials restored this frame
+                old.enabled = false; // OnDisable fires immediately → materials restored this frame
                 Destroy(old);
             }
         }
@@ -272,13 +300,11 @@ public class PlacementController : MonoBehaviour
 
         var cells = GetRotatedCells();
         if (cells.Length == 0) return;
-
         if (!CanPlace(currentGridPos, cells)) return;
 
         Vector3 center = Vector3.zero;
         foreach (var c in cells)
             center += grid.GridToWorld(currentGridPos + c);
-
         center /= cells.Length;
 
         GameObject obj = new GameObject("PlacedBlock");
@@ -294,7 +320,7 @@ public class PlacementController : MonoBehaviour
 
         PlacedBlockInstance ins = new()
         {
-            data = currentBlock,
+            data         = currentBlock,
             visualObject = obj
         };
 
@@ -305,10 +331,11 @@ public class PlacementController : MonoBehaviour
 
         isPickingUpObject = false;
         currentBlock = GetRandomBlock();
+        currentColor = GetRandomColor();
+
+        // Return to Select mode; camera stays where it is — no forced focus change.
         mode = PlacementMode.Select;
         previewParent.gameObject.SetActive(false);
-
-        cam.SetFocus(obj.transform);
     }
 
     void UpdatePreview()
@@ -329,7 +356,6 @@ public class PlacementController : MonoBehaviour
             var c = Instantiate(cubePrefab, previewParent);
             foreach (var col in c.GetComponentsInChildren<Collider>())
                 col.enabled = false;
-
             previewCubes.Add(c);
         }
 
@@ -343,7 +369,6 @@ public class PlacementController : MonoBehaviour
         {
             previewCubes[i].transform.position =
                 grid.GridToWorld(currentGridPos + cells[i]);
-
             previewCubes[i].GetComponent<Renderer>().material.color = tint;
         }
     }
@@ -354,10 +379,8 @@ public class PlacementController : MonoBehaviour
             return System.Array.Empty<Vector3Int>();
 
         Vector3Int[] res = new Vector3Int[currentBlock.cells.Length];
-
         for (int i = 0; i < res.Length; i++)
             res[i] = Vector3Int.RoundToInt(_currentRotation * (Vector3)currentBlock.cells[i]);
-
         return res;
     }
 
@@ -366,8 +389,7 @@ public class PlacementController : MonoBehaviour
         foreach (var c in cs)
         {
             var p = bp + c;
-            if (grid.IsOccupied(p) || p.y < 0)
-                return false;
+            if (grid.IsOccupied(p) || p.y < 0) return false;
         }
         return true;
     }
@@ -388,8 +410,7 @@ public class PlacementController : MonoBehaviour
             br.cubePrefab = cubePrefab;
 
             Vector3Int origin = grid.WorldToGrid(lastObjectPos);
-
-            Vector3Int[] rel = new Vector3Int[lastObjectCells.Length];
+            Vector3Int[] rel  = new Vector3Int[lastObjectCells.Length];
             for (int i = 0; i < rel.Length; i++)
                 rel[i] = lastObjectCells[i] - origin;
 
@@ -397,7 +418,7 @@ public class PlacementController : MonoBehaviour
 
             PlacedBlockInstance ins = new()
             {
-                data = currentBlock,
+                data         = currentBlock,
                 visualObject = obj
             };
 
@@ -416,11 +437,11 @@ public class PlacementController : MonoBehaviour
 
     void SpawnPhysicsBlockAt(Vector3 pos, Quaternion rot)
     {
+        if (currentBlock == null) return;
+
         GameObject obj = new GameObject("PhysicsBlock");
         obj.transform.position = pos;
         obj.transform.rotation = rot;
-
-        if (currentBlock == null) return;
 
         foreach (var cell in currentBlock.cells)
         {
@@ -444,8 +465,6 @@ public class PlacementController : MonoBehaviour
         return blocks[Random.Range(0, blocks.Length)];
     }
 
-    Color GetRandomColor()
-    {
-        return Random.ColorHSV(0f, 1f, 0.6f, 1f, 0.7f, 1f);
-    }
+    Color GetRandomColor() =>
+        Random.ColorHSV(0f, 1f, 0.6f, 1f, 0.7f, 1f);
 }
