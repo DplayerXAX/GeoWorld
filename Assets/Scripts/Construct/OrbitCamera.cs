@@ -17,6 +17,11 @@ public class OrbitCamera : MonoBehaviour
     private Vector3 currentFocusPoint;
     private Transform desiredTarget;
 
+    // Free pan offset added on top of the focus target's position.
+    // Reset whenever SetFocus is called so selecting an object snaps the
+    // camera back to it.
+    private Vector3 _panOffset;
+
     void Start()
     {
         if (target != null)
@@ -25,22 +30,34 @@ public class OrbitCamera : MonoBehaviour
             currentFocusPoint = target.position;
         }
     }
+
     public void AddDistance(float delta)
     {
         distance = Mathf.Clamp(distance + delta, 2f, 40f);
     }
+
     public void SetFocus(Transform newTarget)
     {
+        if (desiredTarget != newTarget)
+            _panOffset = Vector3.zero; // new focus → cancel any free-pan
         desiredTarget = newTarget;
+    }
+
+    // Called by PlacementController on WASD/QE in Select mode.
+    public void Pan(Vector3 worldDelta)
+    {
+        _panOffset += worldDelta;
     }
 
     void LateUpdate()
     {
         if (desiredTarget == null) return;
 
+        Vector3 focusGoal = desiredTarget.position + _panOffset;
+
         currentFocusPoint = Vector3.Lerp(
             currentFocusPoint,
-            desiredTarget.position,
+            focusGoal,
             1f - Mathf.Exp(-transitionSpeed * Time.deltaTime)
         );
 

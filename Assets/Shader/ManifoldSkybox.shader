@@ -86,16 +86,30 @@ Shader "Custom/ManifoldSkybox"
                 return saturate(n1 + n2 + n3);
             }
 
-            // Per-cell hue offset so adjacent cells read as separate glass panels
-            // (deep blues next to violets next to teals — chapel-window vibe)
-            // rather than a single muddy color.
-            float StainedGlassPanelHue(float3 p)
+            // Per-cell color modulation. Returns:
+            //   x → hue offset (turns; ±0.25 = ±90° = clearly different colors)
+            //   y → brightness multiplier (0.6..1.4)
+            //   z → extra saturation push (0..0.5)
+            // Adjacent cells get distinctly different stained-glass tints
+            // (cobalt next to ruby next to amber) instead of mud.
+            float3 StainedGlassPanel(float3 p)
             {
-                // Same cell scale as the dominant fog layer
                 float3 cellId = floor(p);
-                float h = Hash3(cellId);
-                // Spread around 0 with limited range so the palette stays cohesive
-                return (h - 0.5) * 0.18;
+                float h1 = Hash3(cellId);
+                float h2 = Hash3(cellId + float3(7.3, 1.7, 4.1));
+                float h3 = Hash3(cellId + float3(0.9, 5.1, 8.6));
+
+                float hue   = (h1 - 0.5) * 0.5;          // ±90° hue
+                float bri   = 0.65 + h2 * 0.85;          // 0.65..1.5 brightness
+                float satEx = h3 * 0.45;                 // 0..0.45 extra saturation
+                return float3(hue, bri, satEx);
+            }
+
+            // Boost saturation by pushing colors away from their luma
+            float3 SaturationBoost(float3 col, float amount)
+            {
+                float luma = dot(col, float3(0.299, 0.587, 0.114));
+                return luma + (col - luma) * (1.0 + amount);
             }
 
             // ── HSV-style hue rotation for the music color shift ─────────
@@ -224,12 +238,16 @@ Shader "Custom/ManifoldSkybox"
                           * smoothstep(0.0, 0.6, 1.0 - height)
                           * _FogStrength;
 
-                // Fog color tinted by the cell value, with a per-panel hue
-                // offset so adjacent cells read as distinct stained-glass panels.
+                // Fog color tinted by the cell value, then per-panel modulated
+                // so adjacent cells become distinct stained-glass panels.
                 half3 fogCol = lerp(_FogColor.rgb, _ZenithColor.rgb, fogLayer);
-                float panelHue = StainedGlassPanelHue(p);
-                fogCol = HsvShift(fogCol, _ColorShift + panelHue);
-                sky    = lerp(fogCol, sky, 1.0 - fog);
+
+                float3 panel = StainedGlassPanel(p);
+                fogCol = HsvShift(fogCol, _ColorShift + panel.x);    // unique hue per cell
+                fogCol = SaturationBoost(fogCol, panel.z);            // some panels jewel-like
+                fogCol *= panel.y;                                    // light/dark glass panels
+
+                sky = lerp(fogCol, sky, 1.0 - fog);
 
                 // ── Geometry layered through the fog ────────────────────
                 float sphereGrid = SphericalGrid(dir, gridScaleM) * (1.0 - fog * 0.55);

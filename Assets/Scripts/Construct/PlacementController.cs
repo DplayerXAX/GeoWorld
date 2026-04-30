@@ -17,6 +17,7 @@ public class PlacementController : MonoBehaviour
 
     [Range(0.5f, 4f)] public float snapGridRadius = 1.5f;
     public float minDepth = 2f, maxDepth = 40f, scrollSpeed = 3f, rotateSpeed = 10f;
+    public float panSpeed = 8f;
 
     private Vector3Int baseGridPos, currentGridPos, manualOffset;
     private float _depth = 10f;
@@ -96,6 +97,10 @@ public class PlacementController : MonoBehaviour
             HandleKeyboardOffset();
             HandleRotate();
         }
+        else
+        {
+            HandleSelectModePan();
+        }
 
         UpdatePreview();
 
@@ -150,6 +155,26 @@ public class PlacementController : MonoBehaviour
         if (Input.GetKeyDown(KeyCode.S)) manualOffset -= forward;
         if (Input.GetKeyDown(KeyCode.Q)) manualOffset += Vector3Int.down;
         if (Input.GetKeyDown(KeyCode.E)) manualOffset += Vector3Int.up;
+    }
+
+    // Select mode: WASD pans the camera continuously along its horizontal facing,
+    // Q/E moves it down/up. Selecting an object cancels the pan and snaps focus
+    // back to that object (handled in OrbitCamera.SetFocus).
+    void HandleSelectModePan()
+    {
+        Vector3 right = cam.transform.right;   right.y = 0; right.Normalize();
+        Vector3 fwd   = cam.transform.forward; fwd.y   = 0; fwd.Normalize();
+
+        Vector3 delta = Vector3.zero;
+        if (Input.GetKey(KeyCode.D)) delta += right;
+        if (Input.GetKey(KeyCode.A)) delta -= right;
+        if (Input.GetKey(KeyCode.W)) delta += fwd;
+        if (Input.GetKey(KeyCode.S)) delta -= fwd;
+        if (Input.GetKey(KeyCode.E)) delta += Vector3.up;
+        if (Input.GetKey(KeyCode.Q)) delta -= Vector3.up;
+
+        if (delta.sqrMagnitude > 0.0001f)
+            cam.Pan(delta.normalized * panSpeed * Time.deltaTime);
     }
 
     // Projects a world-space direction onto the XZ plane and snaps to the
