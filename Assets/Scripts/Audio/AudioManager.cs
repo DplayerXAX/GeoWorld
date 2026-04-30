@@ -44,7 +44,7 @@ public class AudioManager : MonoBehaviour
     // ===== NOTE =====
     public void PlayNote(int note)
     {
-        AkSoundEngine.SetRTPCValue("NoteValue", note, pianoKey[note-1]);
+        AkUnitySoundEngine.SetRTPCValue("NoteValue", note, pianoKey[note-1]);
         Note.Post(pianoKey[note-1]);
     }
 
@@ -63,22 +63,24 @@ public class AudioManager : MonoBehaviour
         }
     }
 
-    public void PlayArpNote(int semitone, float velocity = 0.7f)
+    public void PlayArpNote(int degree, int octave, float velocity = 0.7f)
     {
-        AkSoundEngine.SetRTPCValue("NoteValue", semitone, audioEmitter);
-        AkSoundEngine.SetRTPCValue("Velocity", velocity * 100f, audioEmitter);
+        AkUnitySoundEngine.SetRTPCValue("NoteValue", degree, audioEmitter);
+        AkUnitySoundEngine.SetRTPCValue("Oct", octave, audioEmitter);
+        AkUnitySoundEngine.SetRTPCValue("Velocity", velocity * 100f, audioEmitter);
+
         Note.Post(audioEmitter);
     }
 
     // ===== BGM CONTROL =====
     public void SetHarmony(string key)
     {
-        AkSoundEngine.SetSwitch("Key", key, audioEmitter);
+        AkUnitySoundEngine.SetSwitch("Key", key, audioEmitter);
     }
 
     public void SetIntensity(float value)
     {
-        AkSoundEngine.SetRTPCValue("Intensity", value, audioEmitter);
+        AkUnitySoundEngine.SetRTPCValue("Intensity", value, audioEmitter);
     }
 
     // Switches the chord pad to match the current block type.
@@ -89,6 +91,6 @@ public class AudioManager : MonoBehaviour
     //     (beat-synced crossfade) under the BGM event
     public void SetChord(BlockType type)
     {
-        AkSoundEngine.SetSwitch(chordSwitchGroup, type.ToString(), audioEmitter);
+        AkUnitySoundEngine.SetSwitch(chordSwitchGroup, type.ToString(), audioEmitter);
     }
 }

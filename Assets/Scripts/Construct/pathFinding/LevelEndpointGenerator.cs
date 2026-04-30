@@ -72,25 +72,33 @@ public class LevelEndpointGenerator : MonoBehaviour
 
     Vector3Int PickEnd(List<Vector3Int> candidates, Vector3Int start)
     {
-        Vector3Int best = start;
-        float bestScore = -1f;
+        Vector3Int best      = Vector3Int.zero;
+        float      bestScore = -1f;
+        bool       found     = false;
 
+        // Phase 1: strict distance window (30 random samples).
         for (int i = 0; i < 30; i++)
         {
             var c = candidates[Random.Range(0, candidates.Count)];
-
             if (c == start) continue;
 
             float dist = Vector3Int.Distance(c, start);
-
-            if (dist < minDistance || dist > maxDistance)
-                continue;
-
-            if (dist > bestScore)
+            if (dist >= minDistance && dist <= maxDistance && dist > bestScore)
             {
-                best = c;
-                bestScore = dist;
+                best = c; bestScore = dist; found = true;
             }
+        }
+
+        if (found) return best;
+
+        // Phase 2: relax — scan all candidates for the one closest to maxDistance
+        // so the puzzle is at least as hard as possible within the grid.
+        float closestDelta = float.MaxValue;
+        foreach (var c in candidates)
+        {
+            if (c == start) continue;
+            float delta = Mathf.Abs(Vector3Int.Distance(c, start) - maxDistance);
+            if (delta < closestDelta) { closestDelta = delta; best = c; }
         }
 
         return best;

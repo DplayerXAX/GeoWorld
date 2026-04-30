@@ -322,7 +322,7 @@ public class PlacementController : MonoBehaviour
             return;
         }
 
-        // --- Placed blocks: highlight, double-click focus, Tab to pick up ---
+        // --- Placed blocks: single-click selects, double-click picks up for re-edit ---
         Vector3Int gPos    = grid.WorldToGrid(hit.point);
         var        instance = grid.GetInstanceAt(gPos);
 
@@ -340,7 +340,19 @@ public class PlacementController : MonoBehaviour
             _lastClickTime   = Time.time;
             _lastClickTarget = instance.visualObject;
 
-            if (isDouble) cam.SetFocus(instance.visualObject.transform);
+            if (isDouble)
+            {
+                // Pick the block back up, same as Tab — remove from grid and re-enter edit mode.
+                isPickingUpObject = true;
+                lastObjectPos     = instance.visualObject.transform.position;
+                lastObjectRot     = instance.visualObject.transform.rotation;
+                lastObjectCells   = instance.occupiedCells.ToArray();
+
+                SnapDepthToWorldPos(lastObjectPos);
+                grid.RemoveInstance(instance);   // destroys visualObject
+                selectedInstance = null;
+                EnterEditMode(lastObjectPos);
+            }
         }
     }
 
@@ -430,6 +442,12 @@ public class PlacementController : MonoBehaviour
 
         grid.RegisterInstance(ins);
 
+        // 放置成功：立刻播放该block的和弦根音，给玩家即时音乐反馈。
+        ArpeggiatorManager.Instance?.PlayAmbientNote(
+    PlacementDegree(ins.data.blockType),
+    PlacementOctave(ins.data.blockType),
+    0.45f
+);
         // Consume the tray token we picked up. activePhysicsObject is set
         // when TrySelectObject hits a SelectableBlock; destroying it frees
         // the slot and (when the tray empties) GameFlowManager spawns a
@@ -573,6 +591,24 @@ public class PlacementController : MonoBehaviour
     // =========================
     // UTIL
     // =========================
+
+    static int PlacementDegree(BlockType t) => t switch
+    {
+        BlockType.Home => 1,
+        BlockType.Lift => 4,
+        BlockType.Pull => 5,
+        BlockType.Shadow => 7,
+        _ => 1,
+    };
+
+    static int PlacementOctave(BlockType t) => t switch
+    {
+        BlockType.Home => 0,
+        BlockType.Lift => 1,
+        BlockType.Pull => 0,
+        BlockType.Shadow => -1,
+        _ => 0,
+    };
 
     Color GetRandomColor() =>
         Random.ColorHSV(0f, 1f, 0.6f, 1f, 0.7f, 1f);

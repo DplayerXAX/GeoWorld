@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 public class ArpeggiatorManager : MonoBehaviour
@@ -6,119 +7,186 @@ public class ArpeggiatorManager : MonoBehaviour
 
     class MelodyState
     {
-        public int lastNote = 0;
-        public int direction = 1;
-        public float energy = 0.2f;
+        public int lastIndex = 7;
+        public int hDir = 1;
+        public float zigzag = 0f;
+        public float vertDir = 0f;
     }
 
-    MelodyState state = new MelodyState();
+    MelodyState state = new();
 
-    static readonly int[] Scale_Major = { 0, 2, 4, 5, 7, 9, 11, 12 };
+    static readonly int[] Scale = { 0, 2, 3, 5, 7, 9, 10, 12, 14, 15, 17 };
 
     [Header("Feel")]
-    [Range(0f, 1f)] public float noteDensity = 0.8f;   // 控制留白
-    [Range(0f, 1f)] public float repetition = 0.3f;    // motif重复概率
+    [Range(0f, 1f)] public float noteDensity = 0.75f;
+    [Range(0f, 1f)] public float repetition = 0.25f;
+
+    readonly List<NoteEvent> _rec = new();
+    bool _recording;
 
     void Awake() => Instance = this;
 
-    // ===== 主旋律入口 =====
-    public void PlayMelodyNote(BlockType type, FaceNode node, FaceNode prevNode, float progress, int pathIndex)
+    public struct NoteEvent
     {
-        // 留白（很关键）
-        if (Random.value > noteDensity)
+        public int degree;   // 0 = rest
+        public int octave;
+        public float tension;
+    }
+
+    public void StartRecording()
+    {
+        _rec.Clear();
+        state = new MelodyState();
+        _recording = true;
+    }
+
+    public List<NoteEvent> StopRecording()
+    {
+        _recording = false;
+        var copy = new List<NoteEvent>(_rec);
+        _rec.Clear();
+        return copy;
+    }
+
+    public void PlayMelodyNote(
+        BlockType type, FaceNode node, FaceNode prevNode,
+        float progress, int pathIndex, float velocityScale = 1f)
+    {
+        float density = noteDensity * (0.45f + 0.55f * Mathf.Sin(progress * Mathf.PI));
+        bool rest = Random.value > density;
+
+        if (rest)
+        {
+            if (_recording)
+                _rec.Add(new NoteEvent { degree = 0 });
             return;
+        }
 
-        UpdateMelodyFromSpace(node, prevNode);
+        UpdateState(node, prevNode);
 
-        int note = PickAmbientNote(Scale_Major);
+        NoteEvent e = PickEvent(type);
 
-        // 轻微弧线（避免机械）
-        int arc = Mathf.RoundToInt(Mathf.Sin(progress * Mathf.PI) * 2f);
-        note += arc;
+        if (progress >= 0.97f)
+        {
+            e.degree = 1;
+            e.octave = 0;
+        }
 
-        // 力度：随进度变化（神圣感 = 平滑）
-        float velocity = Mathf.Lerp(0.5f, 0.8f, progress);
+        float vel = Mathf.Lerp(0.38f, 0.82f, progress) * velocityScale;
 
-        AudioManager.Instance.PlayArpNote(note, velocity);
+        if (_recording)
+            _rec.Add(e);
 
-        BackgroundReactor.Instance?.OnNote(0.6f);
+        AudioManager.Instance.PlayArpNote(e.degree, e.octave, vel);
+        BackgroundReactor.Instance?.OnNote(e.tension * velocityScale);
     }
 
-    // ===== 空间 → 旋律行为 =====
-    void UpdateMelodyFromSpace(FaceNode current, FaceNode previous)
+    public void PlayBassRoot(BlockType type)
     {
-        if (previous == null) return;
+        int degree = type switch
+        {
+            BlockType.Home => 1,
+            BlockType.Lift => 4,
+            BlockType.Pull => 5,
+            BlockType.Shadow => 7,
+            _ => 1
+        };
 
-        Vector3 dir = current.worldPos - previous.worldPos;
+        int octave = -1;
 
-        // 方向（但不要频繁抖动）
-        if (Mathf.Abs(dir.x) > 0.1f)
-            state.direction = dir.x > 0 ? 1 : -1;
-
-        // 高度 → energy（但限制很弱）
-        float height = current.worldPos.y;
-        state.energy = Mathf.Clamp01(height * 0.15f);
+        AudioManager.Instance.PlayArpNote(degree, octave, 0.4f);
+        BackgroundReactor.Instance?.OnNote(0.4f);
     }
 
-    // ===== 旋律核心（级进 + 秩序）=====
-    int PickAmbientNote(int[] scale)
+    public void PlayAmbientNote(int degree, int octave, float velocity)
     {
-        int best = scale[0];
+        AudioManager.Instance.PlayArpNote(degree, octave, velocity);
+    }
+
+    public void StopArp() { }
+
+    void UpdateState(FaceNode cur, FaceNode prev)
+    {
+        if (prev == null) return;
+
+        Vector3 d = cur.worldPos - prev.worldPos;
+
+        int newH = 0;
+        if (Mathf.Abs(d.x) > Mathf.Abs(d.z))
+            newH = d.x > 0 ? 1 : -1;
+        else if (Mathf.Abs(d.z) > 0.05f)
+            newH = d.z > 0 ? 1 : -1;
+
+        if (newH != 0 && newH != state.hDir)
+            state.zigzag = Mathf.Min(state.zigzag + 1f, 6f);
+        else
+            state.zigzag = Mathf.Max(state.zigzag - 0.3f, 0f);
+
+        if (newH != 0) state.hDir = newH;
+
+        state.vertDir = Mathf.Sign(d.y);
+    }
+
+    NoteEvent PickEvent(BlockType type)
+    {
+        int bestIndex = 0;
         float bestScore = float.MinValue;
 
-        foreach (int note in scale)
-        {
-            int dist = note - state.lastNote;
+        int[] preferred = ChordDegrees(type);
 
+        for (int i = 0; i < Scale.Length; i++)
+        {
+            int dist = i - state.lastIndex;
             float score = 0f;
 
-            // 强烈惩罚大跳
-            score -= Mathf.Abs(dist) * 2f;
+            float penalty = Mathf.Lerp(2.2f, 0.6f, state.zigzag / 6f);
+            score -= Mathf.Abs(dist) * penalty;
 
-            // 鼓励级进
-            if (Mathf.Abs(dist) <= 2)
-                score += 3f;
+            if (Mathf.Abs(dist) <= 1) score += 2.8f;
 
-            // 轻微方向一致
-            if (Mathf.Sign(dist) == state.direction)
-                score += 1f;
+            if (dist != 0 && Mathf.Sign(dist) == state.hDir) score += 0.7f;
 
-            // 中音区偏好
-            score -= Mathf.Abs(note - 6) * 0.2f;
+            if (state.vertDir > 0 && dist > 0) score += 1.8f;
+            if (state.vertDir < 0 && dist < 0) score += 1.8f;
+
+            int degree = (i % 7) + 1;
+
+            if (System.Array.IndexOf(preferred, degree) >= 0)
+                score += 2.2f;
+
+            score -= Mathf.Abs(i - 5) * 0.15f;
 
             if (score > bestScore)
             {
                 bestScore = score;
-                best = note;
+                bestIndex = i;
             }
         }
 
-        // motif（重复）
         if (Random.value < repetition)
-            best = state.lastNote;
+            bestIndex = state.lastIndex;
 
-        state.lastNote = best;
-        return best;
-    }
+        int finalDegree = (bestIndex % 7) + 1;
+        int finalOctave = (bestIndex / 7) - 1;
 
-    // ===== 和弦低音（保留你原逻辑但更稳）=====
-    public void PlayBassRoot(BlockType type)
-    {
-        int root = type switch
+        float tension = Mathf.Clamp01(Mathf.Abs(bestIndex - state.lastIndex) / 6f);
+
+        state.lastIndex = bestIndex;
+
+        return new NoteEvent
         {
-            BlockType.Home => 0,
-            BlockType.Lift => 5,
-            BlockType.Pull => 7,
-            BlockType.Shadow => -3,
-            _ => 0
+            degree = finalDegree,
+            octave = finalOctave,
+            tension = tension
         };
-
-        int bass = root - 12;
-        if (bass < -12) bass += 12;
-
-        AudioManager.Instance.PlayArpNote(bass, 0.4f);
-        BackgroundReactor.Instance?.OnNote(0.4f);
     }
 
-    public void StopArp() { }
+    static int[] ChordDegrees(BlockType t) => t switch
+    {
+        BlockType.Home => new[] { 1, 3, 5 },
+        BlockType.Lift => new[] { 4, 6, 1 },
+        BlockType.Pull => new[] { 5, 7, 2 },
+        BlockType.Shadow => new[] { 7, 2, 4 },
+        _ => new[] { 1, 5 }
+    };
 }

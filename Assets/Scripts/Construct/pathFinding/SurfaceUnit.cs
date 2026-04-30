@@ -42,6 +42,8 @@ public class SurfaceUnit : MonoBehaviour
         beatTimer = 0f;
         prevNode = null;
 
+        ArpeggiatorManager.Instance.StartRecording();
+
         StepToNode(path[0]);
         index = 1;
     }
@@ -128,7 +130,24 @@ public class SurfaceUnit : MonoBehaviour
     void OnPathFinished()
     {
         ArpeggiatorManager.Instance.StopArp();
-        AkSoundEngine.PostEvent("Cadence_End", this.gameObject);
+
+        var rec = ArpeggiatorManager.Instance.StopRecording();
+
+        // Collect block visuals before clearing path — LoopManager uses them
+        // to flash blocks in sync with loop playback.
+        var visuals = new List<GameObject>();
+        if (path != null)
+        {
+            foreach (var node in path)
+            {
+                var inst = GridSystem.instance?.GetInstanceAt(node.cell);
+                if (inst?.visualObject != null) visuals.Add(inst.visualObject);
+            }
+        }
+
+        LoopManager.Instance?.AddLoop(rec, visuals, bpm);
+
+        AkUnitySoundEngine.PostEvent("Cadence_End", this.gameObject);
         AudioManager.Instance.SetIntensity(0f);
         path = null;
         gameFlow?.EndRunningPhase();

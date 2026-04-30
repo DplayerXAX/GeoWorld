@@ -85,13 +85,13 @@ Material:
     - _AddPrecomputedVelocity: 0
     - _AlphaClip: 0
     - _AlphaToMask: 0
-    - _BeatPulse: 1.4126145e-20
+    - _BeatPulse: 5.4362667e-11
     - _Blend: 0
     - _BlendModePreserveSpecular: 1
     - _BumpScale: 1
     - _ClearCoatMask: 0
     - _ClearCoatSmoothness: 0
-    - _ColorShift: 0.65991884
+    - _ColorShift: 0.6696815
     - _Cull: 2
     - _Cutoff: 0.5
     - _DetailAlbedoMapScale: 1

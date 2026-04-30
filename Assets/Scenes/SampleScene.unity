@@ -827,6 +827,8 @@ MonoBehaviour:
   placement: {fileID: 164805052}
   blocksPerTurn: 3
   phase: 0
+  scanBeats: 8
+  scanFlashBrightness: 0.7
 --- !u!4 &653921581
 Transform:
   m_ObjectHideFlags: 0
@@ -877,6 +879,7 @@ MonoBehaviour:
   bpm: 80
   moveRatio: 0.8
   grid: {fileID: 164805054}
+  gameFlow: {fileID: 0}
 --- !u!65 &658080853
 BoxCollider:
   m_ObjectHideFlags: 0
@@ -964,7 +967,7 @@ Transform:
   m_GameObject: {fileID: 658080851}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 2.463, y: -26.83, z: 0.5}
+  m_LocalPosition: {x: 2.463, y: -4461, z: 0.5}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -1052,6 +1055,53 @@ MonoBehaviour:
   unloadTriggerList: 958ca0ea
   bankNameInternal: 
   valueGuidInternal: 
+--- !u!1 &764464397
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 764464399}
+  - component: {fileID: 764464398}
+  m_Layer: 0
+  m_Name: LoopManager
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &764464398
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 764464397}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5cc8a44f947ca1d499137bba633101f8, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::LoopManager
+  loopVelocity: 0.18
+  tempoScale: 0.75
+  flashBrightness: 0.55
+--- !u!4 &764464399
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 764464397}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: -6.20331, y: -0, z: -17.35466}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &832575517
 GameObject:
   m_ObjectHideFlags: 0
@@ -1270,7 +1320,7 @@ GameObject:
   - component: {fileID: 1188158438}
   - component: {fileID: 1188158437}
   m_Layer: 0
-  m_Name: GameObject (1)
+  m_Name: BackgroundReact
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -1883,6 +1933,7 @@ MonoBehaviour:
   gridSystem: {fileID: 164805054}
   startCell: {x: 0, y: 0, z: 0}
   endCell: {x: 0, y: 0, z: 0}
+  allEndpoints: []
   minDistance: 5
   maxDistance: 10
   startPrefab: {fileID: 5859562048836445988, guid: 3c0e5140eab477e49b5e8b36477a17b5, type: 3}
@@ -1901,7 +1952,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 2132525315679210296, guid: 2d67442949634b046a787f5c9948be95, type: 3}
       propertyPath: m_LocalPosition.y
-      value: -26.83
+      value: -4461
       objectReference: {fileID: 0}
     - target: {fileID: 2132525315679210296, guid: 2d67442949634b046a787f5c9948be95, type: 3}
       propertyPath: m_LocalPosition.z
@@ -1972,3 +2023,4 @@ SceneRoots:
   - {fileID: 723872988}
   - {fileID: 173873515}
   - {fileID: 1188158438}
+  - {fileID: 764464399}
