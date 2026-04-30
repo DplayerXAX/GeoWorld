@@ -88,10 +88,14 @@ Shader "Custom/ManifoldSkybox"
 
             // Per-cell color modulation. Returns:
             //   x → hue offset (turns; ±0.25 = ±90° = clearly different colors)
-            //   y → brightness multiplier (0.6..1.4)
-            //   z → extra saturation push (0..0.5)
-            // Adjacent cells get distinctly different stained-glass tints
-            // (cobalt next to ruby next to amber) instead of mud.
+            //   y → brightness multiplier
+            //   z → extra saturation push
+            //
+            // Each panel carries a base hash AND animates over time, so the
+            // chapel-glass palette continually re-rotates: hues drift, panels
+            // breathe brighter/dimmer, jewel-tone bursts come and go.
+            // Music drives the speed and amplitude — beat pulse flares all
+            // panels at once, music intensity speeds up the cycling.
             float3 StainedGlassPanel(float3 p)
             {
                 float3 cellId = floor(p);
@@ -99,9 +103,23 @@ Shader "Custom/ManifoldSkybox"
                 float h2 = Hash3(cellId + float3(7.3, 1.7, 4.1));
                 float h3 = Hash3(cellId + float3(0.9, 5.1, 8.6));
 
-                float hue   = (h1 - 0.5) * 0.5;          // ±90° hue
-                float bri   = 0.65 + h2 * 0.85;          // 0.65..1.5 brightness
-                float satEx = h3 * 0.45;                 // 0..0.45 extra saturation
+                // Time advances faster when music is intense
+                float t = _Time.y * (0.15 + _MusicIntensity * 0.55);
+
+                // ── Hue: each panel's base offset (±0.25) plus a slow oscillation
+                //    around it. Different panels are out of phase via h1/h2 offsets.
+                float hueBase   = (h1 - 0.5) * 0.5;
+                float hueOsc    = sin(t * 0.6 + h1 * 6.2832) * 0.10;
+                float hue       = hueBase + hueOsc;
+
+                // ── Brightness: hash baseline + per-panel breathing + global beat flash.
+                float briBreath = sin(t * 0.9 + h2 * 6.2832) * 0.25;
+                float bri       = (0.7 + h2 * 0.8 + briBreath) * (1.0 + _BeatPulse * 0.55);
+
+                // ── Saturation: hash baseline + slower oscillation, jewel-tone bursts.
+                float satBreath = sin(t * 0.5 + h3 * 6.2832) * 0.18;
+                float satEx     = saturate(h3 * 0.45 + satBreath);
+
                 return float3(hue, bri, satEx);
             }
 

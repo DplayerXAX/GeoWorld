@@ -94,12 +94,18 @@ public class SurfaceUnit : MonoBehaviour
             case BlockType.Lift:
             case BlockType.Pull:
             case BlockType.Shadow:
-                // Local cell position within the block → different cells produce different notes,
-                // so the block's spatial shape shapes the melody.
+                // Switch the BGM pad chord on entering a new block — the pad
+                // sustains the harmony through every step on this block.
+                if (block != currentBlock)
+                {
+                    AudioManager.Instance.SetChord(block.blockType);
+                    currentBlock = block;
+                }
+
+                // Per-step arp: cell's local position within the block picks the chord tone.
                 Vector3Int origin = MinCell(instance.occupiedCells);
                 Vector3Int local  = node.cell - origin;
                 ArpeggiatorManager.Instance.PlayCellNote(block.blockType, local);
-                currentBlock = block;
                 break;
 
             case BlockType.Turret:

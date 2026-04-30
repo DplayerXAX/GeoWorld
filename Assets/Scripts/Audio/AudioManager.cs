@@ -15,6 +15,11 @@ public class AudioManager : MonoBehaviour
     public AK.Wwise.Event Note;
     public AK.Wwise.Event scroll;
     public AK.Wwise.Event rotate;
+
+    [Header("Chord pad (Wwise Switch driving the BGM pad layer)")]
+    // The Switch Group name in your Wwise project. Switch values must
+    // match BlockType enum names (Home / Lift / Pull / Shadow).
+    public string chordSwitchGroup = "BlockChord";
     void Awake()
     {
         Instance = this;
@@ -75,5 +80,16 @@ public class AudioManager : MonoBehaviour
     public void SetIntensity(float value)
     {
         AkSoundEngine.SetRTPCValue("Intensity", value, audioEmitter);
+    }
+
+    // Switches the chord pad to match the current block type.
+    // In Wwise, set up:
+    //   - a Switch Group named `chordSwitchGroup` (default "BlockChord")
+    //   - Switch values "Home", "Lift", "Pull", "Shadow" matching BlockType
+    //   - either a Switch Container (instant) or a Music Switch Container
+    //     (beat-synced crossfade) under the BGM event
+    public void SetChord(BlockType type)
+    {
+        AkSoundEngine.SetSwitch(chordSwitchGroup, type.ToString(), audioEmitter);
     }
 }
