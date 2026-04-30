@@ -3,9 +3,8 @@ Shader "Custom/ObjectOutline"
     Properties
     {
         _OutlineColor ("Outline Color", Color) = (1, 1, 0, 1)
-        // Now expressed in normalised screen units (e.g. 0.02 ≈ 2% of screen height).
-        // The outline keeps a constant pixel thickness regardless of camera distance.
-        _OutlineWidth ("Outline Width (screen)", Range(0, 0.05)) = 0.018
+        // Object-space normal extrusion: hugs the geometry tightly.
+        _OutlineWidth ("Outline Width", Range(0, 0.15)) = 0.05
     }
     SubShader
     {
@@ -41,18 +40,12 @@ Shader "Custom/ObjectOutline"
 
             Varyings vert(Attributes IN)
             {
+                // Push the back-face mesh outward along its object-space normal.
+                // This stays glued to the surface (no screen-space drift on flat
+                // panels) and creates a clean halo around the silhouette.
+                float3 expanded = IN.positionOS.xyz + normalize(IN.normalOS) * _OutlineWidth;
                 Varyings OUT;
-                OUT.positionCS = TransformObjectToHClip(IN.positionOS.xyz);
-
-                // Project world normal into clip-space, then expand the vertex
-                // along that direction by a constant fraction of the screen.
-                float3 normalWS = TransformObjectToWorldNormal(IN.normalOS);
-                float3 normalCS = mul((float3x3)UNITY_MATRIX_VP, normalWS);
-                float2 offset   = normalize(normalCS.xy + 1e-5) * _OutlineWidth;
-
-                // Multiplying by w preserves the offset after perspective divide,
-                // so the outline is the same pixel width at all depths.
-                OUT.positionCS.xy += offset * OUT.positionCS.w;
+                OUT.positionCS = TransformObjectToHClip(expanded);
                 return OUT;
             }
 

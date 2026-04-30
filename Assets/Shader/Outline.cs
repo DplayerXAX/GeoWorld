@@ -8,8 +8,8 @@ public class Outline : MonoBehaviour
     public float OutlineWidth { get => outlineWidth; set { outlineWidth = value; ApplyProperties(); } }
 
     [SerializeField] private Color outlineColor = Color.yellow;
-    // Now in normalised screen units (≈ fraction of screen height). 0.02 = 2%.
-    [SerializeField, Range(0f, 0.05f)] private float outlineWidth = 0.022f;
+    // Object-space normal extrusion (in mesh local units). Hugs the geometry.
+    [SerializeField, Range(0f, 0.15f)] private float outlineWidth = 0.05f;
 
     private List<Renderer> _renderers;
     private List<Material[]> _originals = new();

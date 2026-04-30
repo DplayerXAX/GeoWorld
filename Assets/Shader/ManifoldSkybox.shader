@@ -4,17 +4,20 @@ Shader "Custom/ManifoldSkybox"
     {
         _ZenithColor   ("Zenith Color",   Color) = (0.02, 0.02, 0.06, 1)
         _HorizonColor  ("Horizon Color",  Color) = (0.06, 0.08, 0.15, 1)
+        _FogColor      ("Fog/Haze Color", Color) = (0.10, 0.12, 0.22, 1)
 
         _GridColor     ("Grid Line Color",Color) = (0.25, 0.35, 0.65, 1)
         _GridScale     ("Grid Scale",     Float) = 12.0
         _GridThickness ("Grid Thickness", Range(0.01, 0.1)) = 0.03
 
-        _StarDensity   ("Star Density",   Range(0,1)) = 0.6
+        _FogStart      ("Fog Start (horizon band)", Range(0, 1)) = 0.08
+        _FogDensity    ("Fog Density",    Range(0, 8)) = 3.5
+        _FogStrength   ("Fog Strength",   Range(0, 1)) = 0.85
+
         _HorizonSharp  ("Horizon Sharpness", Range(1, 20)) = 6.0
         _TimeSpeed     ("Time Speed", Float) = 0.2
 
-        // Music reactivity (set from BackgroundReactor.cs).
-        // Effects are tuned to be VISIBLE — pulse multipliers are large.
+        // Music reactivity (driven from BackgroundReactor.cs)
         _BeatPulse     ("Beat Pulse",     Range(0,1)) = 0
         _MusicIntensity("Music Intensity",Range(0,1)) = 0.5
         _ColorShift    ("Color Shift",    Range(0,1)) = 0
@@ -32,9 +35,10 @@ Shader "Custom/ManifoldSkybox"
             #pragma fragment frag
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
 
-            half4 _ZenithColor, _HorizonColor, _GridColor;
+            half4 _ZenithColor, _HorizonColor, _FogColor, _GridColor;
             float _GridScale, _GridThickness;
-            float _StarDensity, _HorizonSharp, _TimeSpeed;
+            float _FogStart, _FogDensity, _FogStrength;
+            float _HorizonSharp, _TimeSpeed;
             float _BeatPulse, _MusicIntensity, _ColorShift;
 
             struct Attributes { float4 positionOS : POSITION; };
@@ -52,7 +56,7 @@ Shader "Custom/ManifoldSkybox"
                 return OUT;
             }
 
-            // ── Hash ──────────────────────────────────────────────────────
+            // ── Hash & noise (for the stained-glass fog cells) ───────────
             float Hash3(float3 p)
             {
                 p = frac(p * 0.3183099 + 0.1);
@@ -60,7 +64,41 @@ Shader "Custom/ManifoldSkybox"
                 return frac(p.x * p.y * p.z * (p.x + p.y + p.z));
             }
 
-            // ── HSV-ish hue rotation (Rec.709 luma-preserving) ────────────
+            float Noise(float3 p)
+            {
+                float3 i = floor(p);
+                float3 f = frac(p);
+                float n000 = Hash3(i + float3(0,0,0)); float n100 = Hash3(i + float3(1,0,0));
+                float n010 = Hash3(i + float3(0,1,0)); float n110 = Hash3(i + float3(1,1,0));
+                float n001 = Hash3(i + float3(0,0,1)); float n101 = Hash3(i + float3(1,0,1));
+                float n011 = Hash3(i + float3(0,1,1)); float n111 = Hash3(i + float3(1,1,1));
+                float3 u = f * f * (3.0 - 2.0 * f);
+                return lerp(lerp(lerp(n000,n100,u.x), lerp(n010,n110,u.x), u.y),
+                            lerp(lerp(n001,n101,u.x), lerp(n011,n111,u.x), u.y), u.z);
+            }
+
+            // Quantised noise → blocky stained-glass cells (the look the user liked)
+            float StainedGlassFog(float3 p)
+            {
+                float n1 = floor(Noise(p)       * 4.0) / 4.0;
+                float n2 = floor(Noise(p * 2.0) * 4.0) / 4.0 * 0.5;
+                float n3 = floor(Noise(p * 4.0) * 4.0) / 4.0 * 0.25;
+                return saturate(n1 + n2 + n3);
+            }
+
+            // Per-cell hue offset so adjacent cells read as separate glass panels
+            // (deep blues next to violets next to teals — chapel-window vibe)
+            // rather than a single muddy color.
+            float StainedGlassPanelHue(float3 p)
+            {
+                // Same cell scale as the dominant fog layer
+                float3 cellId = floor(p);
+                float h = Hash3(cellId);
+                // Spread around 0 with limited range so the palette stays cohesive
+                return (h - 0.5) * 0.18;
+            }
+
+            // ── HSV-style hue rotation for the music color shift ─────────
             float3 HsvShift(float3 rgb, float shift)
             {
                 float c = cos(shift * 6.2832);
@@ -73,7 +111,7 @@ Shader "Custom/ManifoldSkybox"
                 return saturate(mul(m, rgb));
             }
 
-            // ── Spherical 3-axis grid ─────────────────────────────────────
+            // ── 3-axis spherical grid ────────────────────────────────────
             float SphericalGrid(float3 dir, float scaleMul)
             {
                 float3 d = normalize(dir);
@@ -98,14 +136,13 @@ Shader "Custom/ManifoldSkybox"
                 return saturate(lXZ * w.y + lXY * w.z + lYZ * w.x);
             }
 
-            // ── Perspective floor grid ────────────────────────────────────
+            // ── Perspective floor grid (depth cue) ───────────────────────
             float PerspectiveFloor(float3 dir)
             {
                 if (dir.y >= -0.005) return 0.0;
 
                 float t  = -1.0 / dir.y;
                 float2 xz = dir.xz * t;
-
                 float scale = _GridScale * 0.25;
                 float2 uv   = xz * scale;
                 float2 g    = abs(frac(uv - 0.5) - 0.5) / fwidth(uv);
@@ -114,34 +151,10 @@ Shader "Custom/ManifoldSkybox"
                 float elevFade = saturate(-dir.y * 4.0);
                 float distFade = saturate(1.0 - exp(-t * 0.15));
                 float distFar  = exp(-t * 0.04);
-
                 return saturate(ln) * elevFade * distFade * distFar;
             }
 
-            // ── Sharp star/point field ────────────────────────────────────
-            // Replaces the old block-noise fog. Stars are tiny dots in a 3D
-            // lattice — clean geometric look, not a smear.
-            float Stars(float3 dir)
-            {
-                float3 d = normalize(dir) * 60.0;
-                float3 cellId  = floor(d);
-                float3 cellPos = frac(d) - 0.5;
-
-                float rnd = Hash3(cellId);
-                // _StarDensity 1 → many stars, 0 → almost none
-                float visible = step(1.0 - _StarDensity * 0.04, rnd);
-
-                float dist = length(cellPos);
-                float core = saturate(1.0 - dist * 18.0);
-                core = pow(core, 4.0);
-
-                // Subtle twinkle keyed off time + cell id
-                float twinkle = 0.6 + 0.4 * sin(_Time.y * 2.3 + rnd * 31.7);
-
-                return core * visible * twinkle;
-            }
-
-            // ── Floating block silhouettes ────────────────────────────────
+            // ── Floating cube silhouettes (3D feel through the fog) ──────
             float FloatingCubes(float3 dir)
             {
                 float3 d = normalize(dir);
@@ -164,22 +177,26 @@ Shader "Custom/ManifoldSkybox"
 
                     float edge = saturate(1.0 - abs(sdf) * 22.0);
                     float weight = 1.0 - float(shell) * 0.28;
-                    result = max(result, edge * weight * 0.55);
+                    result = max(result, edge * weight * 0.5);
                 }
                 return result;
             }
 
-            // ── Beat shockwave ────────────────────────────────────────────
-            // A radial pulse expanding outward each beat — clearly visible
-            // confirmation that music is driving the visuals.
+            // ── Beat shockwave (radial pulse from horizon on each beat) ──
             float BeatRipple(float3 dir, float pulse)
             {
                 if (pulse < 0.01) return 0.0;
-                // distance from horizon line (pulse rises from horizon)
                 float horiz = abs(dir.y);
                 float wave  = sin(horiz * 24.0 - _Time.y * 6.0) * 0.5 + 0.5;
                 float band  = smoothstep(0.0, 0.5, horiz) * (1.0 - smoothstep(0.4, 0.9, horiz));
                 return wave * band * pulse;
+            }
+
+            // ── Horizon fog gradient ─────────────────────────────────────
+            float HorizonFog(float3 dir)
+            {
+                float t = abs(normalize(dir).y);
+                return saturate(exp(-_FogDensity * max(0, t - _FogStart)));
             }
 
             half4 frag(Varyings IN) : SV_Target
@@ -187,36 +204,49 @@ Shader "Custom/ManifoldSkybox"
                 float3 dir = normalize(IN.dir);
 
                 // ── Music-driven boosts ─────────────────────────────────
-                float beat       = _BeatPulse;             // [0,1] decays each frame
+                float beat       = _BeatPulse;
                 float intensity  = 0.4 + _MusicIntensity * 0.6;
-                float beatBoost  = 1.0 + beat * 2.5;       // grids brighten dramatically
-                float gridScaleM = 1.0 + beat * 0.05;      // tiny grid breathing on hit
+                float beatBoost  = 1.0 + beat * 2.0;       // grids brighten on hit
+                float gridScaleM = 1.0 + beat * 0.04;
 
-                // ── Base sky gradient ───────────────────────────────────
-                float up    = dir.y * 0.5 + 0.5;
-                float t     = pow(saturate(up), 1.0 / _HorizonSharp);
-                half3 sky   = lerp(_HorizonColor.rgb, _ZenithColor.rgb, t);
+                // ── Sky base gradient ───────────────────────────────────
+                float up = dir.y * 0.5 + 0.5;
+                float t  = pow(saturate(up), 1.0 / _HorizonSharp);
+                half3 sky = lerp(_HorizonColor.rgb, _ZenithColor.rgb, t);
 
-                // ── Geometry layers ─────────────────────────────────────
-                float sphereGrid = SphericalGrid(dir, gridScaleM);
+                // ── Stained-glass fog (the foggy / chapel-glass feel) ──
+                float3 p = dir * 8.0 + _Time.y * _TimeSpeed;
+                float fogLayer = StainedGlassFog(p);
+
+                float baseFog = HorizonFog(dir);
+                float height  = dir.y * 0.5 + 0.5;
+                float fog = saturate(baseFog * (0.6 + fogLayer))
+                          * smoothstep(0.0, 0.6, 1.0 - height)
+                          * _FogStrength;
+
+                // Fog color tinted by the cell value, with a per-panel hue
+                // offset so adjacent cells read as distinct stained-glass panels.
+                half3 fogCol = lerp(_FogColor.rgb, _ZenithColor.rgb, fogLayer);
+                float panelHue = StainedGlassPanelHue(p);
+                fogCol = HsvShift(fogCol, _ColorShift + panelHue);
+                sky    = lerp(fogCol, sky, 1.0 - fog);
+
+                // ── Geometry layered through the fog ────────────────────
+                float sphereGrid = SphericalGrid(dir, gridScaleM) * (1.0 - fog * 0.55);
                 float floorGrid  = PerspectiveFloor(dir);
-                float cubes      = FloatingCubes(dir);
-                float stars      = Stars(dir);
+                float cubes      = FloatingCubes(dir) * (1.0 - fog * 0.4);
                 float ripple     = BeatRipple(dir, beat);
 
-                half3 gridCol    = _GridColor.rgb * beatBoost * intensity;
-                half3 starCol    = lerp(half3(0.9,0.95,1.1), gridCol, 0.3);
-                half3 floorCol   = gridCol * half3(1.10, 1.00, 0.85);
+                half3 gridCol  = _GridColor.rgb * beatBoost * intensity;
+                half3 floorCol = gridCol * half3(1.10, 1.00, 0.85);
 
-                // ── Compose ─────────────────────────────────────────────
                 half3 result = sky;
-                result += starCol * stars * 0.9;
-                result  = lerp(result, gridCol,    sphereGrid * 0.55);
-                result  = lerp(result, floorCol,   floorGrid  * 0.85);
-                result  = lerp(result, gridCol*1.4, cubes     * 0.50);
-                result += gridCol * ripple * 0.6;
+                result = lerp(result, gridCol,    sphereGrid * 0.55);
+                result = lerp(result, floorCol,   floorGrid  * 0.85);
+                result = lerp(result, gridCol*1.3, cubes     * 0.40);
+                result += gridCol * ripple * 0.5;
 
-                // ── Music color shift (continuous hue rotation) ────────
+                // Final hue rotation — keeps the chapel-glass palette evolving
                 result = HsvShift(result, _ColorShift);
 
                 return half4(result, 1.0);
