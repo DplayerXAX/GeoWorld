@@ -27,18 +27,19 @@ public class ArpeggiatorManager : MonoBehaviour
     //          For an L-shape spanning (0,0,0)→(2,0,0)→(2,1,0) the local
     //          values [0, 1, 2, (2,1,0)] pick different chord tones in turn.
     //
-    // Mapping:
-    //   |x| + |z| → chord-tone index (which scale degree)
-    //   y         → octave offset (taller blocks reach higher pitches)
+    // Mapping (kept entirely inside the chord pool — no octave jumps that
+    // sound dissonant when Wwise pitch-shifts beyond the sample's natural range):
+    //   step index = |x| + |z| + y*2 → chord-tone slot
+    //   higher y still reaches higher tones because the pool spans ~2 octaves,
+    //   but the pitch shift stays within musically safe bounds.
     public void PlayCellNote(BlockType type, Vector3Int local)
     {
         int[] chord = GetChord(type);
         if (chord == null || chord.Length == 0) return;
 
-        int horizontal = Mathf.Abs(local.x) + Mathf.Abs(local.z);
-        int idx        = horizontal % chord.Length;
-        int octave     = Mathf.Clamp(local.y, 0, 2) * 12;
-        int semitone   = chord[idx] + octave;
+        int step     = Mathf.Abs(local.x) + Mathf.Abs(local.z) + Mathf.Abs(local.y) * 2;
+        int idx      = step % chord.Length;
+        int semitone = chord[idx];
 
         AudioManager.Instance.PlayArpNote(semitone);
         BackgroundReactor.Instance?.OnNote(0.7f);

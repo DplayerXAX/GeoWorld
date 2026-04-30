@@ -374,8 +374,11 @@ public class PlacementController : MonoBehaviour
         for (int i = 0; i < previewCubes.Count; i++)
             previewCubes[i].SetActive(i < cells.Length);
 
-        Color tint = currentColor;
-        tint.a = valid ? 0.5f : 0.3f;
+        // Valid → green, invalid → red. Preview always reads as a placement hint;
+        // the random per-block color is applied only on successful placement.
+        Color tint = valid
+            ? new Color(0.25f, 1.00f, 0.35f, 0.55f)
+            : new Color(1.00f, 0.20f, 0.20f, 0.45f);
 
         for (int i = 0; i < cells.Length; i++)
         {

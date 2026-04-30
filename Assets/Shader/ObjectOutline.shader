@@ -3,7 +3,9 @@ Shader "Custom/ObjectOutline"
     Properties
     {
         _OutlineColor ("Outline Color", Color) = (1, 1, 0, 1)
-        _OutlineWidth ("Outline Width", Range(0, 0.1)) = 0.04
+        // Now expressed in normalised screen units (e.g. 0.02 ≈ 2% of screen height).
+        // The outline keeps a constant pixel thickness regardless of camera distance.
+        _OutlineWidth ("Outline Width (screen)", Range(0, 0.05)) = 0.018
     }
     SubShader
     {
@@ -23,7 +25,7 @@ Shader "Custom/ObjectOutline"
 
             CBUFFER_START(UnityPerMaterial)
                 float4 _OutlineColor;
-                float _OutlineWidth;
+                float  _OutlineWidth;
             CBUFFER_END
 
             struct Attributes
@@ -39,9 +41,18 @@ Shader "Custom/ObjectOutline"
 
             Varyings vert(Attributes IN)
             {
-                float3 expanded = IN.positionOS.xyz + normalize(IN.normalOS) * _OutlineWidth;
                 Varyings OUT;
-                OUT.positionCS = TransformObjectToHClip(expanded);
+                OUT.positionCS = TransformObjectToHClip(IN.positionOS.xyz);
+
+                // Project world normal into clip-space, then expand the vertex
+                // along that direction by a constant fraction of the screen.
+                float3 normalWS = TransformObjectToWorldNormal(IN.normalOS);
+                float3 normalCS = mul((float3x3)UNITY_MATRIX_VP, normalWS);
+                float2 offset   = normalize(normalCS.xy + 1e-5) * _OutlineWidth;
+
+                // Multiplying by w preserves the offset after perspective divide,
+                // so the outline is the same pixel width at all depths.
+                OUT.positionCS.xy += offset * OUT.positionCS.w;
                 return OUT;
             }
 
