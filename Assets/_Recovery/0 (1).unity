@@ -222,10 +222,6 @@ MonoBehaviour:
   scrollSpeed: 3
   rotateSpeed: 10
   panSpeed: 8
-  trayAnchor: {fileID: 0}
-  trayLocalOffset: {x: 4, y: -2, z: 6}
-  traySpacing: 1.5
-  trayBlockScale: 0.5
 --- !u!4 &164805053
 Transform:
   m_ObjectHideFlags: 0
@@ -273,7 +269,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 0
+  m_IsActive: 1
 --- !u!64 &173873512
 MeshCollider:
   m_ObjectHideFlags: 0
@@ -825,7 +821,6 @@ MonoBehaviour:
   unitPrefab: {fileID: 658080852}
   gridSystem: {fileID: 164805054}
   placement: {fileID: 164805052}
-  blocksPerTurn: 3
   phase: 0
 --- !u!4 &653921581
 Transform:
@@ -874,7 +869,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 10a431f7aeddd8142a61766f6c9d64ef, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::SurfaceUnit
-  bpm: 80
+  bpm: 120
   moveRatio: 0.8
   grid: {fileID: 164805054}
 --- !u!65 &658080853
@@ -1162,8 +1157,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 51133a4190fddab408e6cbdba3705af6, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ArpeggiatorManager
-  noteDensity: 0.8
-  repetition: 0.3
 --- !u!4 &871035206
 Transform:
   m_ObjectHideFlags: 0
@@ -1884,7 +1877,7 @@ MonoBehaviour:
   startCell: {x: 0, y: 0, z: 0}
   endCell: {x: 0, y: 0, z: 0}
   minDistance: 5
-  maxDistance: 10
+  maxDistance: 20
   startPrefab: {fileID: 5859562048836445988, guid: 3c0e5140eab477e49b5e8b36477a17b5, type: 3}
   endPrefab: {fileID: 5859562048836445988, guid: 4242ad8251adaef4ca86b2541266b895, type: 3}
 --- !u!1001 &1079170805139325090

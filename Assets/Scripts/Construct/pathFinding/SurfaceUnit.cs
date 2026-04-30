@@ -11,6 +11,8 @@ public class SurfaceUnit : MonoBehaviour
     [Header("Music")]
     public GridSystem grid;
 
+    [HideInInspector] public GameFlowManager gameFlow;
+
     List<FaceNode> path;
     int index;
 
@@ -24,6 +26,7 @@ public class SurfaceUnit : MonoBehaviour
     float moveTimer;
 
     BlockData currentBlock;
+    FaceNode prevNode;
 
     void Start()
     {
@@ -37,6 +40,7 @@ public class SurfaceUnit : MonoBehaviour
         index = 0;
         currentBlock = null;
         beatTimer = 0f;
+        prevNode = null;
 
         StepToNode(path[0]);
         index = 1;
@@ -86,7 +90,7 @@ public class SurfaceUnit : MonoBehaviour
         if (instance == null || instance.data == null) return;
         BlockData block = instance.data;
 
-        float progress = (float)index / path.Count;
+        float progress = path.Count > 1 ? (float)index / (path.Count - 1) : 0f;
 
         switch (block.blockType)
         {
@@ -94,18 +98,21 @@ public class SurfaceUnit : MonoBehaviour
             case BlockType.Lift:
             case BlockType.Pull:
             case BlockType.Shadow:
-                // Switch the BGM pad chord on entering a new block — the pad
-                // sustains the harmony through every step on this block.
+
                 if (block != currentBlock)
                 {
                     AudioManager.Instance.SetChord(block.blockType);
+                    ArpeggiatorManager.Instance.PlayBassRoot(block.blockType);
                     currentBlock = block;
                 }
 
-                // Per-step arp: cell's local position within the block picks the chord tone.
-                Vector3Int origin = MinCell(instance.occupiedCells);
-                Vector3Int local  = node.cell - origin;
-                ArpeggiatorManager.Instance.PlayCellNote(block.blockType, local);
+                ArpeggiatorManager.Instance.PlayMelodyNote(
+                    block.blockType,
+                    node,
+                    prevNode,
+                    progress,
+                    index
+                );
                 break;
 
             case BlockType.Turret:
@@ -113,19 +120,9 @@ public class SurfaceUnit : MonoBehaviour
                 break;
         }
 
-        AudioManager.Instance.SetIntensity(progress * 100f);
-    }
+        prevNode = node;
 
-    static Vector3Int MinCell(List<Vector3Int> cells)
-    {
-        Vector3Int m = cells[0];
-        foreach (var c in cells)
-        {
-            m.x = Mathf.Min(m.x, c.x);
-            m.y = Mathf.Min(m.y, c.y);
-            m.z = Mathf.Min(m.z, c.z);
-        }
-        return m;
+        AudioManager.Instance.SetIntensity(progress * 100f);
     }
 
     void OnPathFinished()
@@ -134,5 +131,6 @@ public class SurfaceUnit : MonoBehaviour
         AkSoundEngine.PostEvent("Cadence_End", this.gameObject);
         AudioManager.Instance.SetIntensity(0f);
         path = null;
+        gameFlow?.EndRunningPhase();
     }
 }

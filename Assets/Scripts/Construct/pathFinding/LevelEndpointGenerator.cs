@@ -8,7 +8,7 @@ public class LevelEndpointGenerator : MonoBehaviour
     [Header("Logic")]
     public Vector3Int startCell;
     public Vector3Int endCell;
-
+    public List<GameObject> allEndpoints = new();
     public float minDistance = 5f;
     public float maxDistance = 10f;
 
@@ -47,23 +47,26 @@ public class LevelEndpointGenerator : MonoBehaviour
     {
         if (gridSystem == null) return;
 
-        if (startObj != null) Destroy(startObj);
-        if (endObj != null) Destroy(endObj);
-
         if (startPrefab != null)
         {
-            startObj = Instantiate(startPrefab);
-            startObj.transform.position = gridSystem.GridToWorld(startCell);
+            var obj = Instantiate(startPrefab);
+            obj.transform.position = gridSystem.GridToWorld(startCell);
             gridSystem.SetOccupied(startCell);
-            startObj.name = "startBlock";
+            obj.name = "startBlock";
+            if (!obj.GetComponent<GridEndpoint>()) obj.AddComponent<GridEndpoint>();
+
+            allEndpoints.Add(obj);
         }
 
         if (endPrefab != null)
         {
-            endObj = Instantiate(endPrefab);
-            endObj.transform.position = gridSystem.GridToWorld(endCell);
+            var obj = Instantiate(endPrefab);
+            obj.transform.position = gridSystem.GridToWorld(endCell);
             gridSystem.SetOccupied(endCell);
-            endObj.name = "endBlock";
+            obj.name = "endBlock";
+            if (!obj.GetComponent<GridEndpoint>()) obj.AddComponent<GridEndpoint>();
+
+            allEndpoints.Add(obj);
         }
     }
 

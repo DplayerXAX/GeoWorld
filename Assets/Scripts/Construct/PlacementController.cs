@@ -19,6 +19,18 @@ public class PlacementController : MonoBehaviour
     public float minDepth = 2f, maxDepth = 40f, scrollSpeed = 3f, rotateSpeed = 10f;
     public float panSpeed = 8f;
 
+    [Header("Tray")]
+    // If assigned, tray blocks spawn parented to this transform (use a scene
+    // pivot so the tray sits in a fixed world location). If null, the tray
+    // is parented to the camera so it always stays on-screen.
+    public Transform trayAnchor;
+    // Default lands in the bottom-right of the camera view at a comfortable
+    // distance. +X is camera-right, -Y is camera-down.
+    public Vector3 trayLocalOffset = new Vector3(3.5f, -1.8f, 5f);
+    public float traySpacing = 1.5f;
+    [Tooltip("Visual scale of tray tokens. Grid cellSize used for placement is unchanged.")]
+    public float trayBlockScale = 0.5f;
+
     private Vector3Int baseGridPos, currentGridPos, manualOffset;
     private float _depth = 10f;
     private Quaternion _currentRotation = Quaternion.identity, _targetRotation = Quaternion.identity;
@@ -36,6 +48,14 @@ public class PlacementController : MonoBehaviour
     private Quaternion lastObjectRot;
     private Vector3Int[] lastObjectCells;
 
+    // Tray tracking — kept so we can show/hide tokens on edit mode enter/exit.
+    private List<GameObject> trayBlocks = new();
+
+    // Double-click detection for placed-block and endpoint focus.
+    private float _lastClickTime;
+    private GameObject _lastClickTarget;
+    private const float DoubleClickInterval = 0.3f;
+
     void Awake()
     {
         editFocusAnchor = new GameObject("EditFocusAnchor").transform;
@@ -43,28 +63,38 @@ public class PlacementController : MonoBehaviour
 
     void Start()
     {
-        currentBlock = GetRandomBlock();
+        // currentBlock starts null — the tray is the source of truth for what's
+        // available to place. GameFlowManager.StartTurn populates the tray.
         currentColor = GetRandomColor();
     }
 
+    // Spawns `count` block tokens laid out as a row in the tray (no physics).
+    // Each token is a SelectableBlock the player clicks to grab; clicking
+    // immediately enters Edit mode, and a successful TryPlace destroys the
+    // token (consuming the slot).
     public void SpawnRoundBlocks(int count)
     {
         if (cubePrefab == null || blocks == null || blocks.Length == 0)
             return;
+
+        Transform parent     = trayAnchor != null ? trayAnchor : cam.transform;
+        Vector3   originLocal = trayAnchor != null ? Vector3.zero : trayLocalOffset;
 
         for (int i = 0; i < count; i++)
         {
             BlockData data = blocks[Random.Range(0, blocks.Length)];
             if (data == null || data.cells == null) continue;
 
-            Vector3 pos =
-                cam.transform.position +
-                cam.transform.forward * 5f +
-                Random.insideUnitSphere * 2f;
+            float   offset   = (i - (count - 1) * 0.5f) * traySpacing;
+            Vector3 localPos = originLocal + Vector3.right * offset;
 
-            GameObject obj = new GameObject("PhysicsBlock");
-            obj.transform.position = pos;
-            obj.transform.rotation = Quaternion.identity;
+            GameObject obj = new GameObject("TrayBlock");
+            obj.transform.SetParent(parent, false);
+            obj.transform.localPosition = localPos;
+            obj.transform.localRotation = Quaternion.identity;
+            // Scale shrinks the whole token (cubes + their relative offsets)
+            // so multi-cell blocks fit inside a small visual footprint.
+            obj.transform.localScale    = Vector3.one * trayBlockScale;
 
             Color co = GetRandomColor();
             foreach (var cell in data.cells)
@@ -74,10 +104,16 @@ public class PlacementController : MonoBehaviour
                 c.GetComponent<Renderer>().material.color = co;
             }
 
-            obj.AddComponent<Rigidbody>();
             obj.AddComponent<SelectableBlock>().data = data;
-            obj.AddComponent<BoxCollider>().size = Vector3.one * 2.5f;
+            trayBlocks.Add(obj);
         }
+    }
+
+    // Hides or shows all tray tokens that haven't been consumed yet.
+    void SetTrayVisible(bool visible)
+    {
+        trayBlocks.RemoveAll(b => b == null);
+        foreach (var b in trayBlocks) b.SetActive(visible);
     }
 
     void Update()
@@ -236,6 +272,7 @@ public class PlacementController : MonoBehaviour
 
             mode = PlacementMode.Select;
             previewParent.gameObject.SetActive(false);
+            SetTrayVisible(true);
         }
     }
 
@@ -250,34 +287,60 @@ public class PlacementController : MonoBehaviour
         if (!Physics.Raycast(ray, out RaycastHit hit))
         {
             UpdateHighlight(null);
+            _lastClickTarget = null;
             return;
         }
 
+        // --- Tray token: single click → immediately grab and enter Edit ---
         var sb = hit.transform.GetComponentInParent<SelectableBlock>();
         if (sb != null)
         {
-            currentBlock  = sb.data;
-            currentColor  = sb.GetComponentInChildren<Renderer>().material.color;
+            currentBlock        = sb.data;
+            currentColor        = sb.GetComponentInChildren<Renderer>().material.color;
             activePhysicsObject = sb.gameObject;
             selectedInstance    = null;
 
             UpdateHighlight(activePhysicsObject);
-            cam.SetFocus(sb.transform);
+            EnterEditMode(null);
             return;
         }
 
+        // --- Endpoint markers (start / end block): highlight, double-click focus ---
+        var ep = hit.transform.GetComponentInParent<GridEndpoint>();
+        if (ep != null)
+        {
+            UpdateHighlight(ep.gameObject);
+            selectedInstance    = null;
+            activePhysicsObject = null;
+
+            bool isDouble = ep.gameObject == _lastClickTarget
+                         && Time.time - _lastClickTime < DoubleClickInterval;
+            _lastClickTime   = Time.time;
+            _lastClickTarget = ep.gameObject;
+
+            if (isDouble) cam.SetFocus(ep.transform);
+            return;
+        }
+
+        // --- Placed blocks: highlight, double-click focus, Tab to pick up ---
         Vector3Int gPos    = grid.WorldToGrid(hit.point);
         var        instance = grid.GetInstanceAt(gPos);
 
         if (instance != null)
         {
-            selectedInstance = instance;
-            currentBlock     = instance.data;
-            currentColor     = instance.visualObject.GetComponentInChildren<Renderer>().material.color;
+            selectedInstance    = instance;
+            currentBlock        = instance.data;
+            currentColor        = instance.visualObject.GetComponentInChildren<Renderer>().material.color;
             activePhysicsObject = null;
 
             UpdateHighlight(instance.visualObject);
-            cam.SetFocus(instance.visualObject.transform);
+
+            bool isDouble = instance.visualObject == _lastClickTarget
+                         && Time.time - _lastClickTime < DoubleClickInterval;
+            _lastClickTime   = Time.time;
+            _lastClickTarget = instance.visualObject;
+
+            if (isDouble) cam.SetFocus(instance.visualObject.transform);
         }
     }
 
@@ -320,6 +383,7 @@ public class PlacementController : MonoBehaviour
     void EnterEditMode(Vector3? focusPos)
     {
         mode = PlacementMode.Edit;
+        SetTrayVisible(false);  // hide tokens while placing so they don't clutter the view
         previewParent.gameObject.SetActive(currentBlock != null);
         if (focusPos == null) manualOffset = Vector3Int.zero;
         UpdateHighlight(null);
@@ -366,13 +430,24 @@ public class PlacementController : MonoBehaviour
 
         grid.RegisterInstance(ins);
 
+        // Consume the tray token we picked up. activePhysicsObject is set
+        // when TrySelectObject hits a SelectableBlock; destroying it frees
+        // the slot and (when the tray empties) GameFlowManager spawns a
+        // fresh round.
+        if (activePhysicsObject != null)
+        {
+            trayBlocks.Remove(activePhysicsObject); // remove before Destroy so SetTrayVisible skips it
+            Destroy(activePhysicsObject);
+            activePhysicsObject = null;
+        }
+
         isPickingUpObject = false;
-        currentBlock = GetRandomBlock();
+        currentBlock = null;
         currentColor = GetRandomColor();
 
-        // Return to Select mode; camera stays where it is — no forced focus change.
         mode = PlacementMode.Select;
         previewParent.gameObject.SetActive(false);
+        SetTrayVisible(true);
     }
 
     void UpdatePreview()
@@ -498,12 +573,6 @@ public class PlacementController : MonoBehaviour
     // =========================
     // UTIL
     // =========================
-
-    BlockData GetRandomBlock()
-    {
-        if (blocks == null || blocks.Length == 0) return null;
-        return blocks[Random.Range(0, blocks.Length)];
-    }
 
     Color GetRandomColor() =>
         Random.ColorHSV(0f, 1f, 0.6f, 1f, 0.7f, 1f);
