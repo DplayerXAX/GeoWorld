@@ -31,7 +31,7 @@ public class FaceBuilder
             {
                 cell = cell,
                 normal = n,
-                worldPos = basePos + n * (size * 0.5f)
+                worldPos = basePos + n * (size * 0.5f + 0.01f)
             });
         }
 

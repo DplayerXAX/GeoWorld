@@ -70,6 +70,34 @@ public class LevelEndpointGenerator : MonoBehaviour
         }
     }
 
+    // Generates one new endpoint near any of the existing network points,
+    // spawns its visual, and returns the grid cell.
+    public Vector3Int GenerateSinglePoint(List<Vector3Int> existingPoints, bool isStart)
+    {
+        var candidates = new List<Vector3Int>();
+        foreach (var kv in gridSystem.GetGrid())
+            if (!kv.Value) candidates.Add(kv.Key);
+
+        if (candidates.Count == 0) return Vector3Int.zero;
+
+        // Anchor on a random existing point so the new endpoint grows the network.
+        var anchor = existingPoints[Random.Range(0, existingPoints.Count)];
+        var cell   = PickEnd(candidates, anchor);
+
+        var prefab = isStart ? startPrefab : endPrefab;
+        if (prefab != null)
+        {
+            var obj = Instantiate(prefab);
+            obj.transform.position = gridSystem.GridToWorld(cell);
+            gridSystem.SetOccupied(cell);
+            obj.name = isStart ? "startBlock" : "endBlock";
+            if (!obj.GetComponent<GridEndpoint>()) obj.AddComponent<GridEndpoint>();
+            allEndpoints.Add(obj);
+        }
+
+        return cell;
+    }
+
     Vector3Int PickEnd(List<Vector3Int> candidates, Vector3Int start)
     {
         Vector3Int best      = Vector3Int.zero;

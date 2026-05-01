@@ -21,6 +21,10 @@ Shader "Custom/ManifoldSkybox"
         _BeatPulse     ("Beat Pulse",     Range(0,1)) = 0
         _MusicIntensity("Music Intensity",Range(0,1)) = 0.5
         _ColorShift    ("Color Shift",    Range(0,1)) = 0
+        // Block-type hue target (0-1, rotates palette toward chord colour)
+        _TypeHue       ("Type Hue",       Range(0,1)) = 0.6
+        // Pitch glow (0-1, high notes → bright zenith flash)
+        _PitchGlow     ("Pitch Glow",     Range(0,1)) = 0
     }
 
     SubShader
@@ -39,7 +43,7 @@ Shader "Custom/ManifoldSkybox"
             float _GridScale, _GridThickness;
             float _FogStart, _FogDensity, _FogStrength;
             float _HorizonSharp, _TimeSpeed;
-            float _BeatPulse, _MusicIntensity, _ColorShift;
+            float _BeatPulse, _MusicIntensity, _ColorShift, _TypeHue, _PitchGlow;
 
             struct Attributes { float4 positionOS : POSITION; };
             struct Varyings
@@ -106,11 +110,13 @@ Shader "Custom/ManifoldSkybox"
                 // Time advances faster when music is intense
                 float t = _Time.y * (0.15 + _MusicIntensity * 0.55);
 
-                // ── Hue: each panel's base offset (±0.25) plus a slow oscillation
-                //    around it. Different panels are out of phase via h1/h2 offsets.
+                // ── Hue: each panel's base offset (±0.25) plus a slow oscillation,
+                //    plus a bias toward the current block-type's characteristic hue.
                 float hueBase   = (h1 - 0.5) * 0.5;
                 float hueOsc    = sin(t * 0.6 + h1 * 6.2832) * 0.10;
-                float hue       = hueBase + hueOsc;
+                // _TypeHue biases panels toward the chord colour; different panels
+                // are pulled by different amounts (h2 as a per-panel weight 0-0.6).
+                float hue       = hueBase + hueOsc + (_TypeHue - 0.5) * h2 * 0.6;
 
                 // ── Brightness: hash baseline + per-panel breathing + global beat flash.
                 float briBreath = sin(t * 0.9 + h2 * 6.2832) * 0.25;
@@ -244,7 +250,9 @@ Shader "Custom/ManifoldSkybox"
                 // ── Sky base gradient ───────────────────────────────────
                 float up = dir.y * 0.5 + 0.5;
                 float t  = pow(saturate(up), 1.0 / _HorizonSharp);
-                half3 sky = lerp(_HorizonColor.rgb, _ZenithColor.rgb, t);
+                // Pitch glow: high notes briefly brighten the zenith
+                half3 zenith = _ZenithColor.rgb * (1.0 + _PitchGlow * 3.5 * up);
+                half3 sky = lerp(_HorizonColor.rgb, zenith, t);
 
                 // ── Stained-glass fog (the foggy / chapel-glass feel) ──
                 float3 p = dir * 8.0 + _Time.y * _TimeSpeed;

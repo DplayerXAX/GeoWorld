@@ -14,7 +14,6 @@ public class PlacementController : MonoBehaviour
     public Transform previewParent;
     public OrbitCamera cam;
     public Vector3Int SnappedGridPos => baseGridPos;
-
     [Range(0.5f, 4f)] public float snapGridRadius = 1.5f;
     public float minDepth = 2f, maxDepth = 40f, scrollSpeed = 3f, rotateSpeed = 10f;
     public float panSpeed = 8f;
@@ -26,10 +25,10 @@ public class PlacementController : MonoBehaviour
     public Transform trayAnchor;
     // Default lands in the bottom-right of the camera view at a comfortable
     // distance. +X is camera-right, -Y is camera-down.
-    public Vector3 trayLocalOffset = new Vector3(3.5f, -1.8f, 5f);
-    public float traySpacing = 1.5f;
+    public Vector3 trayLocalOffset = new Vector3(4.5f, -2.5f, 7f);
+    public float traySpacing = 2.0f;
     [Tooltip("Visual scale of tray tokens. Grid cellSize used for placement is unchanged.")]
-    public float trayBlockScale = 0.5f;
+    public float trayBlockScale = 0.6f;
 
     private Vector3Int baseGridPos, currentGridPos, manualOffset;
     private float _depth = 10f;
@@ -229,14 +228,23 @@ public class PlacementController : MonoBehaviour
     {
         bool shift = Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift);
 
-        if (Input.GetKeyDown(KeyCode.Alpha1))
+        if (Input.GetKeyDown(KeyCode.Alpha1)) 
+        {
+            AudioManager.Instance.PlayRotate();
             _targetRotation *= Quaternion.Euler(90, 0, 0);
+        }
 
-        if (Input.GetKeyDown(KeyCode.Alpha2))
+        if (Input.GetKeyDown(KeyCode.Alpha2)) 
+        {
+            AudioManager.Instance.PlayRotate();
             _targetRotation *= Quaternion.Euler(0, 90, 0);
+        }
 
-        if (Input.GetKeyDown(KeyCode.Alpha3))
+        if (Input.GetKeyDown(KeyCode.Alpha3)) 
+        {
+            AudioManager.Instance.PlayRotate();
             _targetRotation *= Quaternion.Euler(0, 0, 90);
+        }
     }
 
     void HandleModeSwitch()
@@ -323,7 +331,9 @@ public class PlacementController : MonoBehaviour
         }
 
         // --- Placed blocks: single-click selects, double-click picks up for re-edit ---
-        Vector3Int gPos    = grid.WorldToGrid(hit.point);
+        // Step slightly inward along the surface normal before snapping to grid so
+        // a hit exactly on a face boundary doesn't round into the adjacent empty cell.
+        Vector3Int gPos    = grid.WorldToGrid(hit.point - hit.normal * (grid.cellSize * 0.1f));
         var        instance = grid.GetInstanceAt(gPos);
 
         if (instance != null)

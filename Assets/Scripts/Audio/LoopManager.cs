@@ -62,12 +62,15 @@ public class LoopManager : MonoBehaviour
             int i = tick % entry.notes.Count;
             var note = entry.notes[i];
 
-            // degree == 0 ¡ú rest
+            // degree == 0 = rest
             if (note.degree > 0)
             {
+                // Shift loops down 1 octave relative to how they were recorded,
+                // clamped to [-1, 0] so ambient layers sit in a low register.
+                int loopOct = Mathf.Clamp(note.octave - 1, -1, 0);
                 ArpeggiatorManager.Instance.PlayAmbientNote(
                     note.degree,
-                    note.octave,
+                    loopOct,
                     loopVelocity
                 );
 

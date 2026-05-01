@@ -27,7 +27,9 @@ public class AudioManager : MonoBehaviour
     }
     private void Start()
     {
-        //Note.Post(this.gameObject);
+        // Establish a default Switch state before the BGM Switch Container fires,
+        // otherwise Wwise logs "No default Switch value selected".
+        SetChord(BlockType.Home);
         BGM.Post(this.gameObject);
     }
 

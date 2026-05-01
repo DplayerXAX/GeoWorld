@@ -1,4 +1,4 @@
-﻿using System.Collections;
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -20,17 +20,27 @@ public class GameFlowManager : MonoBehaviour
 
     [Header("Turn")]
     public int blocksPerTurn = 3;
-    List<(Vector3Int start, Vector3Int end)> stages = new();
-    int currentStageIndex = 0;
-    private SurfaceUnit currentUnit;
     public GamePhase phase;
+
+    // Roguelite accumulation — all endpoint cells and live looping units
+    readonly List<Vector3Int> allStarts    = new();
+    readonly List<Vector3Int> allEnds      = new();
+    readonly List<SurfaceUnit> loopingUnits = new();
+    int roundIndex;   // how many extra endpoints have been added so far
+
+    // The specific endpoint the player must connect this round.
+    // Zero → first stage (any start to any end). Set by AddNextEndpoint.
+    Vector3Int _challengeCell;
+    bool       _challengeIsStart;
+
+    SurfaceUnit currentUnit;
 
     [Header("Ambient Scan")]
     public int scanBeats = 8;
     [Range(0f, 1f)] public float scanFlashBrightness = 0.7f;
 
     float _scanTimer;
-    bool _scanning;
+    bool  _scanning;
     readonly HashSet<GameObject> _scanFlashing = new();
 
     void Start()
@@ -44,25 +54,56 @@ public class GameFlowManager : MonoBehaviour
         StartTurn();
     }
 
-    void ConfigureEndpointBounds()
+    // ── Endpoint helpers ─────────────────────────────────────────────────────
+
+    void ConfigureEndpointBounds(float extraRange = 0f)
     {
         endpoints.minDistance = Mathf.Max(2f, blocksPerTurn * 0.5f);
-        endpoints.maxDistance = blocksPerTurn + 1f;
+        endpoints.maxDistance = Mathf.Min(blocksPerTurn + 1f + extraRange, 9f);
     }
 
     void CreateFirstStage()
     {
         ConfigureEndpointBounds();
         endpoints.Generate();
-        stages.Add((endpoints.startCell, endpoints.endCell));
+        allStarts.Add(endpoints.startCell);
+        allEnds.Add(endpoints.endCell);
     }
 
-    void AddNextStage()
+    // Alternates: even roundIndex → +start, odd → +end.
+    // Distance window widens so later endpoints can span larger gaps.
+    void AddNextEndpoint()
     {
-        ConfigureEndpointBounds();
-        endpoints.Generate();
-        stages.Add((endpoints.startCell, endpoints.endCell));
+        float extraRange = roundIndex * 0.5f;
+        ConfigureEndpointBounds(extraRange);
+
+        bool addStart = (roundIndex % 2 == 0);
+
+        if (addStart)
+        {
+            var cell = endpoints.GenerateSinglePoint(allStarts, true);
+            if (cell != Vector3Int.zero)
+            {
+                allStarts.Add(cell);
+                _challengeCell    = cell;
+                _challengeIsStart = true;
+            }
+        }
+        else
+        {
+            var cell = endpoints.GenerateSinglePoint(allEnds, false);
+            if (cell != Vector3Int.zero)
+            {
+                allEnds.Add(cell);
+                _challengeCell    = cell;
+                _challengeIsStart = false;
+            }
+        }
+
+        roundIndex++;
     }
+
+    // ── Per-frame logic ───────────────────────────────────────────────────────
 
     void Update()
     {
@@ -95,6 +136,8 @@ public class GameFlowManager : MonoBehaviour
         }
     }
 
+    // ── Ambient path scan ─────────────────────────────────────────────────────
+
     IEnumerator PathPulseScan()
     {
         _scanning = true;
@@ -103,18 +146,17 @@ public class GameFlowManager : MonoBehaviour
         scanGraph.SetData(gridSystem);
         scanGraph.Build();
 
-        var stage = stages[currentStageIndex];
-        var startF = scanGraph.GetFaceNodes(stage.start);
-        var endF = scanGraph.GetFaceNodes(stage.end);
+        var startFaces = CollectFacesFromGraph(scanGraph, allStarts);
+        var endFaces   = CollectFacesFromGraph(scanGraph, allEnds);
 
-        if (startF != null && endF != null && startF.Count > 0 && endF.Count > 0)
+        if (startFaces.Count > 0 && endFaces.Count > 0)
         {
-            var path = SurfacePathfinding.FindPath(startF, endF);
+            var path = SurfacePathfinding.FindPath(startFaces, endFaces);
 
             if (path != null && path.Count > 0)
             {
                 float secPerBeat = 60f / unitPrefab.bpm;
-                float stepSec = Mathf.Clamp(secPerBeat * scanBeats / path.Count, 0.08f, 0.72f);
+                float stepSec    = Mathf.Clamp(secPerBeat * scanBeats / path.Count, 0.08f, 0.72f);
 
                 foreach (var node in path)
                 {
@@ -122,23 +164,12 @@ public class GameFlowManager : MonoBehaviour
 
                     if (inst?.data != null)
                     {
-                        int root = RootDegree(inst.data.blockType);
+                        int root  = RootDegree(inst.data.blockType);
+                        int yi    = Mathf.Clamp(node.cell.y, 0, YDegreeMap.Length - 1);
+                        int deg   = ((root + YDegreeMap[yi] - 2) % 7 + 7) % 7 + 1;
+                        int oct   = Mathf.Clamp(node.cell.y - 1, -1, 3);
 
-                        int yIndex = Mathf.Clamp(node.cell.y, 0, YDegreeMap.Length - 1);
-                        int offset = YDegreeMap[yIndex];
-
-                        // 更安全的degree循环
-                        int finalDegree = ((root + offset - 2) % 7 + 7) % 7 + 1;
-
-                        int octave = Mathf.Clamp(node.cell.y - 1, -1, 3);
-
-                        ArpeggiatorManager.Instance.PlayAmbientNote(
-                            finalDegree,
-                            octave,
-                            0.28f
-                        );
-
-                        // 👉 让scan也有“生命感”
+                        ArpeggiatorManager.Instance.PlayAmbientNote(deg, oct, 0.28f);
                         BackgroundReactor.Instance?.OnNote(0.2f);
 
                         if (inst.visualObject != null)
@@ -147,8 +178,7 @@ public class GameFlowManager : MonoBehaviour
 
                     yield return new WaitForSeconds(stepSec);
 
-                    if (phase != GamePhase.Build)
-                        break;
+                    if (phase != GamePhase.Build) break;
                 }
             }
         }
@@ -156,16 +186,15 @@ public class GameFlowManager : MonoBehaviour
         _scanning = false;
     }
 
-    // ✔ 完整合法定义（你之前这里断了）
     static readonly int[] YDegreeMap = { 1, 2, 4, 5, 7 };
 
     static int RootDegree(BlockType t) => t switch
     {
-        BlockType.Home => 1,
-        BlockType.Lift => 4,
-        BlockType.Pull => 5,
+        BlockType.Home   => 1,
+        BlockType.Lift   => 4,
+        BlockType.Pull   => 5,
         BlockType.Shadow => 7,
-        _ => 1,
+        _                => 1,
     };
 
     IEnumerator ScanFlashBlock(GameObject obj, float duration)
@@ -175,12 +204,12 @@ public class GameFlowManager : MonoBehaviour
         var rends = obj.GetComponentsInChildren<Renderer>();
         int n = rends.Length;
 
-        var orig = new Color[n];
+        var orig   = new Color[n];
         var bright = new Color[n];
 
         for (int i = 0; i < n; i++)
         {
-            orig[i] = rends[i].material.color;
+            orig[i]   = rends[i].material.color;
             bright[i] = Color.Lerp(orig[i], Color.white, scanFlashBrightness);
             rends[i].material.color = bright[i];
         }
@@ -207,6 +236,8 @@ public class GameFlowManager : MonoBehaviour
         _scanFlashing.Remove(obj);
     }
 
+    // ── Turn / run flow ───────────────────────────────────────────────────────
+
     public void StartTurn()
     {
         placement.currentBlock = null;
@@ -226,13 +257,28 @@ public class GameFlowManager : MonoBehaviour
         graph.SetData(gridSystem);
         graph.Build();
 
-        var stage = stages[currentStageIndex];
+        List<FaceNode> startFaces, endFaces;
 
-        var startFaces = graph.GetFaceNodes(stage.start);
-        var endFaces = graph.GetFaceNodes(stage.end);
+        if (_challengeCell == Vector3Int.zero)
+        {
+            // First stage — any start to any end
+            startFaces = CollectFaces(allStarts);
+            endFaces   = CollectFaces(allEnds);
+        }
+        else if (_challengeIsStart)
+        {
+            // Player must route FROM the newly added start to any existing end
+            startFaces = CollectFacesFromGraph(graph, new List<Vector3Int> { _challengeCell });
+            endFaces   = CollectFaces(allEnds);
+        }
+        else
+        {
+            // Player must route from any existing start TO the newly added end
+            startFaces = CollectFaces(allStarts);
+            endFaces   = CollectFacesFromGraph(graph, new List<Vector3Int> { _challengeCell });
+        }
 
-        if (startFaces == null || endFaces == null || startFaces.Count == 0 || endFaces.Count == 0)
-            return;
+        if (startFaces.Count == 0 || endFaces.Count == 0) return;
 
         var path = SurfacePathfinding.FindPath(startFaces, endFaces);
 
@@ -243,27 +289,51 @@ public class GameFlowManager : MonoBehaviour
             return;
         }
 
-        if (currentUnit != null)
-            Destroy(currentUnit.gameObject);
-
+        // Spawn unit at the actual path start, not necessarily startFaces[0]
         currentUnit = Instantiate(unitPrefab);
         currentUnit.gameFlow = this;
-        currentUnit.transform.position = startFaces[0].worldPos;
+        currentUnit.transform.position = path[0].worldPos;
         currentUnit.SetPath(path);
 
         phase = GamePhase.Running;
     }
 
+    // Called by SurfaceUnit when it finishes its first traversal.
     public void EndRunningPhase()
     {
         if (phase != GamePhase.Running) return;
 
-        currentStageIndex++;
+        // Promote the finished unit to a permanent ambient loop
+        currentUnit.SetLooping(true);
+        loopingUnits.Add(currentUnit);
 
-        if (currentStageIndex >= stages.Count)
-            AddNextStage();
+        AddNextEndpoint();
 
         phase = GamePhase.Build;
         StartTurn();
+    }
+
+    // ── Graph helpers ─────────────────────────────────────────────────────────
+
+    List<FaceNode> CollectFaces(List<Vector3Int> cells)
+    {
+        var result = new List<FaceNode>();
+        foreach (var cell in cells)
+        {
+            var faces = graph.GetFaceNodes(cell);
+            if (faces != null) result.AddRange(faces);
+        }
+        return result;
+    }
+
+    List<FaceNode> CollectFacesFromGraph(SurfaceGraphBuilder g, List<Vector3Int> cells)
+    {
+        var result = new List<FaceNode>();
+        foreach (var cell in cells)
+        {
+            var faces = g.GetFaceNodes(cell);
+            if (faces != null) result.AddRange(faces);
+        }
+        return result;
     }
 }

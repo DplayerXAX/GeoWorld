@@ -223,9 +223,9 @@ MonoBehaviour:
   rotateSpeed: 10
   panSpeed: 8
   trayAnchor: {fileID: 0}
-  trayLocalOffset: {x: 4, y: -2, z: 6}
+  trayLocalOffset: {x: 4, y: -2.5, z: 6}
   traySpacing: 1.5
-  trayBlockScale: 0.5
+  trayBlockScale: 0.4
 --- !u!4 &164805053
 Transform:
   m_ObjectHideFlags: 0
@@ -879,6 +879,7 @@ MonoBehaviour:
   bpm: 80
   moveRatio: 0.8
   grid: {fileID: 164805054}
+  loopVelocityScale: 0.35
   gameFlow: {fileID: 0}
 --- !u!65 &658080853
 BoxCollider:
@@ -1343,6 +1344,10 @@ MonoBehaviour:
   beatStrength: 0.85
   colorShiftPerNote: 0.008
   ambientColorDrift: 0.01
+  typeHueLerpSpeed: 0.9
+  pitchGlowStrength: 0.7
+  pitchGlowDecay: 3.5
+  tensionColorKick: 0.06
   idleIntensity: 0.5
 --- !u!4 &1188158438
 Transform:
