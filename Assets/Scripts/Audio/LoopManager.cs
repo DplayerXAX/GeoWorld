@@ -13,8 +13,9 @@ public class LoopManager : MonoBehaviour
     class LoopEntry
     {
         public List<ArpeggiatorManager.NoteEvent> notes;
-        public List<GameObject> visuals;
-        public float bpm;
+        public List<GameObject>    visuals;
+        public HashSet<Vector3Int> cells;   // grid cells this loop's path covers
+        public float     bpm;
         public Coroutine coroutine;
     }
 
@@ -23,19 +24,39 @@ public class LoopManager : MonoBehaviour
 
     void Awake() => Instance = this;
 
-    public void AddLoop(List<ArpeggiatorManager.NoteEvent> notes, List<GameObject> visuals, float bpm)
+    public void AddLoop(List<ArpeggiatorManager.NoteEvent> notes, List<GameObject> visuals,
+                        float bpm, IEnumerable<Vector3Int> cells = null)
     {
         if (notes == null || notes.Count == 0) return;
 
+        var cellSet = new HashSet<Vector3Int>();
+        if (cells != null)
+            foreach (var c in cells) cellSet.Add(c);
+
         var entry = new LoopEntry
         {
-            notes = notes,
+            notes   = notes,
             visuals = visuals ?? new List<GameObject>(),
-            bpm = bpm
+            cells   = cellSet,
+            bpm     = bpm
         };
 
         entry.coroutine = StartCoroutine(PlayLoop(entry));
         _loops.Add(entry);
+    }
+
+    // Stops and removes every loop whose path overlaps the given cells.
+    // Called by PlacementController when a block is lifted from the grid.
+    public void RemoveLoopsOverlapping(IEnumerable<Vector3Int> cells)
+    {
+        var check = new HashSet<Vector3Int>(cells);
+        for (int i = _loops.Count - 1; i >= 0; i--)
+        {
+            if (!_loops[i].cells.Overlaps(check)) continue;
+
+            if (_loops[i].coroutine != null) StopCoroutine(_loops[i].coroutine);
+            _loops.RemoveAt(i);
+        }
     }
 
     public void ClearAllLoops()
@@ -65,31 +86,29 @@ public class LoopManager : MonoBehaviour
             // degree == 0 = rest
             if (note.degree > 0)
             {
-                // Shift loops down 1 octave relative to how they were recorded,
-                // clamped to [-1, 0] so ambient layers sit in a low register.
-                int loopOct = Mathf.Clamp(note.octave - 1, -1, 0);
-                ArpeggiatorManager.Instance.PlayAmbientNote(
-                    note.degree,
-                    loopOct,
-                    loopVelocity
-                );
-
+                // Resolve the visual block for this note — used for both
+                // 3-D audio emission (attenuation) and the flash effect.
+                GameObject noteEmitter = null;
                 if (entry.visuals.Count > 0)
                 {
                     int vi = entry.visuals.Count == 1 ? 0
-                        : Mathf.FloorToInt(
-                            (float)i / entry.notes.Count * entry.visuals.Count
-                        );
+                        : Mathf.Clamp(
+                            Mathf.FloorToInt(
+                                (float)i / entry.notes.Count * entry.visuals.Count),
+                            0, entry.visuals.Count - 1);
 
-                    vi = Mathf.Clamp(vi, 0, entry.visuals.Count - 1);
-
-                    if (entry.visuals[vi] != null)
-                    {
-                        StartCoroutine(
-                            FlashBlock(entry.visuals[vi], secPerBeat * 0.55f)
-                        );
-                    }
+                    noteEmitter = entry.visuals[vi];
+                    if (noteEmitter != null)
+                        StartCoroutine(FlashBlock(noteEmitter, secPerBeat * 0.55f));
                 }
+
+                // Shift loops down 2 octaves relative to how they were recorded.
+                // Recorded notes can reach oct +2 (arc at path midpoint); -2 brings
+                // those back to oct 0 at most.  Clamp to [-1, 0] so the ambient
+                // layer always stays in the low register.
+                int loopOct = Mathf.Clamp(note.octave - 2, -1, 0);
+                ArpeggiatorManager.Instance.PlayAmbientNote(
+                    note.degree, loopOct, loopVelocity, noteEmitter);
             }
 
             tick++;

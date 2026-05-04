@@ -17,10 +17,18 @@ public class GameFlowManager : MonoBehaviour
     public SurfaceUnit unitPrefab;
     public GridSystem gridSystem;
     public PlacementController placement;
-
+    public static GameFlowManager Instance;
     [Header("Turn")]
-    public int blocksPerTurn = 3;
+    public int blocksPerTurn = 8;
     public GamePhase phase;
+
+    [Header("Tower Defense Pacing")]
+    [Tooltip("Completed runs before a new endpoint is added.")]
+    public int runsPerEndpoint = 3;
+    [Tooltip("Maximum concurrent ambient loop layers. Oldest retires when exceeded.")]
+    public int maxLoopLayers   = 5;
+
+    int _runsSinceLastEndpoint;
 
     // Roguelite accumulation — all endpoint cells and live looping units
     readonly List<Vector3Int> allStarts    = new();
@@ -45,6 +53,7 @@ public class GameFlowManager : MonoBehaviour
 
     void Start()
     {
+        Instance = this;
         graph = new SurfaceGraphBuilder();
         endpoints.gridSystem = gridSystem;
 
@@ -58,8 +67,10 @@ public class GameFlowManager : MonoBehaviour
 
     void ConfigureEndpointBounds(float extraRange = 0f)
     {
-        endpoints.minDistance = Mathf.Max(2f, blocksPerTurn * 0.5f);
-        endpoints.maxDistance = Mathf.Min(blocksPerTurn + 1f + extraRange, 9f);
+        // Min: at least 4 cells, or 60 % of blocksPerTurn — whichever is larger.
+        endpoints.minDistance = Mathf.Max(4f, blocksPerTurn * 0.6f);
+        // Max: no hard cap — grows naturally with blocks and round index.
+        endpoints.maxDistance = blocksPerTurn * 2f + extraRange;
     }
 
     void CreateFirstStage()
@@ -74,7 +85,7 @@ public class GameFlowManager : MonoBehaviour
     // Distance window widens so later endpoints can span larger gaps.
     void AddNextEndpoint()
     {
-        float extraRange = roundIndex * 0.5f;
+        float extraRange = roundIndex * 1.5f;
         ConfigureEndpointBounds(extraRange);
 
         bool addStart = (roundIndex % 2 == 0);
@@ -109,8 +120,13 @@ public class GameFlowManager : MonoBehaviour
     {
         if (phase == GamePhase.Build)
         {
+            // Space: commit and run
+            if (Input.GetKeyDown(KeyCode.Space))
+                Run();
+
+            // P: manual re-evaluate (force-refresh live preview line)
             if (Input.GetKeyDown(KeyCode.P))
-                BuildGraph();
+                EvaluateGrid();
 
             float secPerBeat = 60f / unitPrefab.bpm;
             _scanTimer += Time.deltaTime;
@@ -128,6 +144,7 @@ public class GameFlowManager : MonoBehaviour
 
         if (phase == GamePhase.ReadyToRun)
         {
+            // Space confirms from preview state; B cancels back to build
             if (Input.GetKeyDown(KeyCode.Space))
                 Run();
 
@@ -169,7 +186,8 @@ public class GameFlowManager : MonoBehaviour
                         int deg   = ((root + YDegreeMap[yi] - 2) % 7 + 7) % 7 + 1;
                         int oct   = Mathf.Clamp(node.cell.y - 1, -1, 3);
 
-                        ArpeggiatorManager.Instance.PlayAmbientNote(deg, oct, 0.28f);
+                        ArpeggiatorManager.Instance.PlayAmbientNote(deg, oct, 0.28f,
+                            inst.visualObject);
                         BackgroundReactor.Instance?.OnNote(0.2f);
 
                         if (inst.visualObject != null)
@@ -245,11 +263,32 @@ public class GameFlowManager : MonoBehaviour
         placement.SpawnRoundBlocks(blocksPerTurn);
     }
 
-    void BuildGraph()
+    // Called after every block place/remove — rebuilds graph, refreshes live
+    // preview line, and stops the unit immediately if the path is now broken.
+    public void EvaluateGrid()
     {
         graph.SetData(gridSystem);
         graph.Build();
-        phase = GamePhase.ReadyToRun;
+
+        var path = FindCurrentPath();
+
+        if (phase == GamePhase.Running)
+        {
+            if (path == null)
+            {
+                // Path broken while unit was traversing — stop it immediately.
+                ArpeggiatorManager.Instance?.StopRecording();
+                if (currentUnit != null) { Destroy(currentUnit.gameObject); currentUnit = null; }
+                phase = GamePhase.Build;
+                // No live line yet — will appear on next block placement.
+            }
+            // Path still valid while running: loop line already visible, leave it.
+            return;
+        }
+
+        // Build / ReadyToRun: show or hide the live preview line.
+        PathFlowManager.Instance?.UpdateLiveLine(path);
+        phase = path != null ? GamePhase.ReadyToRun : GamePhase.Build;
     }
 
     void Run()
@@ -257,45 +296,54 @@ public class GameFlowManager : MonoBehaviour
         graph.SetData(gridSystem);
         graph.Build();
 
-        List<FaceNode> startFaces, endFaces;
-
-        if (_challengeCell == Vector3Int.zero)
-        {
-            // First stage — any start to any end
-            startFaces = CollectFaces(allStarts);
-            endFaces   = CollectFaces(allEnds);
-        }
-        else if (_challengeIsStart)
-        {
-            // Player must route FROM the newly added start to any existing end
-            startFaces = CollectFacesFromGraph(graph, new List<Vector3Int> { _challengeCell });
-            endFaces   = CollectFaces(allEnds);
-        }
-        else
-        {
-            // Player must route from any existing start TO the newly added end
-            startFaces = CollectFaces(allStarts);
-            endFaces   = CollectFacesFromGraph(graph, new List<Vector3Int> { _challengeCell });
-        }
-
-        if (startFaces.Count == 0 || endFaces.Count == 0) return;
-
-        var path = SurfacePathfinding.FindPath(startFaces, endFaces);
+        var path = FindCurrentPath();
 
         if (path == null)
         {
             Debug.Log("Path failed");
             phase = GamePhase.Build;
+            PathFlowManager.Instance?.UpdateLiveLine(null);
             return;
         }
 
-        // Spawn unit at the actual path start, not necessarily startFaces[0]
+        // Live preview line → tracked loop line.
+        PathFlowManager.Instance?.ClearLiveLine();
+        PathFlowManager.Instance?.AddFlow(path);
+
+        // Spawn unit at the visual face-centre of the first path node.
         currentUnit = Instantiate(unitPrefab);
         currentUnit.gameFlow = this;
-        currentUnit.transform.position = path[0].worldPos;
+        currentUnit.transform.position =
+            gridSystem.GridToWorld(path[0].cell) + path[0].normal * (gridSystem.cellSize * 0.5f);
         currentUnit.SetPath(path);
 
         phase = GamePhase.Running;
+    }
+
+    // Builds and returns the path for the current challenge state,
+    // or null if no valid path exists.
+    List<FaceNode> FindCurrentPath()
+    {
+        List<FaceNode> startFaces, endFaces;
+
+        if (_challengeCell == Vector3Int.zero)
+        {
+            startFaces = CollectFaces(allStarts);
+            endFaces   = CollectFaces(allEnds);
+        }
+        else if (_challengeIsStart)
+        {
+            startFaces = CollectFacesFromGraph(graph, new List<Vector3Int> { _challengeCell });
+            endFaces   = CollectFaces(allEnds);
+        }
+        else
+        {
+            startFaces = CollectFaces(allStarts);
+            endFaces   = CollectFacesFromGraph(graph, new List<Vector3Int> { _challengeCell });
+        }
+
+        if (startFaces.Count == 0 || endFaces.Count == 0) return null;
+        return SurfacePathfinding.FindPath(startFaces, endFaces);
     }
 
     // Called by SurfaceUnit when it finishes its first traversal.
@@ -303,14 +351,49 @@ public class GameFlowManager : MonoBehaviour
     {
         if (phase != GamePhase.Running) return;
 
-        // Promote the finished unit to a permanent ambient loop
+        // Promote the finished unit to a permanent ambient loop.
         currentUnit.SetLooping(true);
         loopingUnits.Add(currentUnit);
 
-        AddNextEndpoint();
+        // Retire the oldest loop layer if we've hit the limit.
+        while (loopingUnits.Count > maxLoopLayers)
+            RetireOldestLoop();
+
+        // Add a new endpoint only every N completed runs.
+        _runsSinceLastEndpoint++;
+        if (_runsSinceLastEndpoint >= runsPerEndpoint)
+        {
+            _runsSinceLastEndpoint = 0;
+            AddNextEndpoint();
+        }
 
         phase = GamePhase.Build;
         StartTurn();
+    }
+
+    // Removes the oldest looping unit: stops its audio loop, removes its laser
+    // line, and destroys the GameObject.
+    void RetireOldestLoop()
+    {
+        if (loopingUnits.Count == 0) return;
+
+        var old = loopingUnits[0];
+        loopingUnits.RemoveAt(0);
+
+        if (old == null) return;
+
+        // Gather the path cells so the right loop/line entries can be removed.
+        var cells = new List<Vector3Int>();
+        if (old.Path != null)
+            foreach (var n in old.Path) cells.Add(n.cell);
+
+        if (cells.Count > 0)
+        {
+            PathFlowManager.Instance?.RemoveFlowsOverlapping(cells);
+            LoopManager.Instance?.RemoveLoopsOverlapping(cells);
+        }
+
+        Destroy(old.gameObject);
     }
 
     // ── Graph helpers ─────────────────────────────────────────────────────────

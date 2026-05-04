@@ -27,10 +27,19 @@ public class AudioManager : MonoBehaviour
     }
     private void Start()
     {
-        // Establish a default Switch state before the BGM Switch Container fires,
-        // otherwise Wwise logs "No default Switch value selected".
-        SetChord(BlockType.Home);
+        // BGM 发在 this.gameObject 上，Note 发在 audioEmitter 上。
+        // Switch Container Scope = Game Object 时两个物体都要设，否则其中一个
+        // 找不到 default Switch 就报 "No default Switch value selected"。
+        SetChordOnObject(BlockType.Home, this.gameObject);
+        SetChordOnObject(BlockType.Home, audioEmitter);
         BGM.Post(this.gameObject);
+    }
+
+    // 内部：在指定物体上设 Switch（两个 emitter 都要覆盖到）
+    void SetChordOnObject(BlockType type, GameObject target)
+    {
+        if (target == null) return;
+        AkUnitySoundEngine.SetSwitch(chordSwitchGroup, type.ToString(), target);
     }
 
     public void PlayRotate() 
@@ -65,13 +74,15 @@ public class AudioManager : MonoBehaviour
         }
     }
 
-    public void PlayArpNote(int degree, int octave, float velocity = 0.7f)
+    // emitter: world-positioned object to emit from (enables Wwise distance attenuation).
+    // Falls back to audioEmitter when null (BGM-level sounds with no world position).
+    public void PlayArpNote(int degree, int octave, float velocity = 0.7f, GameObject emitter = null)
     {
-        AkUnitySoundEngine.SetRTPCValue("NoteValue", degree, audioEmitter);
-        AkUnitySoundEngine.SetRTPCValue("Oct", octave, audioEmitter);
-        AkUnitySoundEngine.SetRTPCValue("Velocity", velocity * 100f, audioEmitter);
-
-        Note.Post(audioEmitter);
+        var e = emitter != null ? emitter : audioEmitter;
+        AkUnitySoundEngine.SetRTPCValue("NoteValue", degree, e);
+        AkUnitySoundEngine.SetRTPCValue("Oct",       octave, e);
+        AkUnitySoundEngine.SetRTPCValue("Velocity",  velocity * 100f, e);
+        Note.Post(e);
     }
 
     // ===== BGM CONTROL =====
@@ -93,6 +104,7 @@ public class AudioManager : MonoBehaviour
     //     (beat-synced crossfade) under the BGM event
     public void SetChord(BlockType type)
     {
-        AkUnitySoundEngine.SetSwitch(chordSwitchGroup, type.ToString(), audioEmitter);
+        SetChordOnObject(type, audioEmitter);
+        SetChordOnObject(type, this.gameObject);   // BGM Switch Container 也需要
     }
 }

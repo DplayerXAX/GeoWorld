@@ -85,13 +85,13 @@ Material:
     - _AddPrecomputedVelocity: 0
     - _AlphaClip: 0
     - _AlphaToMask: 0
-    - _BeatPulse: 0.12921591
+    - _BeatPulse: 0
     - _Blend: 0
     - _BlendModePreserveSpecular: 1
     - _BumpScale: 1
     - _ClearCoatMask: 0
     - _ClearCoatSmoothness: 0
-    - _ColorShift: 0.8428681
+    - _ColorShift: 0.46271077
     - _Cull: 2
     - _Cutoff: 0.5
     - _DetailAlbedoMapScale: 1
@@ -112,7 +112,7 @@ Material:
     - _MusicIntensity: 0.5
     - _OcclusionStrength: 1
     - _Parallax: 0.005
-    - _PitchGlow: 0.011953789
+    - _PitchGlow: 0
     - _QueueOffset: 0
     - _ReceiveShadows: 1
     - _Smoothness: 0.5
@@ -123,7 +123,7 @@ Material:
     - _StarDensity: 0.6
     - _Surface: 0
     - _TimeSpeed: 0.2
-    - _TypeHue: 0.4802506
+    - _TypeHue: 0.62
     - _WorkflowMode: 1
     - _XRMotionVectorsPass: 1
     - _ZWrite: 1

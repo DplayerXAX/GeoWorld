@@ -810,7 +810,6 @@ MonoBehaviour:
   laserMaterial: {fileID: 2100000, guid: cbe27151982a69641ab591e07a569734, type: 2}
   lineWidth: 0.055
   heightOffset: 0.04
-  livePathColor: {r: 1, g: 1, b: 0.7, a: 0.9}
 --- !u!1 &658080851
 GameObject:
   m_ObjectHideFlags: 0
@@ -956,7 +955,7 @@ MonoBehaviour:
   nodeSpeedC: 67
   nodeSpeedD: -120
   bodyRotSpeed: 12
-  glowIntensity: 1.5
+  glowIntensity: 3
 --- !u!1 &723872987
 GameObject:
   m_ObjectHideFlags: 0

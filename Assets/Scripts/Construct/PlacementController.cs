@@ -265,6 +265,7 @@ public class PlacementController : MonoBehaviour
                 SnapDepthToWorldPos(lastObjectPos);
 
                 grid.RemoveInstance(selectedInstance);
+                NotifyBlockLifted(lastObjectCells);
                 selectedInstance = null;
                 EnterEditMode(lastObjectPos);
             }
@@ -360,6 +361,7 @@ public class PlacementController : MonoBehaviour
 
                 SnapDepthToWorldPos(lastObjectPos);
                 grid.RemoveInstance(instance);   // destroys visualObject
+                NotifyBlockLifted(lastObjectCells);
                 selectedInstance = null;
                 EnterEditMode(lastObjectPos);
             }
@@ -452,7 +454,9 @@ public class PlacementController : MonoBehaviour
 
         grid.RegisterInstance(ins);
 
-        // 放置成功：立刻播放该block的和弦根音，给玩家即时音乐反馈。
+        // Auto-check path after every block placement — updates live preview line.
+        GameFlowManager.Instance?.EvaluateGrid();
+
         ArpeggiatorManager.Instance?.PlayAmbientNote(
     PlacementDegree(ins.data.blockType),
     PlacementOctave(ins.data.blockType),
@@ -540,6 +544,16 @@ public class PlacementController : MonoBehaviour
     // =========================
     // PICKUP RETURN
     // =========================
+
+    // Called whenever a placed block is lifted from the grid.
+    // Removes any laser lines and audio loops whose path ran through those cells.
+    void NotifyBlockLifted(Vector3Int[] cells)
+    {
+        if (cells == null || cells.Length == 0) return;
+        PathFlowManager.Instance?.RemoveFlowsOverlapping(cells);   // remove affected loop lines
+        LoopManager.Instance?.RemoveLoopsOverlapping(cells);        // stop affected loop audio
+        GameFlowManager.Instance?.EvaluateGrid();                   // stop unit / refresh live line
+    }
 
     void CancelAndReturnObject()
     {

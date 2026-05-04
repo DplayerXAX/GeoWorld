@@ -71,7 +71,8 @@ public class ArpeggiatorManager : MonoBehaviour
     // does NOT write into the recording (prevents contaminating the live run).
     public void PlayMelodyNote(
         BlockType type, FaceNode node, FaceNode prevNode,
-        float progress, int pathIndex, float velocityScale = 1f, bool isLoop = false)
+        float progress, int pathIndex, float velocityScale = 1f, bool isLoop = false,
+        GameObject emitter = null)
     {
         float density = noteDensity * (0.45f + 0.55f * Mathf.Sin(progress * Mathf.PI));
         if (Random.value > density)
@@ -86,7 +87,12 @@ public class ArpeggiatorManager : MonoBehaviour
         // Arc: push melody up/down by scale degrees at the path's midpoint.
         int arcDeg = Mathf.RoundToInt(Mathf.Sin(progress * Mathf.PI) * 2f);
         int sc     = (ne.degree - 1) + ne.octave * 7 + arcDeg;
-        sc         = Mathf.Clamp(sc, -7, 20);          // oct -1 to +2
+        sc         = Mathf.Clamp(sc, -7, 20);          // oct -1 to +2 for live run
+
+        // Looping units act as a quiet background pad — cap them to oct 0 (scalar ≤ 6)
+        // so they never climb into the squeaky upper register.
+        if (isLoop) sc = Mathf.Clamp(sc, -7, 6);
+
         ne.octave  = Mathf.FloorToInt((float)sc / 7);
         ne.degree  = sc - ne.octave * 7 + 1;           // back to 1-indexed
 
@@ -97,14 +103,14 @@ public class ArpeggiatorManager : MonoBehaviour
 
         if (_recording && !isLoop) _rec.Add(ne);
 
-        AudioManager.Instance.PlayArpNote(ne.degree, ne.octave, vel);
+        AudioManager.Instance.PlayArpNote(ne.degree, ne.octave, vel, emitter);
         BackgroundReactor.Instance?.OnNoteDetailed(ne.degree, ne.octave, vel, ne.tension, type);
     }
 
     // ─────────────────────────────────────────────────────────────────────
     // Bass root (triggered once per block-type change)
     // ─────────────────────────────────────────────────────────────────────
-    public void PlayBassRoot(BlockType type)
+    public void PlayBassRoot(BlockType type, GameObject emitter = null)
     {
         int deg = type switch
         {
@@ -114,15 +120,15 @@ public class ArpeggiatorManager : MonoBehaviour
             BlockType.Shadow => 7,  // Bb
             _                => 1,
         };
-        AudioManager.Instance.PlayArpNote(deg, -1, 0.4f);
+        AudioManager.Instance.PlayArpNote(deg, -1, 0.4f, emitter);
         BackgroundReactor.Instance?.OnNote(0.4f);
     }
 
     // ─────────────────────────────────────────────────────────────────────
     // Ambient note (used by LoopManager and PathPulseScan)
     // ─────────────────────────────────────────────────────────────────────
-    public void PlayAmbientNote(int degree, int octave, float velocity)
-        => AudioManager.Instance.PlayArpNote(degree, octave, velocity);
+    public void PlayAmbientNote(int degree, int octave, float velocity, GameObject emitter = null)
+        => AudioManager.Instance.PlayArpNote(degree, octave, velocity, emitter);
 
     public void StopArp() { }
 

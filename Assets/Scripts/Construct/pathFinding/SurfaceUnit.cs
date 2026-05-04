@@ -15,9 +15,15 @@ public class SurfaceUnit : MonoBehaviour
     // Volume scale applied when this unit is in continuous-loop mode.
     [Range(0f, 1f)] public float loopVelocityScale = 0.35f;
 
+    [Header("Audio Events")]
+    // Assign the Wwise "Cadence_End" event here once it exists in your project.
+    // Left unassigned → no error, the call is silently skipped.
+    public AK.Wwise.Event cadenceEndEvent;
+
     [HideInInspector] public GameFlowManager gameFlow;
 
     List<FaceNode> path;
+    public List<FaceNode> Path => path;   // read-only access for retirement logic
     int index;
 
     float secPerBeat;
@@ -104,10 +110,19 @@ public class SurfaceUnit : MonoBehaviour
         }
     }
 
+    // Returns the visual face-centre for a node, matching block render positions.
+    // FaceNode.worldPos uses corner-based coords (cell*size); GridToWorld is
+    // centre-based (cell*size + size/2), so the face sits at blockCentre + normal*(size/2).
+    static Vector3 FaceCenter(FaceNode node)
+    {
+        var gs = GridSystem.instance;
+        return gs.GridToWorld(node.cell) + node.normal * (gs.cellSize * 0.5f);
+    }
+
     void StepToNode(FaceNode node)
     {
         moveFrom = transform.position;
-        moveTo = node.worldPos;
+        moveTo   = FaceCenter(node);
         moveDuration = secPerBeat * moveRatio;
         moveTimer = 0f;
         isMoving = true;
@@ -156,7 +171,7 @@ public class SurfaceUnit : MonoBehaviour
                 if (!_looping && block != currentBlock)
                 {
                     AudioManager.Instance.SetChord(block.blockType);
-                    ArpeggiatorManager.Instance.PlayBassRoot(block.blockType);
+                    ArpeggiatorManager.Instance.PlayBassRoot(block.blockType, this.gameObject);
                     BackgroundReactor.Instance?.OnChordChange(block.blockType);
                     currentBlock = block;
                 }
@@ -167,7 +182,7 @@ public class SurfaceUnit : MonoBehaviour
 
                 ArpeggiatorManager.Instance.PlayMelodyNote(
                     block.blockType, node, prevNode, progress, index,
-                    _looping ? loopVelocityScale : 1f, _looping);
+                    _looping ? loopVelocityScale : 1f, _looping, this.gameObject);
                 break;
 
             case BlockType.Turret:
@@ -201,14 +216,20 @@ public class SurfaceUnit : MonoBehaviour
 
         var rec     = ArpeggiatorManager.Instance.StopRecording();
         var visuals = new List<GameObject>();
+        var cells   = new List<Vector3Int>();
         foreach (var node in path)
         {
+            cells.Add(node.cell);
             var inst = GridSystem.instance?.GetInstanceAt(node.cell);
             if (inst?.visualObject != null) visuals.Add(inst.visualObject);
         }
-        LoopManager.Instance?.AddLoop(rec, visuals, bpm);
+        LoopManager.Instance?.AddLoop(rec, visuals, bpm, cells);
+        // (Laser line is now drawn in GameFlowManager.Run() the moment the path is
+        //  confirmed, so we don't need to draw it again here.)
 
-        AkUnitySoundEngine.PostEvent("Cadence_End", this.gameObject);
+        // cadenceEndEvent is assigned in Inspector — silently skip if not yet set.
+        if (cadenceEndEvent != null && cadenceEndEvent.IsValid())
+            cadenceEndEvent.Post(this.gameObject);
         AudioManager.Instance.SetIntensity(0f);
 
         // EndRunningPhase calls SetLooping(true) on us if the path succeeded.
