@@ -278,7 +278,17 @@ public class PlacementController : MonoBehaviour
         else
         {
             if (isPickingUpObject)
+            {
                 CancelAndReturnObject();
+            }
+            else if (activePhysicsObject != null && _pendingShopPrice > 0)
+            {
+                // Player grabbed a shop item but cancelled before placing — give it back.
+                ShopController.Instance?.RestoreItem(activePhysicsObject);
+                _pendingShopPrice   = 0;
+                currentBlock        = null;
+                activePhysicsObject = null;
+            }
 
             mode = PlacementMode.Select;
             previewParent.gameObject.SetActive(false);
@@ -525,10 +535,16 @@ public class PlacementController : MonoBehaviour
         // fresh round.
         if (activePhysicsObject != null)
         {
-            ShopController.Instance?.RemoveItem(activePhysicsObject);   // deregister from shop
             trayBlocks.Remove(activePhysicsObject);   // no-op if it came from ShopController
-            Destroy(activePhysicsObject);
+            // RemoveItemAnimated returns true when the shop owns the object and will
+            // handle its animated destruction; otherwise destroy it immediately.
+            bool shopHandled = ShopController.Instance?.RemoveItemAnimated(activePhysicsObject) ?? false;
+            if (!shopHandled) Destroy(activePhysicsObject);
             activePhysicsObject = null;
+
+            // Testing mode: immediately spawn a replacement so the shop never runs dry.
+            if (shopHandled && (ResourceManager.Instance?.testing ?? false))
+                SpawnRoundBlocks(3);
         }
 
         isPickingUpObject = false;
@@ -558,6 +574,9 @@ public class PlacementController : MonoBehaviour
             var c = Instantiate(cubePrefab, previewParent);
             foreach (var col in c.GetComponentsInChildren<Collider>())
                 col.enabled = false;
+            // Switch material to alpha-blend so the colour's alpha is actually visible.
+            var rend = c.GetComponent<Renderer>();
+            if (rend != null) ConfigurePreviewMaterial(rend);
             previewCubes.Add(c);
         }
 
@@ -726,6 +745,33 @@ public class PlacementController : MonoBehaviour
 
     Color GetRandomColor() =>
         Random.ColorHSV(0f, 1f, 0.6f, 1f, 0.7f, 1f);
+
+    // Switches the renderer's instanced material to alpha-blend transparent mode.
+    // Handles URP Lit/Unlit (_Surface property) and Built-in Standard (_Mode).
+    static void ConfigurePreviewMaterial(Renderer rend)
+    {
+        var mat = rend.material;   // Unity auto-creates a per-instance copy here
+        if (mat.HasProperty("_Surface"))
+        {
+            // URP Lit / Unlit
+            mat.SetFloat("_Surface", 1f);    // 1 = Transparent
+            mat.SetFloat("_ZWrite",  0f);
+            mat.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
+            mat.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+            mat.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
+            mat.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent;
+        }
+        else if (mat.HasProperty("_Mode"))
+        {
+            // Built-in Standard fallback
+            mat.SetFloat("_Mode", 3f);       // 3 = Transparent
+            mat.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
+            mat.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+            mat.SetInt("_ZWrite", 0);
+            mat.EnableKeyword("_ALPHABLEND_ON");
+            mat.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent;
+        }
+    }
 
     // Flashes the preview cubes solid red for 0.3 s to signal "can't afford".
     System.Collections.IEnumerator FlashPreviewRed()

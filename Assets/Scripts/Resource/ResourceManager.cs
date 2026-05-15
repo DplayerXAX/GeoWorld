@@ -38,6 +38,7 @@ public class ResourceManager : MonoBehaviour
 {
     public static ResourceManager Instance;
 
+    public bool testing = false;
     [Header("Block Currency")]
     [Tooltip("Block currency the player starts the game with.")]
     public int startingBlockCurrency = 80;
@@ -85,7 +86,12 @@ public class ResourceManager : MonoBehaviour
 
         _blockCurrency  = startingBlockCurrency;
         _turretCurrency = startingTurretCurrency;
-
+        if (testing) 
+        {
+            _blockCurrency = 9999;
+            _turretCurrency = 9999;
+        
+        }
         foreach (BlockType t in Enum.GetValues(typeof(BlockType)))
             _placedCounts[t] = 0;
     }

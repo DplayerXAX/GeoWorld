@@ -31,20 +31,29 @@ public class BackgroundReactor : MonoBehaviour
     [Header("Intensity")]
     [Range(0f, 1f)] public float idleIntensity = 0.5f;
 
+    [Header("Combat Mode")]
+    [Tooltip("Press to toggle combat skybox for testing (auto-driven by GameFlowManager in play).")]
+    public KeyCode combatTestKey        = KeyCode.G;
+    [Tooltip("How fast the skybox transitions between calm and combat state.")]
+    public float   combatTransitionSpeed = 2.0f;
+
     // ── Internal state ────────────────────────────────────────────────────────
     float _beatPulse;
     float _colorShift;
     float _targetIntensity;
     float _smoothIntensity;
-    float _typeHue;          // current smoothed type-hue (0-1)
-    float _targetTypeHue;   // target type-hue for current block
-    float _pitchGlow;       // decays each frame
+    float _typeHue;
+    float _targetTypeHue;
+    float _pitchGlow;
+    float _combatMode;        // current smoothed value (0=calm, 1=intense)
+    float _targetCombatMode;  // 0 or 1
 
     static readonly int BeatPulseId  = Shader.PropertyToID("_BeatPulse");
     static readonly int IntensityId  = Shader.PropertyToID("_MusicIntensity");
     static readonly int ColorShiftId = Shader.PropertyToID("_ColorShift");
     static readonly int TypeHueId    = Shader.PropertyToID("_TypeHue");
     static readonly int PitchGlowId  = Shader.PropertyToID("_PitchGlow");
+    static readonly int CombatModeId = Shader.PropertyToID("_CombatMode");
 
     void Awake()
     {
@@ -62,14 +71,25 @@ public class BackgroundReactor : MonoBehaviour
     {
         float dt = Time.deltaTime;
 
-        _beatPulse       = Mathf.Lerp(_beatPulse,       0f,              1f - Mathf.Exp(-beatDecay      * dt));
-        _pitchGlow       = Mathf.Lerp(_pitchGlow,       0f,              1f - Mathf.Exp(-pitchGlowDecay * dt));
-        _smoothIntensity = Mathf.Lerp(_smoothIntensity, _targetIntensity, dt * 2f);
+        // ── Combat mode: test key toggle ─────────────────────────────────────
+        // G toggles freely at any time.
+        // For auto-drive, call SetCombatMode() from GameFlowManager on phase change.
+        if (Input.GetKeyDown(combatTestKey))
+            _targetCombatMode = _targetCombatMode > 0.5f ? 0f : 1f;
 
-        // Smooth palette shift toward the active block type's characteristic hue
-        _typeHue = Mathf.Lerp(_typeHue, _targetTypeHue, dt * typeHueLerpSpeed);
+        _combatMode = Mathf.MoveTowards(_combatMode, _targetCombatMode,
+                                        combatTransitionSpeed * dt);
 
-        // Continuous ambient hue drift
+        // In combat, music intensity rides higher for extra visual energy
+        float targetInt = _targetCombatMode > 0.5f
+                          ? Mathf.Max(_targetIntensity, 0.85f)
+                          : _targetIntensity;
+
+        _beatPulse       = Mathf.Lerp(_beatPulse,       0f,       1f - Mathf.Exp(-beatDecay      * dt));
+        _pitchGlow       = Mathf.Lerp(_pitchGlow,       0f,       1f - Mathf.Exp(-pitchGlowDecay * dt));
+        _smoothIntensity = Mathf.Lerp(_smoothIntensity, targetInt, dt * 2f);
+
+        _typeHue    = Mathf.Lerp(_typeHue, _targetTypeHue, dt * typeHueLerpSpeed);
         _colorShift = (_colorShift + ambientColorDrift * dt) % 1f;
 
         if (skyboxMaterial == null) return;
@@ -78,7 +98,15 @@ public class BackgroundReactor : MonoBehaviour
         skyboxMaterial.SetFloat(ColorShiftId, _colorShift);
         skyboxMaterial.SetFloat(TypeHueId,    _typeHue);
         skyboxMaterial.SetFloat(PitchGlowId,  _pitchGlow);
+        skyboxMaterial.SetFloat(CombatModeId, _combatMode);
     }
+
+    /// <summary>
+    /// Programmatically set combat mode (called by GameFlowManager or other systems).
+    /// The auto-detection in Update() will also keep this in sync.
+    /// </summary>
+    public void SetCombatMode(bool active) =>
+        _targetCombatMode = active ? 1f : 0f;
 
     // ── Simple call (scan notes, bass roots, backward-compat) ────────────────
     public void OnNote(float strength = 1f)
