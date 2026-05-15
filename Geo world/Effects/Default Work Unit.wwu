@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<WwiseDocument Type="WorkUnit" ID="{B782C75F-5A60-41F8-A7B5-1B0E4679E45F}" SchemaVersion="133">
+	<Effects>
+		<WorkUnit Name="Default Work Unit" ID="{B782C75F-5A60-41F8-A7B5-1B0E4679E45F}" PersistMode="Standalone">
+			<ChildrenList>
+				<Effect Name="New_Pitch_Shifter" ID="{61511D88-61A0-48D4-B27F-036DCA1B099A}" PluginName="Wwise Pitch Shifter" CompanyID="0" PluginID="136" PluginType="3">
+					<ObjectLists>
+						<ObjectList Name="RTPC">
+							<RTPC Name="" ID="{316D4F2C-3042-48E5-8776-88DDC57FAEEF}" ShortID="675568541">
+								<PropertyList>
+									<Property Name="PropertyName" Type="string" Value="Pitch"/>
+								</PropertyList>
+								<ReferenceList>
+									<Reference Name="ControlInput">
+										<ObjectRef Name="NoteValue" ID="{D71E7AA8-CAAA-465E-9F21-17CC278BAB96}" WorkUnitID="{746EDB62-9747-4C09-85D1-493CF0163B26}"/>
+									</Reference>
+									<Reference Name="Curve">
+										<Custom>
+											<Curve Name="" ID="{5FAB7428-8323-4E79-9779-98D19585C3D8}">
+												<PropertyList>
+													<Property Name="Flags" Type="int32" Value="1"/>
+												</PropertyList>
+												<PointList>
+													<Point>
+														<XPos>1</XPos>
+														<YPos>-1200</YPos>
+														<Flags>5</Flags>
+													</Point>
+													<Point>
+														<XPos>7</XPos>
+														<YPos>2400</YPos>
+														<Flags>37</Flags>
+													</Point>
+												</PointList>
+											</Curve>
+										</Custom>
+									</Reference>
+								</ReferenceList>
+							</RTPC>
+						</ObjectList>
+					</ObjectLists>
+				</Effect>
+			</ChildrenList>
+		</WorkUnit>
+	</Effects>
+</WwiseDocument>

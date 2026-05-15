@@ -1,0 +1,119 @@
+<?xml version="1.0" encoding="utf-8"?>
+<WwiseDocument Type="WorkUnit" ID="{FD1D3805-1493-4712-94C6-0E6DB7322D3D}" SchemaVersion="133">
+	<Events>
+		<WorkUnit Name="Default Work Unit" ID="{FD1D3805-1493-4712-94C6-0E6DB7322D3D}" PersistMode="Standalone">
+			<ChildrenList>
+				<Event Name="BGM_event" ID="{5D34EB93-16B4-45EF-A43E-418990DD278C}">
+					<ChildrenList>
+						<Action Name="" ID="{775FFE57-6C8A-4068-9E0A-6A5C7EEF50BB}" ShortID="392023108">
+							<ReferenceList>
+								<Reference Name="Target">
+									<ObjectRef Name="BGM" ID="{A2518408-A2B6-47F4-9EA9-BF1874DBA83C}" WorkUnitID="{48502AC3-EE10-4952-8017-84D50D1C5C35}"/>
+								</Reference>
+							</ReferenceList>
+						</Action>
+					</ChildrenList>
+				</Event>
+				<Event Name="rotate" ID="{9F0FC09E-EFE1-4273-BE8D-938E9B2D5ABB}">
+					<ChildrenList>
+						<Action Name="" ID="{27B8E6AF-E7C4-4441-930C-E54E855932AB}" ShortID="974739869">
+							<ReferenceList>
+								<Reference Name="Target">
+									<ObjectRef Name="rotate" ID="{356034B2-C4F7-4FD0-8133-9940891BCBC5}" WorkUnitID="{48502AC3-EE10-4952-8017-84D50D1C5C35}"/>
+								</Reference>
+							</ReferenceList>
+						</Action>
+					</ChildrenList>
+				</Event>
+				<Event Name="scroll" ID="{C4CD9B9D-4062-4426-94CD-EE02F46401EE}">
+					<ChildrenList>
+						<Action Name="" ID="{C8234CF2-66F7-4C00-96C9-D6D08758C816}" ShortID="853014216">
+							<ReferenceList>
+								<Reference Name="Target">
+									<ObjectRef Name="dragon-studio-pop-402323" ID="{1049CD2E-64DB-410B-B402-2D5779009FD0}" WorkUnitID="{48502AC3-EE10-4952-8017-84D50D1C5C35}"/>
+								</Reference>
+							</ReferenceList>
+						</Action>
+					</ChildrenList>
+				</Event>
+				<Event Name="Play_Arp_Note" ID="{35F24250-09C5-4512-93E3-DA3812BA0D80}">
+					<ChildrenList>
+						<Action Name="" ID="{34F086AF-CC33-4CAE-A535-3DE78D95B590}" ShortID="1032672343">
+							<ReferenceList>
+								<Reference Name="Target">
+									<ObjectRef Name="SC_Note" ID="{C67A1B66-6050-4487-BDA9-6995A62C0F6B}" WorkUnitID="{48502AC3-EE10-4952-8017-84D50D1C5C35}"/>
+								</Reference>
+							</ReferenceList>
+						</Action>
+					</ChildrenList>
+				</Event>
+				<Event Name="C" ID="{9E235787-7790-47A5-BB82-21A19C922CA0}">
+					<ChildrenList>
+						<Action Name="" ID="{9C3E6F81-3A7F-41B2-B86D-D1F1CF909CC3}" ShortID="125963090">
+							<ReferenceList>
+								<Reference Name="Target">
+									<ObjectRef Name="C" ID="{2BCBE20D-39AC-4DA7-8776-B75987DDE6CC}" WorkUnitID="{48502AC3-EE10-4952-8017-84D50D1C5C35}"/>
+								</Reference>
+							</ReferenceList>
+						</Action>
+					</ChildrenList>
+				</Event>
+				<Event Name="G" ID="{9420A9D8-1D35-4034-92CB-9D66018FFC56}">
+					<ChildrenList>
+						<Action Name="" ID="{836EBB08-4FF6-47E9-9BA8-1DB8DAE3B8EE}" ShortID="868825572">
+							<ReferenceList>
+								<Reference Name="Target">
+									<ObjectRef Name="G" ID="{54821292-D0B7-4870-B27A-7127FB7CD3E2}" WorkUnitID="{48502AC3-EE10-4952-8017-84D50D1C5C35}"/>
+								</Reference>
+							</ReferenceList>
+						</Action>
+					</ChildrenList>
+				</Event>
+				<Event Name="F" ID="{C4D722D4-568A-4DFD-8E50-A6150E4B218B}">
+					<ChildrenList>
+						<Action Name="" ID="{A6B55FF8-FDEA-472D-A5DD-39C4E294DF89}" ShortID="46866287">
+							<ReferenceList>
+								<Reference Name="Target">
+									<ObjectRef Name="F" ID="{C47D6BE1-0739-4620-9558-9CACC51919AC}" WorkUnitID="{48502AC3-EE10-4952-8017-84D50D1C5C35}"/>
+								</Reference>
+							</ReferenceList>
+						</Action>
+					</ChildrenList>
+				</Event>
+				<Event Name="Dm" ID="{406CC23D-8CFE-4C6E-86CF-B3044EE7C794}">
+					<ChildrenList>
+						<Action Name="" ID="{5886537A-2147-49D2-B94F-78E711A8B9DA}" ShortID="785440030">
+							<ReferenceList>
+								<Reference Name="Target">
+									<ObjectRef Name="Dm" ID="{AC169F6B-03C1-46B8-841E-EDBE8E4DFA82}" WorkUnitID="{48502AC3-EE10-4952-8017-84D50D1C5C35}"/>
+								</Reference>
+							</ReferenceList>
+						</Action>
+					</ChildrenList>
+				</Event>
+				<Event Name="Am" ID="{BB56AD18-4D11-459E-BE7C-D7C7C8E259C3}">
+					<ChildrenList>
+						<Action Name="" ID="{69737586-1B3D-45D3-A2BF-D0ADAB7F32BC}" ShortID="238130309">
+							<ReferenceList>
+								<Reference Name="Target">
+									<ObjectRef Name="Am" ID="{8BD134BE-7A9A-4B2F-B163-A5EFC931306B}" WorkUnitID="{48502AC3-EE10-4952-8017-84D50D1C5C35}"/>
+								</Reference>
+							</ReferenceList>
+						</Action>
+					</ChildrenList>
+				</Event>
+				<Event Name="Bdim" ID="{9110F51A-9829-4003-8E86-C8B03507BD5F}">
+					<ChildrenList>
+						<Action Name="" ID="{F7FDEF77-04A9-426E-8A7A-31D25D05A568}" ShortID="391923965">
+							<ReferenceList>
+								<Reference Name="Target">
+									<ObjectRef Name="Bdim" ID="{0BD452D8-2B5E-4226-91A8-A0782837DDD4}" WorkUnitID="{48502AC3-EE10-4952-8017-84D50D1C5C35}"/>
+								</Reference>
+							</ReferenceList>
+						</Action>
+					</ChildrenList>
+				</Event>
+			</ChildrenList>
+		</WorkUnit>
+	</Events>
+</WwiseDocument>
