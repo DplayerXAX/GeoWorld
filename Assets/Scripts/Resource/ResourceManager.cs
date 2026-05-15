@@ -173,6 +173,14 @@ public class ResourceManager : MonoBehaviour
     /// <summary>Returns true if the player can afford <paramref name="price"/>.</summary>
     public bool CanAfford(int price) => _blockCurrency >= price;
 
+    /// <summary>Adds <paramref name="amount"/> back to block currency (used by undo).</summary>
+    public void RefundBlock(int amount)
+    {
+        if (amount <= 0) return;
+        _blockCurrency += amount;
+        OnBlockCurrencyChanged?.Invoke(_blockCurrency);
+    }
+
     /// <summary>Number of blocks of this type currently on the grid (used by DebugUI / shop).</summary>
     public int PlacedCount(BlockType type) =>
         _placedCounts.TryGetValue(type, out int c) ? c : 0;

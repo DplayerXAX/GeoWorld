@@ -56,6 +56,27 @@ public class PlacementController : MonoBehaviour
     private GameObject _lastClickTarget;
     private const float DoubleClickInterval = 0.3f;
 
+    // ── Undo history ──────────────────────────────────────────────────────────
+    const int MaxUndoDepth = 20;
+    readonly List<UndoRecord> _undoStack = new();
+
+    enum UndoType { NewPlace, Reposition, Delete }
+
+    class UndoRecord
+    {
+        public UndoType     actionType;
+        public BlockData    data;
+        public Color        color;
+        public Quaternion   rotation;
+        public Vector3Int[] cells;      // world-grid cells after the action
+        public Vector3      worldCenter;
+        public int          pricePaid;  // > 0 only for NewPlace — refunded on undo
+        // Reposition only: state before the move
+        public Vector3Int[] prevCells;
+        public Vector3      prevCenter;
+        public Quaternion   prevRotation;
+    }
+
     public static PlacementController Instance;
 
     void Awake()
@@ -78,6 +99,7 @@ public class PlacementController : MonoBehaviour
         // Also clear any legacy trayBlocks (fallback path).
         foreach (var b in trayBlocks) if (b != null) Destroy(b);
         trayBlocks.Clear();
+        ClearUndoHistory();   // history is round-scoped; stale on new round
     }
 
     // Spawns `count` random block tokens into the world-space shop (ShopController).
@@ -140,6 +162,20 @@ public class PlacementController : MonoBehaviour
                 TrySelectObject();
             }
         }
+
+        // Delete — cancel current hold (Edit mode) or remove selected placed block.
+        if (Input.GetKeyDown(KeyCode.Delete))
+        {
+            if (mode == PlacementMode.Edit)
+                CancelEditMode();
+            else
+                TryDelete();
+        }
+
+        // Ctrl+Z — undo last placement or deletion.
+        if (Input.GetKeyDown(KeyCode.Z)
+            && (Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl)))
+            TryUndo();
 
         currentGridPos = baseGridPos + manualOffset;
     }
@@ -277,23 +313,29 @@ public class PlacementController : MonoBehaviour
         }
         else
         {
-            if (isPickingUpObject)
-            {
-                CancelAndReturnObject();
-            }
-            else if (activePhysicsObject != null && _pendingShopPrice > 0)
-            {
-                // Player grabbed a shop item but cancelled before placing — give it back.
-                ShopController.Instance?.RestoreItem(activePhysicsObject);
-                _pendingShopPrice   = 0;
-                currentBlock        = null;
-                activePhysicsObject = null;
-            }
-
-            mode = PlacementMode.Select;
-            previewParent.gameObject.SetActive(false);
-            SetTrayVisible(true);
+            CancelEditMode();
         }
+    }
+
+    // Shared cancel path — called by Tab (HandleModeSwitch) and Delete key.
+    void CancelEditMode()
+    {
+        if (isPickingUpObject)
+        {
+            CancelAndReturnObject();
+        }
+        else if (activePhysicsObject != null && _pendingShopPrice > 0)
+        {
+            // Player grabbed a shop item but cancelled before placing — give it back.
+            ShopController.Instance?.RestoreItem(activePhysicsObject);
+            _pendingShopPrice   = 0;
+            currentBlock        = null;
+            activePhysicsObject = null;
+        }
+
+        mode = PlacementMode.Select;
+        previewParent.gameObject.SetActive(false);
+        SetTrayVisible(true);
     }
 
     // =========================
@@ -480,7 +522,8 @@ public class PlacementController : MonoBehaviour
         }
 
         // ── Resource check (new block from tray only; repositioning is free) ──
-        bool isNewBlock = !isPickingUpObject;
+        bool isNewBlock  = !isPickingUpObject;
+        int  priceForUndo = _pendingShopPrice;   // capture before zeroing (for undo refund)
         if (isNewBlock && ResourceManager.Instance != null)
         {
             if (!ResourceManager.Instance.TryBuy(_pendingShopPrice, currentBlock.blockType))
@@ -517,6 +560,34 @@ public class PlacementController : MonoBehaviour
             ins.occupiedCells.Add(currentGridPos + c);
 
         grid.RegisterInstance(ins);
+
+        // ── Push undo record ──────────────────────────────────────────────────
+        if (isPickingUpObject)   // reposition: remember where it came from
+        {
+            PushUndo(new UndoRecord {
+                actionType  = UndoType.Reposition,
+                data        = ins.data,
+                color       = currentColor,
+                rotation    = _currentRotation,
+                cells       = ins.occupiedCells.ToArray(),
+                worldCenter = obj.transform.position,
+                prevCells   = lastObjectCells,
+                prevCenter  = lastObjectPos,
+                prevRotation= lastObjectRot,
+            });
+        }
+        else                     // new purchase from shop or tray
+        {
+            PushUndo(new UndoRecord {
+                actionType  = UndoType.NewPlace,
+                data        = ins.data,
+                color       = currentColor,
+                rotation    = _currentRotation,
+                cells       = ins.occupiedCells.ToArray(),
+                worldCenter = obj.transform.position,
+                pricePaid   = priceForUndo,
+            });
+        }
 
         // Track placed count for shop price scaling (both new and repositioned blocks).
         ResourceManager.Instance?.OnBlockPlaced(ins.data.blockType);
@@ -616,6 +687,185 @@ public class PlacementController : MonoBehaviour
             if (grid.IsOccupied(p) || p.y < 0) return false;
         }
         return true;
+    }
+
+    // =========================
+    // DELETE
+    // =========================
+
+    // Delete key in Select mode: remove the selected placed block from the grid.
+    // Records an undo entry so it can be restored with Ctrl+Z.
+    void TryDelete()
+    {
+        if (selectedInstance == null) return;
+
+        // Phase gate — same rule as picking up a block.
+        if (GameFlowManager.Instance?.phase == GamePhase.Running
+            && selectedInstance.data?.blockType != BlockType.Turret)
+        {
+            Debug.Log("[Placement] Block deletion locked during combat.");
+            return;
+        }
+
+        // Snapshot for undo before anything is destroyed.
+        Color blockColor = selectedInstance.visualObject
+                            ?.GetComponentInChildren<Renderer>()?.material.color
+                            ?? Color.white;
+        PushUndo(new UndoRecord {
+            actionType  = UndoType.Delete,
+            data        = selectedInstance.data,
+            color       = blockColor,
+            rotation    = selectedInstance.visualObject?.transform.rotation ?? Quaternion.identity,
+            cells       = selectedInstance.occupiedCells.ToArray(),
+            worldCenter = selectedInstance.visualObject?.transform.position ?? Vector3.zero,
+        });
+
+        ResourceManager.Instance?.OnBlockRemoved(selectedInstance.data.blockType);
+        NotifyBlockLifted(selectedInstance.occupiedCells.ToArray());
+        grid.RemoveInstance(selectedInstance);
+        selectedInstance = null;
+        UpdateHighlight(null);
+        GameFlowManager.Instance?.EvaluateGrid();
+    }
+
+    // =========================
+    // UNDO
+    // =========================
+
+    void PushUndo(UndoRecord rec)
+    {
+        _undoStack.Add(rec);
+        if (_undoStack.Count > MaxUndoDepth)
+            _undoStack.RemoveAt(0);   // drop oldest to stay within cap
+    }
+
+    public void ClearUndoHistory() => _undoStack.Clear();
+
+    void TryUndo()
+    {
+        // No history.
+        if (_undoStack.Count == 0)
+        {
+            Debug.Log("[Undo] Nothing to undo.");
+            return;
+        }
+
+        // Block undo during combat (grid editing is locked).
+        if (GameFlowManager.Instance?.phase == GamePhase.Running)
+        {
+            Debug.Log("[Undo] Undo locked during combat.");
+            return;
+        }
+
+        // If currently holding a block, cancel the hold first without touching the stack.
+        // The player must commit or cancel their pending action before undoing past it.
+        if (mode == PlacementMode.Edit)
+        {
+            CancelEditMode();
+            return;
+        }
+
+        var rec = _undoStack[_undoStack.Count - 1];
+        _undoStack.RemoveAt(_undoStack.Count - 1);
+
+        switch (rec.actionType)
+        {
+            case UndoType.NewPlace:   UndoNewPlace(rec);   break;
+            case UndoType.Reposition: UndoReposition(rec); break;
+            case UndoType.Delete:     UndoDelete(rec);     break;
+        }
+
+        selectedInstance = null;
+        UpdateHighlight(null);
+        GameFlowManager.Instance?.EvaluateGrid();
+    }
+
+    // ── Undo: new placement → remove from grid, refund price ─────────────────
+    void UndoNewPlace(UndoRecord rec)
+    {
+        if (rec.cells == null || rec.cells.Length == 0) return;
+        var ins = grid.GetInstanceAt(rec.cells[0]);
+        if (ins == null || ins.data != rec.data)
+        {
+            Debug.LogWarning("[Undo] NewPlace target no longer matches — skipping.");
+            return;
+        }
+
+        ResourceManager.Instance?.OnBlockRemoved(rec.data.blockType);
+        NotifyBlockLifted(rec.cells);
+        grid.RemoveInstance(ins);
+
+        if (rec.pricePaid > 0)
+            ResourceManager.Instance?.RefundBlock(rec.pricePaid);
+    }
+
+    // ── Undo: reposition → remove from new cells, restore at old cells ────────
+    void UndoReposition(UndoRecord rec)
+    {
+        if (rec.cells == null || rec.cells.Length == 0) return;
+        var ins = grid.GetInstanceAt(rec.cells[0]);
+        if (ins == null || ins.data != rec.data)
+        {
+            Debug.LogWarning("[Undo] Reposition target no longer matches — skipping.");
+            return;
+        }
+
+        ResourceManager.Instance?.OnBlockRemoved(rec.data.blockType);
+        NotifyBlockLifted(rec.cells);
+        grid.RemoveInstance(ins);
+
+        // Check old cells are still free before restoring.
+        bool oldCellsFree = true;
+        foreach (var c in rec.prevCells)
+            if (grid.IsOccupied(c)) { oldCellsFree = false; break; }
+
+        if (oldCellsFree)
+            PlaceBlockFromRecord(rec.data, rec.color, rec.prevCells, rec.prevCenter, rec.prevRotation);
+        else
+            Debug.LogWarning("[Undo] Reposition origin cells now occupied — block removed without restore.");
+    }
+
+    // ── Undo: delete → re-place block at its old cells ────────────────────────
+    void UndoDelete(UndoRecord rec)
+    {
+        if (rec.cells == null || rec.cells.Length == 0) return;
+
+        bool cellsFree = true;
+        foreach (var c in rec.cells)
+            if (grid.IsOccupied(c)) { cellsFree = false; break; }
+
+        if (!cellsFree)
+        {
+            Debug.LogWarning("[Undo] Delete restore cells now occupied — cannot undo.");
+            return;
+        }
+
+        PlaceBlockFromRecord(rec.data, rec.color, rec.cells, rec.worldCenter, rec.rotation);
+    }
+
+    // ── Shared: instantiate a placed block from saved state ───────────────────
+    void PlaceBlockFromRecord(BlockData data, Color color, Vector3Int[] cells,
+                              Vector3 center, Quaternion rotation)
+    {
+        var obj = new GameObject("PlacedBlock");
+        obj.transform.position = center;
+        obj.transform.rotation = rotation;
+
+        var br      = obj.AddComponent<BlockRenderer>();
+        br.cubePrefab = cubePrefab;
+        Vector3Int origin = grid.WorldToGrid(center);
+        var rel = new Vector3Int[cells.Length];
+        for (int i = 0; i < cells.Length; i++)
+            rel[i] = cells[i] - origin;
+        br.Render(origin, rel, grid.cellSize, grid);
+
+        foreach (var r in obj.GetComponentsInChildren<Renderer>())
+            r.material.color = color;
+
+        var ins = new PlacedBlockInstance { data = data, visualObject = obj };
+        foreach (var c in cells) ins.occupiedCells.Add(c);
+        grid.RegisterInstance(ins);
+        ResourceManager.Instance?.OnBlockPlaced(data.blockType);
     }
 
     // =========================
