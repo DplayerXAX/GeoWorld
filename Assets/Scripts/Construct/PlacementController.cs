@@ -43,6 +43,7 @@ public class PlacementController : MonoBehaviour
     private Color currentColor;
 
     private bool isPickingUpObject = false;
+    private int  _pendingShopPrice = 0;    // price of the current shop item being held
     private Vector3 lastObjectPos;
     private Quaternion lastObjectRot;
     private Vector3Int[] lastObjectCells;
@@ -55,8 +56,11 @@ public class PlacementController : MonoBehaviour
     private GameObject _lastClickTarget;
     private const float DoubleClickInterval = 0.3f;
 
+    public static PlacementController Instance;
+
     void Awake()
     {
+        Instance        = this;
         editFocusAnchor = new GameObject("EditFocusAnchor").transform;
     }
 
@@ -67,45 +71,27 @@ public class PlacementController : MonoBehaviour
         currentColor = GetRandomColor();
     }
 
-    // Spawns `count` block tokens laid out as a row in the tray (no physics).
-    // Each token is a SelectableBlock the player clicks to grab; clicking
-    // immediately enters Edit mode, and a successful TryPlace destroys the
-    // token (consuming the slot).
+    // Clears all shop items for the new round.
+    public void ClearTray()
+    {
+        ShopController.Instance?.ClearItems();
+        // Also clear any legacy trayBlocks (fallback path).
+        foreach (var b in trayBlocks) if (b != null) Destroy(b);
+        trayBlocks.Clear();
+    }
+
+    // Spawns `count` random block tokens into the world-space shop (ShopController).
+    // Falls back to nothing if ShopController is not present in the scene.
     public void SpawnRoundBlocks(int count)
     {
-        if (cubePrefab == null || blocks == null || blocks.Length == 0)
-            return;
+        if (cubePrefab == null || blocks == null || blocks.Length == 0) return;
+        if (ShopController.Instance == null) return;
 
-        Transform parent     = trayAnchor != null ? trayAnchor : cam.transform;
-        Vector3   originLocal = trayAnchor != null ? Vector3.zero : trayLocalOffset;
-
+        var datas = new BlockData[count];
         for (int i = 0; i < count; i++)
-        {
-            BlockData data = blocks[Random.Range(0, blocks.Length)];
-            if (data == null || data.cells == null) continue;
+            datas[i] = blocks[Random.Range(0, blocks.Length)];
 
-            float   offset   = (i - (count - 1) * 0.5f) * traySpacing;
-            Vector3 localPos = originLocal + Vector3.right * offset;
-
-            GameObject obj = new GameObject("TrayBlock");
-            obj.transform.SetParent(parent, false);
-            obj.transform.localPosition = localPos;
-            obj.transform.localRotation = Quaternion.identity;
-            // Scale shrinks the whole token (cubes + their relative offsets)
-            // so multi-cell blocks fit inside a small visual footprint.
-            obj.transform.localScale    = Vector3.one * trayBlockScale;
-
-            Color co = GetRandomColor();
-            foreach (var cell in data.cells)
-            {
-                GameObject c = Instantiate(cubePrefab, obj.transform);
-                c.transform.localPosition = (Vector3)cell * grid.cellSize;
-                c.GetComponent<Renderer>().material.color = co;
-            }
-
-            obj.AddComponent<SelectableBlock>().data = data;
-            trayBlocks.Add(obj);
-        }
+        ShopController.Instance.SpawnItems(datas, cubePrefab, grid);
     }
 
     // Hides or shows all tray tokens that haven't been consumed yet.
@@ -144,6 +130,10 @@ public class PlacementController : MonoBehaviour
             if (mode == PlacementMode.Edit)
             {
                 if (currentBlock != null) TryPlace();
+            }
+            else if (ShopController.Instance != null && ShopController.Instance.TryHandleClick())
+            {
+                // Shop viewport consumed the click — don't run main-camera selection.
             }
             else
             {
@@ -255,6 +245,14 @@ public class PlacementController : MonoBehaviour
         {
             if (selectedInstance != null)
             {
+                // Non-turret blocks are locked during combat.
+                if (GameFlowManager.Instance?.phase == GamePhase.Running
+                    && selectedInstance.data?.blockType != BlockType.Turret)
+                {
+                    Debug.Log("[Placement] Block editing locked during combat.");
+                    return;
+                }
+
                 isPickingUpObject = true;
                 lastObjectPos   = selectedInstance.visualObject.transform.position;
                 lastObjectRot   = selectedInstance.visualObject.transform.rotation;
@@ -263,6 +261,9 @@ public class PlacementController : MonoBehaviour
                 // Snap depth so the preview block materialises where the picked-up block was.
                 // This also prevents the camera from flying when editFocusAnchor is set below.
                 SnapDepthToWorldPos(lastObjectPos);
+
+                // Update count before removing from grid.
+                ResourceManager.Instance?.OnBlockRemoved(selectedInstance.data.blockType);
 
                 grid.RemoveInstance(selectedInstance);
                 NotifyBlockLifted(lastObjectCells);
@@ -304,6 +305,14 @@ public class PlacementController : MonoBehaviour
         var sb = hit.transform.GetComponentInParent<SelectableBlock>();
         if (sb != null)
         {
+            // Non-turret tray tokens are locked during combat.
+            if (GameFlowManager.Instance?.phase == GamePhase.Running
+                && sb.data?.blockType != BlockType.Turret)
+            {
+                Debug.Log("[Placement] Block editing locked during combat.");
+                return;
+            }
+
             currentBlock        = sb.data;
             currentColor        = sb.GetComponentInChildren<Renderer>().material.color;
             activePhysicsObject = sb.gameObject;
@@ -353,6 +362,14 @@ public class PlacementController : MonoBehaviour
 
             if (isDouble)
             {
+                // Non-turret blocks are locked during combat.
+                if (GameFlowManager.Instance?.phase == GamePhase.Running
+                    && instance.data?.blockType != BlockType.Turret)
+                {
+                    Debug.Log("[Placement] Block editing locked during combat.");
+                    return;
+                }
+
                 // Pick the block back up, same as Tab — remove from grid and re-enter edit mode.
                 isPickingUpObject = true;
                 lastObjectPos     = instance.visualObject.transform.position;
@@ -360,6 +377,10 @@ public class PlacementController : MonoBehaviour
                 lastObjectCells   = instance.occupiedCells.ToArray();
 
                 SnapDepthToWorldPos(lastObjectPos);
+
+                // Update count before removing from grid.
+                ResourceManager.Instance?.OnBlockRemoved(instance.data.blockType);
+
                 grid.RemoveInstance(instance);   // destroys visualObject
                 NotifyBlockLifted(lastObjectCells);
                 selectedInstance = null;
@@ -427,6 +448,39 @@ public class PlacementController : MonoBehaviour
         if (cells.Length == 0) return;
         if (!CanPlace(currentGridPos, cells)) return;
 
+        // ── Phase gate ────────────────────────────────────────────────────────
+        var gfm = GameFlowManager.Instance;
+        if (gfm != null && gfm.phase == GamePhase.Running)
+        {
+            bool isTurret = currentBlock.blockType == BlockType.Turret;
+            if (!isTurret)
+            {
+                Debug.Log("[Placement] Block editing locked during combat.");
+                return;
+            }
+            // Turret in combat: ensure it won't block the active enemy route.
+            var worldCells = new Vector3Int[cells.Length];
+            for (int i = 0; i < cells.Length; i++)
+                worldCells[i] = currentGridPos + cells[i];
+            if (gfm.WouldBlockPath(worldCells))
+            {
+                Debug.Log("[Placement] Can't place turret — would block enemy path.");
+                return;
+            }
+        }
+
+        // ── Resource check (new block from tray only; repositioning is free) ──
+        bool isNewBlock = !isPickingUpObject;
+        if (isNewBlock && ResourceManager.Instance != null)
+        {
+            if (!ResourceManager.Instance.TryBuy(_pendingShopPrice, currentBlock.blockType))
+            {
+                StartCoroutine(FlashPreviewRed());
+                return;
+            }
+            _pendingShopPrice = 0;   // consumed
+        }
+
         Vector3 center = Vector3.zero;
         foreach (var c in cells)
             center += grid.GridToWorld(currentGridPos + c);
@@ -454,6 +508,9 @@ public class PlacementController : MonoBehaviour
 
         grid.RegisterInstance(ins);
 
+        // Track placed count for shop price scaling (both new and repositioned blocks).
+        ResourceManager.Instance?.OnBlockPlaced(ins.data.blockType);
+
         // Auto-check path after every block placement — updates live preview line.
         GameFlowManager.Instance?.EvaluateGrid();
 
@@ -468,7 +525,8 @@ public class PlacementController : MonoBehaviour
         // fresh round.
         if (activePhysicsObject != null)
         {
-            trayBlocks.Remove(activePhysicsObject); // remove before Destroy so SetTrayVisible skips it
+            ShopController.Instance?.RemoveItem(activePhysicsObject);   // deregister from shop
+            trayBlocks.Remove(activePhysicsObject);   // no-op if it came from ShopController
             Destroy(activePhysicsObject);
             activePhysicsObject = null;
         }
@@ -542,6 +600,36 @@ public class PlacementController : MonoBehaviour
     }
 
     // =========================
+    // SHOP GRAB
+    // =========================
+
+    // Called by ShopController when the player clicks a shop item.
+    // Mirrors the tray-token grab path in TrySelectObject.
+    public void GrabFromShop(SelectableBlock sb)
+    {
+        if (sb == null || sb.data == null) return;
+
+        // Phase gate — same rule as tray tokens.
+        if (GameFlowManager.Instance?.phase == GamePhase.Running
+            && sb.data.blockType != BlockType.Turret)
+        {
+            Debug.Log("[Shop] Block editing locked during combat.");
+            return;
+        }
+
+        currentBlock        = sb.data;
+        currentColor        = sb.GetComponentInChildren<Renderer>()?.material.color
+                              ?? GetRandomColor();
+        activePhysicsObject = sb.gameObject;
+        selectedInstance    = null;
+        isPickingUpObject   = false;   // new purchase, not a reposition
+        _pendingShopPrice   = sb.cachedPrice;
+
+        UpdateHighlight(null);
+        EnterEditMode(null);
+    }
+
+    // =========================
     // PICKUP RETURN
     // =========================
 
@@ -583,6 +671,8 @@ public class PlacementController : MonoBehaviour
                 ins.occupiedCells.Add(c);
 
             grid.RegisterInstance(ins);
+            // Restore count — OnBlockRemoved was called on pickup, balance it back.
+            ResourceManager.Instance?.OnBlockPlaced(ins.data.blockType);
         }
         else
         {
@@ -636,4 +726,15 @@ public class PlacementController : MonoBehaviour
 
     Color GetRandomColor() =>
         Random.ColorHSV(0f, 1f, 0.6f, 1f, 0.7f, 1f);
+
+    // Flashes the preview cubes solid red for 0.3 s to signal "can't afford".
+    System.Collections.IEnumerator FlashPreviewRed()
+    {
+        Color flashColor = new Color(1f, 0.15f, 0.15f, 0.85f);
+        foreach (var c in previewCubes)
+            if (c != null && c.activeSelf) c.GetComponent<Renderer>().material.color = flashColor;
+
+        yield return new WaitForSeconds(0.3f);
+        // UpdatePreview() will restore the correct tint next frame automatically.
+    }
 }
