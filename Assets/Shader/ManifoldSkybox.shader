@@ -25,6 +25,8 @@ Shader "Custom/ManifoldSkybox"
         _TypeHue       ("Type Hue",       Range(0,1)) = 0.6
         // Pitch glow (0-1, high notes → bright zenith flash)
         _PitchGlow     ("Pitch Glow",     Range(0,1)) = 0
+        // Combat mode (0=calm build, 1=intense battle) — driven by BackgroundReactor
+        _CombatMode    ("Combat Mode",    Range(0,1)) = 0
     }
 
     SubShader
@@ -44,6 +46,7 @@ Shader "Custom/ManifoldSkybox"
             float _FogStart, _FogDensity, _FogStrength;
             float _HorizonSharp, _TimeSpeed;
             float _BeatPulse, _MusicIntensity, _ColorShift, _TypeHue, _PitchGlow;
+            float _CombatMode;
 
             struct Attributes { float4 positionOS : POSITION; };
             struct Varyings
@@ -240,58 +243,144 @@ Shader "Custom/ManifoldSkybox"
             half4 frag(Varyings IN) : SV_Target
             {
                 float3 dir = normalize(IN.dir);
+                float  cm  = _CombatMode;   // 0 = calm build, 1 = intense combat
 
-                // ── Music-driven boosts ─────────────────────────────────
-                float beat       = _BeatPulse;
-                float intensity  = 0.4 + _MusicIntensity * 0.6;
-                float beatBoost  = 1.0 + beat * 2.0;       // grids brighten on hit
-                float gridScaleM = 1.0 + beat * 0.04;
+                // ── Geometric IFS fold (combat warp) ───────────────────────────
+                // Each iteration: abs-mirror the direction, sort axes (octahedral
+                // fold → tetrahedral symmetry), then rotate by a time-driven angle.
+                // This creates self-similar crystalline distortion — not random noise.
+                // At cm=0 the lerp cancels it entirely; at cm=1 space visibly fractures.
+                float3 foldedDir = dir;
+                {
+                    float rotSpeed = lerp(0.0, 0.85, cm);
+                    [unroll] for (int k = 0; k < 4; k++)
+                    {
+                        foldedDir = abs(foldedDir);
+                        // Sort so greatest axis is x (octahedral fold)
+                        if (foldedDir.x < foldedDir.y) { float tmp = foldedDir.x; foldedDir.x = foldedDir.y; foldedDir.y = tmp; }
+                        if (foldedDir.x < foldedDir.z) { float tmp = foldedDir.x; foldedDir.x = foldedDir.z; foldedDir.z = tmp; }
+                        float fk  = float(k);
+                        float ang = _Time.y * rotSpeed * (0.11 + fk * 0.06) + fk * 0.7854;
+                        float fca = cos(ang), fsa = sin(ang);
+                        foldedDir.xy = float2(fca * foldedDir.x - fsa * foldedDir.y,
+                                               fsa * foldedDir.x + fca * foldedDir.y);
+                    }
+                    foldedDir = normalize(foldedDir);
+                }
+                float3 sampleDir = normalize(lerp(dir, foldedDir, cm * 0.65));
 
-                // ── Sky base gradient ───────────────────────────────────
+                // ── Music-driven boosts ─────────────────────────────────────────
+                float beat      = _BeatPulse;
+                float intensity = 0.4 + _MusicIntensity * 0.6 + cm * 0.15;
+                float beatBoost = 1.0 + beat * lerp(2.0, 2.5, cm);
+                float gridScaleM= 1.0 + beat * 0.04 + cm * 0.08;
+
+                // ── Sky base gradient ───────────────────────────────────────────
                 float up = dir.y * 0.5 + 0.5;
                 float t  = pow(saturate(up), 1.0 / _HorizonSharp);
-                // Pitch glow: high notes briefly brighten the zenith
-                half3 zenith = _ZenithColor.rgb * (1.0 + _PitchGlow * 3.5 * up);
-                half3 sky = lerp(_HorizonColor.rgb, zenith, t);
+                // Combat: deep void — dark indigo/purple.  NO red-orange (avoids bloom).
+                half3 combatZenith  = lerp(_ZenithColor.rgb,  half3(0.04, 0.01, 0.20), cm);
+                half3 combatHorizon = lerp(_HorizonColor.rgb, half3(0.02, 0.04, 0.22), cm);
+                half3 zenith = combatZenith * (1.0 + _PitchGlow * 3.5 * up);
+                half3 sky    = lerp(combatHorizon, zenith, t);
 
-                // ── Stained-glass fog (the foggy / chapel-glass feel) ──
-                float3 p = dir * 8.0 + _Time.y * _TimeSpeed;
-                float fogLayer = StainedGlassFog(p);
+                // ── Stained-glass fog ───────────────────────────────────────────
+                // Drive spatial movement faster; IFS fold already warps the panels.
+                float timeSpeed = _TimeSpeed * lerp(1.0, 2.0, cm);
+                float3 p        = sampleDir * 8.0 + _Time.y * timeSpeed;
+                float fogLayer  = StainedGlassFog(p);
 
                 float baseFog = HorizonFog(dir);
                 float height  = dir.y * 0.5 + 0.5;
-                float fog = saturate(baseFog * (0.6 + fogLayer))
-                          * smoothstep(0.0, 0.6, 1.0 - height)
-                          * _FogStrength;
+                float fogStr  = _FogStrength * lerp(1.0, 1.25, cm);  // modest increase
+                float fog     = saturate(baseFog * (0.6 + fogLayer))
+                              * smoothstep(0.0, 0.6, 1.0 - height)
+                              * fogStr;
 
-                // Fog color tinted by the cell value, then per-panel modulated
-                // so adjacent cells become distinct stained-glass panels.
                 half3 fogCol = lerp(_FogColor.rgb, _ZenithColor.rgb, fogLayer);
+                // Combat: fog takes on crystalline deep-purple instead of orange
+                fogCol = lerp(fogCol, half3(0.06, 0.02, 0.35), cm * fogLayer * 0.7);
 
-                float3 panel = StainedGlassPanel(p);
-                fogCol = HsvShift(fogCol, _ColorShift + panel.x);    // unique hue per cell
-                fogCol = SaturationBoost(fogCol, panel.z);            // some panels jewel-like
-                fogCol *= panel.y;                                    // light/dark glass panels
+                float3 panel   = StainedGlassPanel(p);
+                float panelHue = _ColorShift + panel.x + cm * 0.30;
+                fogCol = HsvShift(fogCol, panelHue);
+                fogCol = SaturationBoost(fogCol, panel.z + cm * 0.25);
+                fogCol *= panel.y * lerp(1.0, 1.12, cm);
 
                 sky = lerp(fogCol, sky, 1.0 - fog);
 
-                // ── Geometry layered through the fog ────────────────────
+                // ── Geometry ───────────────────────────────────────────────────
                 float sphereGrid = SphericalGrid(dir, gridScaleM) * (1.0 - fog * 0.55);
                 float floorGrid  = PerspectiveFloor(dir);
                 float cubes      = FloatingCubes(dir) * (1.0 - fog * 0.4);
                 float ripple     = BeatRipple(dir, beat);
 
-                half3 gridCol  = _GridColor.rgb * beatBoost * intensity;
+                // Combat: second grid at golden-ratio scale, slowly rotating →
+                // geometric moiré interference that reads as "dimensional overlap".
+                float sphereGrid2 = 0.0;
+                if (cm > 0.01)
+                {
+                    float rotA = _Time.y * cm * 0.18;
+                    float gca  = cos(rotA), gsa = sin(rotA);
+                    float3 rotD = dir;
+                    rotD.xy = float2(gca * rotD.x - gsa * rotD.y, gsa * rotD.x + gca * rotD.y);
+                    rotD.xz = float2(gca * rotD.x - gsa * rotD.z, gsa * rotD.x + gca * rotD.z);
+                    sphereGrid2 = SphericalGrid(rotD, gridScaleM * 1.618)
+                                * (1.0 - fog * 0.6) * cm;
+                }
+
+                // Grid color: muted teal in combat — present but not demanding attention
+                half3 combatGridCol = lerp(_GridColor.rgb, half3(0.08, 0.48, 0.58), cm * 0.55);
+                half3 grid2Col      = lerp(combatGridCol,  half3(0.12, 0.35, 0.72), cm * 0.35);
+                half3 gridCol  = combatGridCol * beatBoost * intensity;
                 half3 floorCol = gridCol * half3(1.10, 1.00, 0.85);
 
                 half3 result = sky;
-                result = lerp(result, gridCol,    sphereGrid * 0.55);
-                result = lerp(result, floorCol,   floorGrid  * 0.85);
-                result = lerp(result, gridCol*1.3, cubes     * 0.40);
-                result += gridCol * ripple * 0.5;
+                result = lerp(result, gridCol,                            sphereGrid  * lerp(0.55, 0.85, cm));
+                result = lerp(result, grid2Col * beatBoost * intensity,   sphereGrid2 * 0.28);
+                result = lerp(result, floorCol,                           floorGrid   * lerp(0.85, 1.10, cm));
+                result = lerp(result, gridCol * 1.3,                      cubes       * lerp(0.40, 0.75, cm));
+                result += gridCol * ripple * lerp(0.5, 1.0, cm);
 
-                // Final hue rotation — keeps the chapel-glass palette evolving
-                result = HsvShift(result, _ColorShift);
+                // ── Geometric orbit-trap rings (rift-tear lines) ────────────────
+                // Five tilted ring systems rotate at different rates and frequencies.
+                // Individually: latitude circles on a rotated sphere.
+                // Together: overlapping tilted great-circle families that feel like
+                // geometry tearing open — the Mewgenics rift aesthetic.
+                if (cm > 0.01)
+                {
+                    float riftGlow = 0.0;
+                    [unroll] for (int ri = 0; ri < 5; ri++)
+                    {
+                        float fri  = float(ri);
+                        // Each system gets a unique initial tilt (2π/5 spacing) and speed
+                        float rang = _Time.y * cm * (0.18 + fri * 0.11) + fri * 1.2566;
+                        float rca  = cos(rang), rsa = sin(rang);
+                        float3 rd  = dir;   // use raw dir so rings are in world space
+                        rd.xy = float2(rca * rd.x - rsa * rd.y, rsa * rd.x + rca * rd.y);
+                        rd.xz = float2(rca * rd.x - rsa * rd.z, rsa * rd.x + rca * rd.z);
+                        rd = normalize(rd);
+                        // Latitude circles in this rotated frame
+                        float phi   = asin(clamp(rd.y, -1.0, 1.0));
+                        float ringN = 2.0 + fri * 0.5;   // increasing density per system
+                        float ringD = abs(frac(phi * ringN / 3.14159 + 0.5) - 0.5) * 2.0;
+                        riftGlow   += pow(max(0.0, 1.0 - ringD * 8.0), 3.0) * exp(-fri * 0.5);
+                    }
+                    riftGlow = saturate(riftGlow) * cm * (0.40 + beat * 0.30);
+                    // Ring color: dim blue-white — structural, not glaring
+                    result  += half3(0.50, 0.88, 1.00) * riftGlow * 0.30;
+                }
+
+                // ── Final hue rotation ──────────────────────────────────────────
+                result = HsvShift(result, _ColorShift + cm * 0.04);
+
+                // ── Combat comfort pass ─────────────────────────────────────────
+                // Pull colors toward a cool-tinted grey and slightly darken.
+                // Preserves geometric structure; removes the eye-straining saturation.
+                // At cm=1: ~45% closer to cool grey, ~18% darker overall.
+                float luma = dot(result, float3(0.299, 0.587, 0.114));
+                result = lerp(result, luma * half3(0.80, 0.84, 0.98), cm * 0.45);
+                result *= lerp(1.0, 0.82, cm);
 
                 return half4(result, 1.0);
             }

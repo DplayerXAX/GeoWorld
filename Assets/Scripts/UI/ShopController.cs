@@ -121,6 +121,9 @@ public class ShopController : MonoBehaviour
     float     _riftScreenSize;
     Vector2[] _screenVerts;
 
+    // Counts down after a failed purchase attempt — drives red rift edge flash.
+    float _cantAffordFlash;
+
     // GL rendering
     RenderTexture _shopRT;
     Material      _riftMat;    // Unlit/Texture — draws RT content
@@ -225,6 +228,7 @@ public class ShopController : MonoBehaviour
         UpdateScreenVerts();   // must run before UpdateHover / IsMouseInShopView
         AnimateItems();
         UpdateHover();
+        if (_cantAffordFlash > 0f) _cantAffordFlash -= Time.deltaTime;
     }
 
     // ── Toggle & visibility ───────────────────────────────────────────────────
@@ -334,16 +338,78 @@ public class ShopController : MonoBehaviour
         _hovered = null;
     }
 
+    /// <summary>Immediate removal — use for programmatic cleanup (ClearItems, etc.).</summary>
     public void RemoveItem(GameObject go) =>
         _items.RemoveAll(item => item.root == go);
+
+    /// <summary>
+    /// Removes the item from the shop list and plays a pop-shrink animation
+    /// before destroying the GameObject.  Returns true if the object was found
+    /// in the shop (and will be destroyed by the coroutine); false if it wasn't
+    /// a shop item (caller is responsible for destroying it).
+    /// </summary>
+    public bool RemoveItemAnimated(GameObject go)
+    {
+        bool found = _items.RemoveAll(item => item.root == go) > 0;
+        if (found && go != null) StartCoroutine(ShrinkOut(go));
+        return found;
+    }
+
+    // Short pop-then-shrink sequence: scales up 25 % briefly then collapses.
+    System.Collections.IEnumerator ShrinkOut(GameObject go)
+    {
+        const float dur = 0.28f;
+        float       t   = 0f;
+        Vector3     s0  = go.transform.localScale;
+        Vector3     p0  = go.transform.position;
+
+        while (t < dur && go != null)
+        {
+            t += Time.deltaTime;
+            float frac = Mathf.Clamp01(t / dur);
+
+            // 0→0.2: pop up to 1.25×   |   0.2→1: shrink to 0
+            float scale = frac < 0.20f
+                ? Mathf.Lerp(1f,    1.25f, frac / 0.20f)
+                : Mathf.Lerp(1.25f, 0f,   (frac - 0.20f) / 0.80f);
+
+            go.transform.localScale = s0 * scale;
+            go.transform.position   = p0 + Vector3.up * (frac * frac * 0.6f);
+            yield return null;
+        }
+        if (go != null) Destroy(go);
+    }
 
     public bool TryHandleClick()
     {
         if (!IsMouseInShopView()) return false;
         if (_hovered == null) return true;
+
+        // Affordable check — block the grab if the player can't pay.
+        var rm = ResourceManager.Instance;
+        if (rm != null && !rm.CanAfford(_hovered.sb.cachedPrice))
+        {
+            _cantAffordFlash = 0.55f;   // trigger red rift-edge flash
+            return true;                // consume click, stay in shop
+        }
+
+        // Hide the item while held — RestoreItem re-shows it on cancel.
+        _hovered.root.SetActive(false);
         PlacementController.Instance?.GrabFromShop(_hovered.sb);
         Collapse();
         return true;
+    }
+
+    /// <summary>
+    /// Called by PlacementController when the player cancels placement of a
+    /// shop item without placing it.  Makes the item visible again and reopens
+    /// the rift so the player can see it returned.
+    /// </summary>
+    public void RestoreItem(GameObject go)
+    {
+        if (go == null) return;
+        go.SetActive(true);
+        _expanded = true;   // reopen rift
     }
 
     public bool IsMouseInShopView()
@@ -395,7 +461,7 @@ public class ShopController : MonoBehaviour
 
         // 2. Undo the on-screen rotation to get into the shape's native (unrotated) space.
         //    Must mirror the Rotate2D applied in UpdateScreenVerts.
-        Vector2 local = Rotate2D(new Vector2(rx, ry), -riftRotationDeg);
+        Vector2 local = Rotate2D(new Vector2(rx, ry), riftRotationDeg);
 
         // 3. Map to camera viewport using the same shape bounds as DrawContent.
         //    ViewportPointToRay uses y=0 at bottom, y=1 at top — no D3D flip here.
@@ -407,6 +473,7 @@ public class ShopController : MonoBehaviour
             if (p.x < minX) minX = p.x; if (p.x > maxX) maxX = p.x;
             if (p.y < minY) minY = p.y; if (p.y > maxY) maxY = p.y;
         }
+        // No U flip: camera.right = world +X, viewport X maps directly to shape X.
         return new Vector3(
             Mathf.Clamp01((local.x - minX) / Mathf.Max(maxX - minX, 0.001f)),
             Mathf.Clamp01((local.y - minY) / Mathf.Max(maxY - minY, 0.001f)),
@@ -573,7 +640,10 @@ public class ShopController : MonoBehaviour
         float rx = Mathf.Max(maxX - minX, 0.001f);
         float ry = Mathf.Max(maxY - minY, 0.001f);
 
-        // UV helper: shape normalised → RT UV (V flipped for D3D/URP)
+        // UV helper: shape normalised → RT UV.
+        // Camera LookAt uses cross(worldUp, forward) → camera.right = world +X,
+        // so no U flip needed: left shape → left RT → left items.
+        // V is flipped for D3D/URP (V=0 at top of texture).
         System.Func<Vector2, Vector2> toUV =
             p => new Vector2((p.x - minX) / rx, (maxY - p.y) / ry);
 
@@ -606,12 +676,17 @@ public class ShopController : MonoBehaviour
         int   n     = _screenVerts.Length;
         float pulse = 0.70f + 0.30f * Mathf.Sin(Time.time * edgePulseSpeed);
 
+        // Flash red briefly when the player can't afford the hovered item.
+        Color edgeCol = _cantAffordFlash > 0f
+            ? Color.Lerp(riftEdgeColor, new Color(1f, 0.18f, 0.18f, 1f),
+                         _cantAffordFlash / 0.55f)
+            : riftEdgeColor;
+
         _colorMat.SetPass(0);
 
         // Outer line
         GL.Begin(GL.LINES);
-        GL.Color(new Color(riftEdgeColor.r, riftEdgeColor.g, riftEdgeColor.b,
-                           riftEdgeColor.a * pulse));
+        GL.Color(new Color(edgeCol.r, edgeCol.g, edgeCol.b, edgeCol.a * pulse));
         for (int i = 0; i < n; i++)
         {
             int j = (i + 1) % n;
