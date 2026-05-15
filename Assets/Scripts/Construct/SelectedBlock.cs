@@ -3,5 +3,11 @@ using UnityEngine;
 public class SelectableBlock : MonoBehaviour
 {
     public BlockData data;
-    // ø…“‘ÃÌº”“ª–©∏ﬂ¡¡–ßπ˚
+
+    /// <summary>
+    /// Final shop price pre-computed by ShopController at spawn time.
+    /// Includes cell count, rarity, block type, round scaling, and a one-time
+    /// random fluctuation.  Read this when buying ‚Äî do not recompute.
+    /// </summary>
+    public int cachedPrice;
 }

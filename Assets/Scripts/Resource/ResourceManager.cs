@@ -4,168 +4,239 @@ using UnityEngine;
 
 // ── Resource economy ──────────────────────────────────────────────────────────
 //
-// Four resource types, one per BlockType.  The musical chord palette and the
-// economic palette are the same object — running low on Lift resources means
-// your path loses that harmonic range too.
+// Two resource pools:
 //
-// SPENDING
-//   PlacementController deducts resources when a NEW block is taken from the
-//   tray and placed.  Repositioning an already-placed block is always free.
+//   blockCurrency  — spent at the block shop to buy path blocks.
 //
-// EARNING
-//   Battle system calls OnEnemyPassedBlock(blockType) each time an enemy
-//   walks over a block — 1 resource of that type per pass.
-//   Battle system calls OnWaveComplete(waveIndex) at wave end for a diversity
-//   bonus based on path variety.
+//   Shop price formula (computed once per shop spawn, stored in cachedPrice):
+//     price = cells × cellBasePrice × rarityMult × typeMult × roundMult × fluctuation
+//       rarityMult : Common 1.0 / Uncommon 1.4 / Rare 2.0
+//       typeMult   : Lift 1.4 / Shadow 0.85 / others 1.0
+//       roundMult  : 1 + RoundIndex × roundPriceScale
+//       fluctuation: Random [0.82, 1.22], rolled once at shop spawn — Slay the Spire style
+//
+//   turretCurrency — spent by the turret system (another team).
+//                    Slowly regenerates during combat.
+//
+// INCOME
+//   GrantRoundIncome() — called by GameFlowManager.StartTurn() each build phase.
+//   Turret currency regenerates at turretRegenPerSecond while combat is active.
+//
+// PHASE LOCKING (driven by GameFlowManager)
+//   SetCombatActive(true)  → call when Running phase starts (enables regen)
+//   SetCombatActive(false) → call when transitioning back to Build
 //
 // UI
-//   Subscribe to OnResourceChanged(BlockType, newAmount) to update displays.
+//   Subscribe to OnBlockCurrencyChanged(int) and OnTurretCurrencyChanged(int).
 //   Subscribe to OnInsufficientFunds(BlockType) for "can't afford" feedback.
+//
+// BATTLE-SYSTEM API (other team)
+//   OnEnemyPassedBlock(BlockType) — earns turret currency per block walked over
+//   OnWaveComplete()              — wave-end bonus + triggers round income
 // ─────────────────────────────────────────────────────────────────────────────
 public class ResourceManager : MonoBehaviour
 {
     public static ResourceManager Instance;
 
-    [Header("Starting Resources")]
-    public int startHome   = 8;
-    public int startLift   = 5;
-    public int startPull   = 6;
-    public int startShadow = 12;   // Shadow is cheap — give more to start
+    [Header("Block Currency")]
+    [Tooltip("Block currency the player starts the game with.")]
+    public int startingBlockCurrency = 80;
+    [Tooltip("Block currency earned at the start of each build phase.")]
+    public int blockCurrencyPerRound = 30;
 
-    [Header("Placement Costs")]
-    public int costHome   = 2;
-    public int costLift   = 4;   // expensive: enables vertical routing → longer paths
-    public int costPull   = 3;
-    public int costShadow = 1;   // cheap: enemies move faster through Shadow
+    [Header("Block Shop — Pricing")]
+    [Tooltip("Base price per cell. Single=10, I2=20, L4=40 before modifiers.")]
+    public int cellBasePrice = 10;
+    [Tooltip("Price multiplier increase per completed round. 0.06 = +6%/round.")]
+    public float roundPriceScale = 0.06f;
 
-    [Header("Wave Completion Bonus")]
-    [Tooltip("Base resources given per block type at each wave end.")]
-    public int waveBaseBonus = 2;
-    [Tooltip("Extra per unique block type present in the active path (diversity bonus).")]
-    public int waveDiversityBonus = 3;
+    [Header("Turret Currency")]
+    public int startingTurretCurrency = 5;
+    [Tooltip("Turret currency earned at the start of each build phase.")]
+    public int turretCurrencyPerRound = 2;
+    [Tooltip("Turret currency gained per second during combat.")]
+    public float turretRegenPerSecond = 0.5f;
 
     // ── Events ────────────────────────────────────────────────────────────────
-    /// <summary>Fires whenever a resource amount changes. Subscribe for UI updates.</summary>
-    public event Action<BlockType, int> OnResourceChanged;
-
-    /// <summary>Fires when a placement attempt fails due to insufficient funds.</summary>
+    /// <summary>Fires when block currency amount changes. Subscribe for UI updates.</summary>
+    public event Action<int>       OnBlockCurrencyChanged;
+    /// <summary>Fires when turret currency amount changes.</summary>
+    public event Action<int>       OnTurretCurrencyChanged;
+    /// <summary>Fires when a purchase attempt fails due to insufficient funds.</summary>
     public event Action<BlockType> OnInsufficientFunds;
 
+    // ── Properties ────────────────────────────────────────────────────────────
+    public int BlockCurrency  => _blockCurrency;
+    public int TurretCurrency => _turretCurrency;
+
     // ── State ─────────────────────────────────────────────────────────────────
-    readonly Dictionary<BlockType, int> _res = new();
+    int   _blockCurrency;
+    int   _turretCurrency;
+    float _turretRegenAccum;
+    bool  _combatActive;
+
+    // Number of each type currently placed on the grid — drives price scaling.
+    readonly Dictionary<BlockType, int> _placedCounts = new();
 
     // ── Lifecycle ─────────────────────────────────────────────────────────────
     void Awake()
     {
         Instance = this;
-        _res[BlockType.Home]   = startHome;
-        _res[BlockType.Lift]   = startLift;
-        _res[BlockType.Pull]   = startPull;
-        _res[BlockType.Shadow] = startShadow;
+
+        _blockCurrency  = startingBlockCurrency;
+        _turretCurrency = startingTurretCurrency;
+
+        foreach (BlockType t in Enum.GetValues(typeof(BlockType)))
+            _placedCounts[t] = 0;
     }
 
-    // ── Queries ───────────────────────────────────────────────────────────────
-
-    /// <summary>Current amount of the given resource type.</summary>
-    public int Get(BlockType type) =>
-        _res.TryGetValue(type, out int v) ? v : 0;
-
-    /// <summary>Placement cost for a block of the given type.</summary>
-    public int PlacementCost(BlockType type) => type switch
+    void Update()
     {
-        BlockType.Home   => costHome,
-        BlockType.Lift   => costLift,
-        BlockType.Pull   => costPull,
-        BlockType.Shadow => costShadow,
-        _                => 1,
+        if (!_combatActive) return;
+
+        _turretRegenAccum += turretRegenPerSecond * Time.deltaTime;
+        if (_turretRegenAccum >= 1f)
+        {
+            int gain = Mathf.FloorToInt(_turretRegenAccum);
+            _turretRegenAccum -= gain;
+            AddTurretCurrency(gain);
+        }
+    }
+
+    // ── Phase toggle ──────────────────────────────────────────────────────────
+    /// <summary>
+    /// Called by GameFlowManager when entering/leaving combat.
+    /// Enables turret currency regeneration while true.
+    /// </summary>
+    public void SetCombatActive(bool active)
+    {
+        _combatActive     = active;
+        if (!active) _turretRegenAccum = 0f;
+    }
+
+    // ── Round income ──────────────────────────────────────────────────────────
+    /// <summary>Called by GameFlowManager.StartTurn() at the start of each build phase.</summary>
+    public void GrantRoundIncome()
+    {
+        _blockCurrency  += blockCurrencyPerRound;
+        _turretCurrency += turretCurrencyPerRound;
+        OnBlockCurrencyChanged?.Invoke(_blockCurrency);
+        OnTurretCurrencyChanged?.Invoke(_turretCurrency);
+    }
+
+    // ── Block shop ────────────────────────────────────────────────────────────
+
+    // Rarity multipliers: more-powerful shapes cost exponentially more.
+    static float RarityMult(BlockRarity r) => r switch
+    {
+        BlockRarity.Common   => 1.0f,
+        BlockRarity.Uncommon => 1.4f,
+        BlockRarity.Rare     => 2.0f,
+        _                    => 1.0f
     };
 
-    /// <summary>Returns true if the player can afford to place this block type.</summary>
-    public bool CanAfford(BlockType type) =>
-        Get(type) >= PlacementCost(type);
-
-    // ── Spending ──────────────────────────────────────────────────────────────
+    // Lift enables vertical routing → longer paths → stronger blocks → pricier.
+    // Shadow is slightly cheaper since it adds less path utility.
+    static float TypeMult(BlockType t) => t switch
+    {
+        BlockType.Lift   => 1.4f,
+        BlockType.Shadow => 0.85f,
+        _                => 1.0f
+    };
 
     /// <summary>
-    /// Attempts to deduct the placement cost for this block type.
-    /// Returns true on success; fires OnInsufficientFunds and returns false if
-    /// the player cannot afford it.
+    /// Computes the final shop price for <paramref name="data"/>.
+    /// <paramref name="fluctuation"/> is a one-time random [0.82, 1.22] rolled
+    /// at shop spawn time (Slay-the-Spire style) — pass the value stored on
+    /// SelectableBlock.cachedPrice rather than calling this on every frame.
     /// </summary>
-    public bool TrySpend(BlockType type)
+    public int ComputePrice(BlockData data, float fluctuation)
     {
-        int cost = PlacementCost(type);
-        if (Get(type) < cost)
+        if (data == null) return 0;
+        int   cells     = (data.cells != null && data.cells.Length > 0) ? data.cells.Length : 1;
+        int   round     = GameFlowManager.Instance?.RoundIndex ?? 0;
+        float roundMult = 1f + round * roundPriceScale;
+        float raw       = cells * cellBasePrice
+                          * RarityMult(data.rarity)
+                          * TypeMult(data.blockType)
+                          * roundMult
+                          * fluctuation;
+        return Mathf.Max(1, Mathf.RoundToInt(raw));
+    }
+
+    /// <summary>Returns true if the player can afford <paramref name="price"/>.</summary>
+    public bool CanAfford(int price) => _blockCurrency >= price;
+
+    /// <summary>Number of blocks of this type currently on the grid (used by DebugUI / shop).</summary>
+    public int PlacedCount(BlockType type) =>
+        _placedCounts.TryGetValue(type, out int c) ? c : 0;
+
+    /// <summary>
+    /// Deducts <paramref name="price"/> from block currency.
+    /// Returns false (and fires OnInsufficientFunds) if insufficient.
+    /// Only call for NEW purchases — repositioning is always free.
+    /// </summary>
+    public bool TryBuy(int price, BlockType type)
+    {
+        if (_blockCurrency < price)
         {
             OnInsufficientFunds?.Invoke(type);
-            Debug.Log($"[Resource] Can't afford {type} (need {cost}, have {Get(type)})");
+            Debug.Log($"[Resource] Can't afford {type} (need {price}, have {_blockCurrency})");
             return false;
         }
-        _res[type] -= cost;
-        OnResourceChanged?.Invoke(type, _res[type]);
-        Debug.Log($"[Resource] Spent {cost} {type} → {_res[type]} remaining");
+        _blockCurrency -= price;
+        OnBlockCurrencyChanged?.Invoke(_blockCurrency);
+        Debug.Log($"[Resource] Bought {type} for {price} ¤ → {_blockCurrency} remaining");
         return true;
     }
 
-    // ── Earning ───────────────────────────────────────────────────────────────
-
+    // ── Placed-count tracking (for price scaling) ─────────────────────────────
     /// <summary>
-    /// Add resources of a specific type.
-    /// Call this directly for flat bonuses or scripted rewards.
+    /// Call when ANY block is successfully placed on the grid (new purchase or reposition).
+    /// Increments the count used for price scaling.
     /// </summary>
-    public void Earn(BlockType type, int amount)
+    public void OnBlockPlaced(BlockType type)
     {
-        if (amount <= 0) return;
-        if (!_res.ContainsKey(type)) _res[type] = 0;
-        _res[type] += amount;
-        OnResourceChanged?.Invoke(type, _res[type]);
+        if (!_placedCounts.ContainsKey(type)) _placedCounts[type] = 0;
+        _placedCounts[type]++;
     }
 
-    // ── Battle-system API (called by whoever implements enemies / waves) ───────
-
     /// <summary>
-    /// Call this each time an enemy walks over a block of a given type.
-    /// Earns 1 resource of that type.
+    /// Call when a block is removed from the grid (picked up for reposition or destroyed).
+    /// Decrements the count — temporarily lowers the price for that type.
     /// </summary>
-    public void OnEnemyPassedBlock(BlockType blockType)
-        => Earn(blockType, 1);
-
-    /// <summary>
-    /// Call this at the end of each wave with the set of block types present
-    /// on the current path.  Gives a base bonus + diversity bonus.
-    /// </summary>
-    public void OnWaveComplete(IEnumerable<BlockType> pathBlockTypes)
+    public void OnBlockRemoved(BlockType type)
     {
-        var types = new HashSet<BlockType>(pathBlockTypes);
-
-        // Base bonus for every resource type
-        foreach (BlockType t in System.Enum.GetValues(typeof(BlockType)))
-        {
-            if (t == BlockType.Turret) continue;   // Turret isn't a resource type
-            Earn(t, waveBaseBonus);
-        }
-
-        // Diversity bonus — reward path variety (ties to musical variety)
-        if (types.Count >= 3)
-        {
-            Debug.Log($"[Resource] Diversity bonus! {types.Count} block types on path.");
-            foreach (var t in types)
-                Earn(t, waveDiversityBonus);
-        }
+        if (_placedCounts.ContainsKey(type))
+            _placedCounts[type] = Mathf.Max(0, _placedCounts[type] - 1);
     }
 
-    // ── Debug ─────────────────────────────────────────────────────────────────
-    void OnGUI()
+    // ── Turret currency ───────────────────────────────────────────────────────
+    /// <summary>Attempt to spend turret currency. Returns false if insufficient.</summary>
+    public bool TrySpendTurret(int amount)
     {
-        // Temporary display until proper UI is added.
-        // Remove or disable this when your UI is hooked up.
-        int y = 10;
-        GUI.Label(new Rect(10, y, 220, 20), "── Resources ──"); y += 20;
-        foreach (var kv in _res)
-        {
-            string afford = kv.Value >= PlacementCost(kv.Key) ? "" : " ✗";
-            GUI.Label(new Rect(10, y, 220, 20),
-                $"{kv.Key,8}: {kv.Value,3}  (cost {PlacementCost(kv.Key)}){afford}");
-            y += 18;
-        }
+        if (_turretCurrency < amount) return false;
+        _turretCurrency -= amount;
+        OnTurretCurrencyChanged?.Invoke(_turretCurrency);
+        return true;
     }
+
+    void AddTurretCurrency(int amount)
+    {
+        _turretCurrency += amount;
+        OnTurretCurrencyChanged?.Invoke(_turretCurrency);
+    }
+
+    // ── Battle-system API (other team calls these) ────────────────────────────
+    /// <summary>Call each time an enemy walks over a block. Earns 1 turret currency.</summary>
+    public void OnEnemyPassedBlock(BlockType blockType) => AddTurretCurrency(1);
+
+    /// <summary>Call at wave end. Grants bonus turret currency + round income for next build.</summary>
+    public void OnWaveComplete()
+    {
+        AddTurretCurrency(3);
+        GrantRoundIncome();
+    }
+
+    // OnGUI removed — use DebugUI.cs for all display.
 }

@@ -1,0 +1,50 @@
+Event	ID	Name			Wwise Object Path	Notes
+	84696440	G			\Default Work Unit\G	
+	84696441	F			\Default Work Unit\F	
+	84696444	C			\Default Work Unit\C	
+	454121546	scroll			\Default Work Unit\scroll	
+	1302771492	rotate			\Default Work Unit\rotate	
+	1660099773	Bdim			\Default Work Unit\Bdim	
+	1799075776	BGM_event			\Default Work Unit\BGM_event	
+	1836525772	Dm			\Default Work Unit\Dm	
+	1886858551	Am			\Default Work Unit\Am	
+	2050041828	Play_Arp_Note			\Default Work Unit\Play_Arp_Note	
+
+Switch Group	ID	Name			Wwise Object Path	Notes
+	3818020044	NoteRange			\Default Work Unit\NoteRange	
+
+Switch	ID	Name	Switch Group			Notes
+	275943656	R_0	NoteRange			
+	275943657	R_1	NoteRange			
+	275943658	R_2	NoteRange			
+	275943659	R_3	NoteRange			
+	275943660	R_4	NoteRange			
+	275943661	R_5	NoteRange			
+	275943662	R_6	NoteRange			
+
+Game Parameter	ID	Name			Wwise Object Path	Notes
+	880379197	Oct			\Default Work Unit\Oct	
+	2992552588	NoteValue			\Default Work Unit\NoteValue	
+
+In Memory Audio	ID	Name	Audio source file		Wwise Object Path	Notes	Data Size
+	9946735	New Music Track_06	.cache\BA\{BA502EA0-FA8A-4DBB-D157-D8F6B9B9B911}.wem		\Containers\Default Work Unit\C\New Music Track_06		352896
+	39964637	New Music Track_02	.cache\EF\{EF6546AB-B953-D7C3-9F2B-0B1A206022EE}.wem		\Containers\Default Work Unit\F\New Music Track_02		352896
+	64655033	1	.cache\10\{106A5B23-34ED-F388-6F70-52AFE86A2EE4}.wem		\Containers\Default Work Unit\SC_Note\1		352896
+	135888558	3	.cache\4E\{4EB90DB4-0F73-5D35-95A7-8286A0C58173}.wem		\Containers\Default Work Unit\SC_Note\3		352896
+	205244938	4	.cache\FD\{FDA079BE-5726-49B1-C760-541B3852183F}.wem		\Containers\Default Work Unit\SC_Note\4		352896
+	217994856	2	.cache\5A\{5A86A6C0-68E1-5E45-F13B-F453451E2AC5}.wem		\Containers\Default Work Unit\SC_Note\2		352896
+	267990303	rotate	.cache\31\{3130154D-6829-8B70-A9C1-31B1F15B577D}.wem		\Containers\Default Work Unit\rotate\rotate		244320
+	282693327	dragon-studio-pop-402323	.cache\E4\{E4A48526-DE10-26C9-DD32-53D849D0FAF3}.wem		\Containers\Default Work Unit\dragon-studio-pop-402323\dragon-studio-pop-402323		138336
+	318210178	New Music Track_02	.cache\B3\{B368F3FC-2490-3758-E160-4B28D80FCEFF}.wem		\Containers\Default Work Unit\C\New Music Track_02		352896
+	335049325	5	.cache\7A\{7A4C3AA1-D3E7-65B5-BCA8-ADF61F0AA6F5}.wem		\Containers\Default Work Unit\SC_Note\5		352896
+	397057705	New Music Track_02	.cache\DB\{DB539939-026D-38FE-A732-796F86477D78}.wem		\Containers\Default Work Unit\Dm\New Music Track_02		352896
+	442785962	New Music Track_06	.cache\32\{32258BDC-6032-D42F-8789-5FDD1B559970}.wem		\Containers\Default Work Unit\Dm\New Music Track_06		352896
+	529299935	6	.cache\D6\{D6A2925D-B22E-9968-6871-0901DE7C381A}.wem		\Containers\Default Work Unit\SC_Note\6		352896
+	566543099	ambient bgm	.cache\28\{28D4672F-2484-1CD6-8135-CDAD372308AD}.wem		\Containers\Default Work Unit\BGM\change bgm\ambient bgm		5644896
+	633751974	New Music Track_06	.cache\7D\{7D33FDDD-17CE-8BDA-C0FB-75D5FB7BA202}.wem		\Containers\Default Work Unit\Bdim\New Music Track_06		352896
+	759153527	ambient bgm	.cache\EA\{EAE24123-C675-595C-B50B-C5C8DBB2DC3C}.wem		\Containers\Default Work Unit\BGM\ambient bgm\ambient bgm		5644896
+	799708269	New Music Track_06	.cache\19\{1911F0A7-4D8E-A328-97B7-A96A592875B7}.wem		\Containers\Default Work Unit\G\New Music Track_06		352896
+	888948449	ambient bgm	.cache\80\{802F01CA-1B7C-C650-FF9E-451F3BE2007C}.wem		\Containers\Default Work Unit\BGM\up bgm\ambient bgm		5644896
+	1062488858	7	.cache\6A\{6AA23FAE-6D57-D56F-8BE8-4188A088EA5D}.wem		\Containers\Default Work Unit\SC_Note\7		352896
+	1072811695	New Music Track_04	.cache\3E\{3E50F188-05FB-4E0D-B3A8-1EB2FC689910}.wem		\Containers\Default Work Unit\Dm\New Music Track_04		352896
+

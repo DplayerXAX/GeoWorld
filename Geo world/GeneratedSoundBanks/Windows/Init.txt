@@ -1,0 +1,19 @@
+Switch Group	ID	Name			Wwise Object Path	Notes
+	3818020044	NoteRange			\Default Work Unit\NoteRange	
+
+Switch	ID	Name	Switch Group			Notes
+	275943656	R_0	NoteRange			
+	275943657	R_1	NoteRange			
+	275943658	R_2	NoteRange			
+	275943659	R_3	NoteRange			
+	275943660	R_4	NoteRange			
+	275943661	R_5	NoteRange			
+	275943662	R_6	NoteRange			
+
+Audio Bus	ID	Name			Wwise Object Path	Notes
+	2246998526	Main Audio Bus			\Default Work Unit\Main Audio Bus	
+
+Audio Devices	ID	Name	Type				Notes
+	2317455096	No_Output	No Output			
+	3859886410	System	System			
+

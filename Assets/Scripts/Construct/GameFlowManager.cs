@@ -36,6 +36,11 @@ public class GameFlowManager : MonoBehaviour
     readonly List<SurfaceUnit> loopingUnits = new();
     int roundIndex;   // how many extra endpoints have been added so far
 
+    // ── Read-only state exposed for UI ────────────────────────────────────────
+    public int  ActiveLoopCount         => loopingUnits.Count;
+    public int  RunsSinceLastEndpoint   => _runsSinceLastEndpoint;
+    public int  RoundIndex              => roundIndex;
+
     // The specific endpoint the player must connect this round.
     // Zero → first stage (any start to any end). Set by AddNextEndpoint.
     Vector3Int _challengeCell;
@@ -258,8 +263,10 @@ public class GameFlowManager : MonoBehaviour
 
     public void StartTurn()
     {
+        ResourceManager.Instance?.GrantRoundIncome();   // fixed income each build phase
         placement.currentBlock = null;
         placement.mode = PlacementMode.Select;
+        placement.ClearTray();                          // remove leftover tokens from last round
         placement.SpawnRoundBlocks(blocksPerTurn);
     }
 
@@ -279,6 +286,7 @@ public class GameFlowManager : MonoBehaviour
                 // Path broken while unit was traversing — stop it immediately.
                 ArpeggiatorManager.Instance?.StopRecording();
                 if (currentUnit != null) { Destroy(currentUnit.gameObject); currentUnit = null; }
+                ResourceManager.Instance?.SetCombatActive(false);
                 phase = GamePhase.Build;
                 // No live line yet — will appear on next block placement.
             }
@@ -318,6 +326,8 @@ public class GameFlowManager : MonoBehaviour
         currentUnit.SetPath(path);
 
         phase = GamePhase.Running;
+        ResourceManager.Instance?.SetCombatActive(true);   // start turret currency regen
+        ShopController.Instance?.OnCombatStart();           // collapse and hide shop
     }
 
     // Builds and returns the path for the current challenge state,
@@ -367,6 +377,7 @@ public class GameFlowManager : MonoBehaviour
             AddNextEndpoint();
         }
 
+        ResourceManager.Instance?.SetCombatActive(false);  // stop turret regen, income in StartTurn
         phase = GamePhase.Build;
         StartTurn();
     }
@@ -394,6 +405,49 @@ public class GameFlowManager : MonoBehaviour
         }
 
         Destroy(old.gameObject);
+    }
+
+    // ── Path-break validation (used by PlacementController in combat) ────────
+
+    /// <summary>
+    /// Returns true if placing blocks at <paramref name="cells"/> would break the
+    /// current enemy path.  Use this before placing a turret during combat to
+    /// enforce the "turrets cannot block the active route" rule.
+    ///
+    /// Internally: temporarily registers a dummy instance, re-runs pathfinding,
+    /// then removes it — leaves the grid unchanged.
+    /// </summary>
+    public bool WouldBlockPath(Vector3Int[] cells)
+    {
+        // Filter to only the cells that are currently empty (occupied cells are
+        // already denied by CanPlace; no risk of stomping a real block's data).
+        var testCells = new List<Vector3Int>();
+        foreach (var c in cells)
+            if (!gridSystem.IsOccupied(c))
+                testCells.Add(c);
+
+        if (testCells.Count == 0) return false;
+
+        // Temporarily occupy the target cells.
+        var fake = new PlacedBlockInstance();
+        foreach (var c in testCells)
+            fake.occupiedCells.Add(c);
+
+        gridSystem.RegisterInstance(fake);
+
+        var testGraph = new SurfaceGraphBuilder();
+        testGraph.SetData(gridSystem);
+        testGraph.Build();
+
+        var startFaces = CollectFacesFromGraph(testGraph, allStarts);
+        var endFaces   = CollectFacesFromGraph(testGraph, allEnds);
+        bool blocked   = startFaces.Count == 0 || endFaces.Count == 0
+                         || SurfacePathfinding.FindPath(startFaces, endFaces) == null;
+
+        // Undo — RemoveInstance safely handles null visualObject.
+        gridSystem.RemoveInstance(fake);
+
+        return blocked;
     }
 
     // ── Graph helpers ─────────────────────────────────────────────────────────
