@@ -547,6 +547,10 @@ public class PlacementController : MonoBehaviour
         br.cubePrefab = cubePrefab;
         br.Render(currentGridPos, cells, grid.cellSize, grid);
 
+        // Set scale to zero AFTER rendering so children resolve world positions
+        // correctly before the parent scale collapses them for GrowIn.
+        obj.transform.localScale = Vector3.zero;
+
         foreach (var r in obj.GetComponentsInChildren<Renderer>())
             r.material.color = currentColor;
 
@@ -560,6 +564,7 @@ public class PlacementController : MonoBehaviour
             ins.occupiedCells.Add(currentGridPos + c);
 
         grid.RegisterInstance(ins);
+        StartCoroutine(GrowIn(obj));
 
         // ── Push undo record ──────────────────────────────────────────────────
         if (isPickingUpObject)   // reposition: remember where it came from
@@ -858,6 +863,7 @@ public class PlacementController : MonoBehaviour
         for (int i = 0; i < cells.Length; i++)
             rel[i] = cells[i] - origin;
         br.Render(origin, rel, grid.cellSize, grid);
+        obj.transform.localScale = Vector3.zero;
 
         foreach (var r in obj.GetComponentsInChildren<Renderer>())
             r.material.color = color;
@@ -865,7 +871,199 @@ public class PlacementController : MonoBehaviour
         var ins = new PlacedBlockInstance { data = data, visualObject = obj };
         foreach (var c in cells) ins.occupiedCells.Add(c);
         grid.RegisterInstance(ins);
+        StartCoroutine(GrowIn(obj));
         ResourceManager.Instance?.OnBlockPlaced(data.blockType);
+    }
+
+    // =========================
+    // COMBAT RIPPLE
+    // =========================
+
+    /// <summary>
+    /// Called by GameFlowManager when entering the Running phase.
+    /// The wave grows along the path start → end. Blocks not on the path bloom
+    /// afterwards, rippling outward from their nearest path block.
+    /// </summary>
+    public void TriggerCombatRipple(List<FaceNode> path)
+    {
+        StartCoroutine(CombatRippleCoroutine(path));
+    }
+
+    System.Collections.IEnumerator CombatRippleCoroutine(List<FaceNode> path)
+    {
+        var all = grid.GetAllInstances();
+        if (all.Count == 0) yield break;
+
+        // Step 1: hide every placed block.
+        foreach (var ins in all)
+            if (ins.visualObject != null)
+                ins.visualObject.transform.localScale = Vector3.zero;
+
+        yield return null;
+
+        // Step 2: build cell → first-occurrence-index map along the path.
+        var pathIdx = new Dictionary<Vector3Int, int>();
+        if (path != null)
+            for (int i = 0; i < path.Count; i++)
+                if (!pathIdx.ContainsKey(path[i].cell))
+                    pathIdx[path[i].cell] = i;
+
+        // Step 3: split blocks into on-path (with earliest path index) and off-path.
+        var onPath  = new List<(PlacedBlockInstance ins, int idx)>();
+        var offPath = new List<PlacedBlockInstance>();
+        foreach (var ins in all)
+        {
+            if (ins.visualObject == null) continue;
+            int earliest = int.MaxValue;
+            foreach (var c in ins.occupiedCells)
+                if (pathIdx.TryGetValue(c, out int idx) && idx < earliest)
+                    earliest = idx;
+            if (earliest < int.MaxValue) onPath.Add((ins, earliest));
+            else offPath.Add(ins);
+        }
+        onPath.Sort((a, b) => a.idx.CompareTo(b.idx));
+
+        // Step 4: sweep along the path, start → end.
+        const float pathSpread = 1.2f;   // total time for the path sweep
+        const float sproutDur  = 0.6f;   // matches WaveSproutIn duration
+        int pathLen = path != null ? path.Count : 0;
+        foreach (var (ins, idx) in onPath)
+        {
+            float t     = pathLen > 1 ? (float)idx / (pathLen - 1) : 0f;
+            float delay = t * pathSpread;
+            StartCoroutine(DelayedGrowIn(ins.visualObject, delay));
+        }
+
+        // Step 5: after the path-front passes, off-path blocks bloom outward
+        // from their nearest path block — small overlap so it doesn't feel paused.
+        if (offPath.Count == 0) yield break;
+
+        float offStart = pathSpread + sproutDur * 0.35f;
+
+        // Anchors = world positions of on-path blocks. Fallback to centroid
+        // if the path has no blocks placed on it yet (defensive).
+        var anchors = new List<Vector3>();
+        foreach (var (ins, _) in onPath)
+            if (ins.visualObject != null) anchors.Add(ins.visualObject.transform.position);
+        if (anchors.Count == 0)
+        {
+            Vector3 c = Vector3.zero; int cn = 0;
+            foreach (var ins in offPath)
+                if (ins.visualObject != null) { c += ins.visualObject.transform.position; cn++; }
+            if (cn > 0) anchors.Add(c / cn);
+        }
+
+        float maxOffDist = 0f;
+        var offDists = new float[offPath.Count];
+        for (int i = 0; i < offPath.Count; i++)
+        {
+            var pos = offPath[i].visualObject.transform.position;
+            float minD = float.MaxValue;
+            foreach (var a in anchors)
+            {
+                float d = Vector3.Distance(pos, a);
+                if (d < minD) minD = d;
+            }
+            offDists[i]  = (minD == float.MaxValue) ? 0f : minD;
+            if (offDists[i] > maxOffDist) maxOffDist = offDists[i];
+        }
+        if (maxOffDist < 0.001f) maxOffDist = 1f;
+
+        const float offSpread = 0.6f;
+        for (int i = 0; i < offPath.Count; i++)
+        {
+            float delay = offStart + (offDists[i] / maxOffDist) * offSpread;
+            StartCoroutine(DelayedGrowIn(offPath[i].visualObject, delay));
+        }
+    }
+
+    // Waits for this block's slot in the wave, then runs the wave-reveal sprout.
+    System.Collections.IEnumerator DelayedGrowIn(GameObject obj, float delay)
+    {
+        if (delay > 0.001f) yield return new WaitForSeconds(delay);
+        if (obj != null) StartCoroutine(WaveSproutIn(obj));
+    }
+
+    // ── Wave reveal: brightness flash + organic Y-leading unfurl ────────────
+    // Combat-start only. Normal block placement still uses GrowIn (snappier).
+    static System.Collections.IEnumerator WaveSproutIn(GameObject obj)
+    {
+        if (obj == null) yield break;
+
+        var rends = obj.GetComponentsInChildren<Renderer>();
+        int rc    = rends.Length;
+        var orig  = new Color[rc];
+        for (int i = 0; i < rc; i++)
+            if (rends[i]) orig[i] = rends[i].material.color;
+
+        const float dur = 0.6f;
+        float elapsed   = 0f;
+
+        while (elapsed < dur)
+        {
+            if (obj == null) yield break;
+            elapsed += Time.deltaTime;
+            float t = Mathf.Clamp01(elapsed / dur);
+
+            // Y leads, X/Z follow ~15 % behind — tree-like unfurl.
+            float ty  = Mathf.Clamp01(t / 0.7f);
+            float ey  = 1f - Mathf.Pow(1f - ty, 4f);   // easeOutQuart
+            float txz = Mathf.Clamp01((t - 0.15f) / 0.85f);
+            float exz = 1f - Mathf.Pow(1f - txz, 3f);  // easeOutCubic
+
+            obj.transform.localScale = new Vector3(exz, ey, exz);
+
+            // Brightness from the passing wave: bright at arrival, fades into the growth.
+            float bright = (1f - t) * (1f - t) * 0.7f;
+            for (int i = 0; i < rc; i++)
+                if (rends[i]) rends[i].material.color = Color.Lerp(orig[i], Color.white, bright);
+
+            yield return null;
+        }
+
+        if (obj != null) obj.transform.localScale = Vector3.one;
+        for (int i = 0; i < rc; i++)
+            if (rends[i]) rends[i].material.color = orig[i];
+    }
+
+    // ── Growth animation: 0 → 1.12 → 1.0 with cubic ease-out ────────────────
+    // Overshoot to 1.12 gives a satisfying "snap into place" feel.
+    static System.Collections.IEnumerator GrowIn(GameObject obj)
+    {
+        if (obj == null) yield break;
+
+        const float dur     = 0.22f;
+        const float peak    = 1.12f;   // overshoot scale
+        const float peakAt  = 0.55f;   // fraction of dur at which we hit peak
+        float       elapsed = 0f;
+
+        while (elapsed < dur)
+        {
+            if (obj == null) yield break;
+            elapsed += Time.deltaTime;
+            float t = Mathf.Clamp01(elapsed / dur);
+
+            float scale;
+            if (t < peakAt)
+            {
+                // Phase 1: 0 → peak  (ease-out cubic)
+                float t1 = t / peakAt;
+                float e  = 1f - (1f - t1) * (1f - t1) * (1f - t1);
+                scale = e * peak;
+            }
+            else
+            {
+                // Phase 2: peak → 1  (ease-in-out)
+                float t2 = (t - peakAt) / (1f - peakAt);
+                float e  = t2 * t2 * (3f - 2f * t2);
+                scale = Mathf.Lerp(peak, 1f, e);
+            }
+
+            obj.transform.localScale = Vector3.one * scale;
+            yield return null;
+        }
+
+        if (obj != null) obj.transform.localScale = Vector3.one;
     }
 
     // =========================
@@ -929,6 +1127,7 @@ public class PlacementController : MonoBehaviour
                 rel[i] = lastObjectCells[i] - origin;
 
             br.Render(origin, rel, grid.cellSize, grid);
+            obj.transform.localScale = Vector3.zero;
 
             PlacedBlockInstance ins = new()
             {
@@ -940,6 +1139,7 @@ public class PlacementController : MonoBehaviour
                 ins.occupiedCells.Add(c);
 
             grid.RegisterInstance(ins);
+            StartCoroutine(GrowIn(obj));
             // Restore count — OnBlockRemoved was called on pickup, balance it back.
             ResourceManager.Instance?.OnBlockPlaced(ins.data.blockType);
         }

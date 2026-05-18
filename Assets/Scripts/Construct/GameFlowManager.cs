@@ -328,6 +328,7 @@ public class GameFlowManager : MonoBehaviour
         phase = GamePhase.Running;
         ResourceManager.Instance?.SetCombatActive(true);   // start turret currency regen
         ShopController.Instance?.OnCombatStart();           // collapse and hide shop
+        placement.TriggerCombatRipple(path);                // wave grows along path, then off-path blocks bloom
     }
 
     // Builds and returns the path for the current challenge state,
