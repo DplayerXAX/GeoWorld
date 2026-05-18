@@ -82,4 +82,15 @@ public class GridSystem : MonoBehaviour
     }
 
     public Dictionary<Vector3Int, bool> GetGrid() => occupied;
+
+    /// <summary>Returns every distinct placed instance currently on the grid.</summary>
+    public List<PlacedBlockInstance> GetAllInstances()
+    {
+        var seen   = new HashSet<PlacedBlockInstance>();
+        var result = new List<PlacedBlockInstance>();
+        foreach (var ins in cellToInstance.Values)
+            if (ins != null && seen.Add(ins))
+                result.Add(ins);
+        return result;
+    }
 }
