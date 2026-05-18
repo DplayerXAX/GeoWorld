@@ -881,8 +881,9 @@ public class PlacementController : MonoBehaviour
 
     /// <summary>
     /// Called by GameFlowManager when entering the Running phase.
-    /// The wave grows along the path start → end. Blocks not on the path bloom
-    /// afterwards, rippling outward from their nearest path block.
+    /// Grows cube-by-cube along the path, each cube extending from its entry
+    /// edge in the direction of travel — like a branch creeping forward.
+    /// Off-path cubes bloom afterwards, rippling out from the nearest path cube.
     /// </summary>
     public void TriggerCombatRipple(List<FaceNode> path)
     {
@@ -894,134 +895,180 @@ public class PlacementController : MonoBehaviour
         var all = grid.GetAllInstances();
         if (all.Count == 0) yield break;
 
-        // Step 1: hide every placed block.
+        // Step 1: collect every cube (cell-sized child of a placed block) and
+        // hide it. Children are created 1:1 with occupiedCells in render order.
+        var cubes = new List<(Transform t, Vector3Int cell, Vector3 worldPos, Vector3 origLocalPos)>();
         foreach (var ins in all)
-            if (ins.visualObject != null)
-                ins.visualObject.transform.localScale = Vector3.zero;
+        {
+            if (ins.visualObject == null) continue;
+            // Parent stays at scale 1; we drive each child independently.
+            ins.visualObject.transform.localScale = Vector3.one;
 
+            int count = Mathf.Min(ins.visualObject.transform.childCount, ins.occupiedCells.Count);
+            for (int i = 0; i < count; i++)
+            {
+                var t = ins.visualObject.transform.GetChild(i);
+                cubes.Add((t, ins.occupiedCells[i], t.position, t.localPosition));
+                t.localScale = Vector3.zero;
+            }
+        }
+        if (cubes.Count == 0) yield break;
         yield return null;
 
-        // Step 2: build cell → first-occurrence-index map along the path.
+        // Step 2: cell → first index along path.
         var pathIdx = new Dictionary<Vector3Int, int>();
         if (path != null)
             for (int i = 0; i < path.Count; i++)
                 if (!pathIdx.ContainsKey(path[i].cell))
                     pathIdx[path[i].cell] = i;
 
-        // Step 3: split blocks into on-path (with earliest path index) and off-path.
-        var onPath  = new List<(PlacedBlockInstance ins, int idx)>();
-        var offPath = new List<PlacedBlockInstance>();
-        foreach (var ins in all)
+        // Step 3: split into on-path (with index + entry direction) and off-path.
+        var onPath  = new List<(Transform t, int idx, Vector3 worldPos, Vector3 origLocalPos, Vector3 entryDirWorld)>();
+        var offPath = new List<(Transform t, Vector3 worldPos, Vector3 origLocalPos)>();
+        foreach (var c in cubes)
         {
-            if (ins.visualObject == null) continue;
-            int earliest = int.MaxValue;
-            foreach (var c in ins.occupiedCells)
-                if (pathIdx.TryGetValue(c, out int idx) && idx < earliest)
-                    earliest = idx;
-            if (earliest < int.MaxValue) onPath.Add((ins, earliest));
-            else offPath.Add(ins);
+            if (pathIdx.TryGetValue(c.cell, out int idx))
+            {
+                Vector3 entry = Vector3.zero;
+                if (path != null)
+                {
+                    // Entry direction: from the previous path cell into this one.
+                    // For idx 0, use the direction toward the next cell so the seed
+                    // still grows outward instead of expanding from its center.
+                    if (idx > 0)
+                        entry = ((Vector3)(path[idx].cell - path[idx - 1].cell)).normalized;
+                    else if (path.Count > 1)
+                        entry = ((Vector3)(path[1].cell - path[0].cell)).normalized;
+                }
+                onPath.Add((c.t, idx, c.worldPos, c.origLocalPos, entry));
+            }
+            else
+            {
+                offPath.Add((c.t, c.worldPos, c.origLocalPos));
+            }
         }
         onPath.Sort((a, b) => a.idx.CompareTo(b.idx));
 
-        // Step 4: sweep along the path, start → end.
-        const float pathSpread = 1.2f;   // total time for the path sweep
-        const float sproutDur  = 0.6f;   // matches WaveSproutIn duration
-        int pathLen = path != null ? path.Count : 0;
-        foreach (var (ins, idx) in onPath)
+        // Step 4: branch along the path, cube by cube.
+        const float perCellStep = 0.07f;   // delay between consecutive path cells
+        const float cubeDur     = 0.22f;   // per-cube growth time
+
+        float pathSweepEnd = 0f;
+        foreach (var c in onPath)
         {
-            float t     = pathLen > 1 ? (float)idx / (pathLen - 1) : 0f;
-            float delay = t * pathSpread;
-            StartCoroutine(DelayedGrowIn(ins.visualObject, delay));
+            float delay = c.idx * perCellStep;
+            StartCoroutine(BranchSproutCube(c.t, delay, cubeDur, c.entryDirWorld, c.origLocalPos));
+            pathSweepEnd = Mathf.Max(pathSweepEnd, delay + cubeDur);
         }
 
-        // Step 5: after the path-front passes, off-path blocks bloom outward
-        // from their nearest path block — small overlap so it doesn't feel paused.
+        // Step 5: off-path cubes bloom from their nearest path cube. Small
+        // overlap with the path sweep so it doesn't feel halted.
         if (offPath.Count == 0) yield break;
 
-        float offStart = pathSpread + sproutDur * 0.35f;
-
-        // Anchors = world positions of on-path blocks. Fallback to centroid
-        // if the path has no blocks placed on it yet (defensive).
-        var anchors = new List<Vector3>();
-        foreach (var (ins, _) in onPath)
-            if (ins.visualObject != null) anchors.Add(ins.visualObject.transform.position);
+        var anchors = new List<Vector3>(onPath.Count);
+        foreach (var c in onPath) anchors.Add(c.worldPos);
         if (anchors.Count == 0)
         {
-            Vector3 c = Vector3.zero; int cn = 0;
-            foreach (var ins in offPath)
-                if (ins.visualObject != null) { c += ins.visualObject.transform.position; cn++; }
-            if (cn > 0) anchors.Add(c / cn);
+            Vector3 c = Vector3.zero;
+            foreach (var o in offPath) c += o.worldPos;
+            anchors.Add(c / offPath.Count);
         }
 
         float maxOffDist = 0f;
         var offDists = new float[offPath.Count];
         for (int i = 0; i < offPath.Count; i++)
         {
-            var pos = offPath[i].visualObject.transform.position;
             float minD = float.MaxValue;
             foreach (var a in anchors)
             {
-                float d = Vector3.Distance(pos, a);
+                float d = Vector3.Distance(offPath[i].worldPos, a);
                 if (d < minD) minD = d;
             }
-            offDists[i]  = (minD == float.MaxValue) ? 0f : minD;
+            offDists[i] = (minD == float.MaxValue) ? 0f : minD;
             if (offDists[i] > maxOffDist) maxOffDist = offDists[i];
         }
         if (maxOffDist < 0.001f) maxOffDist = 1f;
 
-        const float offSpread = 0.6f;
+        float offStart = Mathf.Max(0f, pathSweepEnd - cubeDur * 0.5f);
+        const float offSpread = 0.55f;
         for (int i = 0; i < offPath.Count; i++)
         {
             float delay = offStart + (offDists[i] / maxOffDist) * offSpread;
-            StartCoroutine(DelayedGrowIn(offPath[i].visualObject, delay));
+            // No entry direction → cube does a uniform bloom from its centre.
+            StartCoroutine(BranchSproutCube(offPath[i].t, delay, cubeDur, Vector3.zero, offPath[i].origLocalPos));
         }
     }
 
-    // Waits for this block's slot in the wave, then runs the wave-reveal sprout.
-    System.Collections.IEnumerator DelayedGrowIn(GameObject obj, float delay)
+    // ── Per-cube branch growth ──────────────────────────────────────────────
+    // Path cubes scale anisotropically along the entry axis, with a position
+    // offset so the back edge stays glued to the previous cube — visually the
+    // cube "extends" outward like a branch tip.
+    // Off-path cubes (entryDirWorld = 0) just bloom uniformly from their centre.
+    static System.Collections.IEnumerator BranchSproutCube(
+        Transform t, float delay, float dur, Vector3 entryDirWorld, Vector3 origLocalPos)
     {
         if (delay > 0.001f) yield return new WaitForSeconds(delay);
-        if (obj != null) StartCoroutine(WaveSproutIn(obj));
-    }
+        if (t == null) yield break;
 
-    // ── Wave reveal: brightness flash + organic Y-leading unfurl ────────────
-    // Combat-start only. Normal block placement still uses GrowIn (snappier).
-    static System.Collections.IEnumerator WaveSproutIn(GameObject obj)
-    {
-        if (obj == null) yield break;
-
-        var rends = obj.GetComponentsInChildren<Renderer>();
+        var rends = t.GetComponentsInChildren<Renderer>();
         int rc    = rends.Length;
         var orig  = new Color[rc];
         for (int i = 0; i < rc; i++)
             if (rends[i]) orig[i] = rends[i].material.color;
 
-        const float dur = 0.6f;
-        float elapsed   = 0f;
+        // Resolve entry direction in the cube's local frame and pick the
+        // dominant axis. Block rotations are 90°-stepped, so this maps cleanly.
+        int   axis = -1;
+        float sign = 1f;
+        if (entryDirWorld.sqrMagnitude > 0.001f && t.parent != null)
+        {
+            Vector3 local = t.parent.InverseTransformDirection(entryDirWorld);
+            float ax = Mathf.Abs(local.x), ay = Mathf.Abs(local.y), az = Mathf.Abs(local.z);
+            if (ax >= ay && ax >= az)      { axis = 0; sign = Mathf.Sign(local.x); }
+            else if (ay >= az)             { axis = 1; sign = Mathf.Sign(local.y); }
+            else                           { axis = 2; sign = Mathf.Sign(local.z); }
+        }
 
+        float elapsed = 0f;
         while (elapsed < dur)
         {
-            if (obj == null) yield break;
+            if (t == null) yield break;
             elapsed += Time.deltaTime;
-            float t = Mathf.Clamp01(elapsed / dur);
+            float p = Mathf.Clamp01(elapsed / dur);
+            float e = 1f - Mathf.Pow(1f - p, 4f);   // easeOutQuart
 
-            // Y leads, X/Z follow ~15 % behind — tree-like unfurl.
-            float ty  = Mathf.Clamp01(t / 0.7f);
-            float ey  = 1f - Mathf.Pow(1f - ty, 4f);   // easeOutQuart
-            float txz = Mathf.Clamp01((t - 0.15f) / 0.85f);
-            float exz = 1f - Mathf.Pow(1f - txz, 3f);  // easeOutCubic
+            if (axis >= 0)
+            {
+                // Perp axes start a bit thick so the tip looks like a bud, not a needle.
+                float perp  = Mathf.Lerp(0.72f, 1f, e);
+                float along = e;
 
-            obj.transform.localScale = new Vector3(exz, ey, exz);
+                Vector3 scl = new Vector3(perp, perp, perp);
+                scl[axis] = along;
+                t.localScale = scl;
 
-            // Brightness from the passing wave: bright at arrival, fades into the growth.
-            float bright = (1f - t) * (1f - t) * 0.7f;
+                Vector3 offset = Vector3.zero;
+                offset[axis] = -sign * (1f - along) * 0.5f;
+                t.localPosition = origLocalPos + offset;
+            }
+            else
+            {
+                t.localScale = Vector3.one * e;
+            }
+
+            // Brief brightness pulse — wavefront passing through.
+            float bright = (1f - p) * (1f - p) * 0.7f;
             for (int i = 0; i < rc; i++)
                 if (rends[i]) rends[i].material.color = Color.Lerp(orig[i], Color.white, bright);
 
             yield return null;
         }
 
-        if (obj != null) obj.transform.localScale = Vector3.one;
+        if (t != null)
+        {
+            t.localScale    = Vector3.one;
+            t.localPosition = origLocalPos;
+        }
         for (int i = 0; i < rc; i++)
             if (rends[i]) rends[i].material.color = orig[i];
     }
