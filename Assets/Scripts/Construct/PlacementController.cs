@@ -8,6 +8,7 @@ public class PlacementController : MonoBehaviour
 {
     public PlacementMode mode = PlacementMode.Select;
     public BlockData[] blocks;
+    [Range(0f, 1f)] public float turretShopChance = 0.25f;
     public GridSystem grid;
     public BlockData currentBlock;
     public GameObject cubePrefab;
@@ -157,9 +158,28 @@ public class PlacementController : MonoBehaviour
         if (cubePrefab == null || blocks == null || blocks.Length == 0) return;
         if (ShopController.Instance == null) return;
 
+        BlockData turretBlock = null;
+        var normalBlocks = new List<BlockData>();
+        foreach (var block in blocks)
+        {
+            if (block == null) continue;
+            if (block.blockType == BlockType.Turret && turretBlock == null)
+                turretBlock = block;
+            else if (block.blockType != BlockType.Turret)
+                normalBlocks.Add(block);
+        }
+
+        if (turretBlock == null && normalBlocks.Count == 0) return;
+
         var datas = new BlockData[count];
         for (int i = 0; i < count; i++)
-            datas[i] = blocks[Random.Range(0, blocks.Length)];
+        {
+            bool rollTurret = turretBlock != null
+                && (normalBlocks.Count == 0 || Random.value < turretShopChance);
+            datas[i] = rollTurret
+                ? turretBlock
+                : normalBlocks[Random.Range(0, normalBlocks.Count)];
+        }
 
         ShopController.Instance.SpawnItems(datas, cubePrefab, grid);
     }
@@ -380,6 +400,7 @@ public class PlacementController : MonoBehaviour
             currentBlock        = null;
             activePhysicsObject = null;
         }
+
 
         mode = PlacementMode.Select;
         previewParent.gameObject.SetActive(false);
@@ -1163,6 +1184,378 @@ public class PlacementController : MonoBehaviour
             t.localScale    = Vector3.one;
             t.localPosition = origLocalPos;
         }
+        for (int i = 0; i < rc; i++)
+            if (rends[i]) rends[i].material.color = orig[i];
+    }
+
+    // ── Growth animation: 0 → 1.12 → 1.0 with cubic ease-out ────────────────
+    // Overshoot to 1.12 gives a satisfying "snap into place" feel.
+    static System.Collections.IEnumerator GrowIn(GameObject obj)
+    {
+        if (obj == null) yield break;
+
+        const float dur     = 0.22f;
+        const float peak    = 1.12f;   // overshoot scale
+        const float peakAt  = 0.55f;   // fraction of dur at which we hit peak
+        float       elapsed = 0f;
+
+        while (elapsed < dur)
+        {
+            if (obj == null) yield break;
+            elapsed += Time.deltaTime;
+            float t = Mathf.Clamp01(elapsed / dur);
+
+            float scale;
+            if (t < peakAt)
+            {
+                // Phase 1: 0 → peak  (ease-out cubic)
+                float t1 = t / peakAt;
+                float e  = 1f - (1f - t1) * (1f - t1) * (1f - t1);
+                scale = e * peak;
+            }
+            else
+            {
+                // Phase 2: peak → 1  (ease-in-out)
+                float t2 = (t - peakAt) / (1f - peakAt);
+                float e  = t2 * t2 * (3f - 2f * t2);
+                scale = Mathf.Lerp(peak, 1f, e);
+            }
+
+            obj.transform.localScale = Vector3.one * scale;
+            yield return null;
+        }
+
+        if (obj != null) obj.transform.localScale = Vector3.one;
+    }
+
+    // =========================
+    // DELETE
+    // =========================
+
+    // Delete key in Select mode: remove the selected placed block from the grid.
+    // Records an undo entry so it can be restored with Ctrl+Z.
+    void TryDelete()
+    {
+        if (selectedInstance == null) return;
+
+        // Phase gate — same rule as picking up a block.
+        if (GameFlowManager.Instance?.phase == GamePhase.Running
+            && selectedInstance.data?.blockType != BlockType.Turret)
+        {
+            Debug.Log("[Placement] Block deletion locked during combat.");
+            return;
+        }
+
+        // Snapshot for undo before anything is destroyed.
+        Color blockColor = selectedInstance.visualObject
+                            ?.GetComponentInChildren<Renderer>()?.material.color
+                            ?? Color.white;
+        PushUndo(new UndoRecord {
+            actionType  = UndoType.Delete,
+            data        = selectedInstance.data,
+            color       = blockColor,
+            rotation    = selectedInstance.visualObject?.transform.rotation ?? Quaternion.identity,
+            cells       = selectedInstance.occupiedCells.ToArray(),
+            worldCenter = selectedInstance.visualObject?.transform.position ?? Vector3.zero,
+        });
+
+        ResourceManager.Instance?.OnBlockRemoved(selectedInstance.data.blockType);
+        NotifyBlockLifted(selectedInstance.occupiedCells.ToArray());
+        grid.RemoveInstance(selectedInstance);
+        selectedInstance = null;
+        UpdateHighlight(null);
+        GameFlowManager.Instance?.EvaluateGrid();
+    }
+
+    // =========================
+    // UNDO
+    // =========================
+
+    void PushUndo(UndoRecord rec)
+    {
+        _undoStack.Add(rec);
+        if (_undoStack.Count > MaxUndoDepth)
+            _undoStack.RemoveAt(0);   // drop oldest to stay within cap
+    }
+
+    public void ClearUndoHistory() => _undoStack.Clear();
+
+    void TryUndo()
+    {
+        // No history.
+        if (_undoStack.Count == 0)
+        {
+            Debug.Log("[Undo] Nothing to undo.");
+            return;
+        }
+
+        // Block undo during combat (grid editing is locked).
+        if (GameFlowManager.Instance?.phase == GamePhase.Running)
+        {
+            Debug.Log("[Undo] Undo locked during combat.");
+            return;
+        }
+
+        // If currently holding a block, cancel the hold first without touching the stack.
+        // The player must commit or cancel their pending action before undoing past it.
+        if (mode == PlacementMode.Edit)
+        {
+            CancelEditMode();
+            return;
+        }
+
+        var rec = _undoStack[_undoStack.Count - 1];
+        _undoStack.RemoveAt(_undoStack.Count - 1);
+
+        switch (rec.actionType)
+        {
+            case UndoType.NewPlace:   UndoNewPlace(rec);   break;
+            case UndoType.Reposition: UndoReposition(rec); break;
+            case UndoType.Delete:     UndoDelete(rec);     break;
+        }
+
+        selectedInstance = null;
+        UpdateHighlight(null);
+        GameFlowManager.Instance?.EvaluateGrid();
+    }
+
+    // ── Undo: new placement → remove from grid, refund price ─────────────────
+    void UndoNewPlace(UndoRecord rec)
+    {
+        if (rec.cells == null || rec.cells.Length == 0) return;
+        var ins = grid.GetInstanceAt(rec.cells[0]);
+        if (ins == null || ins.data != rec.data)
+        {
+            Debug.LogWarning("[Undo] NewPlace target no longer matches — skipping.");
+            return;
+        }
+
+        ResourceManager.Instance?.OnBlockRemoved(rec.data.blockType);
+        NotifyBlockLifted(rec.cells);
+        grid.RemoveInstance(ins);
+
+        if (rec.pricePaid > 0)
+            ResourceManager.Instance?.RefundBlock(rec.pricePaid);
+    }
+
+    // ── Undo: reposition → remove from new cells, restore at old cells ────────
+    void UndoReposition(UndoRecord rec)
+    {
+        if (rec.cells == null || rec.cells.Length == 0) return;
+        var ins = grid.GetInstanceAt(rec.cells[0]);
+        if (ins == null || ins.data != rec.data)
+        {
+            Debug.LogWarning("[Undo] Reposition target no longer matches — skipping.");
+            return;
+        }
+
+        ResourceManager.Instance?.OnBlockRemoved(rec.data.blockType);
+        NotifyBlockLifted(rec.cells);
+        grid.RemoveInstance(ins);
+
+        // Check old cells are still free before restoring.
+        bool oldCellsFree = true;
+        foreach (var c in rec.prevCells)
+            if (grid.IsOccupied(c)) { oldCellsFree = false; break; }
+
+        if (oldCellsFree)
+            PlaceBlockFromRecord(rec.data, rec.color, rec.prevCells, rec.prevCenter, rec.prevRotation);
+        else
+            Debug.LogWarning("[Undo] Reposition origin cells now occupied — block removed without restore.");
+    }
+
+    // ── Undo: delete → re-place block at its old cells ────────────────────────
+    void UndoDelete(UndoRecord rec)
+    {
+        if (rec.cells == null || rec.cells.Length == 0) return;
+
+        bool cellsFree = true;
+        foreach (var c in rec.cells)
+            if (grid.IsOccupied(c)) { cellsFree = false; break; }
+
+        if (!cellsFree)
+        {
+            Debug.LogWarning("[Undo] Delete restore cells now occupied — cannot undo.");
+            return;
+        }
+
+        PlaceBlockFromRecord(rec.data, rec.color, rec.cells, rec.worldCenter, rec.rotation);
+    }
+
+    // ── Shared: instantiate a placed block from saved state ───────────────────
+    void PlaceBlockFromRecord(BlockData data, Color color, Vector3Int[] cells,
+                              Vector3 center, Quaternion rotation)
+    {
+        var obj = new GameObject("PlacedBlock");
+        obj.transform.position = center;
+        obj.transform.rotation = rotation;
+
+        var br      = obj.AddComponent<BlockRenderer>();
+        br.cubePrefab = cubePrefab;
+        Vector3Int origin = grid.WorldToGrid(center);
+        var rel = new Vector3Int[cells.Length];
+        for (int i = 0; i < cells.Length; i++)
+            rel[i] = cells[i] - origin;
+        br.Render(origin, rel, grid.cellSize, grid);
+        obj.transform.localScale = Vector3.zero;
+
+        foreach (var r in obj.GetComponentsInChildren<Renderer>())
+            r.material.color = color;
+
+        var ins = new PlacedBlockInstance { data = data, visualObject = obj };
+        foreach (var c in cells) ins.occupiedCells.Add(c);
+        grid.RegisterInstance(ins);
+        StartCoroutine(GrowIn(obj));
+        ResourceManager.Instance?.OnBlockPlaced(data.blockType);
+    }
+
+    // =========================
+    // COMBAT RIPPLE
+    // =========================
+
+    /// <summary>
+    /// Called by GameFlowManager when entering the Running phase.
+    /// The wave grows along the path start → end. Blocks not on the path bloom
+    /// afterwards, rippling outward from their nearest path block.
+    /// </summary>
+    public void TriggerCombatRipple(List<FaceNode> path)
+    {
+        StartCoroutine(CombatRippleCoroutine(path));
+    }
+
+    System.Collections.IEnumerator CombatRippleCoroutine(List<FaceNode> path)
+    {
+        var all = grid.GetAllInstances();
+        if (all.Count == 0) yield break;
+
+        // Step 1: hide every placed block.
+        foreach (var ins in all)
+            if (ins.visualObject != null)
+                ins.visualObject.transform.localScale = Vector3.zero;
+
+        yield return null;
+
+        // Step 2: build cell → first-occurrence-index map along the path.
+        var pathIdx = new Dictionary<Vector3Int, int>();
+        if (path != null)
+            for (int i = 0; i < path.Count; i++)
+                if (!pathIdx.ContainsKey(path[i].cell))
+                    pathIdx[path[i].cell] = i;
+
+        // Step 3: split blocks into on-path (with earliest path index) and off-path.
+        var onPath  = new List<(PlacedBlockInstance ins, int idx)>();
+        var offPath = new List<PlacedBlockInstance>();
+        foreach (var ins in all)
+        {
+            if (ins.visualObject == null) continue;
+            int earliest = int.MaxValue;
+            foreach (var c in ins.occupiedCells)
+                if (pathIdx.TryGetValue(c, out int idx) && idx < earliest)
+                    earliest = idx;
+            if (earliest < int.MaxValue) onPath.Add((ins, earliest));
+            else offPath.Add(ins);
+        }
+        onPath.Sort((a, b) => a.idx.CompareTo(b.idx));
+
+        // Step 4: sweep along the path, start → end.
+        const float pathSpread = 1.2f;   // total time for the path sweep
+        const float sproutDur  = 0.6f;   // matches WaveSproutIn duration
+        int pathLen = path != null ? path.Count : 0;
+        foreach (var (ins, idx) in onPath)
+        {
+            float t     = pathLen > 1 ? (float)idx / (pathLen - 1) : 0f;
+            float delay = t * pathSpread;
+            StartCoroutine(DelayedGrowIn(ins.visualObject, delay));
+        }
+
+        // Step 5: after the path-front passes, off-path blocks bloom outward
+        // from their nearest path block — small overlap so it doesn't feel paused.
+        if (offPath.Count == 0) yield break;
+
+        float offStart = pathSpread + sproutDur * 0.35f;
+
+        // Anchors = world positions of on-path blocks. Fallback to centroid
+        // if the path has no blocks placed on it yet (defensive).
+        var anchors = new List<Vector3>();
+        foreach (var (ins, _) in onPath)
+            if (ins.visualObject != null) anchors.Add(ins.visualObject.transform.position);
+        if (anchors.Count == 0)
+        {
+            Vector3 c = Vector3.zero; int cn = 0;
+            foreach (var ins in offPath)
+                if (ins.visualObject != null) { c += ins.visualObject.transform.position; cn++; }
+            if (cn > 0) anchors.Add(c / cn);
+        }
+
+        float maxOffDist = 0f;
+        var offDists = new float[offPath.Count];
+        for (int i = 0; i < offPath.Count; i++)
+        {
+            var pos = offPath[i].visualObject.transform.position;
+            float minD = float.MaxValue;
+            foreach (var a in anchors)
+            {
+                float d = Vector3.Distance(pos, a);
+                if (d < minD) minD = d;
+            }
+            offDists[i]  = (minD == float.MaxValue) ? 0f : minD;
+            if (offDists[i] > maxOffDist) maxOffDist = offDists[i];
+        }
+        if (maxOffDist < 0.001f) maxOffDist = 1f;
+
+        const float offSpread = 0.6f;
+        for (int i = 0; i < offPath.Count; i++)
+        {
+            float delay = offStart + (offDists[i] / maxOffDist) * offSpread;
+            StartCoroutine(DelayedGrowIn(offPath[i].visualObject, delay));
+        }
+    }
+
+    // Waits for this block's slot in the wave, then runs the wave-reveal sprout.
+    System.Collections.IEnumerator DelayedGrowIn(GameObject obj, float delay)
+    {
+        if (delay > 0.001f) yield return new WaitForSeconds(delay);
+        if (obj != null) StartCoroutine(WaveSproutIn(obj));
+    }
+
+    // ── Wave reveal: brightness flash + organic Y-leading unfurl ────────────
+    // Combat-start only. Normal block placement still uses GrowIn (snappier).
+    static System.Collections.IEnumerator WaveSproutIn(GameObject obj)
+    {
+        if (obj == null) yield break;
+
+        var rends = obj.GetComponentsInChildren<Renderer>();
+        int rc    = rends.Length;
+        var orig  = new Color[rc];
+        for (int i = 0; i < rc; i++)
+            if (rends[i]) orig[i] = rends[i].material.color;
+
+        const float dur = 0.6f;
+        float elapsed   = 0f;
+
+        while (elapsed < dur)
+        {
+            if (obj == null) yield break;
+            elapsed += Time.deltaTime;
+            float t = Mathf.Clamp01(elapsed / dur);
+
+            // Y leads, X/Z follow ~15 % behind — tree-like unfurl.
+            float ty  = Mathf.Clamp01(t / 0.7f);
+            float ey  = 1f - Mathf.Pow(1f - ty, 4f);   // easeOutQuart
+            float txz = Mathf.Clamp01((t - 0.15f) / 0.85f);
+            float exz = 1f - Mathf.Pow(1f - txz, 3f);  // easeOutCubic
+
+            obj.transform.localScale = new Vector3(exz, ey, exz);
+
+            // Brightness from the passing wave: bright at arrival, fades into the growth.
+            float bright = (1f - t) * (1f - t) * 0.7f;
+            for (int i = 0; i < rc; i++)
+                if (rends[i]) rends[i].material.color = Color.Lerp(orig[i], Color.white, bright);
+
+            yield return null;
+        }
+
+        if (obj != null) obj.transform.localScale = Vector3.one;
         for (int i = 0; i < rc; i++)
             if (rends[i]) rends[i].material.color = orig[i];
     }
