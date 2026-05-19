@@ -8,6 +8,7 @@ public class PlacementController : MonoBehaviour
 {
     public PlacementMode mode = PlacementMode.Select;
     public BlockData[] blocks;
+    [Range(0f, 1f)] public float turretShopChance = 0.25f;
     public GridSystem grid;
     public BlockData currentBlock;
     public GameObject cubePrefab;
@@ -109,9 +110,28 @@ public class PlacementController : MonoBehaviour
         if (cubePrefab == null || blocks == null || blocks.Length == 0) return;
         if (ShopController.Instance == null) return;
 
+        BlockData turretBlock = null;
+        var normalBlocks = new List<BlockData>();
+        foreach (var block in blocks)
+        {
+            if (block == null) continue;
+            if (block.blockType == BlockType.Turret && turretBlock == null)
+                turretBlock = block;
+            else if (block.blockType != BlockType.Turret)
+                normalBlocks.Add(block);
+        }
+
+        if (turretBlock == null && normalBlocks.Count == 0) return;
+
         var datas = new BlockData[count];
         for (int i = 0; i < count; i++)
-            datas[i] = blocks[Random.Range(0, blocks.Length)];
+        {
+            bool rollTurret = turretBlock != null
+                && (normalBlocks.Count == 0 || Random.value < turretShopChance);
+            datas[i] = rollTurret
+                ? turretBlock
+                : normalBlocks[Random.Range(0, normalBlocks.Count)];
+        }
 
         ShopController.Instance.SpawnItems(datas, cubePrefab, grid);
     }
