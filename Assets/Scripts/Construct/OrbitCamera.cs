@@ -18,6 +18,18 @@ public class OrbitCamera : MonoBehaviour
     private Transform desiredTarget;
 
     public Vector3 FocusPoint => currentFocusPoint;
+    public float   Yaw        => yaw;
+    public float   Pitch      => pitch;
+
+    // Hard-reset orbit state. Used by snapshot restore.
+    public void ApplyState(Vector3 focus, float dist, float newYaw, float newPitch)
+    {
+        currentFocusPoint = focus;
+        distance          = dist;
+        yaw               = newYaw;
+        pitch             = Mathf.Clamp(newPitch, minPitch, maxPitch);
+        _panOffset        = Vector3.zero;
+    }
 
     // Free pan offset added on top of the focus target's position.
     // Reset whenever SetFocus is called so selecting an object snaps the

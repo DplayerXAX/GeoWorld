@@ -39,29 +39,33 @@ public class LevelEndpointGenerator : MonoBehaviour
 
     void SpawnVisual()
     {
+        SpawnEndpointAt(startCell, true);
+        SpawnEndpointAt(endCell,   false);
+    }
+
+    // Public spawn-at-known-cell. Used by snapshot restore.
+    public void SpawnEndpointAt(Vector3Int cell, bool isStart)
+    {
         if (gridSystem == null) return;
+        var prefab = isStart ? startPrefab : endPrefab;
+        if (prefab == null) return;
 
-        if (startPrefab != null)
-        {
-            var obj = Instantiate(startPrefab);
-            obj.transform.position = gridSystem.GridToWorld(startCell);
-            gridSystem.SetOccupied(startCell);
-            obj.name = "startBlock";
-            if (!obj.GetComponent<GridEndpoint>()) obj.AddComponent<GridEndpoint>();
+        var obj = Instantiate(prefab);
+        obj.transform.position = gridSystem.GridToWorld(cell);
+        gridSystem.SetOccupied(cell);
+        obj.name = isStart ? "startBlock" : "endBlock";
+        if (!obj.GetComponent<GridEndpoint>()) obj.AddComponent<GridEndpoint>();
+        allEndpoints.Add(obj);
+    }
 
-            allEndpoints.Add(obj);
-        }
-
-        if (endPrefab != null)
-        {
-            var obj = Instantiate(endPrefab);
-            obj.transform.position = gridSystem.GridToWorld(endCell);
-            gridSystem.SetOccupied(endCell);
-            obj.name = "endBlock";
-            if (!obj.GetComponent<GridEndpoint>()) obj.AddComponent<GridEndpoint>();
-
-            allEndpoints.Add(obj);
-        }
+    // Destroys every endpoint visual. Cells stay occupied (caller's job to clear).
+    public void ClearAll()
+    {
+        foreach (var go in allEndpoints)
+            if (go != null) Destroy(go);
+        allEndpoints.Clear();
+        startCell = Vector3Int.zero;
+        endCell   = Vector3Int.zero;
     }
 
     public Vector3Int GenerateSinglePoint(List<Vector3Int> existingPoints, bool isStart)
