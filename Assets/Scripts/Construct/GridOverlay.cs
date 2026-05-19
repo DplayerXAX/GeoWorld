@@ -1,17 +1,23 @@
 using UnityEngine;
 using UnityEngine.Rendering;
 
-// 三轴虚线网格，边界自动对齐 GridSystem.size。
-// 外框线较亮，内部线极淡，形成一个透明的立体格子感。
+// Dashed grid that follows the camera focus and fades with distance.
 public class GridOverlay : MonoBehaviour
 {
     [Header("References")]
     public GridSystem grid;
     public PlacementController placement;
+    [Tooltip("Camera whose focus point we orbit around. If null, falls back to Camera.main.transform.position.")]
+    public OrbitCamera cam;
+
+    [Header("Range (in cells, around focus)")]
+    [Range(1, 20)] public int radiusXZ = 3;
+    [Range(1, 10)] public int radiusY  = 2;
+    [Tooltip("Fraction of the radius at which dashes start fading. 0 = fade from the centre, 1 = fade only at the edge.")]
+    [Range(0f, 1f)] public float fadeStartPct = 0.35f;
 
     [Header("颜色")]
-    public Color outerColor = new(0.35f, 0.88f, 1.00f, 0.28f);  // 外框线
-    public Color innerColor = new(0.35f, 0.88f, 1.00f, 0.06f);  // 内部线
+    public Color lineColor      = new(0.35f, 0.88f, 1.00f, 0.45f);
     public Color highlightColor = new(0.00f, 0.95f, 1.00f, 0.85f);
 
     [Header("虚线")]
@@ -19,10 +25,10 @@ public class GridOverlay : MonoBehaviour
     [Range(0.02f, 0.5f)] public float gapLen  = 0.12f;
 
     [Header("显示")]
-    public bool showXZ = true;   // 水平层格线（X方向 + Z方向）
-    public bool showY  = true;   // 竖向格线
+    public bool showXZ = true;
+    public bool showY  = true;
     public bool showCursor = true;
-    public bool visible    = true;   // 整体显隐（按 toggleKey 切换）
+    public bool visible    = true;
 
     [Header("按键")]
     public KeyCode toggleKey = KeyCode.G;
@@ -50,6 +56,15 @@ public class GridOverlay : MonoBehaviour
             visible = !visible;
     }
 
+    Vector3 GetFocus()
+    {
+        if (cam == null) cam = FindObjectOfType<OrbitCamera>();
+        if (cam != null) return cam.FocusPoint;
+        if (placement != null && grid != null)
+            return grid.GridToWorld(placement.SnappedGridPos);
+        return Vector3.zero;
+    }
+
     void OnRenderObject()
     {
         if (!visible || !_mat || grid == null) return;
@@ -58,39 +73,44 @@ public class GridOverlay : MonoBehaviour
         GL.PushMatrix();
         GL.MultMatrix(Matrix4x4.identity);
 
-        int   sx = grid.size.x, sy = grid.size.y, sz = grid.size.z;
         float cs = grid.cellSize;
+        Vector3 focus = GetFocus();
+        Vector3Int focusCell = grid.WorldToGrid(focus);
+
+        int xMin = focusCell.x - radiusXZ;
+        int xMax = focusCell.x + radiusXZ + 1;
+        int yMin = focusCell.y - radiusY;
+        int yMax = focusCell.y + radiusY + 1;
+        int zMin = focusCell.z - radiusXZ;
+        int zMax = focusCell.z + radiusXZ + 1;
+
+        float fadeEnd   = Mathf.Max(radiusXZ, radiusY) * cs;
+        float fadeStart = fadeEnd * Mathf.Clamp01(fadeStartPct);
 
         GL.Begin(GL.LINES);
 
         if (showXZ)
         {
-            // X 方向线：每个 (yi, zi) 节点处画一条沿 X 的线
-            for (int yi = 0; yi <= sy; yi++)
-            for (int zi = 0; zi <= sz; zi++)
-            {
-                Color c = IsOnFaceXZ(yi, zi, sy, sz) ? outerColor : innerColor;
-                Dash(new Vector3(0, yi*cs, zi*cs), new Vector3(sx*cs, yi*cs, zi*cs), c);
-            }
+            for (int yi = yMin; yi <= yMax; yi++)
+            for (int zi = zMin; zi <= zMax; zi++)
+                Dash(new Vector3(xMin*cs, yi*cs, zi*cs),
+                     new Vector3(xMax*cs, yi*cs, zi*cs),
+                     focus, fadeStart, fadeEnd);
 
-            // Z 方向线：每个 (xi, yi) 节点处画一条沿 Z 的线
-            for (int xi = 0; xi <= sx; xi++)
-            for (int yi = 0; yi <= sy; yi++)
-            {
-                Color c = IsOnFaceXZ(xi, yi, sx, sy) ? outerColor : innerColor;
-                Dash(new Vector3(xi*cs, yi*cs, 0), new Vector3(xi*cs, yi*cs, sz*cs), c);
-            }
+            for (int xi = xMin; xi <= xMax; xi++)
+            for (int yi = yMin; yi <= yMax; yi++)
+                Dash(new Vector3(xi*cs, yi*cs, zMin*cs),
+                     new Vector3(xi*cs, yi*cs, zMax*cs),
+                     focus, fadeStart, fadeEnd);
         }
 
         if (showY)
         {
-            // Y 方向线：每个 (xi, zi) 节点处画一条竖线
-            for (int xi = 0; xi <= sx; xi++)
-            for (int zi = 0; zi <= sz; zi++)
-            {
-                Color c = IsOnFaceY(xi, zi, sx, sz) ? outerColor : innerColor;
-                Dash(new Vector3(xi*cs, 0, zi*cs), new Vector3(xi*cs, sy*cs, zi*cs), c);
-            }
+            for (int xi = xMin; xi <= xMax; xi++)
+            for (int zi = zMin; zi <= zMax; zi++)
+                Dash(new Vector3(xi*cs, yMin*cs, zi*cs),
+                     new Vector3(xi*cs, yMax*cs, zi*cs),
+                     focus, fadeStart, fadeEnd);
         }
 
         GL.End();
@@ -101,37 +121,41 @@ public class GridOverlay : MonoBehaviour
         GL.PopMatrix();
     }
 
-    // 判断是否在外层面上（两个坐标都在边界时）
-    static bool IsOnFaceXZ(int a, int b, int maxA, int maxB)
-        => a == 0 || a == maxA || b == 0 || b == maxB;
-
-    static bool IsOnFaceY(int x, int z, int maxX, int maxZ)
-        => x == 0 || x == maxX || z == 0 || z == maxZ;
-
-    // ── 虚线（在 GL.Begin 内调用）────────────────────────────────────────────
-    void Dash(Vector3 from, Vector3 to, Color col)
+    // Must be called inside GL.Begin(GL.LINES). Each dash fades by distance to focus.
+    void Dash(Vector3 from, Vector3 to, Vector3 focus, float fadeStart, float fadeEnd)
     {
         float len = Vector3.Distance(from, to);
         if (len < 0.001f) return;
+
         Vector3 dir  = (to - from) / len;
         float   t    = 0f;
         bool    draw = true;
+
         while (t < len)
         {
             float step = draw ? dashLen : gapLen;
             float t2   = Mathf.Min(t + step, len);
             if (draw)
             {
-                GL.Color(col);
-                GL.Vertex(from + dir * t);
-                GL.Vertex(from + dir * t2);
+                Vector3 a   = from + dir * t;
+                Vector3 b   = from + dir * t2;
+                Vector3 mid = (a + b) * 0.5f;
+                float   d   = Vector3.Distance(mid, focus);
+                float   fade = 1f - Mathf.SmoothStep(fadeStart, fadeEnd, d);
+                if (fade > 0.01f)
+                {
+                    Color c = lineColor;
+                    c.a *= fade;
+                    GL.Color(c);
+                    GL.Vertex(a);
+                    GL.Vertex(b);
+                }
             }
             t    = t2;
             draw = !draw;
         }
     }
 
-    // ── 鼠标悬停格高亮 ────────────────────────────────────────────────────────
     void DrawCursorBox(Vector3Int cell, float cs)
     {
         float x0 = cell.x * cs, y0 = cell.y * cs, z0 = cell.z * cs;
@@ -145,11 +169,8 @@ public class GridOverlay : MonoBehaviour
 
         GL.Begin(GL.LINES);
         GL.Color(highlightColor);
-        // 底
         L(v[0],v[1]); L(v[1],v[2]); L(v[2],v[3]); L(v[3],v[0]);
-        // 顶
         L(v[4],v[5]); L(v[5],v[6]); L(v[6],v[7]); L(v[7],v[4]);
-        // 柱
         L(v[0],v[4]); L(v[1],v[5]); L(v[2],v[6]); L(v[3],v[7]);
         GL.End();
     }

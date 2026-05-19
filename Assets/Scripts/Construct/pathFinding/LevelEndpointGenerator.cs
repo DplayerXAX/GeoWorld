@@ -12,6 +12,16 @@ public class LevelEndpointGenerator : MonoBehaviour
     public float minDistance = 5f;
     public float maxDistance = 10f;
 
+    [Header("First-stage seed (no anchor yet)")]
+    [Tooltip("Half-extent (in cells) of the random region used to place the very first start endpoint, centred on the origin.")]
+    public int firstStartScatter = 2;
+
+    [Header("Shell sampling")]
+    [Tooltip("Vertical cap on endpoint cells. y is clamped into [0, yMax].")]
+    public int yMax = 4;
+    [Tooltip("Random shell sampling attempts before falling back to a deterministic offset.")]
+    public int shellSampleAttempts = 60;
+
     [Header("Visual")]
     public GameObject startPrefab;
     public GameObject endPrefab;
@@ -19,27 +29,11 @@ public class LevelEndpointGenerator : MonoBehaviour
     GameObject startObj;
     GameObject endObj;
 
+    // First stage: no anchor yet. Start near origin, end shell-sampled from start.
     public void Generate()
     {
-        List<Vector3Int> candidates = new();
-
-        var grid = gridSystem.GetGrid();
-
-        foreach (var kv in grid)
-        {
-            if (!kv.Value)
-                candidates.Add(kv.Key);
-        }
-
-        if (candidates.Count < 2)
-        {
-            Debug.LogError("Not enough free cells");
-            return;
-        }
-
-        startCell = candidates[Random.Range(0, candidates.Count)];
-        endCell = PickEnd(candidates, startCell);
-
+        startCell = SampleFirstStart();
+        endCell   = ShellSample(startCell, minDistance, maxDistance);
         SpawnVisual();
     }
 
@@ -70,19 +64,13 @@ public class LevelEndpointGenerator : MonoBehaviour
         }
     }
 
-    // Generates one new endpoint near any of the existing network points,
-    // spawns its visual, and returns the grid cell.
     public Vector3Int GenerateSinglePoint(List<Vector3Int> existingPoints, bool isStart)
     {
-        var candidates = new List<Vector3Int>();
-        foreach (var kv in gridSystem.GetGrid())
-            if (!kv.Value) candidates.Add(kv.Key);
+        if (existingPoints == null || existingPoints.Count == 0) return Vector3Int.zero;
 
-        if (candidates.Count == 0) return Vector3Int.zero;
-
-        // Anchor on a random existing point so the new endpoint grows the network.
         var anchor = existingPoints[Random.Range(0, existingPoints.Count)];
-        var cell   = PickEnd(candidates, anchor);
+        var cell   = ShellSample(anchor, minDistance, maxDistance);
+        if (cell == anchor) return Vector3Int.zero;
 
         var prefab = isStart ? startPrefab : endPrefab;
         if (prefab != null)
@@ -98,37 +86,40 @@ public class LevelEndpointGenerator : MonoBehaviour
         return cell;
     }
 
-    Vector3Int PickEnd(List<Vector3Int> candidates, Vector3Int start)
+    Vector3Int SampleFirstStart()
     {
-        Vector3Int best      = Vector3Int.zero;
-        float      bestScore = -1f;
-        bool       found     = false;
+        int r = Mathf.Max(0, firstStartScatter);
+        return new Vector3Int(
+            Random.Range(-r, r + 1),
+            0,
+            Random.Range(-r, r + 1)
+        );
+    }
 
-        // Phase 1: strict distance window (30 random samples).
-        for (int i = 0; i < 30; i++)
+    // Y is clamped so endpoints don't drift underground or above the play area.
+    Vector3Int ShellSample(Vector3Int center, float minD, float maxD)
+    {
+        for (int attempt = 0; attempt < shellSampleAttempts; attempt++)
         {
-            var c = candidates[Random.Range(0, candidates.Count)];
-            if (c == start) continue;
-
-            float dist = Vector3Int.Distance(c, start);
-            if (dist >= minDistance && dist <= maxDistance && dist > bestScore)
-            {
-                best = c; bestScore = dist; found = true;
-            }
+            Vector3 dir = Random.onUnitSphere;
+            float   d   = Random.Range(minD, maxD);
+            Vector3 raw = (Vector3)center + dir * d;
+            var cell = new Vector3Int(
+                Mathf.RoundToInt(raw.x),
+                Mathf.Clamp(Mathf.RoundToInt(raw.y), 0, yMax),
+                Mathf.RoundToInt(raw.z)
+            );
+            if (cell == center) continue;
+            if (gridSystem.IsOccupied(cell)) continue;
+            return cell;
         }
 
-        if (found) return best;
-
-        // Phase 2: relax — scan all candidates for the one closest to maxDistance
-        // so the puzzle is at least as hard as possible within the grid.
-        float closestDelta = float.MaxValue;
-        foreach (var c in candidates)
+        int dist = Mathf.Max(1, Mathf.CeilToInt(maxD));
+        for (int i = 0; i < 8; i++)
         {
-            if (c == start) continue;
-            float delta = Mathf.Abs(Vector3Int.Distance(c, start) - maxDistance);
-            if (delta < closestDelta) { closestDelta = delta; best = c; }
+            var c = center + new Vector3Int(dist + i, 0, 0);
+            if (!gridSystem.IsOccupied(c)) return c;
         }
-
-        return best;
+        return center + new Vector3Int(dist, 0, 0);
     }
 }

@@ -79,10 +79,58 @@ public class PlacementController : MonoBehaviour
 
     public static PlacementController Instance;
 
+    string   _popupMsg;
+    float    _popupExpire;
+    float    _popupDuration;
+    GUIStyle _popupStyle;
+
     void Awake()
     {
         Instance        = this;
         editFocusAnchor = new GameObject("EditFocusAnchor").transform;
+    }
+
+    void ShowPlacementPopup(string msg, float duration = 1.5f)
+    {
+        if (string.IsNullOrEmpty(msg)) return;
+        _popupMsg      = msg;
+        _popupDuration = duration;
+        _popupExpire   = Time.unscaledTime + duration;
+    }
+
+    void OnGUI()
+    {
+        if (string.IsNullOrEmpty(_popupMsg)) return;
+        float remaining = _popupExpire - Time.unscaledTime;
+        if (remaining <= 0f) { _popupMsg = null; return; }
+
+        if (_popupStyle == null)
+        {
+            _popupStyle = new GUIStyle(GUI.skin.box)
+            {
+                fontSize  = 18,
+                alignment = TextAnchor.MiddleCenter,
+                wordWrap  = false,
+            };
+            _popupStyle.normal.textColor = Color.white;
+        }
+
+        var content = new GUIContent(_popupMsg);
+        var size    = _popupStyle.CalcSize(content);
+        size.x += 28f;
+        size.y += 14f;
+
+        float fade = Mathf.Clamp01(remaining / Mathf.Min(0.4f, _popupDuration));
+        var prev   = GUI.color;
+        GUI.color  = new Color(1f, 1f, 1f, fade);
+
+        var rect = new Rect(
+            (Screen.width - size.x) * 0.5f,
+            Screen.height * 0.78f,
+            size.x, size.y
+        );
+        GUI.Box(rect, content, _popupStyle);
+        GUI.color = prev;
     }
 
     void Start()
@@ -498,40 +546,51 @@ public class PlacementController : MonoBehaviour
 
         var cells = GetRotatedCells();
         if (cells.Length == 0) return;
-        if (!CanPlace(currentGridPos, cells)) return;
 
-        // ── Phase gate ────────────────────────────────────────────────────────
-        var gfm = GameFlowManager.Instance;
-        if (gfm != null && gfm.phase == GamePhase.Running)
+        // Priority-ordered checks: combat lock → path block → funds → geometry.
+        var  gfm       = GameFlowManager.Instance;
+        bool inRunning = gfm != null && gfm.phase == GamePhase.Running;
+        bool isTurret  = currentBlock.blockType == BlockType.Turret;
+        if (inRunning && !isTurret)
         {
-            bool isTurret = currentBlock.blockType == BlockType.Turret;
-            if (!isTurret)
-            {
-                Debug.Log("[Placement] Block editing locked during combat.");
-                return;
-            }
-            // Turret in combat: ensure it won't block the active enemy route.
+            ShowPlacementPopup(ReasonToMessage(PlaceFailureReason.CombatLocked));
+            return;
+        }
+
+        if (inRunning && isTurret)
+        {
             var worldCells = new Vector3Int[cells.Length];
             for (int i = 0; i < cells.Length; i++)
                 worldCells[i] = currentGridPos + cells[i];
             if (gfm.WouldBlockPath(worldCells))
             {
-                Debug.Log("[Placement] Can't place turret — would block enemy path.");
+                ShowPlacementPopup(ReasonToMessage(PlaceFailureReason.WouldBlockPath));
                 return;
             }
         }
 
-        // ── Resource check (new block from tray only; repositioning is free) ──
-        bool isNewBlock  = !isPickingUpObject;
-        int  priceForUndo = _pendingShopPrice;   // capture before zeroing (for undo refund)
+        // Repositioning is free; only new purchases need funds.
+        bool isNewBlock   = !isPickingUpObject;
+        int  priceForUndo = _pendingShopPrice;
+        if (isNewBlock && ResourceManager.Instance != null
+            && !ResourceManager.Instance.CanAfford(_pendingShopPrice))
+        {
+            ShowPlacementPopup(ReasonToMessage(PlaceFailureReason.InsufficientFunds));
+            StartCoroutine(FlashPreviewRed());
+            return;
+        }
+
+        var reason = Validate(currentGridPos, cells);
+        if (reason != PlaceFailureReason.None)
+        {
+            ShowPlacementPopup(ReasonToMessage(reason));
+            return;
+        }
+
         if (isNewBlock && ResourceManager.Instance != null)
         {
-            if (!ResourceManager.Instance.TryBuy(_pendingShopPrice, currentBlock.blockType))
-            {
-                StartCoroutine(FlashPreviewRed());
-                return;
-            }
-            _pendingShopPrice = 0;   // consumed
+            ResourceManager.Instance.TryBuy(_pendingShopPrice, currentBlock.blockType);
+            _pendingShopPrice = 0;
         }
 
         Vector3 center = Vector3.zero;
@@ -684,15 +743,50 @@ public class PlacementController : MonoBehaviour
         return res;
     }
 
-    bool CanPlace(Vector3Int bp, Vector3Int[] cs)
+    public enum PlaceFailureReason
     {
-        foreach (var c in cs)
-        {
-            var p = bp + c;
-            if (grid.IsOccupied(p) || p.y < 0) return false;
-        }
-        return true;
+        None,
+        CombatLocked,
+        WouldBlockPath,
+        InsufficientFunds,
+        OutOfBounds,
+        Occupied,
+        NotAdjacent,
     }
+
+    bool CanPlace(Vector3Int bp, Vector3Int[] cs) => Validate(bp, cs) == PlaceFailureReason.None;
+
+    // Geometric validation only — combat/funds checks live in TryPlace so they
+    // can be reported in priority order.
+    PlaceFailureReason Validate(Vector3Int bp, Vector3Int[] cs)
+    {
+        if (cs == null || cs.Length == 0) return PlaceFailureReason.None;
+
+        var worldCells = new Vector3Int[cs.Length];
+        for (int i = 0; i < cs.Length; i++)
+        {
+            var p = bp + cs[i];
+            if (p.y < 0)            return PlaceFailureReason.OutOfBounds;
+            if (grid.IsOccupied(p)) return PlaceFailureReason.Occupied;
+            worldCells[i] = p;
+        }
+
+        if (!grid.HasOccupiedNeighbor26(worldCells))
+            return PlaceFailureReason.NotAdjacent;
+
+        return PlaceFailureReason.None;
+    }
+
+    static string ReasonToMessage(PlaceFailureReason r) => r switch
+    {
+        PlaceFailureReason.CombatLocked      => "Only turrets can be placed during combat",
+        PlaceFailureReason.WouldBlockPath    => "Turret would block the enemy path",
+        PlaceFailureReason.InsufficientFunds => "Not enough resources",
+        PlaceFailureReason.OutOfBounds       => "Can't place below ground",
+        PlaceFailureReason.Occupied          => "Cell is already occupied",
+        PlaceFailureReason.NotAdjacent       => "Must touch an existing block or endpoint",
+        _                                    => "",
+    };
 
     // =========================
     // DELETE

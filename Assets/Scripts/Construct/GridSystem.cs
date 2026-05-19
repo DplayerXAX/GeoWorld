@@ -11,8 +11,10 @@ public class PlacedBlockInstance
 public class GridSystem : MonoBehaviour
 {
     public float cellSize = 1f;
+    // Unused at runtime — the grid is unbounded. Kept as an inspector hint.
     public Vector3Int size = new Vector3Int(10, 5, 10);
     public static GridSystem instance;
+    // Sparse: only occupied cells are stored. Missing keys ⇒ unoccupied.
     private Dictionary<Vector3Int, bool> occupied = new();
     private Dictionary<Vector3Int, PlacedBlockInstance> cellToInstance = new();
 
@@ -26,10 +28,6 @@ public class GridSystem : MonoBehaviour
     {
         occupied.Clear();
         cellToInstance.Clear();
-        for (int x = 0; x < size.x; x++)
-            for (int y = 0; y < size.y; y++)
-                for (int z = 0; z < size.z; z++)
-                    occupied[new Vector3Int(x, y, z)] = false;
     }
 
     public Vector3 GridToWorld(Vector3Int gp)
@@ -44,12 +42,12 @@ public class GridSystem : MonoBehaviour
 
     public bool IsOccupied(Vector3Int pos)
     {
-        return occupied.ContainsKey(pos) && occupied[pos];
+        return occupied.TryGetValue(pos, out bool v) && v;
     }
 
     public void SetOccupied(Vector3Int pos)
     {
-        if (occupied.ContainsKey(pos)) occupied[pos] = true;
+        occupied[pos] = true;
     }
 
     public void RegisterInstance(PlacedBlockInstance instance)
@@ -70,7 +68,7 @@ public class GridSystem : MonoBehaviour
     {
         foreach (var pos in instance.occupiedCells)
         {
-            occupied[pos] = false;
+            occupied.Remove(pos);
             cellToInstance.Remove(pos);
         }
         if (instance.visualObject != null) Destroy(instance.visualObject);
@@ -82,6 +80,28 @@ public class GridSystem : MonoBehaviour
     }
 
     public Dictionary<Vector3Int, bool> GetGrid() => occupied;
+
+    // 26-neighbor (face / edge / corner) adjacency. Cells within newCells
+    // don't count as neighbors of each other.
+    public bool HasOccupiedNeighbor26(IList<Vector3Int> newCells)
+    {
+        if (newCells == null || newCells.Count == 0) return false;
+
+        var newSet = new HashSet<Vector3Int>(newCells);
+        foreach (var c in newCells)
+        {
+            for (int dx = -1; dx <= 1; dx++)
+            for (int dy = -1; dy <= 1; dy++)
+            for (int dz = -1; dz <= 1; dz++)
+            {
+                if (dx == 0 && dy == 0 && dz == 0) continue;
+                var n = new Vector3Int(c.x + dx, c.y + dy, c.z + dz);
+                if (newSet.Contains(n)) continue;
+                if (IsOccupied(n)) return true;
+            }
+        }
+        return false;
+    }
 
     /// <summary>Returns every distinct placed instance currently on the grid.</summary>
     public List<PlacedBlockInstance> GetAllInstances()
