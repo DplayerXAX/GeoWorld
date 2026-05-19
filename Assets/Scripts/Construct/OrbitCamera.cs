@@ -17,6 +17,8 @@ public class OrbitCamera : MonoBehaviour
     private Vector3 currentFocusPoint;
     private Transform desiredTarget;
 
+    public Vector3 FocusPoint => currentFocusPoint;
+
     // Free pan offset added on top of the focus target's position.
     // Reset whenever SetFocus is called so selecting an object snaps the
     // camera back to it.

@@ -640,6 +640,7 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 344404549}
   serializedVersion: 2
+
   m_LocalRotation: {x: -0.018026548, y: 0.22904497, z: -0.97024876, w: -0.076360166}
   m_LocalPosition: {x: -99, y: -99, z: -99}
   m_LocalScale: {x: 1, y: 1, z: 1}
@@ -1790,7 +1791,9 @@ MonoBehaviour:
   riftHintScale: 0.22
   expandSpeed: 9
   shopToggleKey: 102
+
   shopCenter: {x: -99, y: -99, z: -99}
+
   blockSpacing: 2.8
   bobAmplitude: 0.35
   bobSpeed: 1
