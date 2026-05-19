@@ -638,7 +638,7 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 344404549}
   serializedVersion: 2
-  m_LocalRotation: {x: -0.14921254, y: -0.17470595, z: 0.7400642, w: -0.6320747}
+  m_LocalRotation: {x: 0.14921257, y: 0.17470595, z: -0.7400642, w: 0.6320747}
   m_LocalPosition: {x: -100, y: -100, z: -100}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
@@ -803,8 +803,11 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::GridOverlay
   grid: {fileID: 164805054}
   placement: {fileID: 164805052}
-  outerColor: {r: 0, g: 0, b: 0, a: 0.28}
-  innerColor: {r: 0.0000988859, g: 0.0051331655, b: 0.006289184, a: 0.06}
+  cam: {fileID: 330585548}
+  radiusXZ: 3
+  radiusY: 2
+  fadeStartPct: 0.35
+  lineColor: {r: 0.35, g: 0.88, b: 1, a: 0.45}
   highlightColor: {r: 0, g: 0.9, b: 1, a: 0.7}
   dashLen: 0.16
   gapLen: 0.13
@@ -1907,6 +1910,9 @@ MonoBehaviour:
   allEndpoints: []
   minDistance: 5
   maxDistance: 10
+  firstStartScatter: 2
+  yMax: 4
+  shellSampleAttempts: 60
   startPrefab: {fileID: 5859562048836445988, guid: 3c0e5140eab477e49b5e8b36477a17b5, type: 3}
   endPrefab: {fileID: 5859562048836445988, guid: 4242ad8251adaef4ca86b2541266b895, type: 3}
 --- !u!1 &2098137108
