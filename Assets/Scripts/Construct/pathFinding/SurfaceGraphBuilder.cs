@@ -1,4 +1,3 @@
-using JetBrains.Annotations;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -7,12 +6,10 @@ public class SurfaceGraphBuilder
     public Dictionary<Vector3Int, List<FaceNode>> cellFaces = new();
     public List<FaceNode> allFaces = new();
     GridSystem gridSystem;
-    float cachedSize;
 
     public void SetData(GridSystem grid)
     {
         this.gridSystem = grid;
-        cachedSize = grid.cellSize;
     }
 
     public void Build()
@@ -45,20 +42,67 @@ public class SurfaceGraphBuilder
         BuildNeighbors();
     }
 
+    // Locality-based O(V × ~12) instead of O(V²). For each face check:
+    //   Type A — parallel face on cell C+T (one cell over in a tangent direction)
+    //   Type B — perpendicular face on cell C+N+T (wraps a convex edge across cubes)
+    //   Type C — perpendicular sibling on the same cell (wraps a convex edge of this cube)
+    // After collecting, sort by normal.y desc so BFS tie-breaks toward top faces.
     void BuildNeighbors()
     {
-        foreach (var a in allFaces)
+        foreach (var face in allFaces)
         {
-            foreach (var b in allFaces)
-            {
-                if (a == b) continue;
+            var n = Vector3Int.RoundToInt(face.normal);
+            var tangents = GetTangents(n);
 
-                if (IsNeighbor(a, b))
+            foreach (var t in tangents)
+            {
+                if (cellFaces.TryGetValue(face.cell + t, out var facesA))
+                    foreach (var f2 in facesA)
+                        if (Vector3.Dot(f2.normal, face.normal) > 0.9f)
+                        {
+                            face.neighbors.Add(f2);
+                            break;
+                        }
+
+                if (cellFaces.TryGetValue(face.cell + n + t, out var facesB))
                 {
-                    a.neighbors.Add(b);
+                    Vector3 negT = -(Vector3)t;
+                    foreach (var f2 in facesB)
+                        if (Vector3.Dot(f2.normal, negT) > 0.9f)
+                        {
+                            face.neighbors.Add(f2);
+                            break;
+                        }
                 }
             }
+
+            if (cellFaces.TryGetValue(face.cell, out var siblings))
+                foreach (var sib in siblings)
+                {
+                    if (sib == face) continue;
+                    if (Mathf.Abs(Vector3.Dot(face.normal, sib.normal)) < 0.1f)
+                        face.neighbors.Add(sib);
+                }
+
+            face.neighbors.Sort((a, b) => b.normal.y.CompareTo(a.normal.y));
         }
+    }
+
+    static readonly Vector3Int[] _tangentsForX = {
+        new(0, 1, 0), new(0, -1, 0), new(0, 0, 1), new(0, 0, -1)
+    };
+    static readonly Vector3Int[] _tangentsForY = {
+        new(1, 0, 0), new(-1, 0, 0), new(0, 0, 1), new(0, 0, -1)
+    };
+    static readonly Vector3Int[] _tangentsForZ = {
+        new(1, 0, 0), new(-1, 0, 0), new(0, 1, 0), new(0, -1, 0)
+    };
+
+    static Vector3Int[] GetTangents(Vector3Int n)
+    {
+        if (n.x != 0) return _tangentsForX;
+        if (n.y != 0) return _tangentsForY;
+        return _tangentsForZ;
     }
 
     public List<FaceNode> GetFaceNodes(Vector3Int cell)
@@ -90,19 +134,5 @@ public class SurfaceGraphBuilder
             if (d > bestDot) { bestDot = d; best = f; }
         }
         return best;
-    }
-
-    bool IsNeighbor(FaceNode a, FaceNode b)
-    {
-        float dist = Vector3.Distance(a.worldPos, b.worldPos);
-        float eps = cachedSize * 0.05f;
-
-        if (Mathf.Abs(dist - cachedSize) < eps)
-            return Vector3.Dot(a.normal, b.normal) > 0.9f;
-
-        if (Mathf.Abs(dist - cachedSize * 0.7072f) < eps)
-            return Mathf.Abs(Vector3.Dot(a.normal, b.normal)) < 0.1f;
-
-        return false;
     }
 }

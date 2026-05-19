@@ -591,7 +591,7 @@ Camera:
   m_Enabled: 0
   serializedVersion: 2
   m_ClearFlags: 2
-  m_BackGroundColor: {r: 0.1, g: 0.07, b: 0.01, a: 1}
+  m_BackGroundColor: {r: 0.28, g: 0.14, b: 0.01, a: 1}
   m_projectionMatrixMode: 1
   m_GateFitMode: 2
   m_FOVAxisMode: 0
@@ -640,9 +640,8 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 344404549}
   serializedVersion: 2
-
-  m_LocalRotation: {x: -0.018026548, y: 0.22904497, z: -0.97024876, w: -0.076360166}
-  m_LocalPosition: {x: -99, y: -99, z: -99}
+  m_LocalRotation: {x: -0, y: -0, z: -0.9702957, w: 0.24192189}
+  m_LocalPosition: {x: -25, y: 4, z: 5}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -806,8 +805,11 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::GridOverlay
   grid: {fileID: 164805054}
   placement: {fileID: 164805052}
-  outerColor: {r: 0, g: 0, b: 0, a: 0.28}
-  innerColor: {r: 0.0000988859, g: 0.0051331655, b: 0.006289184, a: 0.06}
+  cam: {fileID: 330585548}
+  radiusXZ: 3
+  radiusY: 2
+  fadeStartPct: 0.35
+  lineColor: {r: 0.35, g: 0.88, b: 1, a: 0.45}
   highlightColor: {r: 0, g: 0.9, b: 1, a: 0.7}
   dashLen: 0.16
   gapLen: 0.13
@@ -1105,6 +1107,56 @@ MonoBehaviour:
   nodeSpeedD: -120
   bodyRotSpeed: 12
   glowIntensity: 1.5
+--- !u!1 &680953391
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 680953393}
+  - component: {fileID: 680953392}
+  m_Layer: 0
+  m_Name: Dev Panel
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &680953392
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 680953391}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 46372be9ca2a93c458f45a2a4c15e513, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::DevPanel
+  toggleKey: 282
+  slowMoKey: 283
+  normalKey: 284
+  fastFwdKey: 285
+  blockCurrencyGrant: 100
+  turretCurrencyGrant: 10
+--- !u!4 &680953393
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 680953391}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 6.78765, y: -0, z: -49.87365}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &723872987
 GameObject:
   m_ObjectHideFlags: 0
@@ -1791,14 +1843,12 @@ MonoBehaviour:
   riftHintScale: 0.22
   expandSpeed: 9
   shopToggleKey: 102
-
-  shopCenter: {x: -99, y: -99, z: -99}
-
+  shopCenter: {x: -25, y: 4, z: 5}
   blockSpacing: 2.8
   bobAmplitude: 0.35
   bobSpeed: 1
   rotateSpeed: 28
-  shopBackground: {r: 0.1, g: 0.07, b: 0.01, a: 1}
+  shopBackground: {r: 0.28, g: 0.14, b: 0.01, a: 1}
   shopLightColor: {r: 1, g: 0.82, b: 0.25, a: 1}
   shopLightIntensity: 3.5
   shopLightRange: 18
@@ -1912,6 +1962,9 @@ MonoBehaviour:
   allEndpoints: []
   minDistance: 5
   maxDistance: 10
+  firstStartScatter: 2
+  yMax: 4
+  shellSampleAttempts: 60
   startPrefab: {fileID: 5859562048836445988, guid: 3c0e5140eab477e49b5e8b36477a17b5, type: 3}
   endPrefab: {fileID: 5859562048836445988, guid: 4242ad8251adaef4ca86b2541266b895, type: 3}
 --- !u!1 &2098137108
@@ -2048,3 +2101,4 @@ SceneRoots:
   - {fileID: 2001472448}
   - {fileID: 344404553}
   - {fileID: 745744074}
+  - {fileID: 680953393}

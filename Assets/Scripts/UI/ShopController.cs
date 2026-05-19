@@ -311,7 +311,7 @@ public class ShopController : MonoBehaviour
             {
                 var c = Instantiate(cubePrefab, root.transform);
                 c.transform.localPosition = (Vector3)cell * grid.cellSize;
-                c.GetComponent<Renderer>().material.color = col;
+                MpbColor.Set(c.GetComponent<Renderer>(), col);
             }
 
             var sb = root.AddComponent<SelectableBlock>();

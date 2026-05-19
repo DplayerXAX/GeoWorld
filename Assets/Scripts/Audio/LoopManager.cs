@@ -127,9 +127,9 @@ public class LoopManager : MonoBehaviour
 
         for (int i = 0; i < n; i++)
         {
-            orig[i] = rends[i].material.color;
+            orig[i] = MpbColor.Get(rends[i]);
             bright[i] = Color.Lerp(orig[i], Color.white, flashBrightness);
-            rends[i].material.color = bright[i];
+            MpbColor.Set(rends[i], bright[i]);
         }
 
         float t = 0f;
@@ -143,7 +143,7 @@ public class LoopManager : MonoBehaviour
             for (int i = 0; i < n; i++)
             {
                 if (rends[i])
-                    rends[i].material.color = Color.Lerp(bright[i], orig[i], s);
+                    MpbColor.Set(rends[i], Color.Lerp(bright[i], orig[i], s));
             }
 
             yield return null;
@@ -152,7 +152,7 @@ public class LoopManager : MonoBehaviour
         for (int i = 0; i < n; i++)
         {
             if (rends[i])
-                rends[i].material.color = orig[i];
+                MpbColor.Set(rends[i], orig[i]);
         }
 
         _flashing.Remove(obj);

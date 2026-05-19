@@ -91,7 +91,7 @@ Material:
     - _BumpScale: 1
     - _ClearCoatMask: 0
     - _ClearCoatSmoothness: 0
-    - _ColorShift: 0.19712476
+    - _ColorShift: 0.9362
     - _CombatMode: 0
     - _Cull: 2
     - _Cutoff: 0.5
@@ -110,7 +110,7 @@ Material:
     - _GridThickness: 0.03
     - _HorizonSharp: 1
     - _Metallic: 0
-    - _MusicIntensity: 0.5284505
+    - _MusicIntensity: 0.5000004
     - _OcclusionStrength: 1
     - _Parallax: 0.005
     - _PitchGlow: 0

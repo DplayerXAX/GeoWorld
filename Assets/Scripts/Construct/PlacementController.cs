@@ -435,7 +435,7 @@ public class PlacementController : MonoBehaviour
             }
 
             currentBlock        = sb.data;
-            currentColor        = sb.GetComponentInChildren<Renderer>().material.color;
+            currentColor        = MpbColor.Get(sb.GetComponentInChildren<Renderer>());
             activePhysicsObject = sb.gameObject;
             selectedInstance    = null;
 
@@ -471,7 +471,7 @@ public class PlacementController : MonoBehaviour
         {
             selectedInstance    = instance;
             currentBlock        = instance.data;
-            currentColor        = instance.visualObject.GetComponentInChildren<Renderer>().material.color;
+            currentColor        = MpbColor.Get(instance.visualObject.GetComponentInChildren<Renderer>());
             activePhysicsObject = null;
 
             UpdateHighlight(instance.visualObject);
@@ -632,7 +632,7 @@ public class PlacementController : MonoBehaviour
         obj.transform.localScale = Vector3.zero;
 
         foreach (var r in obj.GetComponentsInChildren<Renderer>())
-            r.material.color = currentColor;
+            MpbColor.Set(r, currentColor);
 
         PlacedBlockInstance ins = new()
         {
@@ -764,6 +764,47 @@ public class PlacementController : MonoBehaviour
         return res;
     }
 
+    // Direct block spawn that bypasses player input, payment, preview, and the
+    // grow animation. Used by snapshot restore. Caller is responsible for
+    // ensuring `worldCells` are unoccupied; this method does not validate.
+    public PlacedBlockInstance PlaceBlockDirect(
+        BlockData data, Vector3Int[] worldCells, Quaternion rotation, Color color)
+    {
+        if (data == null || worldCells == null || worldCells.Length == 0) return null;
+
+        Vector3 center = Vector3.zero;
+        foreach (var c in worldCells) center += grid.GridToWorld(c);
+        center /= worldCells.Length;
+
+        var obj = new GameObject("PlacedBlock");
+        obj.transform.position = center;
+        obj.transform.rotation = rotation;
+
+        var br = obj.AddComponent<BlockRenderer>();
+        br.cubePrefab = cubePrefab;
+
+        var origin = grid.WorldToGrid(center);
+        var rel    = new Vector3Int[worldCells.Length];
+        for (int i = 0; i < worldCells.Length; i++) rel[i] = worldCells[i] - origin;
+        br.Render(origin, rel, grid.cellSize, grid);
+
+        foreach (var r in obj.GetComponentsInChildren<Renderer>())
+            MpbColor.Set(r, color);
+
+        var ins = new PlacedBlockInstance { data = data, visualObject = obj };
+        foreach (var c in worldCells) ins.occupiedCells.Add(c);
+        grid.RegisterInstance(ins);
+        return ins;
+    }
+
+    public BlockData FindBlockData(BlockType type)
+    {
+        if (blocks == null) return null;
+        foreach (var b in blocks)
+            if (b != null && b.blockType == type) return b;
+        return null;
+    }
+
     public enum PlaceFailureReason
     {
         None,
@@ -828,9 +869,8 @@ public class PlacementController : MonoBehaviour
         }
 
         // Snapshot for undo before anything is destroyed.
-        Color blockColor = selectedInstance.visualObject
-                            ?.GetComponentInChildren<Renderer>()?.material.color
-                            ?? Color.white;
+        Color blockColor = MpbColor.Get(selectedInstance.visualObject
+                            ?.GetComponentInChildren<Renderer>());
         PushUndo(new UndoRecord {
             actionType  = UndoType.Delete,
             data        = selectedInstance.data,
@@ -981,7 +1021,7 @@ public class PlacementController : MonoBehaviour
         obj.transform.localScale = Vector3.zero;
 
         foreach (var r in obj.GetComponentsInChildren<Renderer>())
-            r.material.color = color;
+            MpbColor.Set(r, color);
 
         var ins = new PlacedBlockInstance { data = data, visualObject = obj };
         foreach (var c in cells) ins.occupiedCells.Add(c);
@@ -1129,7 +1169,7 @@ public class PlacementController : MonoBehaviour
         int rc    = rends.Length;
         var orig  = new Color[rc];
         for (int i = 0; i < rc; i++)
-            if (rends[i]) orig[i] = rends[i].material.color;
+            if (rends[i]) orig[i] = MpbColor.Get(rends[i]);
 
         // Resolve entry direction in the cube's local frame and pick the
         // dominant axis. Block rotations are 90°-stepped, so this maps cleanly.
@@ -1174,7 +1214,7 @@ public class PlacementController : MonoBehaviour
             // Brief brightness pulse — wavefront passing through.
             float bright = (1f - p) * (1f - p) * 0.7f;
             for (int i = 0; i < rc; i++)
-                if (rends[i]) rends[i].material.color = Color.Lerp(orig[i], Color.white, bright);
+                if (rends[i]) MpbColor.Set(rends[i], Color.Lerp(orig[i], Color.white, bright));
 
             yield return null;
         }
@@ -1185,7 +1225,7 @@ public class PlacementController : MonoBehaviour
             t.localPosition = origLocalPos;
         }
         for (int i = 0; i < rc; i++)
-            if (rends[i]) rends[i].material.color = orig[i];
+            if (rends[i]) MpbColor.Set(rends[i], orig[i]);
     }
 
     // ── Growth animation: 0 → 1.12 → 1.0 with cubic ease-out ────────────────
@@ -1230,59 +1270,6 @@ public class PlacementController : MonoBehaviour
 
     
 
-   
-
-    // Waits for this block's slot in the wave, then runs the wave-reveal sprout.
-    System.Collections.IEnumerator DelayedGrowIn(GameObject obj, float delay)
-    {
-        if (delay > 0.001f) yield return new WaitForSeconds(delay);
-        if (obj != null) StartCoroutine(WaveSproutIn(obj));
-    }
-
-    // ── Wave reveal: brightness flash + organic Y-leading unfurl ────────────
-    // Combat-start only. Normal block placement still uses GrowIn (snappier).
-    static System.Collections.IEnumerator WaveSproutIn(GameObject obj)
-    {
-        if (obj == null) yield break;
-
-        var rends = obj.GetComponentsInChildren<Renderer>();
-        int rc    = rends.Length;
-        var orig  = new Color[rc];
-        for (int i = 0; i < rc; i++)
-            if (rends[i]) orig[i] = rends[i].material.color;
-
-        const float dur = 0.6f;
-        float elapsed   = 0f;
-
-        while (elapsed < dur)
-        {
-            if (obj == null) yield break;
-            elapsed += Time.deltaTime;
-            float t = Mathf.Clamp01(elapsed / dur);
-
-            // Y leads, X/Z follow ~15 % behind — tree-like unfurl.
-            float ty  = Mathf.Clamp01(t / 0.7f);
-            float ey  = 1f - Mathf.Pow(1f - ty, 4f);   // easeOutQuart
-            float txz = Mathf.Clamp01((t - 0.15f) / 0.85f);
-            float exz = 1f - Mathf.Pow(1f - txz, 3f);  // easeOutCubic
-
-            obj.transform.localScale = new Vector3(exz, ey, exz);
-
-            // Brightness from the passing wave: bright at arrival, fades into the growth.
-            float bright = (1f - t) * (1f - t) * 0.7f;
-            for (int i = 0; i < rc; i++)
-                if (rends[i]) rends[i].material.color = Color.Lerp(orig[i], Color.white, bright);
-
-            yield return null;
-        }
-
-        if (obj != null) obj.transform.localScale = Vector3.one;
-        for (int i = 0; i < rc; i++)
-            if (rends[i]) rends[i].material.color = orig[i];
-    }
-
-   
-
     // =========================
     // SHOP GRAB
     // =========================
@@ -1302,8 +1289,7 @@ public class PlacementController : MonoBehaviour
         }
 
         currentBlock        = sb.data;
-        currentColor        = sb.GetComponentInChildren<Renderer>()?.material.color
-                              ?? GetRandomColor();
+        currentColor        = MpbColor.Get(sb.GetComponentInChildren<Renderer>());
         activePhysicsObject = sb.gameObject;
         selectedInstance    = null;
         isPickingUpObject   = false;   // new purchase, not a reposition
@@ -1380,7 +1366,7 @@ public class PlacementController : MonoBehaviour
         {
             GameObject c = Instantiate(cubePrefab, obj.transform);
             c.transform.localPosition = (Vector3)cell * grid.cellSize;
-            c.GetComponent<Renderer>().material.color = currentColor;
+            MpbColor.Set(c.GetComponent<Renderer>(), currentColor);
         }
 
         obj.AddComponent<Rigidbody>();

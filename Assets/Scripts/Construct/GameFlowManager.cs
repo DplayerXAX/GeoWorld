@@ -40,6 +40,8 @@ public class GameFlowManager : MonoBehaviour
     public int  ActiveLoopCount         => loopingUnits.Count;
     public int  RunsSinceLastEndpoint   => _runsSinceLastEndpoint;
     public int  RoundIndex              => roundIndex;
+    public IReadOnlyList<Vector3Int> AllStarts => allStarts;
+    public IReadOnlyList<Vector3Int> AllEnds   => allEnds;
 
     // The specific endpoint the player must connect this round.
     // Zero → first stage (any start to any end). Set by AddNextEndpoint.
@@ -88,7 +90,7 @@ public class GameFlowManager : MonoBehaviour
 
     // Alternates: even roundIndex → +start, odd → +end.
     // Distance window widens so later endpoints can span larger gaps.
-    void AddNextEndpoint()
+    public void AddNextEndpoint()
     {
         float extraRange = roundIndex * 1.5f;
         ConfigureEndpointBounds(extraRange);
@@ -232,9 +234,9 @@ public class GameFlowManager : MonoBehaviour
 
         for (int i = 0; i < n; i++)
         {
-            orig[i]   = rends[i].material.color;
+            orig[i]   = MpbColor.Get(rends[i]);
             bright[i] = Color.Lerp(orig[i], Color.white, scanFlashBrightness);
-            rends[i].material.color = bright[i];
+            MpbColor.Set(rends[i], bright[i]);
         }
 
         float t = 0f;
@@ -247,14 +249,14 @@ public class GameFlowManager : MonoBehaviour
 
             for (int i = 0; i < n; i++)
                 if (rends[i])
-                    rends[i].material.color = Color.Lerp(bright[i], orig[i], s);
+                    MpbColor.Set(rends[i], Color.Lerp(bright[i], orig[i], s));
 
             yield return null;
         }
 
         for (int i = 0; i < n; i++)
             if (rends[i])
-                rends[i].material.color = orig[i];
+                MpbColor.Set(rends[i], orig[i]);
 
         _scanFlashing.Remove(obj);
     }
@@ -355,6 +357,60 @@ public class GameFlowManager : MonoBehaviour
 
         if (startFaces.Count == 0 || endFaces.Count == 0) return null;
         return SurfacePathfinding.FindPath(startFaces, endFaces);
+    }
+
+    // Full reset — wipes blocks, endpoints, loops, and round counters.
+    // Used by snapshot load to start from a clean slate before replay.
+    public void WipeAll()
+    {
+        AbortRun();
+
+        foreach (var ins in gridSystem.GetAllInstances())
+            gridSystem.RemoveInstance(ins);
+
+        PathFlowManager.Instance?.ClearAll();
+        LoopManager.Instance?.ClearAllLoops();
+        PlacementController.Instance?.ClearUndoHistory();
+
+        foreach (var u in loopingUnits)
+            if (u != null) Destroy(u.gameObject);
+        loopingUnits.Clear();
+
+        endpoints.ClearAll();
+        allStarts.Clear();
+        allEnds.Clear();
+
+        _runsSinceLastEndpoint = 0;
+        roundIndex             = 0;
+        _challengeCell         = Vector3Int.zero;
+        _challengeIsStart      = false;
+
+        phase = GamePhase.Build;
+    }
+
+    // Direct restore of round-scoped counters and endpoint tracking,
+    // used after a snapshot load has re-created the visuals.
+    public void RestoreRoundState(int round, int runsSinceLastEndpoint,
+                                  IList<Vector3Int> starts, IList<Vector3Int> ends)
+    {
+        roundIndex             = round;
+        _runsSinceLastEndpoint = runsSinceLastEndpoint;
+        allStarts.Clear();
+        allEnds.Clear();
+        if (starts != null) allStarts.AddRange(starts);
+        if (ends   != null) allEnds.AddRange(ends);
+    }
+
+    // Force-aborts an in-progress run without promoting it to a loop.
+    // Used by dev tools / cancel-run shortcut.
+    public void AbortRun()
+    {
+        if (phase != GamePhase.Running) return;
+
+        ArpeggiatorManager.Instance?.StopRecording();
+        if (currentUnit != null) { Destroy(currentUnit.gameObject); currentUnit = null; }
+        ResourceManager.Instance?.SetCombatActive(false);
+        phase = GamePhase.Build;
     }
 
     // Called by SurfaceUnit when it finishes its first traversal.

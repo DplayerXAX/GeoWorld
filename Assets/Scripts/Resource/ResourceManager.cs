@@ -235,7 +235,7 @@ public class ResourceManager : MonoBehaviour
         return true;
     }
 
-    void AddTurretCurrency(int amount)
+    public void AddTurretCurrency(int amount)
     {
         _turretCurrency += amount;
         OnTurretCurrencyChanged?.Invoke(_turretCurrency);
