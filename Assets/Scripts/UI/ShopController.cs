@@ -86,6 +86,10 @@ public class ShopController : MonoBehaviour
     [Header("Tooltip")]
     public Color tooltipBg = new Color(0.04f, 0.04f, 0.08f, 0.90f);
 
+    [Header("Hover correction (empirical — toggle if hover hits the wrong item after a rift rotation)")]
+    public bool flipHoverX;
+    public bool flipHoverY;
+
     // ── Rift polygon ──────────────────────────────────────────────────────────
     // Built-in fallback shape: 12-vertex vertical convex lens.
     // At runtime, _runtimeRiftShape is used instead (built from riftSprite or this default).
@@ -475,6 +479,9 @@ public class ShopController : MonoBehaviour
         }
     }
 
+    [Header("Debug")]
+    public bool logHover;
+
     void UpdateHover()
     {
         _hovered = null;
@@ -486,8 +493,14 @@ public class ShopController : MonoBehaviour
 
         var sb = hit.transform.GetComponentInParent<SelectableBlock>();
         if (sb == null) return;
-        foreach (var item in _items)
-            if (item.sb == sb) { _hovered = item; return; }
+        for (int i = 0; i < _items.Count; i++)
+        {
+            if (_items[i].sb != sb) continue;
+            _hovered = _items[i];
+            if (logHover)
+                Debug.Log($"[Shop] hover idx={i}  name={sb.gameObject.name}  vp={vp}");
+            return;
+        }
     }
 
     // Input.mousePosition (y=0 bottom) → shop camera viewport (0..1, y=0 bottom).
@@ -513,10 +526,11 @@ public class ShopController : MonoBehaviour
             if (p.y < minY) minY = p.y; if (p.y > maxY) maxY = p.y;
         }
         // No U flip: camera.right = world +X, viewport X maps directly to shape X.
-        return new Vector3(
-            Mathf.Clamp01((local.x - minX) / Mathf.Max(maxX - minX, 0.001f)),
-            Mathf.Clamp01((local.y - minY) / Mathf.Max(maxY - minY, 0.001f)),
-            0f);
+        float vpx = Mathf.Clamp01((local.x - minX) / Mathf.Max(maxX - minX, 0.001f));
+        float vpy = Mathf.Clamp01((local.y - minY) / Mathf.Max(maxY - minY, 0.001f));
+        if (flipHoverX) vpx = 1f - vpx;
+        if (flipHoverY) vpy = 1f - vpy;
+        return new Vector3(vpx, vpy, 0f);
     }
 
     // ── Public query (DebugUI) ────────────────────────────────────────────────

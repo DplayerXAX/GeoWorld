@@ -162,7 +162,6 @@ MonoBehaviour:
   - {fileID: 11400000, guid: 820a88ddf0392914889d66c41c3658a0, type: 2}
   - {fileID: 11400000, guid: 73ed5d4e29e4f7e4ab87f85650c2863a, type: 2}
   - {fileID: 11400000, guid: 3bcfeb02226d44d49a6df82d6c36a1a7, type: 2}
-  turretShopChance: 0.25
   grid: {fileID: 164805054}
   currentBlock: {fileID: 11400000, guid: c8bcfd2efd3263845ad3ea61c80c0fe7, type: 2}
   cubePrefab: {fileID: 1376436057}
@@ -640,8 +639,8 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 344404549}
   serializedVersion: 2
-  m_LocalRotation: {x: -0, y: -0, z: -0.9702957, w: 0.24192189}
-  m_LocalPosition: {x: -25, y: 4, z: 5}
+  m_LocalRotation: {x: -0, y: -0, z: -0.24192189, w: -0.9702957}
+  m_LocalPosition: {x: -99, y: -99, z: -99}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -924,7 +923,9 @@ MonoBehaviour:
   unitPrefab: {fileID: 1207342289}
   gridSystem: {fileID: 164805054}
   placement: {fileID: 164805052}
+  enemyBaseManager: {fileID: 0}
   blocksPerTurn: 3
+  turretsPerTurn: 3
   phase: 0
   runsPerEndpoint: 3
   maxLoopLayers: 5
@@ -1140,6 +1141,9 @@ MonoBehaviour:
   slowMoKey: 283
   normalKey: 284
   fastFwdKey: 285
+  quickSaveKey: 286
+  browseKey: 287
+  quickLoadKey: 290
   blockCurrencyGrant: 100
   turretCurrencyGrant: 10
 --- !u!4 &680953393
@@ -1843,13 +1847,16 @@ MonoBehaviour:
   riftHintScale: 0.22
   expandSpeed: 9
   shopToggleKey: 102
-  shopCenter: {x: -25, y: 4, z: 5}
+  shopCenter: {x: -99, y: -99, z: -99}
   blockSpacing: 2.8
+  blockRowOffset: {x: 0, y: 1.6, z: 0}
+  turretRowOffset: {x: 0, y: -1.6, z: 0}
   bobAmplitude: 0.35
   bobSpeed: 1
   rotateSpeed: 28
   shopBackground: {r: 0.28, g: 0.14, b: 0.01, a: 1}
-  shopLightColor: {r: 1, g: 0.82, b: 0.25, a: 1}
+  blockLightColor: {r: 1, g: 0.82, b: 0.25, a: 1}
+  turretLightColor: {r: 0.3, g: 0.8, b: 1, a: 1}
   shopLightIntensity: 3.5
   shopLightRange: 18
   riftSprite: {fileID: 0}
@@ -1865,6 +1872,9 @@ MonoBehaviour:
   spikeLength: 16
   spikeSpeed: 3
   tooltipBg: {r: 0.04, g: 0.04, b: 0.08, a: 0.9}
+  flipHoverX: 0
+  flipHoverY: 1
+  logHover: 1
   debugShowRTPreview: 0
 --- !u!4 &2001472448
 Transform:
