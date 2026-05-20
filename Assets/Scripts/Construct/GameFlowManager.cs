@@ -17,6 +17,7 @@ public class GameFlowManager : MonoBehaviour
     public SurfaceUnit unitPrefab;
     public GridSystem gridSystem;
     public PlacementController placement;
+    public EnemyBaseManager enemyBaseManager;
     public static GameFlowManager Instance;
     [Header("Turn")]
     public int blocksPerTurn = 8;
@@ -63,6 +64,11 @@ public class GameFlowManager : MonoBehaviour
         Instance = this;
         graph = new SurfaceGraphBuilder();
         endpoints.gridSystem = gridSystem;
+        enemyBaseManager = enemyBaseManager != null
+            ? enemyBaseManager
+            : FindFirstObjectByType<EnemyBaseManager>();
+        if (enemyBaseManager == null)
+            enemyBaseManager = new GameObject("EnemyBaseManager").AddComponent<EnemyBaseManager>();
 
         CreateFirstStage();
 
@@ -288,6 +294,7 @@ public class GameFlowManager : MonoBehaviour
                 // Path broken while unit was traversing — stop it immediately.
                 ArpeggiatorManager.Instance?.StopRecording();
                 if (currentUnit != null) { Destroy(currentUnit.gameObject); currentUnit = null; }
+                enemyBaseManager?.CancelWave();
                 ResourceManager.Instance?.SetCombatActive(false);
                 phase = GamePhase.Build;
                 // No live line yet — will appear on next block placement.
@@ -328,9 +335,18 @@ public class GameFlowManager : MonoBehaviour
         currentUnit.SetPath(path);
 
         phase = GamePhase.Running;
+        enemyBaseManager?.BeginWave(path, currentUnit);
         ResourceManager.Instance?.SetCombatActive(true);   // start turret currency regen
         ShopController.Instance?.OnCombatStart();           // collapse and hide shop
         placement.TriggerCombatRipple(path);                // wave grows along path, then off-path blocks bloom
+    }
+
+    public bool TryGetCurrentPath(out List<FaceNode> path)
+    {
+        graph.SetData(gridSystem);
+        graph.Build();
+        path = FindCurrentPath();
+        return path != null && path.Count > 0;
     }
 
     // Builds and returns the path for the current challenge state,
@@ -435,6 +451,7 @@ public class GameFlowManager : MonoBehaviour
         }
 
         ResourceManager.Instance?.SetCombatActive(false);  // stop turret regen, income in StartTurn
+        enemyBaseManager?.CancelWave();
         phase = GamePhase.Build;
         StartTurn();
     }
