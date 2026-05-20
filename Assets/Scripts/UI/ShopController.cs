@@ -285,9 +285,12 @@ public class ShopController : MonoBehaviour
         if (shopCam == null) return;
         shopCam.transform.position = shopCenter + _currentOffset;
         shopCam.transform.LookAt(shopCenter);
-        // Counter-roll so shop items appear upright inside a rotated rift.
+        // Roll the camera the same direction as the rift rotation so item
+        // world axes (X-row, Y-row) align with visible screen axes after the
+        // polygon's UV mapping. Without this, both axes flip in the visible
+        // layout and hover mapping becomes ambiguous.
         if (Mathf.Abs(riftRotationDeg) > 0.01f)
-            shopCam.transform.Rotate(Vector3.forward, -riftRotationDeg, Space.Self);
+            shopCam.transform.Rotate(Vector3.forward, riftRotationDeg, Space.Self);
     }
 
     // Recomputes _riftScreenCenter, _riftScreenSize, _screenVerts every frame.
@@ -495,9 +498,9 @@ public class ShopController : MonoBehaviour
         float rx   = (mp.x               - _riftScreenCenter.x) / (_riftScreenSize + 0.001f);
         float ry   = (_riftScreenCenter.y - guiY)                / (_riftScreenSize + 0.001f);
 
-        // 2. Undo the on-screen rotation to get into the shape's native (unrotated) space.
-        //    Must mirror the Rotate2D applied in UpdateScreenVerts.
-        Vector2 local = Rotate2D(new Vector2(rx, ry), riftRotationDeg);
+        // 2. Undo the on-screen rotation to get into the shape's native (unrotated)
+        //    space. UpdateScreenVerts applied +riftRotationDeg, so invert with -.
+        Vector2 local = Rotate2D(new Vector2(rx, ry), -riftRotationDeg);
 
         // 3. Map to camera viewport using the same shape bounds as DrawContent.
         //    ViewportPointToRay uses y=0 at bottom, y=1 at top — no D3D flip here.

@@ -2,30 +2,23 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
-// 每条完成的路径用 LineRenderer 画一条激光线。
-// 场景里挂到任意 GameObject，把 PathLaser 材质赋给 laserMaterial。
-//
-// 两类线：
-//   Live line  — 放置方块时自动预览当前最优路径，Space 发车后消失
-//   Loop lines — 每次跑完路径后生成，按覆盖 cell 追踪，方块被捡起时移除
 public class PathFlowManager : MonoBehaviour
 {
     public static PathFlowManager Instance;
 
-    [Header("激光线")]
+    [Header("Laser line")]
     public Material laserMaterial;
     [Range(0.02f, 0.3f)] public float lineWidth    = 0.055f;
     [Range(0f,    1f)]   public float heightOffset = 0.04f;
 
-    [Header("Live 预览线颜色")]
-    public Color livePathColor = new Color(1f, 1f, 0.70f, 0.90f);   // 暖白
+    [Header("Live path")]
+    public Color livePathColor = new Color(1f, 1f, 0.70f, 0.90f);   
 
-    // 已完成路径的颜色循环
     static readonly Color[] PathColors =
     {
-        new Color(0.25f, 0.90f, 1.00f),   // 青
-        new Color(1.00f, 0.72f, 0.18f),   // 琥珀
-        new Color(0.38f, 1.00f, 0.52f),   // 薄荷
+        new Color(0.25f, 0.90f, 1.00f),   
+        new Color(1.00f, 0.72f, 0.18f),  
+        new Color(0.38f, 1.00f, 0.52f),  
         new Color(1.00f, 0.35f, 0.72f),   // 粉红
         new Color(0.78f, 0.46f, 1.00f),   // 紫
         new Color(0.28f, 1.00f, 0.72f),   // 青绿
