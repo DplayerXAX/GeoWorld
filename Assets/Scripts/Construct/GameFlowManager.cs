@@ -19,7 +19,8 @@ public class GameFlowManager : MonoBehaviour
     public PlacementController placement;
     public static GameFlowManager Instance;
     [Header("Turn")]
-    public int blocksPerTurn = 8;
+    public int blocksPerTurn  = 8;
+    public int turretsPerTurn = 3;
     public GamePhase phase;
 
     [Header("Tower Defense Pacing")]
@@ -269,7 +270,7 @@ public class GameFlowManager : MonoBehaviour
         placement.currentBlock = null;
         placement.mode = PlacementMode.Select;
         placement.ClearTray();                          // remove leftover tokens from last round
-        placement.SpawnRoundBlocks(blocksPerTurn);
+        placement.SpawnRoundBlocks(blocksPerTurn, turretsPerTurn);
     }
 
     // Called after every block place/remove — rebuilds graph, refreshes live
