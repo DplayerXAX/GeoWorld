@@ -8,7 +8,6 @@ public class PlacementController : MonoBehaviour
 {
     public PlacementMode mode = PlacementMode.Select;
     public BlockData[] blocks;
-    [Range(0f, 1f)] public float turretShopChance = 0.25f;
     public GridSystem grid;
     public BlockData currentBlock;
     public GameObject cubePrefab;
@@ -151,37 +150,35 @@ public class PlacementController : MonoBehaviour
         ClearUndoHistory();   // history is round-scoped; stale on new round
     }
 
-    // Spawns `count` random block tokens into the world-space shop (ShopController).
-    // Falls back to nothing if ShopController is not present in the scene.
-    public void SpawnRoundBlocks(int count)
+    // Rolls two independent shop rows — `blockCount` normal blocks, `turretCount`
+    // turrets — and hands them to the shop. Each row uses its own currency.
+    public void SpawnRoundBlocks(int blockCount, int turretCount)
     {
         if (cubePrefab == null || blocks == null || blocks.Length == 0) return;
         if (ShopController.Instance == null) return;
 
-        BlockData turretBlock = null;
-        var normalBlocks = new List<BlockData>();
-        foreach (var block in blocks)
+        var turretTypes = new List<BlockData>();
+        var normalTypes = new List<BlockData>();
+        foreach (var b in blocks)
         {
-            if (block == null) continue;
-            if (block.blockType == BlockType.Turret && turretBlock == null)
-                turretBlock = block;
-            else if (block.blockType != BlockType.Turret)
-                normalBlocks.Add(block);
+            if (b == null) continue;
+            if (b.blockType == BlockType.Turret) turretTypes.Add(b);
+            else                                 normalTypes.Add(b);
         }
 
-        if (turretBlock == null && normalBlocks.Count == 0) return;
+        var blockRow  = RollRow(normalTypes, blockCount);
+        var turretRow = RollRow(turretTypes, turretCount);
 
-        var datas = new BlockData[count];
+        ShopController.Instance.SetShopItems(blockRow, turretRow, cubePrefab, grid);
+    }
+
+    static BlockData[] RollRow(List<BlockData> pool, int count)
+    {
+        if (count <= 0 || pool == null || pool.Count == 0) return System.Array.Empty<BlockData>();
+        var row = new BlockData[count];
         for (int i = 0; i < count; i++)
-        {
-            bool rollTurret = turretBlock != null
-                && (normalBlocks.Count == 0 || Random.value < turretShopChance);
-            datas[i] = rollTurret
-                ? turretBlock
-                : normalBlocks[Random.Range(0, normalBlocks.Count)];
-        }
-
-        ShopController.Instance.SpawnItems(datas, cubePrefab, grid);
+            row[i] = pool[Random.Range(0, pool.Count)];
+        return row;
     }
 
     // Hides or shows all tray tokens that haven't been consumed yet.
@@ -594,7 +591,7 @@ public class PlacementController : MonoBehaviour
         bool isNewBlock   = !isPickingUpObject;
         int  priceForUndo = _pendingShopPrice;
         if (isNewBlock && ResourceManager.Instance != null
-            && !ResourceManager.Instance.CanAfford(_pendingShopPrice))
+            && !ResourceManager.Instance.CanAfford(_pendingShopPrice, currentBlock.blockType))
         {
             ShowPlacementPopup(ReasonToMessage(PlaceFailureReason.InsufficientFunds));
             StartCoroutine(FlashPreviewRed());
@@ -700,7 +697,7 @@ public class PlacementController : MonoBehaviour
 
             // Testing mode: immediately spawn a replacement so the shop never runs dry.
             if (shopHandled && (ResourceManager.Instance?.testing ?? false))
-                SpawnRoundBlocks(3);
+                SpawnRoundBlocks(gfm?.blocksPerTurn ?? 3, gfm?.turretsPerTurn ?? 1);
         }
 
         isPickingUpObject = false;

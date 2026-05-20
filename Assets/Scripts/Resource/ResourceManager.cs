@@ -173,6 +173,10 @@ public class ResourceManager : MonoBehaviour
     /// <summary>Returns true if the player can afford <paramref name="price"/>.</summary>
     public bool CanAfford(int price) => _blockCurrency >= price;
 
+    /// <summary>Type-aware affordability: turrets check turret pool, others check block pool.</summary>
+    public bool CanAfford(int price, BlockType type) =>
+        type == BlockType.Turret ? _turretCurrency >= price : _blockCurrency >= price;
+
     /// <summary>Adds <paramref name="amount"/> back to block currency (used by undo).</summary>
     public void RefundBlock(int amount)
     {
@@ -186,21 +190,32 @@ public class ResourceManager : MonoBehaviour
         _placedCounts.TryGetValue(type, out int c) ? c : 0;
 
     /// <summary>
-    /// Deducts <paramref name="price"/> from block currency.
+    /// Deducts <paramref name="price"/> from the pool that matches <paramref name="type"/>:
+    /// turret currency for Turret blocks, block currency for everything else.
     /// Returns false (and fires OnInsufficientFunds) if insufficient.
     /// Only call for NEW purchases — repositioning is always free.
     /// </summary>
     public bool TryBuy(int price, BlockType type)
     {
-        if (_blockCurrency < price)
+        bool isTurret = type == BlockType.Turret;
+        int  pool     = isTurret ? _turretCurrency : _blockCurrency;
+        if (pool < price)
         {
             OnInsufficientFunds?.Invoke(type);
-            Debug.Log($"[Resource] Can't afford {type} (need {price}, have {_blockCurrency})");
+            Debug.Log($"[Resource] Can't afford {type} (need {price}, have {pool})");
             return false;
         }
-        _blockCurrency -= price;
-        OnBlockCurrencyChanged?.Invoke(_blockCurrency);
-        Debug.Log($"[Resource] Bought {type} for {price} ¤ → {_blockCurrency} remaining");
+        if (isTurret)
+        {
+            _turretCurrency -= price;
+            OnTurretCurrencyChanged?.Invoke(_turretCurrency);
+        }
+        else
+        {
+            _blockCurrency -= price;
+            OnBlockCurrencyChanged?.Invoke(_blockCurrency);
+        }
+        Debug.Log($"[Resource] Bought {type} for {price} ¤ → {(isTurret ? _turretCurrency : _blockCurrency)} remaining");
         return true;
     }
 

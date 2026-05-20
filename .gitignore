@@ -76,3 +76,8 @@ crashlytics-build.properties
 
 # Claude Code working directories
 **/.claude/
+
+# ignore cache file from wwise when restrarting the project
+*.csproj.Iscache
+*.sln.Iscache
+/[Aa]ssets/_[Rr]ecovery/
