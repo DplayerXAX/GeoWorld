@@ -44,6 +44,10 @@ public class ShopController : MonoBehaviour
     [Header("Shop World Area")]
     public Vector3 shopCenter   = new Vector3(-25f, 4f, 5f);
     public float   blockSpacing = 2.8f;
+    [Tooltip("Vertical offset for the block row, relative to shopCenter.")]
+    public Vector3 blockRowOffset  = new Vector3(0f,  1.6f, 0f);
+    [Tooltip("Vertical offset for the turret row, relative to shopCenter.")]
+    public Vector3 turretRowOffset = new Vector3(0f, -1.6f, 0f);
 
     [Header("Float Animation")]
     public float bobAmplitude = 0.35f;
@@ -52,7 +56,10 @@ public class ShopController : MonoBehaviour
 
     [Header("Rift Atmosphere")]
     public Color shopBackground     = new Color(0.28f, 0.14f, 0.01f, 1f);
-    public Color shopLightColor     = new Color(1.00f, 0.82f, 0.25f, 1f);
+    [Tooltip("Light over the block row — warm to read as 'music/construction'.")]
+    public Color blockLightColor    = new Color(1.00f, 0.82f, 0.25f, 1f);
+    [Tooltip("Light over the turret row — cool to separate from blocks visually.")]
+    public Color turretLightColor   = new Color(0.30f, 0.80f, 1.00f, 1f);
     public float shopLightIntensity = 3.5f;
     public float shopLightRange     = 18f;
 
@@ -129,7 +136,8 @@ public class ShopController : MonoBehaviour
     Material      _riftMat;    // Unlit/Texture — draws RT content
     Material      _colorMat;   // Hidden/Internal-Colored — draws colored geometry
 
-    Light _shopLight;
+    Light _blockLight;
+    Light _turretLight;
 
     // Active rift polygon in normalised coords (Y-up, centred at origin).
     // Built once from riftSprite physics shape (or RiftShapeDefault if no sprite).
@@ -153,15 +161,22 @@ public class ShopController : MonoBehaviour
             shopCam.backgroundColor = shopBackground;
         }
 
-        var lightGO = new GameObject("ShopLight");
-        lightGO.transform.position = shopCenter + Vector3.up * 4f;
-        _shopLight = lightGO.AddComponent<Light>();
-        _shopLight.type      = LightType.Point;
-        _shopLight.color     = shopLightColor;
-        _shopLight.intensity = shopLightIntensity;
-        _shopLight.range     = shopLightRange;
+        _blockLight  = CreateRowLight("BlockShopLight",  shopCenter + blockRowOffset  + Vector3.up * 2f, blockLightColor);
+        _turretLight = CreateRowLight("TurretShopLight", shopCenter + turretRowOffset + Vector3.up * 2f, turretLightColor);
 
         ApplyCameraTransform();
+    }
+
+    Light CreateRowLight(string name, Vector3 pos, Color col)
+    {
+        var go = new GameObject(name);
+        go.transform.position = pos;
+        var l = go.AddComponent<Light>();
+        l.type      = LightType.Point;
+        l.color     = col;
+        l.intensity = shopLightIntensity;
+        l.range     = shopLightRange;
+        return l;
     }
 
     void Start()
@@ -197,12 +212,19 @@ public class ShopController : MonoBehaviour
             shopCam.backgroundColor = shopBackground;
             ApplyCameraTransform();
         }
-        if (_shopLight != null)
+        if (_blockLight != null)
         {
-            _shopLight.color     = shopLightColor;
-            _shopLight.intensity = shopLightIntensity;
-            _shopLight.range     = shopLightRange;
-            _shopLight.transform.position = shopCenter + Vector3.up * 4f;
+            _blockLight.color     = blockLightColor;
+            _blockLight.intensity = shopLightIntensity;
+            _blockLight.range     = shopLightRange;
+            _blockLight.transform.position = shopCenter + blockRowOffset + Vector3.up * 2f;
+        }
+        if (_turretLight != null)
+        {
+            _turretLight.color     = turretLightColor;
+            _turretLight.intensity = shopLightIntensity;
+            _turretLight.range     = shopLightRange;
+            _turretLight.transform.position = shopCenter + turretRowOffset + Vector3.up * 2f;
         }
         // Rebuild shape when sprite or RT dims change in the Inspector.
         if (Application.isPlaying)
@@ -291,9 +313,19 @@ public class ShopController : MonoBehaviour
 
     // ── Public API ────────────────────────────────────────────────────────────
 
-    public void SpawnItems(BlockData[] datas, GameObject cubePrefab, GridSystem grid)
+    // Spawns two segregated rows: blocks on top, turrets on bottom (offsets
+    // configurable). Either row may be empty.
+    public void SetShopItems(BlockData[] blockDatas, BlockData[] turretDatas,
+                             GameObject cubePrefab, GridSystem grid)
     {
         ClearItems();
+        SpawnRow(blockDatas,  shopCenter + blockRowOffset,  cubePrefab, grid, isTurretRow: false);
+        SpawnRow(turretDatas, shopCenter + turretRowOffset, cubePrefab, grid, isTurretRow: true);
+    }
+
+    void SpawnRow(BlockData[] datas, Vector3 rowCenter, GameObject cubePrefab, GridSystem grid, bool isTurretRow)
+    {
+        if (datas == null) return;
         int n = datas.Length;
         for (int i = 0; i < n; i++)
         {
@@ -301,12 +333,16 @@ public class ShopController : MonoBehaviour
             if (data == null || data.cells == null) continue;
 
             float   offset = (i - (n - 1) * 0.5f) * blockSpacing;
-            Vector3 pos    = shopCenter + Vector3.right * offset;
+            Vector3 pos    = rowCenter + Vector3.right * offset;
 
             var root = new GameObject($"Shop_{data.blockType}_{i}");
             root.transform.position = pos;
 
-            Color col = Random.ColorHSV(0f, 1f, 0.55f, 0.9f, 0.75f, 1f);
+            // Turrets get cyan-ish colors; blocks get any hue.
+            Color col = isTurretRow
+                ? Random.ColorHSV(0.45f, 0.62f, 0.5f, 0.85f, 0.75f, 1f)
+                : Random.ColorHSV(0f, 1f, 0.55f, 0.9f, 0.75f, 1f);
+
             foreach (var cell in data.cells)
             {
                 var c = Instantiate(cubePrefab, root.transform);
@@ -387,7 +423,7 @@ public class ShopController : MonoBehaviour
 
         // Affordable check — block the grab if the player can't pay.
         var rm = ResourceManager.Instance;
-        if (rm != null && !rm.CanAfford(_hovered.sb.cachedPrice))
+        if (rm != null && !rm.CanAfford(_hovered.sb.cachedPrice, _hovered.sb.data.blockType))
         {
             _cantAffordFlash = 0.55f;   // trigger red rift-edge flash
             return true;                // consume click, stay in shop
@@ -501,7 +537,7 @@ public class ShopController : MonoBehaviour
             {
                 displayName = item.sb.data.DisplayName,
                 price       = price,
-                affordable  = rm != null && rm.CanAfford(price),
+                affordable  = rm != null && rm.CanAfford(price, item.sb.data.blockType),
             });
         }
         return result;
@@ -785,9 +821,10 @@ public class ShopController : MonoBehaviour
 
         BlockType type    = item.sb.data.blockType;
         int       price   = item.sb.cachedPrice;
-        bool      afford  = rm.CanAfford(price);
+        bool      afford  = rm.CanAfford(price, type);
         int       placed  = rm.PlacedCount(type);
-        int       deficit = price - rm.BlockCurrency;
+        int       pool    = type == BlockType.Turret ? rm.TurretCurrency : rm.BlockCurrency;
+        int       deficit = price - pool;
 
         var   mp = Input.mousePosition;
         float tx = Mathf.Clamp(mp.x + 16f, 4f, Screen.width  - 148f);
@@ -805,7 +842,8 @@ public class ShopController : MonoBehaviour
 
         _ttPrice.normal.textColor = afford ? new Color(0.45f, 1f, 0.55f)
                                            : new Color(1f, 0.38f, 0.38f);
-        string priceText = afford ? $"{price} ¤" : $"{price} ¤  (need {deficit} more)";
+        string sfx       = type == BlockType.Turret ? " ¤T" : " ¤B";
+        string priceText = afford ? $"{price}{sfx}" : $"{price}{sfx}  (need {deficit} more)";
         GUI.Label(new Rect(tx, ty + 22f, 124f, 20f), priceText, _ttPrice);
 
         _ttSub.normal.textColor = new Color(0.65f, 0.65f, 0.65f);
