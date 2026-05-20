@@ -640,7 +640,7 @@ public class PlacementController : MonoBehaviour
         foreach (var c in cells)
             ins.occupiedCells.Add(currentGridPos + c);
 
-        grid.RegisterInstance(ins);
+        RegisterPlacedBlock(ins);
         StartCoroutine(GrowIn(obj));
 
         // ── Push undo record ──────────────────────────────────────────────────
@@ -790,7 +790,7 @@ public class PlacementController : MonoBehaviour
 
         var ins = new PlacedBlockInstance { data = data, visualObject = obj };
         foreach (var c in worldCells) ins.occupiedCells.Add(c);
-        grid.RegisterInstance(ins);
+        RegisterPlacedBlock(ins);
         return ins;
     }
 
@@ -1022,7 +1022,7 @@ public class PlacementController : MonoBehaviour
 
         var ins = new PlacedBlockInstance { data = data, visualObject = obj };
         foreach (var c in cells) ins.occupiedCells.Add(c);
-        grid.RegisterInstance(ins);
+        RegisterPlacedBlock(ins);
         StartCoroutine(GrowIn(obj));
         ResourceManager.Instance?.OnBlockPlaced(data.blockType);
     }
@@ -1338,7 +1338,7 @@ public class PlacementController : MonoBehaviour
             foreach (var c in lastObjectCells)
                 ins.occupiedCells.Add(c);
 
-            grid.RegisterInstance(ins);
+            RegisterPlacedBlock(ins);
             StartCoroutine(GrowIn(obj));
             // Restore count — OnBlockRemoved was called on pickup, balance it back.
             ResourceManager.Instance?.OnBlockPlaced(ins.data.blockType);
@@ -1374,6 +1374,26 @@ public class PlacementController : MonoBehaviour
     // =========================
     // UTIL
     // =========================
+
+    void RegisterPlacedBlock(PlacedBlockInstance ins)
+    {
+        grid.RegisterInstance(ins);
+        AttachTurretController(ins);
+    }
+
+    void AttachTurretController(PlacedBlockInstance ins)
+    {
+        if (ins?.data == null || ins.visualObject == null) return;
+        if (ins.data.blockType != BlockType.Turret) return;
+
+        Transform target = ins.visualObject.transform.childCount > 0
+            ? ins.visualObject.transform.GetChild(0)
+            : ins.visualObject.transform;
+
+        var turret = target.GetComponent<TurretController>();
+        if (turret == null)
+            target.gameObject.AddComponent<TurretController>();
+    }
 
     static int PlacementDegree(BlockType t) => t switch
     {
