@@ -463,6 +463,8 @@ public class ShopController : MonoBehaviour
             sb.cachedPrice = ResourceManager.Instance != null
                              ? ResourceManager.Instance.ComputePrice(data, fluc) : 0;
 
+            if (isTurretRow) AttachTurretBeacon(root, grid.cellSize);
+
             const float TAU = Mathf.PI * 2f;
             _items.Add(new ShopItem
             {
@@ -480,6 +482,45 @@ public class ShopController : MonoBehaviour
         foreach (var item in _items) if (item.root != null) Destroy(item.root);
         _items.Clear();
         _hovered = null;
+    }
+
+    // Same visual rule as placed turrets: hide the cube body, show a single
+    // floating diamond. Keeps shop preview consistent with what gets placed.
+    static void AttachTurretBeacon(GameObject root, float cs)
+    {
+        if (root == null) return;
+
+        Vector3 centroid = Vector3.zero;
+        int     n        = 0;
+        foreach (Transform child in root.transform)
+        {
+            centroid += child.position;
+            n++;
+        }
+        if (n == 0) return;
+        centroid /= n;
+
+        foreach (var r in root.GetComponentsInChildren<Renderer>())
+            r.enabled = false;
+
+        var marker  = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        marker.name = "TurretBeacon";
+        marker.transform.SetParent(root.transform, worldPositionStays: false);
+        marker.transform.position      = centroid;
+        marker.transform.localScale    = Vector3.one * (0.62f * cs);
+        marker.transform.localRotation = Quaternion.Euler(45f, 45f, 0f);
+
+        var col = marker.GetComponent<Collider>();
+        if (col != null) Destroy(col);
+
+        var rend = marker.GetComponent<Renderer>();
+        if (rend != null)
+        {
+            MpbColor.Set(rend, new Color(0.45f, 0.95f, 1.00f));
+            rend.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        }
+
+        marker.AddComponent<TurretBeacon>();
     }
 
     /// <summary>Immediate removal — use for programmatic cleanup (ClearItems, etc.).</summary>

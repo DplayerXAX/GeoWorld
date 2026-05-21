@@ -32,6 +32,11 @@ public class PlacementController : MonoBehaviour
 
     private Vector3Int baseGridPos, currentGridPos, manualOffset;
     private float _depth = 10f;
+    [Header("Ortho placement")]
+    [Tooltip("Current build-plane Y in cells when camera is orthographic. Scroll wheel changes it.")]
+    public int _buildY = 0;
+    [Tooltip("Clamp range for the ortho build-plane Y.")]
+    public Vector2Int buildYRange = new Vector2Int(0, 20);
     private Quaternion _currentRotation = Quaternion.identity, _targetRotation = Quaternion.identity;
     private List<GameObject> previewCubes = new();
 
@@ -255,15 +260,45 @@ public class PlacementController : MonoBehaviour
         if (Mathf.Abs(s) < 0.001f) return;
 
         if (mode == PlacementMode.Select)
+        {
             cam.AddDistance(-s * scrollSpeed * 10f);
+            return;
+        }
+
+        // Edit mode
+        if (cam != null && cam.useOrthographic)
+        {
+            // Ortho: scroll moves the build plane up/down. Discrete steps so
+            // each notch == one cell — visible AND grid-snapped.
+            int step  = s > 0f ? 1 : -1;
+            _buildY   = Mathf.Clamp(_buildY + step, buildYRange.x, buildYRange.y);
+        }
         else
+        {
             _depth = Mathf.Clamp(_depth - s * scrollSpeed * _depth, minDepth, maxDepth);
+        }
     }
 
     void HandleMouseMove()
     {
         Ray r = cam.myCam.ScreenPointToRay(Input.mousePosition);
-        Vector3 world = r.origin + r.direction * _depth;
+        Vector3 world;
+
+        if (cam != null && cam.useOrthographic && Mathf.Abs(r.direction.y) > 0.001f)
+        {
+            // Ortho: intersect the mouse ray with the build-plane (world Y).
+            // Plane sits at the centre of cell row _buildY (= cellSize * y + cs/2).
+            float cs       = grid != null ? grid.cellSize : 1f;
+            float planeY   = _buildY * cs + cs * 0.5f;
+            float t        = (planeY - r.origin.y) / r.direction.y;
+            world          = t > 0f ? r.origin + r.direction * t
+                                    : r.origin + r.direction * _depth; // fallback
+        }
+        else
+        {
+            world = r.origin + r.direction * _depth;
+        }
+
         baseGridPos = grid.WorldToGrid(world);
     }
 
@@ -1379,6 +1414,7 @@ public class PlacementController : MonoBehaviour
     {
         grid.RegisterInstance(ins);
         AttachTurretController(ins);
+        AttachTurretBeacon(ins);
     }
 
     void AttachTurretController(PlacedBlockInstance ins)
@@ -1393,6 +1429,49 @@ public class PlacementController : MonoBehaviour
         var turret = target.GetComponent<TurretController>();
         if (turret == null)
             target.gameObject.AddComponent<TurretController>();
+    }
+
+    // Turrets don't render their cube body — they ARE the diamond beacon.
+    // We hide the underlying cube renderers and float a larger diamond at
+    // the cell centroid so the silhouette reads as "turret" at a glance.
+    void AttachTurretBeacon(PlacedBlockInstance ins)
+    {
+        if (ins?.data == null || ins.visualObject == null) return;
+        if (ins.data.blockType != BlockType.Turret) return;
+
+        Vector3 centroid = Vector3.zero;
+        int     n        = 0;
+        foreach (Transform child in ins.visualObject.transform)
+        {
+            if (child.GetComponent<TurretBeacon>() != null) continue;
+            centroid += child.position;
+            n++;
+        }
+        centroid = (n == 0) ? ins.visualObject.transform.position : centroid / n;
+
+        // Hide the cube meshes — the beacon is the only visible part.
+        foreach (var r in ins.visualObject.GetComponentsInChildren<Renderer>())
+            r.enabled = false;
+
+        float cs    = grid != null ? grid.cellSize : 1f;
+        var marker  = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        marker.name = "TurretBeacon";
+        marker.transform.SetParent(ins.visualObject.transform, worldPositionStays: false);
+        marker.transform.position      = centroid;
+        marker.transform.localScale    = Vector3.one * (0.62f * cs);
+        marker.transform.localRotation = Quaternion.Euler(45f, 45f, 0f);
+
+        var col = marker.GetComponent<Collider>();
+        if (col != null) Destroy(col);
+
+        var rend = marker.GetComponent<Renderer>();
+        if (rend != null)
+        {
+            MpbColor.Set(rend, new Color(0.45f, 0.95f, 1.00f));
+            rend.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        }
+
+        marker.AddComponent<TurretBeacon>();
     }
 
     static int PlacementDegree(BlockType t) => t switch
