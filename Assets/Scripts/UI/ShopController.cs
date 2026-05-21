@@ -17,6 +17,8 @@ using UnityEngine;
 // F (configurable) — open / close the rift.
 // Auto-closes during combat (Running phase).
 // ─────────────────────────────────────────────────────────────────────────────
+public enum RiftShapePreset { Triangle, Lens, Oval, Slash, Crack, Diamond, Custom }
+
 public class ShopController : MonoBehaviour
 {
     public static ShopController Instance;
@@ -49,22 +51,32 @@ public class ShopController : MonoBehaviour
     [Tooltip("Vertical offset for the turret row, relative to shopCenter.")]
     public Vector3 turretRowOffset = new Vector3(0f, -1.6f, 0f);
 
-    [Header("Float Animation")]
-    public float bobAmplitude = 0.35f;
-    public float bobSpeed     = 1.0f;
-    public float rotateSpeed  = 28f;
+    [Header("Float Animation — feels like drifting in space")]
+    [Tooltip("Per-axis drift range in world units. Stay small so items don't escape their row / the rift opening.")]
+    public Vector3 driftAmplitude = new Vector3(0.18f, 0.20f, 0.15f);
+    [Tooltip("Per-axis drift frequency (Hz × 2π). Different per axis to avoid lockstep.")]
+    public Vector3 driftSpeed     = new Vector3(0.50f, 0.70f, 0.60f);
+    [Tooltip("Peak wobble angle in degrees on each axis.")]
+    public float   tumbleAmplitude = 14f;
+    [Tooltip("Base wobble frequency. Each axis multiplied by an irrational-ish factor.")]
+    public float   tumbleSpeed     = 0.45f;
 
-    [Header("Rift Atmosphere")]
-    public Color shopBackground     = new Color(0.28f, 0.14f, 0.01f, 1f);
+    [Header("Rift Atmosphere — deep void inside")]
+    public Color shopBackground     = new Color(0.00f, 0.00f, 0.00f, 1f);
     [Tooltip("Light over the block row — warm to read as 'music/construction'.")]
     public Color blockLightColor    = new Color(1.00f, 0.82f, 0.25f, 1f);
     [Tooltip("Light over the turret row — cool to separate from blocks visually.")]
     public Color turretLightColor   = new Color(0.30f, 0.80f, 1.00f, 1f);
     public float shopLightIntensity = 3.5f;
     public float shopLightRange     = 18f;
+    [Tooltip("Inner vignette strength. 0 = no darkening at edges. 1 = full black at edges.")]
+    [Range(0f, 1f)] public float innerVignetteStrength = 0.7f;
 
-    [Header("Rift Sprite & Orientation")]
-    [Tooltip("Optional sprite that defines the rift silhouette. Enable 'Generate Physics Shape' in its import settings.")]
+    [Header("Rift Shape")]
+    public RiftShapePreset shapePreset = RiftShapePreset.Triangle;
+    [Tooltip("Extra polygon rotation when collapsed. Lerps to 0 as the rift opens — gives the 'spin open' feel.")]
+    [Range(0f, 360f)] public float openSpinDegrees = 60f;
+    [Tooltip("Sprite physics outline — only used when shapePreset = Custom.")]
     public Sprite riftSprite;
     [Tooltip("Rotate the rift opening on-screen. 0 = vertical, 90 = horizontal. The shop camera rolls to compensate.")]
     [Range(-180f, 180f)] public float riftRotationDeg = 0f;
@@ -73,15 +85,37 @@ public class ShopController : MonoBehaviour
     [Tooltip("RenderTexture height. 1024 = portrait (default). 512  = landscape.")]
     public int rtHeight = 1024;
 
-    [Header("Rift Edge FX")]
-    public Color riftEdgeColor  = new Color(1.00f, 0.80f, 0.18f, 1.00f);
-    public Color riftGlowColor  = new Color(1.00f, 0.55f, 0.05f, 0.10f);
-    public int   riftGlowLayers = 4;
-    [Range(0f, 5f)] public float edgePulseSpeed = 1.6f;
-    public int   flowDotCount   = 22;
-    [Range(0f, 2f)] public float flowSpeed      = 0.30f;
-    public float spikeLength    = 16f;
-    [Range(0f, 8f)] public float spikeSpeed     = 3.0f;
+    [Header("Rift Edge FX — bright tear in the glass")]
+    public Color riftEdgeColor  = new Color(0.92f, 0.96f, 1.00f, 0.85f);
+    public Color riftGlowColor  = new Color(0.40f, 0.55f, 0.80f, 0.06f);
+    public int   riftGlowLayers = 3;
+    [Range(0f, 5f)] public float edgePulseSpeed = 1.4f;
+
+    [Header("Cosmic Energy — subtle in 'void' mode")]
+    public Color energyRayColor   = new Color(0.75f, 0.85f, 1.00f, 0.25f);
+    [Range(0, 32)] public int rayCount = 8;
+    [Tooltip("Ray length range as a fraction of rift size.")]
+    public Vector2 rayLengthRange = new Vector2(0.40f, 0.90f);
+    [Range(0f, 2f)] public float rayPulseSpeed = 0.60f;
+    [Range(0f, 1f)] public float raySpinSpeed  = 0.05f;
+
+    public Color sparkleColor   = new Color(0.75f, 0.85f, 1.00f, 0.65f);
+    [Range(0, 80)] public int sparkleCount = 16;
+    [Tooltip("Sparkle scatter radius as multiplier of rift size.")]
+    [Range(0.5f, 2.5f)] public float sparkleRadius = 1.15f;
+    [Range(0.2f, 4f)] public float sparkleTwinkleSpeed = 1.1f;
+
+    [Header("Outline Distortion (set 0 for clean geometric lens)")]
+    [Tooltip("Higher = jaggier outline. 0 = clean lens (recommended for geometric art).")]
+    [Range(0f, 0.4f)] public float crackJaggedness = 0f;
+    [Tooltip("Speed of slow crack breathing. 0 = static.")]
+    [Range(0f, 2f)] public float crackWobbleSpeed = 0.30f;
+    [Tooltip("Insert N midpoints between every pair of base vertices. Higher = finer crack detail.")]
+    [Range(0, 5)] public int crackSubdivision = 0;
+
+    [Header("Item Hover")]
+    [Range(1f, 1.5f)] public float hoverScale     = 1.18f;
+    [Range(1f, 20f)]  public float hoverLerpSpeed = 8f;
 
     [Header("Tooltip")]
     public Color tooltipBg = new Color(0.04f, 0.04f, 0.08f, 0.90f);
@@ -90,23 +124,62 @@ public class ShopController : MonoBehaviour
     public bool flipHoverX;
     public bool flipHoverY;
 
-    // ── Rift polygon ──────────────────────────────────────────────────────────
-    // Built-in fallback shape: 12-vertex vertical convex lens.
-    // At runtime, _runtimeRiftShape is used instead (built from riftSprite or this default).
-    static readonly Vector2[] RiftShapeDefault =
+    // Built-in shape presets. Y axis is the long axis; rotation handled separately
+    // by riftRotationDeg. All shapes are normalised so the largest |coord| = 1.
+
+    // Equilateral triangle, pointing up. 3-fold symmetric.
+    static readonly Vector2[] RiftShape_Triangle =
     {
-        new( 0.00f,  1.00f),  //  0 top apex
-        new( 0.15f,  0.70f),  //  1
-        new( 0.30f,  0.35f),  //  2
-        new( 0.38f,  0.00f),  //  3 widest right
-        new( 0.30f, -0.35f),  //  4
-        new( 0.15f, -0.70f),  //  5
-        new( 0.00f, -1.00f),  //  6 bottom apex
-        new(-0.15f, -0.70f),  //  7
-        new(-0.30f, -0.35f),  //  8
-        new(-0.38f,  0.00f),  //  9 widest left
-        new(-0.30f,  0.35f),  // 10
-        new(-0.15f,  0.70f),  // 11
+        new( 0.000f,  1.000f),
+        new( 0.866f, -0.500f),
+        new(-0.866f, -0.500f),
+    };
+
+    static readonly Vector2[] RiftShape_Lens =
+    {
+        new( 0.00f,  1.00f), new( 0.15f,  0.70f), new( 0.30f,  0.35f),
+        new( 0.38f,  0.00f), new( 0.30f, -0.35f), new( 0.15f, -0.70f),
+        new( 0.00f, -1.00f), new(-0.15f, -0.70f), new(-0.30f, -0.35f),
+        new(-0.38f,  0.00f), new(-0.30f,  0.35f), new(-0.15f,  0.70f),
+    };
+
+    // Rounded oval — no sharp tips, friendly silhouette.
+    static readonly Vector2[] RiftShape_Oval =
+    {
+        new( 0.20f,  1.00f), new( 0.45f,  0.85f), new( 0.62f,  0.60f),
+        new( 0.70f,  0.30f), new( 0.72f,  0.00f), new( 0.70f, -0.30f),
+        new( 0.62f, -0.60f), new( 0.45f, -0.85f), new( 0.20f, -1.00f),
+        new(-0.20f, -1.00f), new(-0.45f, -0.85f), new(-0.62f, -0.60f),
+        new(-0.70f, -0.30f), new(-0.72f,  0.00f), new(-0.70f,  0.30f),
+        new(-0.62f,  0.60f), new(-0.45f,  0.85f), new(-0.20f,  1.00f),
+    };
+
+    // Long thin slash — narrow on X.
+    static readonly Vector2[] RiftShape_Slash =
+    {
+        new( 0.00f,  1.00f), new( 0.10f,  0.65f), new( 0.18f,  0.30f),
+        new( 0.22f,  0.00f), new( 0.18f, -0.30f), new( 0.10f, -0.65f),
+        new( 0.00f, -1.00f), new(-0.10f, -0.65f), new(-0.18f, -0.30f),
+        new(-0.22f,  0.00f), new(-0.18f,  0.30f), new(-0.10f,  0.65f),
+    };
+
+    // Asymmetric crack — left and right intentionally don't mirror, so it
+    // reads as a torn opening rather than a clean lens.
+    static readonly Vector2[] RiftShape_Crack =
+    {
+        new( 0.00f,  1.00f), new( 0.12f,  0.65f), new( 0.32f,  0.30f),
+        new( 0.20f,  0.00f), new( 0.38f, -0.30f), new( 0.16f, -0.55f),
+        new( 0.08f, -0.85f), new( 0.00f, -1.00f),
+        new(-0.14f, -0.70f), new(-0.30f, -0.40f), new(-0.18f, -0.10f),
+        new(-0.36f,  0.20f), new(-0.22f,  0.50f), new(-0.10f,  0.80f),
+    };
+
+    // Four-pointed diamond — clean geometric look.
+    static readonly Vector2[] RiftShape_Diamond =
+    {
+        new( 0.00f,  1.00f), new( 0.55f,  0.30f), new( 0.80f,  0.00f),
+        new( 0.55f, -0.30f), new( 0.00f, -1.00f), new(-0.55f, -0.30f),
+        new(-0.80f,  0.00f), new(-0.55f,  0.30f),
     };
 
     // ── State ─────────────────────────────────────────────────────────────────
@@ -115,8 +188,9 @@ public class ShopController : MonoBehaviour
     {
         public GameObject      root;
         public SelectableBlock sb;
-        public float           baseY;
-        public float           phase;
+        public Vector3         basePos;       // anchor — drift oscillates around this
+        public Vector3         driftPhase;    // independent X/Y/Z phase offsets
+        public Vector3         tumblePhase;
     }
 
     readonly List<ShopItem> _items = new();
@@ -144,9 +218,16 @@ public class ShopController : MonoBehaviour
     Light _turretLight;
 
     // Active rift polygon in normalised coords (Y-up, centred at origin).
-    // Built once from riftSprite physics shape (or RiftShapeDefault if no sprite).
+    // Built from the active preset (or riftSprite if shapePreset = Custom).
     // riftRotationDeg is applied on-the-fly in UpdateScreenVerts.
     Vector2[] _runtimeRiftShape;
+
+    // Subdivided base shape (no noise) + stable per-vertex noise personality.
+    // Built whenever the base shape or subdivision count changes.
+    Vector2[] _subdividedShape;
+    float[]   _vertexStaticOffset;
+    float[]   _vertexWobblePhase;
+    int       _builtSubdivision = -1;
 
     GUIStyle _ttTitle, _ttPrice, _ttSub, _hintStyle;
     bool     _stylesBuilt;
@@ -186,6 +267,7 @@ public class ShopController : MonoBehaviour
     void Start()
     {
         BuildShapeFromSprite();
+        BuildCrackShape();
         RebuildRT();
     }
 
@@ -234,6 +316,7 @@ public class ShopController : MonoBehaviour
         if (Application.isPlaying)
         {
             BuildShapeFromSprite();
+            BuildCrackShape();
             RebuildRT();
         }
     }
@@ -289,12 +372,11 @@ public class ShopController : MonoBehaviour
         if (shopCam == null) return;
         shopCam.transform.position = shopCenter + _currentOffset;
         shopCam.transform.LookAt(shopCenter);
-        // Roll the camera the same direction as the rift rotation so item
-        // world axes (X-row, Y-row) align with visible screen axes after the
-        // polygon's UV mapping. Without this, both axes flip in the visible
-        // layout and hover mapping becomes ambiguous.
-        if (Mathf.Abs(riftRotationDeg) > 0.01f)
-            shopCam.transform.Rotate(Vector3.forward, riftRotationDeg, Space.Self);
+        // Roll the camera by the rift's current total rotation (base + open
+        // animation) so items stay upright while the polygon spins.
+        float rot = CurrentRotationDeg();
+        if (Mathf.Abs(rot) > 0.01f)
+            shopCam.transform.Rotate(Vector3.forward, rot, Space.Self);
     }
 
     // Recomputes _riftScreenCenter, _riftScreenSize, _screenVerts every frame.
@@ -304,15 +386,32 @@ public class ShopController : MonoBehaviour
                                         riftScreenPos.y * Screen.height);
         _riftScreenSize   = Screen.height * riftHeight * _riftScale;
 
-        var shape = _runtimeRiftShape ?? RiftShapeDefault;
+        // Rebuild crack shape if the subdivision setting changed at runtime.
+        if (_subdividedShape == null || _builtSubdivision != crackSubdivision)
+            BuildCrackShape();
+
+        var shape = _subdividedShape;
         int n     = shape.Length;
         if (_screenVerts == null || _screenVerts.Length != n)
             _screenVerts = new Vector2[n];
 
+        float t = Time.time;
         for (int i = 0; i < n; i++)
         {
-            // Apply rotation in normalised space, then map to screen.
-            Vector2 rv = Rotate2D(shape[i], riftRotationDeg);
+            Vector2 v = shape[i];
+
+            // Radial noise: half from a stable per-vertex offset (gives the crack
+            // its permanent silhouette), half from a slow wobble (alive feel).
+            float r = v.magnitude;
+            if (r > 0.001f && _vertexStaticOffset != null && i < _vertexStaticOffset.Length)
+            {
+                float staticO = _vertexStaticOffset[i];
+                float wobble  = Mathf.Sin(t * crackWobbleSpeed + _vertexWobblePhase[i]);
+                float radial  = (staticO * 0.5f + wobble * 0.5f) * crackJaggedness * r;
+                v += (v / r) * radial;
+            }
+
+            Vector2 rv = Rotate2D(v, CurrentRotationDeg());
             _screenVerts[i] = new Vector2(_riftScreenCenter.x + rv.x * _riftScreenSize,
                                           _riftScreenCenter.y - rv.y * _riftScreenSize);
         }
@@ -364,12 +463,14 @@ public class ShopController : MonoBehaviour
             sb.cachedPrice = ResourceManager.Instance != null
                              ? ResourceManager.Instance.ComputePrice(data, fluc) : 0;
 
+            const float TAU = Mathf.PI * 2f;
             _items.Add(new ShopItem
             {
-                root  = root,
-                sb    = sb,
-                baseY = pos.y,
-                phase = i * (Mathf.PI * 2f / Mathf.Max(n, 1)),
+                root        = root,
+                sb          = sb,
+                basePos     = pos,
+                driftPhase  = new Vector3(Random.Range(0f, TAU), Random.Range(0f, TAU), Random.Range(0f, TAU)),
+                tumblePhase = new Vector3(Random.Range(0f, TAU), Random.Range(0f, TAU), Random.Range(0f, TAU)),
             });
         }
     }
@@ -469,13 +570,33 @@ public class ShopController : MonoBehaviour
     void AnimateItems()
     {
         float t = Time.time;
+        float lerpK = 1f - Mathf.Exp(-hoverLerpSpeed * Time.deltaTime);
         foreach (var item in _items)
         {
             if (item.root == null) continue;
-            float y = item.baseY + Mathf.Sin(t * bobSpeed + item.phase) * bobAmplitude;
-            var   p = item.root.transform.position;
-            item.root.transform.position = new Vector3(p.x, y, p.z);
-            item.root.transform.Rotate(Vector3.up, rotateSpeed * Time.deltaTime, Space.Self);
+
+            // Drift: bounded sin around basePos so items never escape their slot.
+            Vector3 drift = new Vector3(
+                Mathf.Sin(t * driftSpeed.x + item.driftPhase.x) * driftAmplitude.x,
+                Mathf.Sin(t * driftSpeed.y + item.driftPhase.y) * driftAmplitude.y,
+                Mathf.Sin(t * driftSpeed.z + item.driftPhase.z) * driftAmplitude.z
+            );
+            item.root.transform.position = item.basePos + drift;
+
+            // Tumble: gentle wobble in all 3 axes. Absolute rotation (no
+            // accumulation) — irrational-ish multipliers stop the axes syncing.
+            Vector3 euler = new Vector3(
+                Mathf.Sin(t * tumbleSpeed         + item.tumblePhase.x),
+                Mathf.Sin(t * tumbleSpeed * 0.73f + item.tumblePhase.y),
+                Mathf.Sin(t * tumbleSpeed * 1.31f + item.tumblePhase.z)
+            ) * tumbleAmplitude;
+            item.root.transform.rotation = Quaternion.Euler(euler);
+
+            // Hover feedback: pop up to hoverScale, ease back when not hovered.
+            float target = (item == _hovered) ? hoverScale : 1f;
+            float cur    = item.root.transform.localScale.x;
+            float next   = Mathf.Lerp(cur, target, lerpK);
+            item.root.transform.localScale = Vector3.one * next;
         }
     }
 
@@ -512,12 +633,12 @@ public class ShopController : MonoBehaviour
         float ry   = (_riftScreenCenter.y - guiY)                / (_riftScreenSize + 0.001f);
 
         // 2. Undo the on-screen rotation to get into the shape's native (unrotated)
-        //    space. UpdateScreenVerts applied +riftRotationDeg, so invert with -.
-        Vector2 local = Rotate2D(new Vector2(rx, ry), -riftRotationDeg);
+        //    space. UpdateScreenVerts applied +CurrentRotationDeg(), so invert.
+        Vector2 local = Rotate2D(new Vector2(rx, ry), -CurrentRotationDeg());
 
         // 3. Map to camera viewport using the same shape bounds as DrawContent.
         //    ViewportPointToRay uses y=0 at bottom, y=1 at top — no D3D flip here.
-        var   shape = _runtimeRiftShape ?? RiftShapeDefault;
+        var   shape = _runtimeRiftShape ?? BuiltinShape();
         float minX  = float.MaxValue, maxX = float.MinValue;
         float minY  = float.MaxValue, maxY = float.MinValue;
         foreach (var p in shape)
@@ -570,6 +691,7 @@ public class ShopController : MonoBehaviour
     {
         BuildStyles();
         if (_riftScale > 0.005f) DrawRift();
+        if (_riftScale > 0.5f)   DrawPriceLabels();
         if (_hovered != null && _riftScale > 0.1f) DrawTooltip(_hovered);
         DrawRiftLabel();
 
@@ -609,9 +731,10 @@ public class ShopController : MonoBehaviour
 
         DrawGlow();
         DrawContent();
+        DrawInnerVignette();   // dark fade toward the rift's inner edge
         DrawEdge();
-        DrawFlowDots();
-        DrawEnergySpikes();
+        DrawRadialRays();
+        DrawSparkles();
 
         GL.PopMatrix();
     }
@@ -679,13 +802,16 @@ public class ShopController : MonoBehaviour
     void DrawContent()
     {
         if (_riftMat == null) return;
-        var shape = _runtimeRiftShape ?? RiftShapeDefault;
-        int n     = shape.Length;
+        // Iterate the subdivided shape so the triangle fan follows the noisy
+        // crack outline. UV bounds stay from the base shape so the RT content
+        // doesn't stretch as vertices wobble.
+        var shape     = _subdividedShape ?? _runtimeRiftShape ?? BuiltinShape();
+        var baseShape = _runtimeRiftShape ?? BuiltinShape();
+        int n         = shape.Length;
 
-        // Compute shape bounding box for UV mapping (works for any shape / aspect).
         float minX = float.MaxValue, maxX = float.MinValue;
         float minY = float.MaxValue, maxY = float.MinValue;
-        foreach (var p in shape)
+        foreach (var p in baseShape)
         {
             if (p.x < minX) minX = p.x; if (p.x > maxX) maxX = p.x;
             if (p.y < minY) minY = p.y; if (p.y > maxY) maxY = p.y;
@@ -762,52 +888,93 @@ public class ShopController : MonoBehaviour
         GL.End();
     }
 
-    // Small cross-shaped dots flowing around the rift perimeter.
-    void DrawFlowDots()
+    // Fan with vertex-color gradient: transparent at centre, black at the
+    // polygon edge. Reads as the rift opening up into darkness.
+    void DrawInnerVignette()
     {
+        if (innerVignetteStrength <= 0f || _screenVerts == null) return;
         int n = _screenVerts.Length;
 
-        float[] segs  = new float[n];
-        float   total = 0f;
+        _colorMat.SetPass(0);
+        GL.Begin(GL.TRIANGLES);
+        Color centreCol = new Color(0f, 0f, 0f, 0f);
+        Color edgeCol   = new Color(0f, 0f, 0f, innerVignetteStrength);
         for (int i = 0; i < n; i++)
         {
-            segs[i] = Vector2.Distance(_screenVerts[i], _screenVerts[(i + 1) % n]);
-            total  += segs[i];
-        }
-        if (total < 1f) return;
-
-        float t = Time.time;
-        _colorMat.SetPass(0);
-        GL.Begin(GL.LINES);
-        for (int d = 0; d < flowDotCount; d++)
-        {
-            float   phase = ((t * flowSpeed + (float)d / flowDotCount) % 1f + 1f) % 1f;
-            Vector2 pos   = PointOnPerimeter(segs, total, phase);
-            float   alpha = 0.55f + 0.45f * Mathf.Sin(t * 2.5f + d * 0.63f);
-            float   r     = 2.2f * Mathf.Clamp01(_riftScale);
-            GL.Color(new Color(1f, 0.96f, 0.55f, alpha));
-            GL.Vertex3(pos.x - r, pos.y,     0); GL.Vertex3(pos.x + r, pos.y,     0);
-            GL.Vertex3(pos.x,     pos.y - r, 0); GL.Vertex3(pos.x,     pos.y + r, 0);
+            int j = (i + 1) % n;
+            GL.Color(centreCol);
+            GL.Vertex3(_riftScreenCenter.x, _riftScreenCenter.y, 0);
+            GL.Color(edgeCol);
+            GL.Vertex3(_screenVerts[i].x, _screenVerts[i].y, 0);
+            GL.Vertex3(_screenVerts[j].x, _screenVerts[j].y, 0);
         }
         GL.End();
     }
 
-    // Short animated spikes at each vertex, pointing outward.
-    void DrawEnergySpikes()
+    // Straight rays emanating from rift centre — gives the "energy lance"
+    // feel (cf. reference: cosmic beam projecting outward).
+    void DrawRadialRays()
     {
-        int n = _screenVerts.Length;
+        if (rayCount <= 0) return;
         _colorMat.SetPass(0);
         GL.Begin(GL.LINES);
-        for (int i = 0; i < n; i++)
+
+        float t       = Time.time;
+        float baseRot = t * raySpinSpeed;
+        for (int i = 0; i < rayCount; i++)
         {
-            Vector2 outDir = OutwardNormal(i);
-            float   phase  = Mathf.Sin(Time.time * spikeSpeed + i * 1.1f);
-            float   len    = spikeLength * _riftScale * (0.4f + 0.6f * Mathf.Abs(phase));
-            Vector2 tip    = _screenVerts[i] + outDir * len;
-            float   alpha  = 0.35f + 0.65f * (0.5f + 0.5f * phase);
-            GL.Color(new Color(riftEdgeColor.r, riftEdgeColor.g, riftEdgeColor.b, alpha));
-            GL.Vertex3(_screenVerts[i].x, _screenVerts[i].y, 0);
-            GL.Vertex3(tip.x, tip.y, 0);
+            float angle = (i / (float)rayCount) * Mathf.PI * 2f + baseRot;
+
+            // Each ray's length pulses independently.
+            float phase  = i * 1.713f;
+            float pulse  = 0.5f + 0.5f * Mathf.Sin(t * rayPulseSpeed + phase);
+            float len    = Mathf.Lerp(rayLengthRange.x, rayLengthRange.y, pulse)
+                           * _riftScreenSize;
+
+            // Start a bit out from center so the rays look like they emerge
+            // from the rift mouth, not a single dot.
+            Vector2 dir   = new Vector2(Mathf.Cos(angle), Mathf.Sin(angle));
+            Vector2 start = _riftScreenCenter + dir * (0.30f * _riftScreenSize);
+            Vector2 end   = _riftScreenCenter + dir * len;
+
+            // Fade: bright at start, fully transparent at tip.
+            float aBase = energyRayColor.a * (0.4f + 0.6f * pulse) * _riftScale;
+            GL.Color(new Color(energyRayColor.r, energyRayColor.g, energyRayColor.b, aBase));
+            GL.Vertex3(start.x, start.y, 0);
+            GL.Color(new Color(energyRayColor.r, energyRayColor.g, energyRayColor.b, 0f));
+            GL.Vertex3(end.x,   end.y,   0);
+        }
+        GL.End();
+    }
+
+    // Tiny twinkling cross sparkles scattered around the rift —
+    // geometric stand-in for "cosmic dust" without the messy noise.
+    void DrawSparkles()
+    {
+        if (sparkleCount <= 0 || _riftScale < 0.02f) return;
+        _colorMat.SetPass(0);
+        GL.Begin(GL.LINES);
+
+        float t = Time.time;
+        for (int i = 0; i < sparkleCount; i++)
+        {
+            // Golden-angle distribution + per-index pseudo-random radius —
+            // stable per session, no allocations.
+            float angle  = i * 2.3998f;   // ≈ 137.5°
+            float radNorm = 0.65f + ((i * 31 + 17) % 100) / 100f * 0.85f;
+            float radius  = radNorm * sparkleRadius * _riftScreenSize;
+            Vector2 pos   = _riftScreenCenter + new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)) * radius;
+
+            // Sharp twinkle — pow 3 so most of the time they're dim, brief flash.
+            float twink = 0.5f + 0.5f * Mathf.Sin(t * sparkleTwinkleSpeed + i * 0.91f);
+            twink = twink * twink * twink;
+            if (twink < 0.03f) continue;
+
+            float r = (1.8f + 1.6f * twink) * Mathf.Clamp01(_riftScale);
+            GL.Color(new Color(sparkleColor.r, sparkleColor.g, sparkleColor.b,
+                               sparkleColor.a * twink));
+            GL.Vertex3(pos.x - r, pos.y,     0); GL.Vertex3(pos.x + r, pos.y,     0);
+            GL.Vertex3(pos.x,     pos.y - r, 0); GL.Vertex3(pos.x,     pos.y + r, 0);
         }
         GL.End();
     }
@@ -843,10 +1010,39 @@ public class ShopController : MonoBehaviour
         int       pool    = type == BlockType.Turret ? rm.TurretCurrency : rm.BlockCurrency;
         int       deficit = price - pool;
 
-        var   mp = Input.mousePosition;
-        float tx = Mathf.Clamp(mp.x + 16f, 4f, Screen.width  - 148f);
-        float ty = Mathf.Clamp(Screen.height - mp.y - 96f, 4f, Screen.height - 96f);
-        const float bw = 140f, bh = 84f;
+        // Pin to the side of the rift's screen-space bounds so the tooltip
+        // never covers items. Prefer right; fall back to left if right is
+        // off-screen; finally try below / above as last resorts.
+        const float bw = 200f, bh = 84f;
+        const float pad = 16f;
+
+        float minX = float.MaxValue, maxX = float.MinValue;
+        float minY = float.MaxValue, maxY = float.MinValue;
+        if (_screenVerts != null)
+            foreach (var v in _screenVerts)
+            {
+                if (v.x < minX) minX = v.x;
+                if (v.x > maxX) maxX = v.x;
+                if (v.y < minY) minY = v.y;
+                if (v.y > maxY) maxY = v.y;
+            }
+        if (minX > maxX)   // no verts yet
+        {
+            minX = _riftScreenCenter.x - _riftScreenSize; maxX = _riftScreenCenter.x + _riftScreenSize;
+            minY = _riftScreenCenter.y - _riftScreenSize; maxY = _riftScreenCenter.y + _riftScreenSize;
+        }
+
+        float tx, ty;
+        ty = _riftScreenCenter.y - bh * 0.5f;
+        if (maxX + pad + bw <= Screen.width - 4f)              tx = maxX + pad;            // right
+        else if (minX - pad - bw >= 4f)                        tx = minX - pad - bw;       // left
+        else
+        {
+            tx = Mathf.Clamp(_riftScreenCenter.x - bw * 0.5f, 4f, Screen.width - bw - 4f);
+            ty = (maxY + pad + bh <= Screen.height - 4f) ? maxY + pad : minY - pad - bh;
+        }
+        tx = Mathf.Clamp(tx, 4f, Screen.width  - bw - 4f);
+        ty = Mathf.Clamp(ty, 4f, Screen.height - bh - 4f);
 
         GUI.color = tooltipBg;
         GUI.DrawTexture(new Rect(tx - 8f, ty - 8f, bw, bh), Texture2D.whiteTexture);
@@ -870,6 +1066,69 @@ public class ShopController : MonoBehaviour
         _ttSub.normal.textColor = afford ? new Color(0.65f, 0.65f, 0.65f)
                                          : new Color(1f, 0.45f, 0.45f);
         GUI.Label(new Rect(tx, ty + 62f, 124f, 18f), hint, _ttSub);
+    }
+
+    // Per-item floating price tag, always visible above each shop block.
+    void DrawPriceLabels()
+    {
+        var rm = ResourceManager.Instance;
+        if (rm == null || shopCam == null) return;
+
+        const float w = 64f, h = 18f;
+        foreach (var item in _items)
+        {
+            if (item.root == null || item.sb?.data == null) continue;
+
+            Vector3 vp3 = shopCam.WorldToViewportPoint(item.root.transform.position);
+            if (vp3.z < 0f) continue;
+
+            Vector2 screenPos = ShopViewportToScreen(vp3);
+
+            BlockType type   = item.sb.data.blockType;
+            int       price  = item.sb.cachedPrice;
+            bool      afford = rm.CanAfford(price, type);
+            string    sfx    = type == BlockType.Turret ? "T" : "B";
+            Color     col    = afford ? new Color(0.55f, 1f, 0.60f, 1f)
+                                       : new Color(1f,    0.45f, 0.45f, 1f);
+
+            var rect = new Rect(screenPos.x - w * 0.5f, screenPos.y - 34f, w, h);
+
+            GUI.color = new Color(0f, 0f, 0f, 0.60f);
+            GUI.DrawTexture(rect, Texture2D.whiteTexture);
+            GUI.color = Color.white;
+
+            var prevCol  = _ttSub.normal.textColor;
+            var prevAlgn = _ttSub.alignment;
+            _ttSub.normal.textColor = col;
+            _ttSub.alignment        = TextAnchor.MiddleCenter;
+            GUI.Label(rect, $"{price}¤{sfx}", _ttSub);
+            _ttSub.normal.textColor = prevCol;
+            _ttSub.alignment        = prevAlgn;
+        }
+    }
+
+    // Forward map: shop camera viewport (0..1) → screen position inside rift polygon.
+    // Mirrors the UV mapping used by DrawContent so item positions track the
+    // visible RT content.
+    Vector2 ShopViewportToScreen(Vector3 shopVp)
+    {
+        var baseShape = _runtimeRiftShape ?? BuiltinShape();
+        float minX = float.MaxValue, maxX = float.MinValue;
+        float minY = float.MaxValue, maxY = float.MinValue;
+        foreach (var p in baseShape)
+        {
+            if (p.x < minX) minX = p.x; if (p.x > maxX) maxX = p.x;
+            if (p.y < minY) minY = p.y; if (p.y > maxY) maxY = p.y;
+        }
+        float rx = Mathf.Max(maxX - minX, 0.001f);
+        float ry = Mathf.Max(maxY - minY, 0.001f);
+
+        // Inverse of toUV in DrawContent: UV.y is V-flipped.
+        Vector2 native = new Vector2(minX + shopVp.x * rx,
+                                     minY + shopVp.y * ry);
+        Vector2 rotated = Rotate2D(native, CurrentRotationDeg());
+        return new Vector2(_riftScreenCenter.x + rotated.x * _riftScreenSize,
+                           _riftScreenCenter.y - rotated.y * _riftScreenSize);
     }
 
     // ── Style builder ─────────────────────────────────────────────────────────
@@ -927,18 +1186,35 @@ public class ShopController : MonoBehaviour
 
     // ── Shape builder ─────────────────────────────────────────────────────────
 
-    /// <summary>
-    /// Populates _runtimeRiftShape from riftSprite's physics outline, or falls
-    /// back to RiftShapeDefault.  Call on Start and whenever riftSprite changes.
-    ///
-    /// Sprite requirements: in Import Settings enable
-    ///   Sprite Editor → Physics Shape → Generate  (or draw manually).
-    /// </summary>
+    Vector2[] BuiltinShape() => shapePreset switch
+    {
+        RiftShapePreset.Triangle => RiftShape_Triangle,
+        RiftShapePreset.Lens     => RiftShape_Lens,
+        RiftShapePreset.Oval     => RiftShape_Oval,
+        RiftShapePreset.Slash    => RiftShape_Slash,
+        RiftShapePreset.Crack    => RiftShape_Crack,
+        RiftShapePreset.Diamond  => RiftShape_Diamond,
+        _                        => RiftShape_Triangle,
+    };
+
+    // Total polygon rotation = configured base + animated "spin open" amount.
+    // Used everywhere we need the rift's current world-orientation: vertex
+    // placement, camera counter-roll, hover unprojection.
+    float CurrentRotationDeg() =>
+        riftRotationDeg + (1f - Mathf.Clamp01(_riftScale)) * openSpinDegrees;
+
     void BuildShapeFromSprite()
     {
+        // Built-in preset takes priority — sprite only consulted for Custom.
+        if (shapePreset != RiftShapePreset.Custom)
+        {
+            _runtimeRiftShape = BuiltinShape();
+            return;
+        }
+
         if (riftSprite == null)
         {
-            _runtimeRiftShape = null;   // UpdateScreenVerts falls back to RiftShapeDefault
+            _runtimeRiftShape = null;   // falls back to Lens via BuiltinShape
             return;
         }
 
@@ -972,6 +1248,44 @@ public class ShopController : MonoBehaviour
 
         Debug.Log($"[ShopController] Rift shape loaded from sprite '{riftSprite.name}' " +
                   $"— {pts.Count} vertices.");
+    }
+
+    // Builds _subdividedShape + stable per-vertex randoms. Call when the base
+    // shape or subdivision count changes. Personality is reseeded so the crack
+    // gets a new "look" each rebuild.
+    void BuildCrackShape()
+    {
+        var baseShape = _runtimeRiftShape ?? BuiltinShape();
+        _subdividedShape = SubdivideShape(baseShape, crackSubdivision);
+        _builtSubdivision = crackSubdivision;
+
+        int n = _subdividedShape.Length;
+        _vertexStaticOffset = new float[n];
+        _vertexWobblePhase  = new float[n];
+        for (int i = 0; i < n; i++)
+        {
+            _vertexStaticOffset[i] = Random.Range(-1f, 1f);
+            _vertexWobblePhase[i]  = Random.Range(0f, Mathf.PI * 2f);
+        }
+    }
+
+    static Vector2[] SubdivideShape(Vector2[] src, int subN)
+    {
+        if (src == null || subN <= 0) return src;
+        var result = new List<Vector2>(src.Length * (subN + 1));
+        int count = src.Length;
+        for (int i = 0; i < count; i++)
+        {
+            Vector2 a = src[i];
+            Vector2 b = src[(i + 1) % count];
+            result.Add(a);
+            for (int k = 1; k <= subN; k++)
+            {
+                float t = k / (float)(subN + 1);
+                result.Add(Vector2.Lerp(a, b, t));
+            }
+        }
+        return result.ToArray();
     }
 
     // Rotate a 2D vector by degrees (counter-clockwise).

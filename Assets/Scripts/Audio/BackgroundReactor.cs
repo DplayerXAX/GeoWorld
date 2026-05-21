@@ -58,13 +58,28 @@ public class BackgroundReactor : MonoBehaviour
     void Awake()
     {
         Instance = this;
-        if (skyboxMaterial == null)
-            skyboxMaterial = RenderSettings.skybox;
+
+        // Clone the skybox asset so runtime SetFloat() writes go to a
+        // throw-away instance and don't mark the project file dirty in git.
+        var source = skyboxMaterial != null ? skyboxMaterial : RenderSettings.skybox;
+        if (source != null)
+        {
+            skyboxMaterial = new Material(source) { name = source.name + " (runtime)" };
+            RenderSettings.skybox = skyboxMaterial;
+        }
 
         _targetIntensity = idleIntensity;
         _smoothIntensity = idleIntensity;
         _typeHue         = 0.62f;
         _targetTypeHue   = 0.62f;
+    }
+
+    void OnDestroy()
+    {
+        // Restore RenderSettings to the asset (if we replaced it) and free
+        // the runtime clone. Avoids growing leaked materials across reloads.
+        if (skyboxMaterial != null && skyboxMaterial.name.EndsWith(" (runtime)"))
+            Destroy(skyboxMaterial);
     }
 
     void Update()
