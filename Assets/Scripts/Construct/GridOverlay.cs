@@ -68,6 +68,10 @@ public class GridOverlay : MonoBehaviour
     void OnRenderObject()
     {
         if (!visible || !_mat || grid == null) return;
+        // OnRenderObject fires per-camera. Limit drawing to the main gameplay
+        // camera; otherwise the shop / skybox cameras project the same world
+        // coords through different matrices and we get ghost copies on screen.
+        if (Camera.current != Camera.main) return;
 
         _mat.SetPass(0);
         GL.PushMatrix();

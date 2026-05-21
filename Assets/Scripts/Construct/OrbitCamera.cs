@@ -8,7 +8,13 @@ public class OrbitCamera : MonoBehaviour
 
     [Range(-89f, 0f)] public float minPitch = -80f;
     [Range(0f, 89f)] public float maxPitch = 80f;
+    public bool useOrthographic = true;
 
+    [Header("Ortho")]
+    public float orthoSize = 5f;
+    public float orthoZoomSpeed = 2f;
+
+    public Vector3 orthoAngle = new Vector3(35f, 45f, 0f);
     private float yaw;
     private float pitch = 20f;
 
@@ -16,6 +22,8 @@ public class OrbitCamera : MonoBehaviour
     public Camera myCam;
     private Vector3 currentFocusPoint;
     private Transform desiredTarget;
+    private float targetDistance;
+    private float targetOrthoSize;
 
     public Vector3 FocusPoint => currentFocusPoint;
     public float   Yaw        => yaw;
@@ -38,6 +46,18 @@ public class OrbitCamera : MonoBehaviour
 
     void Start()
     {
+        pitch = orthoAngle.x;
+        if (myCam != null)
+        {
+            myCam.orthographic = useOrthographic;
+
+            if (useOrthographic)
+                myCam.orthographicSize = orthoSize;
+        }
+
+        targetDistance = distance;
+        targetOrthoSize = orthoSize;
+
         if (target != null)
         {
             desiredTarget = target;
@@ -47,7 +67,22 @@ public class OrbitCamera : MonoBehaviour
 
     public void AddDistance(float delta)
     {
-        distance = Mathf.Clamp(distance + delta, 2f, 40f);
+        if (useOrthographic)
+        {
+            targetOrthoSize = Mathf.Clamp(
+                targetOrthoSize + delta * 0.5f,
+                2f,
+                12f
+            );
+        }
+        else
+        {
+            targetDistance = Mathf.Clamp(
+                targetDistance + delta,
+                2f,
+                40f
+            );
+        }
     }
 
     public void SetFocus(Transform newTarget)
@@ -65,7 +100,23 @@ public class OrbitCamera : MonoBehaviour
 
     void LateUpdate()
     {
+        distance = Mathf.Lerp(
+    distance,
+    targetDistance,
+    1f - Mathf.Exp(-transitionSpeed * Time.deltaTime)
+);
+
+        orthoSize = Mathf.Lerp(
+            orthoSize,
+            targetOrthoSize,
+            1f - Mathf.Exp(-transitionSpeed * Time.deltaTime)
+        );
+        if (myCam != null && useOrthographic)
+        {
+            myCam.orthographicSize = orthoSize;
+        }
         if (desiredTarget == null) return;
+
 
         Vector3 focusGoal = desiredTarget.position + _panOffset;
 
@@ -75,14 +126,40 @@ public class OrbitCamera : MonoBehaviour
             1f - Mathf.Exp(-transitionSpeed * Time.deltaTime)
         );
 
-        if (Input.GetMouseButton(1))
+        if (!useOrthographic)
         {
-            yaw += Input.GetAxis("Mouse X") * speed * Time.deltaTime;
-            pitch -= Input.GetAxis("Mouse Y") * speed * Time.deltaTime;
-            pitch = Mathf.Clamp(pitch, minPitch, maxPitch);
+            if (Input.GetMouseButton(1))
+            {
+                yaw += Input.GetAxis("Mouse X") * speed * Time.deltaTime;
+                pitch -= Input.GetAxis("Mouse Y") * speed * Time.deltaTime;
+                pitch = Mathf.Clamp(pitch, minPitch, maxPitch);
+            }
+        }
+        else
+        {
+            if (Input.GetMouseButton(1))
+            {
+                yaw += Input.GetAxis("Mouse X") * speed * 0.3f * Time.deltaTime;
+
+                pitch -= Input.GetAxis("Mouse Y") * speed * 0.2f * Time.deltaTime;
+                pitch = Mathf.Clamp(pitch, 10f, 80f);
+            }
+        }
+        Quaternion rot;
+
+        if (useOrthographic)
+        {
+            rot = Quaternion.Euler(
+     pitch,
+     yaw + orthoAngle.y,
+     0
+ );
+        }
+        else
+        {
+            rot = Quaternion.Euler(pitch, yaw, 0);
         }
 
-        Quaternion rot = Quaternion.Euler(pitch, yaw, 0);
         Vector3 offset = rot * new Vector3(0, 0, -distance);
         Vector3 desiredPos = currentFocusPoint + offset;
 

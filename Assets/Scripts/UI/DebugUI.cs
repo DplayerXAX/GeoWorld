@@ -10,9 +10,14 @@ public class DebugUI : MonoBehaviour
     public int   panelX     = 12;
     public int   panelY     = 12;
     public int   panelW     = 260;
-    public KeyCode toggleKey = KeyCode.F1;   // hide/show the whole panel
+    [Tooltip("Hide / show the debug overlay. Default is backtick (`) — classic dev-console key, doesn't clash with DevPanel's F1.")]
+    public KeyCode toggleKey      = KeyCode.BackQuote;
+    [Tooltip("Initial visibility. Uncheck if you want a clean game view on play.")]
+    public bool    visibleOnStart = true;
 
-    bool _visible = true;
+    bool _visible;
+
+    void Awake() => _visible = visibleOnStart;
 
     // ── Shared styles (built once in OnGUI) ──────────────────────────────────
     GUIStyle _header;
