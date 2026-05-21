@@ -1,2 +1,18 @@
 fileFormatVersion: 2
 guid: 8e3daee3d81054d4899f7e35a1d8d790
+MonoImporter:
+  externalObjects: {}
+  serializedVersion: 2
+  defaultReferences:
+  - grid: {instanceID: 0}
+  - currentBlock: {instanceID: 0}
+  - cubePrefab: {instanceID: 0}
+  - bulletPrefab: {fileID: 8955231615845520475, guid: 26551841770b5d34aa116e104d9614b6, type: 3}
+  - previewParent: {instanceID: 0}
+  - cam: {instanceID: 0}
+  - trayAnchor: {instanceID: 0}
+  executionOrder: 0
+  icon: {instanceID: 0}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
