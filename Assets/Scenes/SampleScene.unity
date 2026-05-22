@@ -531,6 +531,8 @@ MonoBehaviour:
   orthoSize: 5
   orthoZoomSpeed: 2
   orthoAngle: {x: 35, y: 45, z: 0}
+  projectionToggleKey: 289
+  perspectiveFov: 50
   transitionSpeed: 15
   myCam: {fileID: 330585545}
 --- !u!114 &330585549
@@ -1003,6 +1005,10 @@ MonoBehaviour:
   phase: 0
   runsPerEndpoint: 3
   maxLoopLayers: 5
+  waveGenerator: {fileID: 11400000, guid: e3dc511478ca59243959270e939be5ed, type: 2}
+  runSeed: 0
+  waves: []
+  loopWaves: 0
   scanBeats: 8
   scanFlashBrightness: 0.7
 --- !u!4 &653921581

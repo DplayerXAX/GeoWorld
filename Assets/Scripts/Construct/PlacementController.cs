@@ -115,7 +115,7 @@ public class PlacementController : MonoBehaviour
         editFocusAnchor = new GameObject("EditFocusAnchor").transform;
     }
 
-    void ShowPlacementPopup(string msg, float duration = 1.5f)
+    public void ShowPlacementPopup(string msg, float duration = 1.5f)
     {
         if (string.IsNullOrEmpty(msg)) return;
         _popupMsg      = msg;

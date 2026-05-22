@@ -7,7 +7,7 @@ public class EnemyBaseManager : MonoBehaviour
 {
     public static EnemyBaseManager Instance;
 
-    [Header("Wave")]
+    [Header("Wave (fallback when no WaveDefinition is supplied)")]
     public EnemySurfaceUnit enemyPrefab;
     public int spawnCount = 3;
     public float spawnInterval = 0.75f;
@@ -15,6 +15,9 @@ public class EnemyBaseManager : MonoBehaviour
     // Fired once when the last enemy is gone AND spawning has finished.
     // GameFlowManager listens to know when to transition back to Build.
     public event Action OnWaveCompleted;
+
+    IList<SpawnGroup> _currentGroups;
+    int _spawnTotal;
 
     [Header("Enemy Pacing")]
     public bool useSurfaceUnitTempo = true;
@@ -24,7 +27,7 @@ public class EnemyBaseManager : MonoBehaviour
     public bool WaveActive => _waveActive;
     public int ActiveEnemyCount => _activeEnemies.Count;
     public int SpawnedCount => _spawnedCount;
-    public int TargetSpawnCount => spawnCount;
+    public int TargetSpawnCount => _spawnTotal > 0 ? _spawnTotal : spawnCount;
 
     readonly List<EnemySurfaceUnit> _activeEnemies = new();
     Coroutine _spawnRoutine;
@@ -38,6 +41,9 @@ public class EnemyBaseManager : MonoBehaviour
     }
 
     public void BeginWave(List<FaceNode> path, SurfaceUnit tempoSource = null /* legacy */)
+        => BeginWave(path, (IList<SpawnGroup>)null, tempoSource);
+
+    public void BeginWave(List<FaceNode> path, IList<SpawnGroup> groups, SurfaceUnit tempoSource = null)
     {
         if (path == null || path.Count == 0)
         {
@@ -47,9 +53,12 @@ public class EnemyBaseManager : MonoBehaviour
 
         CancelWave();
 
-        _currentPath = new List<FaceNode>(path);
-        _spawnedCount = 0;
-        _waveActive = true;
+        _currentPath   = new List<FaceNode>(path);
+        _currentGroups = groups;
+        _spawnedCount  = 0;
+        _spawnTotal    = CountSpawns(groups);
+        if (_spawnTotal == 0) _spawnTotal = Mathf.Max(0, spawnCount);  // fall back to legacy
+        _waveActive    = true;
 
         if (useSurfaceUnitTempo && tempoSource != null)
         {
@@ -58,6 +67,15 @@ public class EnemyBaseManager : MonoBehaviour
         }
 
         _spawnRoutine = StartCoroutine(SpawnWave());
+    }
+
+    static int CountSpawns(IList<SpawnGroup> groups)
+    {
+        if (groups == null) return 0;
+        int total = 0;
+        for (int i = 0; i < groups.Count; i++)
+            if (groups[i] != null) total += Mathf.Max(0, groups[i].count);
+        return total;
     }
 
     public void CancelWave()
@@ -73,37 +91,73 @@ public class EnemyBaseManager : MonoBehaviour
                 Destroy(enemy.gameObject);
 
         _activeEnemies.Clear();
-        _currentPath = null;
-        _waveActive = false;
+        _currentPath   = null;
+        _currentGroups = null;
+        _spawnTotal    = 0;
+        _waveActive    = false;
     }
 
     IEnumerator SpawnWave()
     {
-        int count = Mathf.Max(0, spawnCount);
-        float delay = Mathf.Max(0f, spawnInterval);
-
-        while (_spawnedCount < count && _waveActive)
+        if (_currentGroups != null && _currentGroups.Count > 0)
         {
-            SpawnEnemy();
-            _spawnedCount++;
+            foreach (var group in _currentGroups)
+            {
+                if (!_waveActive) yield break;
+                if (group == null) continue;
 
-            if (_spawnedCount < count && delay > 0f)
-                yield return new WaitForSeconds(delay);
-            else
-                yield return null;
+                if (group.preDelay > 0f)
+                    yield return new WaitForSeconds(group.preDelay);
+
+                int n     = Mathf.Max(0, group.count);
+                float dly = Mathf.Max(0f, group.interval);
+
+                for (int i = 0; i < n; i++)
+                {
+                    if (!_waveActive) yield break;
+
+                    SpawnEnemy(group.prefab);
+                    _spawnedCount++;
+
+                    bool last = (i == n - 1);
+                    if (!last && dly > 0f)
+                        yield return new WaitForSeconds(dly);
+                    else
+                        yield return null;
+                }
+            }
+        }
+        else
+        {
+            // Legacy path: single homogeneous group using inspector fields.
+            int count = Mathf.Max(0, spawnCount);
+            float delay = Mathf.Max(0f, spawnInterval);
+
+            while (_spawnedCount < count && _waveActive)
+            {
+                SpawnEnemy(null);
+                _spawnedCount++;
+
+                if (_spawnedCount < count && delay > 0f)
+                    yield return new WaitForSeconds(delay);
+                else
+                    yield return null;
+            }
         }
 
         _spawnRoutine = null;
     }
 
-    void SpawnEnemy()
+    void SpawnEnemy(EnemySurfaceUnit prefabOverride)
     {
         if (_currentPath == null || _currentPath.Count == 0) return;
 
+        EnemySurfaceUnit source = prefabOverride != null ? prefabOverride : enemyPrefab;
+
         EnemySurfaceUnit enemy;
-        if (enemyPrefab != null)
+        if (source != null)
         {
-            enemy = Instantiate(enemyPrefab);
+            enemy = Instantiate(source);
         }
         else
         {
@@ -169,7 +223,7 @@ public class EnemyBaseManager : MonoBehaviour
         if (destroy)
             Destroy(enemy.gameObject);
 
-        if (_spawnRoutine == null && _activeEnemies.Count == 0 && _spawnedCount >= Mathf.Max(0, spawnCount))
+        if (_spawnRoutine == null && _activeEnemies.Count == 0 && _spawnedCount >= _spawnTotal)
         {
             if (_waveActive)
             {
