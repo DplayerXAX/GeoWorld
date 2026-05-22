@@ -45,13 +45,19 @@ public class SurfaceUnitVisual : MonoBehaviour
     [Header("Glow")]
     public float  glowIntensity   = 1.5f;
 
+    [Header("Dark Mode (black abstract — for enemies)")]
+    [Tooltip("If true, primitives use the SilkscreenCube shader instead of UnitGlow — opaque dark surfaces with painted texture instead of additive glow.")]
+    public bool darkMode = false;
+
     // ── internals ─────────────────────────────────────────────────────────
     Shader    _glow;
+    Shader    _silk;
     Transform _body;
 
     void Start()
     {
         _glow = Shader.Find("Custom/UnitGlow");
+        _silk = Shader.Find("GeoWorld/SilkscreenCube");
 
         _body = new GameObject("Body").transform;
         _body.SetParent(transform, false);
@@ -135,14 +141,21 @@ public class SurfaceUnitVisual : MonoBehaviour
         var col3D = obj.GetComponent<Collider>();
         if (col3D) Destroy(col3D);
 
-        if (_glow != null)
+        var rend = obj.GetComponent<MeshRenderer>();
+        if (darkMode && _silk != null)
+        {
+            // Opaque painted shader — colours render as solid dark surfaces.
+            rend.sharedMaterial = new Material(_silk);
+            MpbColor.Set(rend, col);
+        }
+        else if (_glow != null)
         {
             var mat = new Material(_glow);
             mat.SetColor("_Color",      col);
             mat.SetFloat("_Intensity",  intensity);
             mat.SetFloat("_PulseSpeed", pulseHz);
             mat.SetFloat("_PulseDepth", pulseDepth);
-            obj.GetComponent<MeshRenderer>().material = mat;
+            rend.material = mat;
         }
 
         return obj;
