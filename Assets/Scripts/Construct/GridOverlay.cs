@@ -11,10 +11,9 @@ public class GridOverlay : MonoBehaviour
     public OrbitCamera cam;
 
     [Header("Range (in cells, around focus)")]
-    [Range(1, 20)] public int radiusXZ = 3;
-    [Range(1, 10)] public int radiusY  = 2;
+    [Range(1, 20)] public int radiusXZ = 8;
     [Tooltip("Fraction of the radius at which dashes start fading. 0 = fade from the centre, 1 = fade only at the edge.")]
-    [Range(0f, 1f)] public float fadeStartPct = 0.35f;
+    [Range(0f, 1f)] public float fadeStartPct = 0.4f;
 
     [Header("颜色")]
     public Color lineColor      = new(0.35f, 0.88f, 1.00f, 0.45f);
@@ -25,8 +24,6 @@ public class GridOverlay : MonoBehaviour
     [Range(0.02f, 0.5f)] public float gapLen  = 0.12f;
 
     [Header("显示")]
-    public bool showXZ = true;
-    public bool showY  = true;
     public bool showCursor = true;
     public bool visible    = true;
 
@@ -48,6 +45,19 @@ public class GridOverlay : MonoBehaviour
         _mat.SetInt("_ZTest",    (int)CompareFunction.LessEqual);
     }
 
+    void OnEnable()
+    {
+        // URP RenderGraph no longer invokes legacy OnRenderObject reliably.
+        // Subscribe to URP's end-camera event instead — fires once per active
+        // camera in both Compatibility and RenderGraph modes.
+        RenderPipelineManager.endCameraRendering += OnEndCameraRendering;
+    }
+
+    void OnDisable()
+    {
+        RenderPipelineManager.endCameraRendering -= OnEndCameraRendering;
+    }
+
     void OnDestroy() { if (_mat) DestroyImmediate(_mat); }
 
     void Update()
@@ -65,13 +75,17 @@ public class GridOverlay : MonoBehaviour
         return Vector3.zero;
     }
 
-    void OnRenderObject()
+    void OnEndCameraRendering(ScriptableRenderContext ctx, Camera cam)
     {
         if (!visible || !_mat || grid == null) return;
-        // OnRenderObject fires per-camera. Limit drawing to the main gameplay
-        // camera; otherwise the shop / skybox cameras project the same world
-        // coords through different matrices and we get ghost copies on screen.
-        if (Camera.current != Camera.main) return;
+
+        // Filter out helper cameras so we only draw on the gameplay screen view:
+        //   - Skip non-Game cameras (Scene preview, RT cams).
+        //   - Skip the perspective skybox child (cullingMask == 0).
+        //   - Skip cameras that render to off-screen RTs (Shop).
+        if (cam.cameraType   != CameraType.Game) return;
+        if (cam.targetTexture != null)            return;
+        if (cam.cullingMask  == 0)                return;
 
         _mat.SetPass(0);
         GL.PushMatrix();
@@ -81,45 +95,37 @@ public class GridOverlay : MonoBehaviour
         Vector3 focus = GetFocus();
         Vector3Int focusCell = grid.WorldToGrid(focus);
 
+        // Single horizontal plane at the cursor's Y (or focus Y if no cursor).
+        // Reads cleanly under the ortho iso projection — no 3D lattice clutter.
+        int planeY = placement != null ? placement.SnappedGridPos.y : focusCell.y;
+
         int xMin = focusCell.x - radiusXZ;
         int xMax = focusCell.x + radiusXZ + 1;
-        int yMin = focusCell.y - radiusY;
-        int yMax = focusCell.y + radiusY + 1;
         int zMin = focusCell.z - radiusXZ;
         int zMax = focusCell.z + radiusXZ + 1;
 
-        float fadeEnd   = Mathf.Max(radiusXZ, radiusY) * cs;
+        float fadeEnd   = radiusXZ * cs;
         float fadeStart = fadeEnd * Mathf.Clamp01(fadeStartPct);
 
         GL.Begin(GL.LINES);
 
-        if (showXZ)
-        {
-            for (int yi = yMin; yi <= yMax; yi++)
-            for (int zi = zMin; zi <= zMax; zi++)
-                Dash(new Vector3(xMin*cs, yi*cs, zi*cs),
-                     new Vector3(xMax*cs, yi*cs, zi*cs),
-                     focus, fadeStart, fadeEnd);
+        // X-direction lines (run along world X)
+        for (int zi = zMin; zi <= zMax; zi++)
+            Dash(new Vector3(xMin * cs, planeY * cs, zi * cs),
+                 new Vector3(xMax * cs, planeY * cs, zi * cs),
+                 focus, fadeStart, fadeEnd);
 
-            for (int xi = xMin; xi <= xMax; xi++)
-            for (int yi = yMin; yi <= yMax; yi++)
-                Dash(new Vector3(xi*cs, yi*cs, zMin*cs),
-                     new Vector3(xi*cs, yi*cs, zMax*cs),
-                     focus, fadeStart, fadeEnd);
-        }
-
-        if (showY)
-        {
-            for (int xi = xMin; xi <= xMax; xi++)
-            for (int zi = zMin; zi <= zMax; zi++)
-                Dash(new Vector3(xi*cs, yMin*cs, zi*cs),
-                     new Vector3(xi*cs, yMax*cs, zi*cs),
-                     focus, fadeStart, fadeEnd);
-        }
+        // Z-direction lines (run along world Z)
+        for (int xi = xMin; xi <= xMax; xi++)
+            Dash(new Vector3(xi * cs, planeY * cs, zMin * cs),
+                 new Vector3(xi * cs, planeY * cs, zMax * cs),
+                 focus, fadeStart, fadeEnd);
 
         GL.End();
 
-        if (showCursor && placement != null)
+        // Cursor box only while actively placing — hiding it in Select keeps
+        // the view clean when the player is just looking around.
+        if (showCursor && placement != null && placement.mode == PlacementMode.Edit)
             DrawCursorBox(placement.SnappedGridPos, cs);
 
         GL.PopMatrix();
