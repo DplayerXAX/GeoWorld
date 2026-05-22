@@ -123,7 +123,9 @@ public class GridOverlay : MonoBehaviour
 
         GL.End();
 
-        if (showCursor && placement != null)
+        // Cursor box only while actively placing — hiding it in Select keeps
+        // the view clean when the player is just looking around.
+        if (showCursor && placement != null && placement.mode == PlacementMode.Edit)
             DrawCursorBox(placement.SnappedGridPos, cs);
 
         GL.PopMatrix();

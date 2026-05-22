@@ -22,6 +22,11 @@ public class SurfaceGraphBuilder
         {
             if (!kv.Value) continue;
 
+            // Turrets are obstacles, not walkable. Their cells stay occupied
+            // (so paths can't pass through), but we skip generating face nodes
+            // for them — the unit can't walk onto a turret's surface.
+            if (IsTurretCell(kv.Key)) continue;
+
             var allCellFaces = FaceBuilder.BuildFaces(kv.Key, gridSystem.cellSize);
             var exposedFaces = new List<FaceNode>();
 
@@ -40,6 +45,12 @@ public class SurfaceGraphBuilder
         }
 
         BuildNeighbors();
+    }
+
+    bool IsTurretCell(Vector3Int cell)
+    {
+        var ins = gridSystem.GetInstanceAt(cell);
+        return ins?.data != null && ins.data.blockType == BlockType.Turret;
     }
 
     // Locality-based O(V × ~12) instead of O(V²). For each face check:

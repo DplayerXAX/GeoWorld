@@ -173,10 +173,24 @@ MonoBehaviour:
   scrollSpeed: 3
   rotateSpeed: 10
   panSpeed: 8
+  blockPalette:
+  - {r: 0.85, g: 0.18, b: 0.12, a: 1}
+  - {r: 0.1, g: 0.2, b: 0.65, a: 1}
+  - {r: 0.95, g: 0.75, b: 0.1, a: 1}
+  - {r: 0.1, g: 0.5, b: 0.3, a: 1}
+  - {r: 0.1, g: 0.1, b: 0.14, a: 1}
+  - {r: 0.92, g: 0.9, b: 0.84, a: 1}
+  turretPalette:
+  - {r: 0.25, g: 0.85, b: 0.95, a: 1}
+  - {r: 0.4, g: 0.6, b: 1, a: 1}
+  - {r: 0.55, g: 0.3, b: 0.9, a: 1}
+  - {r: 0.92, g: 0.9, b: 0.84, a: 1}
   trayAnchor: {fileID: 0}
   trayLocalOffset: {x: 4, y: -2.5, z: 6}
   traySpacing: 1.5
   trayBlockScale: 0.4
+  _buildY: 0
+  buildYRange: {x: 0, y: 20}
 --- !u!4 &164805053
 Transform:
   m_ObjectHideFlags: 0
@@ -657,7 +671,7 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 344404549}
   serializedVersion: 2
-  m_LocalRotation: {x: -0, y: -0, z: -0.017452674, w: 0.9998477}
+  m_LocalRotation: {x: -0, y: -0, z: -0.11320538, w: 0.99357164}
   m_LocalPosition: {x: -99, y: -99, z: -99}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
@@ -824,14 +838,11 @@ MonoBehaviour:
   placement: {fileID: 164805052}
   cam: {fileID: 330585548}
   radiusXZ: 3
-  radiusY: 2
   fadeStartPct: 0.35
   lineColor: {r: 0.35, g: 0.88, b: 1, a: 0.45}
   highlightColor: {r: 0, g: 0.9, b: 1, a: 0.7}
   dashLen: 0.16
   gapLen: 0.13
-  showXZ: 1
-  showY: 1
   showCursor: 1
   visible: 1
   toggleKey: 103
@@ -1861,14 +1872,16 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::ShopController
   shopCam: {fileID: 344404552}
   cameraOffsetSmall: {x: 0, y: 4, z: -10}
-  cameraOffsetLarge: {x: 0, y: 7, z: -12}
-  riftScreenPos: {x: 0.2, y: 0.8}
+  cameraOffsetLarge: {x: 0, y: 7, z: -6.5}
+  riftScreenPos: {x: 0.5, y: 1}
+  riftWidth: 0.92
   riftHeight: 0.46
+  screenEdgeMargin: 0
   riftHintScale: 0.22
   expandSpeed: 9
   shopToggleKey: 102
   shopCenter: {x: -99, y: -99, z: -99}
-  blockSpacing: 2.8
+  blockSpacing: 3
   blockRowOffset: {x: 0, y: 1.6, z: 0}
   turretRowOffset: {x: 0, y: -1.6, z: 0}
   driftAmplitude: {x: 0.18, y: 0.2, z: 0.15}
@@ -1881,11 +1894,11 @@ MonoBehaviour:
   shopLightIntensity: 3.5
   shopLightRange: 18
   innerVignetteStrength: 0.378
-  shapePreset: 1
-  openSpinDegrees: 60
+  shapePreset: 0
+  openSpinDegrees: 0
   riftSprite: {fileID: 0}
-  riftRotationDeg: 90
-  rtWidth: 512
+  riftRotationDeg: 0
+  rtWidth: 2048
   rtHeight: 1024
   riftEdgeColor: {r: 1, g: 0.8, b: 0.18, a: 1}
   riftGlowColor: {r: 1, g: 0.55, b: 0.05, a: 0.1}
@@ -1900,9 +1913,9 @@ MonoBehaviour:
   sparkleCount: 32
   sparkleRadius: 1.35
   sparkleTwinkleSpeed: 1.3
-  crackJaggedness: 0.15
-  crackWobbleSpeed: 0.3
-  crackSubdivision: 2
+  crackJaggedness: 0
+  crackWobbleSpeed: 0
+  crackSubdivision: 0
   hoverScale: 1.18
   hoverLerpSpeed: 8
   tooltipBg: {r: 0.04, g: 0.04, b: 0.08, a: 0.9}
@@ -1937,6 +1950,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 9adabea468bfc8b44a6adea1699b493e, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ShopBackdrop
+  enabled: 0
   backDistance: 9
   quadSize: {x: 28, y: 18}
   paletteA: {r: 0.6, g: 0.3, b: 0.8, a: 1}

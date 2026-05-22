@@ -18,6 +18,26 @@ public class PlacementController : MonoBehaviour
     public float minDepth = 2f, maxDepth = 40f, scrollSpeed = 3f, rotateSpeed = 10f;
     public float panSpeed = 8f;
 
+    [Header("Cube Palette (Constructivism)")]
+    [Tooltip("Block-type cubes pick a random colour from this palette. Strong saturated reds / yellows / blues / blacks read clearly against a textured skybox.")]
+    public Color[] blockPalette = new[]
+    {
+        new Color(0.85f, 0.18f, 0.12f),  // red
+        new Color(0.10f, 0.20f, 0.65f),  // deep blue
+        new Color(0.95f, 0.75f, 0.10f),  // yellow
+        new Color(0.10f, 0.50f, 0.30f),  // green
+        new Color(0.10f, 0.10f, 0.14f),  // near-black
+        new Color(0.92f, 0.90f, 0.84f),  // cream
+    };
+    [Tooltip("Turret cubes pick from this cooler palette so they read as a different family.")]
+    public Color[] turretPalette = new[]
+    {
+        new Color(0.25f, 0.85f, 0.95f),  // cyan
+        new Color(0.40f, 0.60f, 1.00f),  // sky blue
+        new Color(0.55f, 0.30f, 0.90f),  // violet
+        new Color(0.92f, 0.90f, 0.84f),  // cream
+    };
+
     [Header("Tray")]
     // If assigned, tray blocks spawn parented to this transform (use a scene
     // pivot so the tray sits in a fixed world location). If null, the tray
@@ -1467,6 +1487,12 @@ public class PlacementController : MonoBehaviour
         var rend = marker.GetComponent<Renderer>();
         if (rend != null)
         {
+            // Use the same material asset as cubePrefab so beacons share the
+            // silkscreen shader. (Primitives spawn with URP Lit by default.)
+            var prefabRend = cubePrefab != null ? cubePrefab.GetComponentInChildren<Renderer>() : null;
+            if (prefabRend != null && prefabRend.sharedMaterial != null)
+                rend.sharedMaterial = prefabRend.sharedMaterial;
+
             MpbColor.Set(rend, new Color(0.45f, 0.95f, 1.00f));
             rend.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
         }
@@ -1492,8 +1518,19 @@ public class PlacementController : MonoBehaviour
         _ => 0,
     };
 
-    Color GetRandomColor() =>
-        Random.ColorHSV(0f, 1f, 0.6f, 1f, 0.7f, 1f);
+    // Public palette picker — used by ShopController so block/turret items share
+    // the same colour vocabulary as placed blocks.
+    public Color PickPaletteColor(BlockType type)
+    {
+        var pal = (type == BlockType.Turret) ? turretPalette : blockPalette;
+        if (pal == null || pal.Length == 0) return Color.white;
+        return pal[Random.Range(0, pal.Length)];
+    }
+
+    // Fallback only — most code paths read the colour from the shop item the
+    // player picked up. Kept consistent with the palette so any path produces
+    // an in-vocabulary colour.
+    Color GetRandomColor() => PickPaletteColor(BlockType.Home);
 
     // Switches the renderer's instanced material to alpha-blend transparent mode.
     // Handles URP Lit/Unlit (_Surface property) and Built-in Standard (_Mode).

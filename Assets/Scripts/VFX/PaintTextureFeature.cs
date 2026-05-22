@@ -12,31 +12,35 @@ public class PaintTextureFeature : ScriptableRendererFeature
     [System.Serializable]
     public class Settings
     {
-        // BeforeRenderingPostProcessing — runs after skybox+geometry, before
-        // post-FX. Outline runs LATER (AfterRenderingPostProcessing) so the
-        // black lines are not smeared by this pass's jitter.
         public RenderPassEvent renderEvent = RenderPassEvent.BeforeRenderingPostProcessing;
 
-        [Header("Stroke smear (along brush direction only)")]
-        [Tooltip("Pixel offset along the stroke axis. Perpendicular boundaries stay crisp.")]
-        [Range(0f, 6f)] public float strokeJitter   = 1.4f;
-        public float                 jitterFrequency = 320f;
+        [Header("Flow field — large-scale wet-pigment warping")]
+        [Tooltip("Lower = bigger, more sweeping colour regions. Higher = tighter swirls.")]
+        [Range(0.3f, 20f)] public float flowScale       = 3f;
+        [Tooltip("How far colours get pushed (in pixels).")]
+        [Range(0f, 80f)]   public float flowStrength    = 28f;
+        [Range(1, 6)]      public int   flowOctaves     = 4;
+        [Tooltip("0 = pure fbm. >0 = swirls/curls — fluid-like motion.")]
+        [Range(0f, 1.5f)]  public float flowDomainWarp  = 0.7f;
+        [Tooltip("Slow animated drift. 0 = static painting.")]
+        [Range(0f, 0.5f)]  public float flowTimeSpeed   = 0.03f;
 
-        [Header("Brush strokes (visible on flat areas like skybox)")]
-        [Range(0f, 1f)] public float brushStrength = 0.35f;
-        [Tooltip("Higher = smaller, more numerous strokes.")]
-        public float                 brushScale    = 18f;
-        [Tooltip("Stroke direction in degrees.")]
-        [Range(-180f, 180f)] public float brushAngle = 35f;
-        [Tooltip("Per-stroke colour shift (channel-asymmetric). 0 = brightness only.")]
-        [Range(0f, 1f)] public float brushTint     = 0.30f;
+        [Header("Brush layer")]
+        [Range(0f, 1f)]      public float brushStrength = 0.30f;
+        public float                       brushScale   = 12f;
+        [Range(-180f, 180f)] public float brushAngle    = 35f;
+        [Range(0f, 1f)]      public float brushTint     = 0.30f;
 
-        [Header("Canvas grain")]
-        [Range(0f, 1f)] public float grainStrength   = 0.18f;
-        public float                 grainFrequency  = 900f;
+        [Header("Flatten into colour patches")]
+        [Range(2f, 32f)] public float posterizeLevels = 14f;
+        [Range(0f, 1f)]  public float posterizeMix    = 0.35f;
+
+        [Header("Grain")]
+        [Range(0f, 0.3f)] public float grainStrength  = 0.08f;
+        public float                    grainFrequency = 1200f;
 
         [Header("Palette")]
-        [Range(0.5f, 2f)] public float saturation = 1.18f;
+        [Range(0.5f, 2f)] public float saturation = 1.20f;
         [Range(0.5f, 2f)] public float contrast   = 1.08f;
     }
 
@@ -166,14 +170,23 @@ public class PaintTextureFeature : ScriptableRendererFeature
 
         void UpdateMaterial()
         {
-            _mat.SetFloat("_StrokeJitter",    _settings.strokeJitter);
-            _mat.SetFloat("_JitterFrequency", _settings.jitterFrequency);
+            _mat.SetFloat("_FlowScale",       _settings.flowScale);
+            _mat.SetFloat("_FlowStrength",    _settings.flowStrength);
+            _mat.SetFloat("_FlowOctaves",     _settings.flowOctaves);
+            _mat.SetFloat("_FlowDomainWarp",  _settings.flowDomainWarp);
+            _mat.SetFloat("_FlowTimeSpeed",   _settings.flowTimeSpeed);
+
             _mat.SetFloat("_BrushStrength",   _settings.brushStrength);
             _mat.SetFloat("_BrushScale",      _settings.brushScale);
             _mat.SetFloat("_BrushAngle",      _settings.brushAngle);
             _mat.SetFloat("_BrushTint",       _settings.brushTint);
+
+            _mat.SetFloat("_PosterizeLevels", _settings.posterizeLevels);
+            _mat.SetFloat("_PosterizeMix",    _settings.posterizeMix);
+
             _mat.SetFloat("_GrainStrength",   _settings.grainStrength);
             _mat.SetFloat("_GrainFrequency",  _settings.grainFrequency);
+
             _mat.SetFloat("_Saturation",      _settings.saturation);
             _mat.SetFloat("_Contrast",        _settings.contrast);
         }

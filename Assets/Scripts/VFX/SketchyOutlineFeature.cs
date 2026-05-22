@@ -14,23 +14,28 @@ public class SketchyOutlineFeature : ScriptableRendererFeature
     [System.Serializable]
     public class Settings
     {
-        // Run AFTER paint pass so the crisp black lines aren't smeared by jitter.
         public RenderPassEvent renderEvent = RenderPassEvent.AfterRenderingPostProcessing;
 
         [Header("Outline shape")]
-        [Range(0.5f, 4f)]  public float thickness        = 1.5f;
-        public Color outlineColor                        = Color.black;
-        [Range(0f, 1f)]    public float outlineOpacity   = 1f;
+        [Range(0.5f, 5f)] public float thickness        = 1.8f;
+        public Color                    outlineColor    = Color.black;
+        [Range(0f, 1f)]   public float  outlineOpacity  = 1f;
 
         [Header("Edge detection sensitivity")]
-        [Range(0f, 5f)]    public float depthThreshold   = 0.5f;
-        [Range(0f, 1f)]    public float normalThreshold  = 0.4f;
+        [Range(0f, 5f)]   public float depthThreshold   = 0.5f;
+        [Range(0f, 1f)]   public float normalThreshold  = 0.4f;
 
-        [Header("Sketchiness")]
-        [Tooltip("UV jitter amount — higher = more 'hand-drawn' wobble.")]
-        [Range(0f, 3f)]    public float noiseStrength    = 0.6f;
-        [Tooltip("Hash frequency for the UV jitter.")]
-        public float                    noiseFrequency   = 480f;
+        [Header("Charcoal feel")]
+        [Tooltip("Edge-detection sample displacement (px). Line doesn't sit perfectly on geometry.")]
+        [Range(0f, 5f)]   public float sampleJitter        = 1.4f;
+        [Tooltip("Lower = larger broken chunks. Higher = finer dropout.")]
+        public float                    dropoutScale       = 7f;
+        [Tooltip("Higher = more of the outline disappears.")]
+        [Range(0f, 1f)]   public float dropoutThreshold   = 0.45f;
+        public float                    thicknessNoiseScale = 4f;
+        [Range(0f, 1f)]   public float thicknessVariation = 0.7f;
+        public float                    offsetNoiseScale   = 3f;
+        [Range(0f, 4f)]   public float offsetAmount       = 1.2f;
     }
 
     public Settings settings = new Settings();
@@ -167,13 +172,19 @@ public class SketchyOutlineFeature : ScriptableRendererFeature
 
         void UpdateMaterial()
         {
-            _mat.SetFloat("_Thickness",       _settings.thickness);
-            _mat.SetColor("_OutlineColor",    _settings.outlineColor);
-            _mat.SetFloat("_DepthThreshold",  _settings.depthThreshold);
-            _mat.SetFloat("_NormalThreshold", _settings.normalThreshold);
-            _mat.SetFloat("_NoiseStrength",   _settings.noiseStrength);
-            _mat.SetFloat("_NoiseFrequency",  _settings.noiseFrequency);
-            _mat.SetFloat("_OutlineOpacity",  _settings.outlineOpacity);
+            _mat.SetFloat("_Thickness",           _settings.thickness);
+            _mat.SetColor("_OutlineColor",        _settings.outlineColor);
+            _mat.SetFloat("_DepthThreshold",      _settings.depthThreshold);
+            _mat.SetFloat("_NormalThreshold",     _settings.normalThreshold);
+            _mat.SetFloat("_OutlineOpacity",      _settings.outlineOpacity);
+
+            _mat.SetFloat("_SampleJitter",        _settings.sampleJitter);
+            _mat.SetFloat("_DropoutScale",        _settings.dropoutScale);
+            _mat.SetFloat("_DropoutThreshold",    _settings.dropoutThreshold);
+            _mat.SetFloat("_ThicknessNoiseScale", _settings.thicknessNoiseScale);
+            _mat.SetFloat("_ThicknessVariation",  _settings.thicknessVariation);
+            _mat.SetFloat("_OffsetNoiseScale",    _settings.offsetNoiseScale);
+            _mat.SetFloat("_OffsetAmount",        _settings.offsetAmount);
         }
 
         public void Dispose()

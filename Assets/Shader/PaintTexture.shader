@@ -1,42 +1,45 @@
 Shader "GeoWorld/PaintTexture"
 {
-    // Fullscreen "oil paint" overlay:
-    //   1) Per-pixel hash-driven UV jitter → adjacent colours smear into each
-    //      other at boundaries (gives the "wet paint" feel at edges).
-    //   2) Multiplicative canvas grain → high-freq texture across the screen.
-    //   3) Optional saturation / contrast bump to enrich the palette.
+    // Abstract-painting post-process — replaces the original micro-jitter
+    // "filter" approach with a large-scale fBM flow field that warps colour
+    // regions into wet, gestural masses. Adds a directional brush layer
+    // and soft posterization to flatten the image into painted patches.
     Properties
     {
-        // Jitter is now directional (along stroke axis). Perpendicular
-        // boundaries stay crisp, parallel ones get the painted smear.
-        _StrokeJitter    ("Stroke Jitter (px)",  Range(0, 6))    = 1.4
-        _JitterFrequency ("Jitter Frequency",    Float)          = 320
+        [Header(Flow Field)]
+        _FlowScale       ("Flow Scale (low = huge regions)", Range(0.3, 20)) = 3.0
+        _FlowStrength    ("Flow Strength (px)",              Range(0, 80))   = 28
+        _FlowOctaves     ("Flow Octaves",                    Range(1, 6))    = 4
+        _FlowDomainWarp  ("Flow Domain-Warp Strength",       Range(0, 1.5))  = 0.7
+        _FlowTimeSpeed   ("Flow Time Speed",                 Range(0, 0.5))  = 0.03
 
-        _GrainStrength   ("Grain Strength",      Range(0, 1))    = 0.18
-        _GrainFrequency  ("Grain Frequency",     Float)          = 900
+        [Header(Brush)]
+        _BrushScale      ("Brush Scale",        Float)                       = 12
+        _BrushAngle      ("Brush Angle (deg)",  Range(-180, 180))            = 35
+        _BrushStrength   ("Brush Strength",     Range(0, 1))                 = 0.30
+        _BrushTint       ("Brush Tint",         Range(0, 1))                 = 0.30
 
-        _BrushStrength   ("Brush Stroke Strength", Range(0, 1))  = 0.35
-        _BrushScale      ("Brush Scale",         Float)          = 18
-        _BrushAngle      ("Brush Angle (deg)",   Range(-180,180))= 35
-        // Channel-asymmetric tint per brush patch → painted "color patch" feel
-        // inside flat regions (each stroke is a slightly different shade).
-        _BrushTint       ("Brush Tint Strength", Range(0, 1))    = 0.30
+        [Header(Flattening)]
+        _PosterizeLevels ("Posterize Levels",   Range(2, 32))                = 14
+        _PosterizeMix    ("Posterize Mix",      Range(0, 1))                 = 0.35
 
-        _Saturation      ("Saturation",          Range(0.5, 2))  = 1.18
-        _Contrast        ("Contrast",            Range(0.5, 2))  = 1.08
+        [Header(Grain)]
+        _GrainStrength   ("Grain Strength",     Range(0, 0.3))               = 0.08
+        _GrainFrequency  ("Grain Frequency",    Float)                       = 1200
+
+        [Header(Palette)]
+        _Saturation      ("Saturation",         Range(0.5, 2))               = 1.20
+        _Contrast        ("Contrast",           Range(0.5, 2))               = 1.08
     }
 
     SubShader
     {
         Tags { "RenderType" = "Opaque" "RenderPipeline" = "UniversalPipeline" }
-        Cull Off
-        ZWrite Off
-        ZTest Always
+        Cull Off ZWrite Off ZTest Always
 
         Pass
         {
             Name "PaintTexturePass"
-
             HLSLPROGRAM
             #pragma vertex   Vert
             #pragma fragment Frag
@@ -44,16 +47,11 @@ Shader "GeoWorld/PaintTexture"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
             #include "Packages/com.unity.render-pipelines.core/Runtime/Utilities/Blit.hlsl"
 
-            float _StrokeJitter;
-            float _JitterFrequency;
-            float _GrainStrength;
-            float _GrainFrequency;
-            float _BrushStrength;
-            float _BrushScale;
-            float _BrushAngle;
-            float _BrushTint;
-            float _Saturation;
-            float _Contrast;
+            float _FlowScale, _FlowStrength, _FlowOctaves, _FlowDomainWarp, _FlowTimeSpeed;
+            float _BrushScale, _BrushAngle, _BrushStrength, _BrushTint;
+            float _PosterizeLevels, _PosterizeMix;
+            float _GrainStrength, _GrainFrequency;
+            float _Saturation, _Contrast;
 
             float Hash21(float2 p)
             {
@@ -62,7 +60,6 @@ Shader "GeoWorld/PaintTexture"
                 return frac(p.x * p.y);
             }
 
-            // Smooth value-noise — bilinear interp of hash corners.
             float ValueNoise(float2 p)
             {
                 float2 i = floor(p);
@@ -75,22 +72,49 @@ Shader "GeoWorld/PaintTexture"
                 return lerp(lerp(a, b, u.x), lerp(c, d, u.x), u.y);
             }
 
-            // Directional, multi-octave noise that LOOKS like brush strokes.
-            // Visible on smooth gradients (skybox) — unlike pure UV jitter.
+            // Multi-octave fBM. 4 octaves by default → soft, low-freq variation.
+            float Fbm(float2 p)
+            {
+                float v = 0.0;
+                float a = 0.5;
+                int oct = (int)_FlowOctaves;
+                [unroll(6)]
+                for (int i = 0; i < oct; i++)
+                {
+                    v += a * ValueNoise(p);
+                    p *= 2.07;
+                    a *= 0.5;
+                }
+                return v;
+            }
+
+            // Two fBMs offset → produces a 2D flow direction.
+            // Domain warping (fbm-of-fbm) adds curling / vortex-like motion.
+            float2 FlowVector(float2 uv)
+            {
+                float2 p = uv * _FlowScale + _Time.y * _FlowTimeSpeed * float2(0.3, 0.11);
+
+                // Domain warp: shift p by another fbm pair, gives curl-ish feel.
+                float2 w = float2(Fbm(p + 5.2), Fbm(p + 17.3)) - 0.5;
+                p += w * _FlowDomainWarp;
+
+                float fx = Fbm(p);
+                float fy = Fbm(p + 31.7);
+                return float2(fx, fy) - 0.5;   // [-0.5, 0.5]
+            }
+
+            // Same directional brush layer as before, but driven by smoother fbm.
             float BrushPattern(float2 uv)
             {
-                float a = _BrushAngle * 0.01745329; // deg → rad
+                float a = _BrushAngle * 0.01745329;
                 float2 d = float2(cos(a), sin(a));
-                float2 p = float2(dot(uv, d), dot(uv, float2(-d.y, d.x)));
-                // Anisotropic scaling: thin & long strokes.
-                p.x *= 0.35;
-                p.y *= 1.8;
-                p *= _BrushScale;
+                float2 q = float2(dot(uv, d), dot(uv, float2(-d.y, d.x)));
+                q.x *= 0.35; q.y *= 1.8;
+                q *= _BrushScale;
 
-                float n  = ValueNoise(p) * 0.6;
-                n       += ValueNoise(p * 2.1 + 7.3) * 0.25;
-                n       += ValueNoise(p * 4.3 + 13.1) * 0.15;
-                return n;   // ~ 0..1
+                float n  = Fbm(q) * 0.7;
+                n       += Fbm(q * 2.3 + 7.1) * 0.3;
+                return saturate(n);
             }
 
             half4 Frag(Varyings IN) : SV_Target
@@ -98,40 +122,31 @@ Shader "GeoWorld/PaintTexture"
                 float2 uv = IN.texcoord;
                 float2 ts = _BlitTexture_TexelSize.xy;
 
-                float a = _BrushAngle * 0.01745329;
-                float2 strokeDir = float2(cos(a), sin(a));
+                // 1) FLOW FIELD — large-scale UV displacement.
+                // Colours get carried around like wet pigment.
+                float2 flow     = FlowVector(uv);
+                float2 warpedUV = uv + flow * _FlowStrength * ts;
 
-                // 1) Directional jitter — sampling moves ALONG the stroke axis
-                //    only. Boundaries perpendicular to strokes (most cube edges)
-                //    stay crisp; boundaries parallel to strokes get painted bleed.
-                float h = Hash21(uv * _JitterFrequency) - 0.5;
-                float2 jitter = strokeDir * h * _StrokeJitter * ts.y;
-                half3 col = SAMPLE_TEXTURE2D(_BlitTexture, sampler_LinearClamp, uv + jitter).rgb;
+                half3 col = SAMPLE_TEXTURE2D(_BlitTexture, sampler_LinearClamp, warpedUV).rgb;
 
-                // 2) Brush pattern drives BOTH brightness and a small per-channel
-                //    tint, so each stroke patch inside a flat region looks like
-                //    a slightly different shade.
+                // 2) DIRECTIONAL BRUSH overlay — visible on flat areas.
                 float brush  = BrushPattern(uv);
                 float bDelta = brush - 0.5;
-
-                // Brightness from brush.
                 col *= 1.0 + bDelta * _BrushStrength;
-
-                // Channel-asymmetric tint — R warms while B cools (or v.v.) per
-                // stroke. Strokes within a uniform colour region get visible
-                // colour variation, but the underlying hue is preserved.
-                float tintR = bDelta * _BrushTint;
-                float tintB = -bDelta * _BrushTint;
-                col.r *= 1.0 + tintR;
-                col.b *= 1.0 + tintB;
-                // G picks up half of each so changes feel less "channel-y".
+                col.r *= 1.0 + bDelta * _BrushTint;
+                col.b *= 1.0 - bDelta * _BrushTint;
                 col.g *= 1.0 + bDelta * _BrushTint * 0.25;
 
-                // 3) Canvas grain — high-freq multiplicative noise.
+                // 3) SOFT POSTERIZE — quantise colours into painted patches.
+                // Mix back with original so it's not flat-cel-shaded, just clumpier.
+                half3 quantised = floor(col * _PosterizeLevels + 0.5) / _PosterizeLevels;
+                col = lerp(col, quantised, _PosterizeMix);
+
+                // 4) GRAIN — fine canvas texture.
                 float grain = Hash21(uv * _GrainFrequency) * 2.0 - 1.0;
                 col *= 1.0 + grain * _GrainStrength;
 
-                // 4) Saturation / contrast bump.
+                // 5) SATURATION / CONTRAST.
                 float lum = dot(col, float3(0.299, 0.587, 0.114));
                 col = lerp(float3(lum, lum, lum), col, _Saturation);
                 col = (col - 0.5) * _Contrast + 0.5;

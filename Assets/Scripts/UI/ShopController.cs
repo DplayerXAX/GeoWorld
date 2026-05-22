@@ -17,7 +17,7 @@ using UnityEngine;
 // F (configurable) — open / close the rift.
 // Auto-closes during combat (Running phase).
 // ─────────────────────────────────────────────────────────────────────────────
-public enum RiftShapePreset { Triangle, Lens, Oval, Slash, Crack, Diamond, Custom }
+public enum RiftShapePreset { Rectangle, Triangle, Lens, Oval, Slash, Crack, Diamond, Custom }
 
 public class ShopController : MonoBehaviour
 {
@@ -27,16 +27,20 @@ public class ShopController : MonoBehaviour
 
     [Header("Camera")]
     public Camera  shopCam;
-    public Vector3 cameraOffsetSmall = new Vector3(0f,  4f,  -8f);
-    public Vector3 cameraOffsetLarge = new Vector3(0f,  6f, -14f);
+    public Vector3 cameraOffsetSmall = new Vector3(0f, 3f, -10f);
+    public Vector3 cameraOffsetLarge = new Vector3(0f, 3f, -14f);
 
     [Header("Rift Shape & Position")]
-    [Tooltip("Rift centre in normalised screen space (0=left/top, 1=right/bottom).")]
-    public Vector2 riftScreenPos  = new Vector2(0.14f, 0.50f);
-    [Tooltip("Rift height as a fraction of screen height at full open scale.")]
-    public float   riftHeight     = 0.46f;
-    [Tooltip("Scale while collapsed — the always-visible crack hint.")]
-    public float   riftHintScale  = 0.22f;
+    [Tooltip("Rift centre in normalised screen space (0=left/top, 1=right/bottom). Clamped at runtime so the rift never overflows.")]
+    public Vector2 riftScreenPos  = new Vector2(0.5f, 0.85f);
+    [Tooltip("Strip width as a fraction of screen width when fully open.")]
+    [Range(0.1f, 1.0f)] public float riftWidth  = 0.60f;
+    [Tooltip("Strip height as a fraction of screen height when fully open.")]
+    [Range(0.05f, 1.0f)] public float riftHeight = 0.12f;
+    [Tooltip("Minimum gap between the rift and the screen edges (pixels).")]
+    public float screenEdgeMargin = 12f;
+    [Tooltip("Scale while collapsed. 0 = completely hidden when closed (recommended for rectangle preset).")]
+    public float   riftHintScale  = 0f;
     [Tooltip("Open/close speed.")]
     public float   expandSpeed    = 7f;
 
@@ -45,45 +49,44 @@ public class ShopController : MonoBehaviour
 
     [Header("Shop World Area")]
     public Vector3 shopCenter   = new Vector3(-25f, 4f, 5f);
-    public float   blockSpacing = 2.8f;
-    [Tooltip("Vertical offset for the block row, relative to shopCenter.")]
-    public Vector3 blockRowOffset  = new Vector3(0f,  1.6f, 0f);
-    [Tooltip("Vertical offset for the turret row, relative to shopCenter.")]
-    public Vector3 turretRowOffset = new Vector3(0f, -1.6f, 0f);
+    public float   blockSpacing = 1.6f;
+    [Tooltip("Lighting anchor for the block half (LEFT side of the strip).")]
+    public Vector3 blockRowOffset  = new Vector3(-4f, 2.5f, 0f);
+    [Tooltip("Lighting anchor for the turret half (RIGHT side of the strip).")]
+    public Vector3 turretRowOffset = new Vector3( 4f, 2.5f, 0f);
 
-    [Header("Float Animation — feels like drifting in space")]
-    [Tooltip("Per-axis drift range in world units. Stay small so items don't escape their row / the rift opening.")]
-    public Vector3 driftAmplitude = new Vector3(0.18f, 0.20f, 0.15f);
-    [Tooltip("Per-axis drift frequency (Hz × 2π). Different per axis to avoid lockstep.")]
+    [Header("Float Animation — set to 0 for a static clickable shop")]
+    [Tooltip("Per-axis drift range in world units. 0 = items sit completely still.")]
+    public Vector3 driftAmplitude = Vector3.zero;
     public Vector3 driftSpeed     = new Vector3(0.50f, 0.70f, 0.60f);
-    [Tooltip("Peak wobble angle in degrees on each axis.")]
-    public float   tumbleAmplitude = 14f;
-    [Tooltip("Base wobble frequency. Each axis multiplied by an irrational-ish factor.")]
+    [Tooltip("Peak wobble angle in degrees on each axis. 0 = no rotation animation.")]
+    public float   tumbleAmplitude = 0f;
     public float   tumbleSpeed     = 0.45f;
 
     [Header("Rift Atmosphere — deep void inside")]
-    public Color shopBackground     = new Color(0.00f, 0.00f, 0.00f, 1f);
+    [Tooltip("Inner colour of the rift. Deep cosmic by default — adjust to taste.")]
+    public Color shopBackground     = new Color(0.04f, 0.05f, 0.14f, 1f);
     [Tooltip("Light over the block row — warm to read as 'music/construction'.")]
     public Color blockLightColor    = new Color(1.00f, 0.82f, 0.25f, 1f);
     [Tooltip("Light over the turret row — cool to separate from blocks visually.")]
     public Color turretLightColor   = new Color(0.30f, 0.80f, 1.00f, 1f);
     public float shopLightIntensity = 3.5f;
     public float shopLightRange     = 18f;
-    [Tooltip("Inner vignette strength. 0 = no darkening at edges. 1 = full black at edges.")]
-    [Range(0f, 1f)] public float innerVignetteStrength = 0.7f;
+    [Tooltip("Inner vignette strength. 0 = no darkening at edges (recommended for rectangle panel).")]
+    [Range(0f, 1f)] public float innerVignetteStrength = 0.15f;
 
     [Header("Rift Shape")]
-    public RiftShapePreset shapePreset = RiftShapePreset.Triangle;
-    [Tooltip("Extra polygon rotation when collapsed. Lerps to 0 as the rift opens — gives the 'spin open' feel.")]
-    [Range(0f, 360f)] public float openSpinDegrees = 60f;
+    public RiftShapePreset shapePreset = RiftShapePreset.Crack;
+    [Tooltip("Extra polygon rotation when collapsed. 0 = no spin (recommended for clean rectangle panel).")]
+    [Range(0f, 360f)] public float openSpinDegrees = 0f;
     [Tooltip("Sprite physics outline — only used when shapePreset = Custom.")]
     public Sprite riftSprite;
-    [Tooltip("Rotate the rift opening on-screen. 0 = vertical, 90 = horizontal. The shop camera rolls to compensate.")]
+    [Tooltip("Rotate the rift opening on-screen. 0 = naturally horizontal for the wide rectangle preset.")]
     [Range(-180f, 180f)] public float riftRotationDeg = 0f;
-    [Tooltip("RenderTexture width.  512 = portrait (default).  1024 = landscape (pair with riftRotationDeg = 90).")]
-    public int rtWidth  = 512;
-    [Tooltip("RenderTexture height. 1024 = portrait (default). 512  = landscape.")]
-    public int rtHeight = 1024;
+    [Tooltip("RenderTexture width. Aspect should match the on-screen strip (riftWidth × Screen.width : riftHeight × Screen.height) to avoid item stretch.")]
+    public int rtWidth  = 1280;
+    [Tooltip("RenderTexture height. 1280×288 ≈ 4.4:1, matches a 0.92×0.20 strip on a 16:9 screen.")]
+    public int rtHeight = 288;
 
     [Header("Rift Edge FX — bright tear in the glass")]
     public Color riftEdgeColor  = new Color(0.92f, 0.96f, 1.00f, 0.85f);
@@ -91,17 +94,15 @@ public class ShopController : MonoBehaviour
     public int   riftGlowLayers = 3;
     [Range(0f, 5f)] public float edgePulseSpeed = 1.4f;
 
-    [Header("Cosmic Energy — subtle in 'void' mode")]
-    public Color energyRayColor   = new Color(0.75f, 0.85f, 1.00f, 0.25f);
-    [Range(0, 32)] public int rayCount = 8;
-    [Tooltip("Ray length range as a fraction of rift size.")]
+    [Header("Cosmic Energy — off for clean rectangle panel; turn up if you want flavour")]
+    public Color energyRayColor   = new Color(0.75f, 0.85f, 1.00f, 0.15f);
+    [Range(0, 32)] public int rayCount = 0;          // 0 = no rays for the clean rect panel
     public Vector2 rayLengthRange = new Vector2(0.40f, 0.90f);
     [Range(0f, 2f)] public float rayPulseSpeed = 0.60f;
     [Range(0f, 1f)] public float raySpinSpeed  = 0.05f;
 
-    public Color sparkleColor   = new Color(0.75f, 0.85f, 1.00f, 0.65f);
-    [Range(0, 80)] public int sparkleCount = 16;
-    [Tooltip("Sparkle scatter radius as multiplier of rift size.")]
+    public Color sparkleColor   = new Color(0.75f, 0.85f, 1.00f, 0.5f);
+    [Range(0, 80)] public int sparkleCount = 0;      // 0 = no sparkles for clean panel
     [Range(0.5f, 2.5f)] public float sparkleRadius = 1.15f;
     [Range(0.2f, 4f)] public float sparkleTwinkleSpeed = 1.1f;
 
@@ -114,8 +115,8 @@ public class ShopController : MonoBehaviour
     [Range(0, 5)] public int crackSubdivision = 0;
 
     [Header("Item Hover")]
-    [Range(1f, 1.5f)] public float hoverScale     = 1.18f;
-    [Range(1f, 20f)]  public float hoverLerpSpeed = 8f;
+    [Range(1f, 1.5f)] public float hoverScale     = 1.08f;
+    [Range(1f, 20f)]  public float hoverLerpSpeed = 12f;
 
     [Header("Tooltip")]
     public Color tooltipBg = new Color(0.04f, 0.04f, 0.08f, 0.90f);
@@ -126,6 +127,15 @@ public class ShopController : MonoBehaviour
 
     // Built-in shape presets. Y axis is the long axis; rotation handled separately
     // by riftRotationDeg. All shapes are normalised so the largest |coord| = 1.
+
+    // Normalised square — on-screen aspect comes from riftWidth × riftHeight.
+    static readonly Vector2[] RiftShape_Rectangle =
+    {
+        new(-1f,  1f),
+        new( 1f,  1f),
+        new( 1f, -1f),
+        new(-1f, -1f),
+    };
 
     // Equilateral triangle, pointing up. 3-fold symmetric.
     static readonly Vector2[] RiftShape_Triangle =
@@ -163,15 +173,16 @@ public class ShopController : MonoBehaviour
         new(-0.22f,  0.00f), new(-0.18f,  0.30f), new(-0.10f,  0.65f),
     };
 
-    // Asymmetric crack — left and right intentionally don't mirror, so it
-    // reads as a torn opening rather than a clean lens.
+    // Clean horizontal slit — pointy ends, flat top/bottom in the middle.
+    // No jagged noise. Reads as a "crack opening" laid horizontally.
     static readonly Vector2[] RiftShape_Crack =
     {
-        new( 0.00f,  1.00f), new( 0.12f,  0.65f), new( 0.32f,  0.30f),
-        new( 0.20f,  0.00f), new( 0.38f, -0.30f), new( 0.16f, -0.55f),
-        new( 0.08f, -0.85f), new( 0.00f, -1.00f),
-        new(-0.14f, -0.70f), new(-0.30f, -0.40f), new(-0.18f, -0.10f),
-        new(-0.36f,  0.20f), new(-0.22f,  0.50f), new(-0.10f,  0.80f),
+        new(-1.00f,  0.00f),  // left tip
+        new(-0.70f,  1.00f),  // top-left transition
+        new( 0.70f,  1.00f),  // top-right transition
+        new( 1.00f,  0.00f),  // right tip
+        new( 0.70f, -1.00f),  // bottom-right transition
+        new(-0.70f, -1.00f),  // bottom-left transition
     };
 
     // Four-pointed diamond — clean geometric look.
@@ -203,7 +214,9 @@ public class ShopController : MonoBehaviour
 
     // Computed each Update — used by hover/click and GL draw
     Vector2   _riftScreenCenter;
-    float     _riftScreenSize;
+    float     _riftScreenSize;   // legacy: max(_riftSizeX, _riftSizeY)
+    float     _riftSizeX;        // half-extent in screen X
+    float     _riftSizeY;        // half-extent in screen Y (multiplied by _riftScale at use site)
     Vector2[] _screenVerts;
 
     // Counts down after a failed purchase attempt — drives red rift edge flash.
@@ -359,7 +372,7 @@ public class ShopController : MonoBehaviour
     void AnimateRift()
     {
         bool combat = GameFlowManager.Instance?.phase == GamePhase.Running;
-        _riftTarget = combat ? 0f : (_expanded ? 1.0f : riftHintScale);
+        _riftTarget = combat ? 0f : (_expanded ? 0.6f : riftHintScale);
 
         float t    = 1f - Mathf.Exp(-expandSpeed * Time.deltaTime);
         _riftScale     = Mathf.Lerp(_riftScale, _riftTarget, t);
@@ -382,9 +395,18 @@ public class ShopController : MonoBehaviour
     // Recomputes _riftScreenCenter, _riftScreenSize, _screenVerts every frame.
     void UpdateScreenVerts()
     {
-        _riftScreenCenter = new Vector2(riftScreenPos.x * Screen.width,
-                                        riftScreenPos.y * Screen.height);
-        _riftScreenSize   = Screen.height * riftHeight * _riftScale;
+        _riftSizeX        = Screen.width  * riftWidth  * 0.5f;
+        _riftSizeY        = Screen.height * riftHeight * 0.5f;
+        _riftScreenSize   = Mathf.Max(_riftSizeX, _riftSizeY);   // legacy fields rely on this
+
+        // Clamp centre so the rift's full-open footprint never leaves the screen.
+        float cx = Mathf.Clamp(riftScreenPos.x * Screen.width,
+                               _riftSizeX + screenEdgeMargin,
+                               Screen.width - _riftSizeX - screenEdgeMargin);
+        float cy = Mathf.Clamp(riftScreenPos.y * Screen.height,
+                               _riftSizeY + screenEdgeMargin,
+                               Screen.height - _riftSizeY - screenEdgeMargin);
+        _riftScreenCenter = new Vector2(cx, cy);
 
         // Rebuild crack shape if the subdivision setting changed at runtime.
         if (_subdividedShape == null || _builtSubdivision != crackSubdivision)
@@ -412,69 +434,86 @@ public class ShopController : MonoBehaviour
             }
 
             Vector2 rv = Rotate2D(v, CurrentRotationDeg());
-            _screenVerts[i] = new Vector2(_riftScreenCenter.x + rv.x * _riftScreenSize,
-                                          _riftScreenCenter.y - rv.y * _riftScreenSize);
+            _screenVerts[i] = new Vector2(_riftScreenCenter.x + rv.x * _riftSizeX,
+                                          _riftScreenCenter.y - rv.y * _riftSizeY * _riftScale);
         }
     }
 
     // ── Public API ────────────────────────────────────────────────────────────
 
-    // Spawns two segregated rows: blocks on top, turrets on bottom (offsets
-    // configurable). Either row may be empty.
+    // All shop items on a single horizontal row: blocks first, small gap,
+    // then turrets. Designed for the bottom-strip rift layout.
     public void SetShopItems(BlockData[] blockDatas, BlockData[] turretDatas,
                              GameObject cubePrefab, GridSystem grid)
     {
         ClearItems();
-        SpawnRow(blockDatas,  shopCenter + blockRowOffset,  cubePrefab, grid, isTurretRow: false);
-        SpawnRow(turretDatas, shopCenter + turretRowOffset, cubePrefab, grid, isTurretRow: true);
+
+        int blockN  = blockDatas  != null ? blockDatas.Length  : 0;
+        int turretN = turretDatas != null ? turretDatas.Length : 0;
+        int totalN  = blockN + turretN;
+        if (totalN == 0) return;
+
+        // Small visual gap separating blocks from turrets when both present.
+        float gap        = (blockN > 0 && turretN > 0) ? blockSpacing * 0.6f : 0f;
+        float totalWidth = (totalN - 1) * blockSpacing + gap;
+        float xCursor    = shopCenter.x - totalWidth * 0.5f;
+        int   idx        = 0;
+
+        for (int i = 0; i < blockN; i++)
+        {
+            SpawnOne(blockDatas[i], new Vector3(xCursor, shopCenter.y, shopCenter.z),
+                     cubePrefab, grid, isTurret: false, idx++);
+            xCursor += blockSpacing;
+        }
+        xCursor += gap;
+        for (int i = 0; i < turretN; i++)
+        {
+            SpawnOne(turretDatas[i], new Vector3(xCursor, shopCenter.y, shopCenter.z),
+                     cubePrefab, grid, isTurret: true, idx++);
+            xCursor += blockSpacing;
+        }
     }
 
-    void SpawnRow(BlockData[] datas, Vector3 rowCenter, GameObject cubePrefab, GridSystem grid, bool isTurretRow)
+    void SpawnOne(BlockData data, Vector3 pos, GameObject cubePrefab, GridSystem grid,
+                  bool isTurret, int globalIndex)
     {
-        if (datas == null) return;
-        int n = datas.Length;
-        for (int i = 0; i < n; i++)
+        if (data == null || data.cells == null) return;
+
+        var root = new GameObject($"Shop_{data.blockType}_{globalIndex}");
+        root.transform.position = pos;
+
+        BlockType bt = isTurret ? BlockType.Turret : data.blockType;
+        Color col = PlacementController.Instance != null
+            ? PlacementController.Instance.PickPaletteColor(bt)
+            : (isTurret
+                ? new Color(0.25f, 0.85f, 0.95f)
+                : new Color(0.85f, 0.18f, 0.12f));
+
+        foreach (var cell in data.cells)
         {
-            var data = datas[i];
-            if (data == null || data.cells == null) continue;
-
-            float   offset = (i - (n - 1) * 0.5f) * blockSpacing;
-            Vector3 pos    = rowCenter + Vector3.right * offset;
-
-            var root = new GameObject($"Shop_{data.blockType}_{i}");
-            root.transform.position = pos;
-
-            // Turrets get cyan-ish colors; blocks get any hue.
-            Color col = isTurretRow
-                ? Random.ColorHSV(0.45f, 0.62f, 0.5f, 0.85f, 0.75f, 1f)
-                : Random.ColorHSV(0f, 1f, 0.55f, 0.9f, 0.75f, 1f);
-
-            foreach (var cell in data.cells)
-            {
-                var c = Instantiate(cubePrefab, root.transform);
-                c.transform.localPosition = (Vector3)cell * grid.cellSize;
-                MpbColor.Set(c.GetComponent<Renderer>(), col);
-            }
-
-            var sb = root.AddComponent<SelectableBlock>();
-            sb.data = data;
-
-            float fluc     = Random.Range(0.82f, 1.22f);
-            sb.cachedPrice = ResourceManager.Instance != null
-                             ? ResourceManager.Instance.ComputePrice(data, fluc) : 0;
-
-            if (isTurretRow) AttachTurretBeacon(root, grid.cellSize);
-
-            const float TAU = Mathf.PI * 2f;
-            _items.Add(new ShopItem
-            {
-                root        = root,
-                sb          = sb,
-                basePos     = pos,
-                driftPhase  = new Vector3(Random.Range(0f, TAU), Random.Range(0f, TAU), Random.Range(0f, TAU)),
-                tumblePhase = new Vector3(Random.Range(0f, TAU), Random.Range(0f, TAU), Random.Range(0f, TAU)),
-            });
+            var c = Instantiate(cubePrefab, root.transform);
+            c.transform.localPosition = (Vector3)cell * grid.cellSize;
+            MpbColor.Set(c.GetComponent<Renderer>(), col);
         }
+
+        var sb = root.AddComponent<SelectableBlock>();
+        sb.data = data;
+
+        float fluc     = Random.Range(0.82f, 1.22f);
+        sb.cachedPrice = ResourceManager.Instance != null
+                         ? ResourceManager.Instance.ComputePrice(data, fluc) : 0;
+
+        if (isTurret) AttachTurretBeacon(root, grid.cellSize, cubePrefab);
+
+        const float TAU = Mathf.PI * 2f;
+        _items.Add(new ShopItem
+        {
+            root        = root,
+            sb          = sb,
+            basePos     = pos,
+            driftPhase  = new Vector3(Random.Range(0f, TAU), Random.Range(0f, TAU), Random.Range(0f, TAU)),
+            tumblePhase = new Vector3(Random.Range(0f, TAU), Random.Range(0f, TAU), Random.Range(0f, TAU)),
+        });
     }
 
     public void ClearItems()
@@ -486,7 +525,7 @@ public class ShopController : MonoBehaviour
 
     // Same visual rule as placed turrets: hide the cube body, show a single
     // floating diamond. Keeps shop preview consistent with what gets placed.
-    static void AttachTurretBeacon(GameObject root, float cs)
+    static void AttachTurretBeacon(GameObject root, float cs, GameObject cubePrefab)
     {
         if (root == null) return;
 
@@ -516,6 +555,11 @@ public class ShopController : MonoBehaviour
         var rend = marker.GetComponent<Renderer>();
         if (rend != null)
         {
+            // Match cubePrefab's material so shop beacons share the silkscreen shader.
+            var prefabRend = cubePrefab != null ? cubePrefab.GetComponentInChildren<Renderer>() : null;
+            if (prefabRend != null && prefabRend.sharedMaterial != null)
+                rend.sharedMaterial = prefabRend.sharedMaterial;
+
             MpbColor.Set(rend, new Color(0.45f, 0.95f, 1.00f));
             rend.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
         }
@@ -669,9 +713,11 @@ public class ShopController : MonoBehaviour
     Vector3 ScreenToShopViewport(Vector2 mp)
     {
         // 1. Offset from rift centre in normalised rift-screen units (still in rotated space).
+        // X uses _riftSizeX (full width). Y uses _riftSizeY * _riftScale because
+        // the polygon's Y is scaled by _riftScale.
         float guiY = Screen.height - mp.y;
-        float rx   = (mp.x               - _riftScreenCenter.x) / (_riftScreenSize + 0.001f);
-        float ry   = (_riftScreenCenter.y - guiY)                / (_riftScreenSize + 0.001f);
+        float rx   = (mp.x               - _riftScreenCenter.x) / (_riftSizeX + 0.001f);
+        float ry   = (_riftScreenCenter.y - guiY)                / (_riftSizeY * _riftScale + 0.001f);
 
         // 2. Undo the on-screen rotation to get into the shape's native (unrotated)
         //    space. UpdateScreenVerts applied +CurrentRotationDeg(), so invert.
@@ -864,8 +910,18 @@ public class ShopController : MonoBehaviour
         // Camera LookAt uses cross(worldUp, forward) → camera.right = world +X,
         // so no U flip needed: left shape → left RT → left items.
         // V is flipped for D3D/URP (V=0 at top of texture).
+        // Y-only crop: as the rift closes (riftScale → 0), sample a narrower
+        // band of the RT centred on V=0.5. Items inside stay at native size
+        // and the rift just "reveals" more of them as it opens.
+        float scaleY = Mathf.Max(_riftScale, 0.0001f);
         System.Func<Vector2, Vector2> toUV =
-            p => new Vector2((p.x - minX) / rx, (maxY - p.y) / ry);
+            p =>
+            {
+                float uvx = (p.x - minX) / rx;
+                float uvy = (maxY - p.y) / ry;
+                uvy = 0.5f + (uvy - 0.5f) * scaleY;
+                return new Vector2(uvx, uvy);
+            };
 
         Vector2 centerUV = toUV(Vector2.zero);
 
@@ -1054,8 +1110,8 @@ public class ShopController : MonoBehaviour
         // Pin to the side of the rift's screen-space bounds so the tooltip
         // never covers items. Prefer right; fall back to left if right is
         // off-screen; finally try below / above as last resorts.
-        const float bw = 200f, bh = 84f;
-        const float pad = 16f;
+        const float bw = 140f, bh = 60f;
+        const float pad = 12f;
 
         float minX = float.MaxValue, maxX = float.MinValue;
         float minY = float.MaxValue, maxY = float.MinValue;
@@ -1092,21 +1148,21 @@ public class ShopController : MonoBehaviour
         GUI.DrawTexture(new Rect(tx - 8f, ty - 8f, bw, 2f), Texture2D.whiteTexture);
         GUI.color = Color.white;
 
-        GUI.Label(new Rect(tx, ty,        124f, 20f), item.sb.data.DisplayName, _ttTitle);
+        GUI.Label(new Rect(tx, ty,        bw - 16f, 14f), item.sb.data.DisplayName, _ttTitle);
 
         _ttPrice.normal.textColor = afford ? new Color(0.45f, 1f, 0.55f)
                                            : new Color(1f, 0.38f, 0.38f);
         string sfx       = type == BlockType.Turret ? " ¤T" : " ¤B";
-        string priceText = afford ? $"{price}{sfx}" : $"{price}{sfx}  (need {deficit} more)";
-        GUI.Label(new Rect(tx, ty + 22f, 124f, 20f), priceText, _ttPrice);
+        string priceText = afford ? $"{price}{sfx}" : $"{price}{sfx}  (-{deficit})";
+        GUI.Label(new Rect(tx, ty + 14f, bw - 16f, 14f), priceText, _ttPrice);
 
         _ttSub.normal.textColor = new Color(0.65f, 0.65f, 0.65f);
-        GUI.Label(new Rect(tx, ty + 44f, 124f, 18f), $"×{placed} on grid", _ttSub);
+        GUI.Label(new Rect(tx, ty + 28f, bw - 16f, 12f), $"×{placed} on grid", _ttSub);
 
         string hint = afford ? "Click to pick up" : "Not enough ¤";
         _ttSub.normal.textColor = afford ? new Color(0.65f, 0.65f, 0.65f)
                                          : new Color(1f, 0.45f, 0.45f);
-        GUI.Label(new Rect(tx, ty + 62f, 124f, 18f), hint, _ttSub);
+        GUI.Label(new Rect(tx, ty + 42f, bw - 16f, 12f), hint, _ttSub);
     }
 
     // Per-item floating price tag, always visible above each shop block.
@@ -1168,8 +1224,9 @@ public class ShopController : MonoBehaviour
         Vector2 native = new Vector2(minX + shopVp.x * rx,
                                      minY + shopVp.y * ry);
         Vector2 rotated = Rotate2D(native, CurrentRotationDeg());
-        return new Vector2(_riftScreenCenter.x + rotated.x * _riftScreenSize,
-                           _riftScreenCenter.y - rotated.y * _riftScreenSize);
+        // Match UpdateScreenVerts: X full, Y scaled by _riftScale.
+        return new Vector2(_riftScreenCenter.x + rotated.x * _riftSizeX,
+                           _riftScreenCenter.y - rotated.y * _riftSizeY * _riftScale);
     }
 
     // ── Style builder ─────────────────────────────────────────────────────────
@@ -1179,13 +1236,13 @@ public class ShopController : MonoBehaviour
         if (_stylesBuilt) return;
         _stylesBuilt = true;
 
-        _ttTitle = new GUIStyle(GUI.skin.label) { fontSize = 13, fontStyle = FontStyle.Bold };
+        _ttTitle = new GUIStyle(GUI.skin.label) { fontSize = 10, fontStyle = FontStyle.Bold };
         _ttTitle.normal.textColor = Color.white;
 
-        _ttPrice = new GUIStyle(GUI.skin.label) { fontSize = 12, fontStyle = FontStyle.Bold };
+        _ttPrice = new GUIStyle(GUI.skin.label) { fontSize = 10, fontStyle = FontStyle.Bold };
         _ttPrice.normal.textColor = Color.green;
 
-        _ttSub = new GUIStyle(GUI.skin.label) { fontSize = 10 };
+        _ttSub = new GUIStyle(GUI.skin.label) { fontSize = 9 };
         _ttSub.normal.textColor = new Color(0.65f, 0.65f, 0.65f);
 
         _hintStyle = new GUIStyle(GUI.skin.label) { fontSize = 11, fontStyle = FontStyle.Bold };
@@ -1229,13 +1286,14 @@ public class ShopController : MonoBehaviour
 
     Vector2[] BuiltinShape() => shapePreset switch
     {
-        RiftShapePreset.Triangle => RiftShape_Triangle,
-        RiftShapePreset.Lens     => RiftShape_Lens,
-        RiftShapePreset.Oval     => RiftShape_Oval,
-        RiftShapePreset.Slash    => RiftShape_Slash,
-        RiftShapePreset.Crack    => RiftShape_Crack,
-        RiftShapePreset.Diamond  => RiftShape_Diamond,
-        _                        => RiftShape_Triangle,
+        RiftShapePreset.Rectangle => RiftShape_Rectangle,
+        RiftShapePreset.Triangle  => RiftShape_Triangle,
+        RiftShapePreset.Lens      => RiftShape_Lens,
+        RiftShapePreset.Oval      => RiftShape_Oval,
+        RiftShapePreset.Slash     => RiftShape_Slash,
+        RiftShapePreset.Crack     => RiftShape_Crack,
+        RiftShapePreset.Diamond   => RiftShape_Diamond,
+        _                         => RiftShape_Crack,
     };
 
     // Total polygon rotation = configured base + animated "spin open" amount.

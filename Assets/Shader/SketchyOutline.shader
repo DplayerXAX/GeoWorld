@@ -5,13 +5,20 @@ Shader "GeoWorld/SketchyOutline"
     // instead of being a clean line — reads as a brush / ink stroke.
     Properties
     {
-        _Thickness        ("Thickness (px)",      Float)         = 1.5
-        _OutlineColor     ("Outline Color",       Color)         = (0, 0, 0, 1)
-        _DepthThreshold   ("Depth Threshold",     Float)         = 0.5
-        _NormalThreshold  ("Normal Threshold",    Float)         = 0.4
-        _NoiseStrength    ("Noise Jitter",        Range(0, 3))   = 0.6
-        _NoiseFrequency   ("Noise Frequency",     Float)         = 480
-        _OutlineOpacity   ("Outline Opacity",     Range(0, 1))   = 1
+        _Thickness          ("Thickness (px)",          Float)         = 1.8
+        _OutlineColor       ("Outline Color",           Color)         = (0, 0, 0, 1)
+        _DepthThreshold     ("Depth Threshold",         Float)         = 0.5
+        _NormalThreshold    ("Normal Threshold",        Float)         = 0.4
+        _OutlineOpacity     ("Outline Opacity",         Range(0, 1))   = 1
+
+        [Header(Charcoal)]
+        _SampleJitter       ("Sample UV Jitter (px)",   Range(0, 5))   = 1.4
+        _DropoutScale       ("Dropout Pattern Scale",   Float)         = 7
+        _DropoutThreshold   ("Dropout Cutoff",          Range(0, 1))   = 0.45
+        _ThicknessNoiseScale("Thickness Noise Scale",   Float)         = 4
+        _ThicknessVariation ("Thickness Variation",     Range(0, 1))   = 0.7
+        _OffsetNoiseScale   ("Edge Drift Scale",        Float)         = 3
+        _OffsetAmount       ("Edge Drift (px)",         Range(0, 4))   = 1.2
     }
 
     SubShader
@@ -38,15 +45,42 @@ Shader "GeoWorld/SketchyOutline"
             float4 _OutlineColor;
             float  _DepthThreshold;
             float  _NormalThreshold;
-            float  _NoiseStrength;
-            float  _NoiseFrequency;
             float  _OutlineOpacity;
+            float  _SampleJitter;
+            float  _DropoutScale;
+            float  _DropoutThreshold;
+            float  _ThicknessNoiseScale;
+            float  _ThicknessVariation;
+            float  _OffsetNoiseScale;
+            float  _OffsetAmount;
 
             float Hash21(float2 p)
             {
                 p = frac(p * float2(123.34, 456.21));
                 p += dot(p, p + 45.32);
                 return frac(p.x * p.y);
+            }
+
+            // Smooth fbm for natural-looking variation (not high-freq hash).
+            float ValueNoise(float2 p)
+            {
+                float2 i = floor(p);
+                float2 f = frac(p);
+                float2 u = f * f * (3.0 - 2.0 * f);
+                float a = Hash21(i + float2(0, 0));
+                float b = Hash21(i + float2(1, 0));
+                float c = Hash21(i + float2(0, 1));
+                float d = Hash21(i + float2(1, 1));
+                return lerp(lerp(a, b, u.x), lerp(c, d, u.x), u.y);
+            }
+
+            float Fbm3(float2 p)
+            {
+                float v = 0;
+                float a = 0.5;
+                [unroll]
+                for (int i = 0; i < 3; i++) { v += a * ValueNoise(p); p *= 2.07; a *= 0.5; }
+                return v;
             }
 
             float SobelDepth(float2 uv, float2 ts)
@@ -76,25 +110,39 @@ Shader "GeoWorld/SketchyOutline"
 
             half4 Frag(Varyings IN) : SV_Target
             {
-                float2 uv = IN.texcoord;
-                float2 ts = _BlitTexture_TexelSize.xy * _Thickness;
+                float2 uv      = IN.texcoord;
+                float2 texel   = _BlitTexture_TexelSize.xy;
 
-                // Hash-driven per-pixel UV jitter → "wobbly" outline.
-                float h        = Hash21(uv * _NoiseFrequency);
-                float2 jitter  = (float2(h, Hash21(uv * _NoiseFrequency + 17.31)) - 0.5) * _NoiseStrength * ts;
-                float2 jittered = uv + jitter;
+                // ── 1) Thickness varies along the outline (fBM, low freq) ─
+                float thickN     = Fbm3(uv * _ThicknessNoiseScale);
+                float thickMul   = 1.0 + (thickN - 0.5) * _ThicknessVariation;
+                float2 ts        = texel * _Thickness * thickMul;
 
-                float edgeD = SobelDepth (jittered, ts);
-                float edgeN = SobelNormal(jittered, ts);
+                // ── 2) Edge sampling drift: offset edge detection by an fBM
+                //       vector, so the line doesn't sit exactly on the
+                //       geometry — like charcoal stroke applied near the edge.
+                float2 drift = float2(
+                    Fbm3(uv * _OffsetNoiseScale)         - 0.5,
+                    Fbm3(uv * _OffsetNoiseScale + 13.7)  - 0.5
+                ) * _OffsetAmount * texel * 2.0;
 
-                // Two thresholds, max-combined.
-                float depthEdge  = saturate((edgeD - _DepthThreshold  * 0.001) * 80.0);
+                // ── 3) Local high-freq sample jitter (kept small) ─────────
+                float h1 = Hash21(uv * 480.0);
+                float h2 = Hash21(uv * 480.0 + 17.31);
+                float2 microJitter = (float2(h1, h2) - 0.5) * _SampleJitter * texel;
+
+                float2 sampleUV = uv + drift + microJitter;
+
+                float edgeD = SobelDepth (sampleUV, ts);
+                float edgeN = SobelNormal(sampleUV, ts);
+
+                float depthEdge  = saturate((edgeD - _DepthThreshold * 0.001) * 80.0);
                 float normalEdge = saturate((edgeN - _NormalThreshold) * 5.0);
                 float edge       = max(depthEdge, normalEdge);
 
-                // Extra hash mask: drop ~25 % of edge pixels → ink-dropout feel.
-                float dropout = Hash21(uv * 7000.0 + 0.137);
-                edge *= step(0.20, dropout);
+                // ── 4) fBM dropout — line breaks into chunks like real charcoal.
+                float dropout = Fbm3(uv * _DropoutScale);
+                edge *= smoothstep(_DropoutThreshold, _DropoutThreshold + 0.15, dropout);
 
                 edge *= _OutlineOpacity;
 
