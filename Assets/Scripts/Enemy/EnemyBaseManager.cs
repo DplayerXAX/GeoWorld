@@ -1,3 +1,4 @@
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
@@ -10,6 +11,10 @@ public class EnemyBaseManager : MonoBehaviour
     public EnemySurfaceUnit enemyPrefab;
     public int spawnCount = 3;
     public float spawnInterval = 0.75f;
+
+    // Fired once when the last enemy is gone AND spawning has finished.
+    // GameFlowManager listens to know when to transition back to Build.
+    public event Action OnWaveCompleted;
 
     [Header("Enemy Pacing")]
     public bool useSurfaceUnitTempo = true;
@@ -32,7 +37,7 @@ public class EnemyBaseManager : MonoBehaviour
         Instance = this;
     }
 
-    public void BeginWave(List<FaceNode> path, SurfaceUnit tempoSource = null)
+    public void BeginWave(List<FaceNode> path, SurfaceUnit tempoSource = null /* legacy */)
     {
         if (path == null || path.Count == 0)
         {
@@ -116,20 +121,35 @@ public class EnemyBaseManager : MonoBehaviour
 
     EnemySurfaceUnit CreateDefaultEnemy()
     {
-        var root = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-        root.name = "EnemySurfaceUnit";
-        root.transform.localScale = Vector3.one * 0.45f;
+        // Empty root + SurfaceUnitVisual builds the "orb" (core, rings, nodes)
+        // procedurally. darkMode makes the visual use SilkscreenCube — opaque
+        // dark surfaces with painted texture instead of additive glow.
+        var root  = new GameObject("EnemySurfaceUnit");
+        root.transform.localScale = Vector3.one * 0.65f;
 
-        var renderer = root.GetComponent<Renderer>();
-        if (renderer != null)
-            renderer.material.color = new Color(1f, 0.22f, 0.16f);
+        var visual = root.AddComponent<SurfaceUnitVisual>();
+        visual.darkMode      = true;
+        visual.coreColor     = new Color(0.06f, 0.05f, 0.10f);
+        visual.ringColorA    = new Color(0.10f, 0.10f, 0.16f);
+        visual.ringColorB    = new Color(0.08f, 0.06f, 0.14f);
+        visual.ringColorC    = new Color(0.13f, 0.09f, 0.18f);
+        visual.nodeColor     = new Color(0.04f, 0.04f, 0.08f);
+        visual.glowIntensity = 0.5f;   // unused in darkMode but kept consistent
 
         return root.AddComponent<EnemySurfaceUnit>();
     }
 
     void HandleEnemyReachedEnd(EnemySurfaceUnit enemy)
     {
-        Debug.Log("[EnemyBaseManager] Enemy reached endpoint.");
+        if (PlayerHealth.Instance != null)
+        {
+            PlayerHealth.Instance.TakeDamage(1);
+            Debug.Log($"[EnemyBaseManager] Enemy escaped. Lives → {PlayerHealth.Instance.CurrentLives}");
+        }
+        else
+        {
+            Debug.LogWarning("[EnemyBaseManager] Enemy escaped but no PlayerHealth in scene!");
+        }
         RemoveEnemy(enemy, destroy: true);
     }
 
@@ -150,6 +170,12 @@ public class EnemyBaseManager : MonoBehaviour
             Destroy(enemy.gameObject);
 
         if (_spawnRoutine == null && _activeEnemies.Count == 0 && _spawnedCount >= Mathf.Max(0, spawnCount))
-            _waveActive = false;
+        {
+            if (_waveActive)
+            {
+                _waveActive = false;
+                OnWaveCompleted?.Invoke();
+            }
+        }
     }
 }

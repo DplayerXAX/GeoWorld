@@ -7,7 +7,8 @@ public enum GamePhase
     Init,
     Build,
     ReadyToRun,
-    Running
+    Running,
+    GameOver
 }
 
 public class GameFlowManager : MonoBehaviour
@@ -71,10 +72,48 @@ public class GameFlowManager : MonoBehaviour
         if (enemyBaseManager == null)
             enemyBaseManager = new GameObject("EnemyBaseManager").AddComponent<EnemyBaseManager>();
 
+        if (PlayerHealth.Instance == null)
+            new GameObject("PlayerHealth").AddComponent<PlayerHealth>();
+        PlayerHealth.Instance.OnGameOver += HandleGameOver;
+
+        // Wave-driven battle end: when the last enemy is gone, return to Build.
+        if (enemyBaseManager != null)
+            enemyBaseManager.OnWaveCompleted += HandleWaveCompleted;
+
         CreateFirstStage();
 
         phase = GamePhase.Build;
         StartTurn();
+    }
+
+    void OnDestroy()
+    {
+        if (PlayerHealth.Instance != null)
+            PlayerHealth.Instance.OnGameOver -= HandleGameOver;
+        if (enemyBaseManager != null)
+            enemyBaseManager.OnWaveCompleted -= HandleWaveCompleted;
+    }
+
+    void HandleWaveCompleted()
+    {
+        if (phase == GamePhase.Running) EndRunningPhase();
+    }
+
+    void HandleGameOver()
+    {
+        if (phase == GamePhase.GameOver) return;
+        Debug.Log("[GameFlow] Game Over — last life lost.");
+        AbortRun();
+        enemyBaseManager?.CancelWave();
+        phase = GamePhase.GameOver;
+    }
+
+    // Hard reset → reload current scene from scratch. Bound to PlayerHealth's
+    // restart UI; safest way to wipe all combat / music / scene state.
+    public void RestartGame()
+    {
+        UnityEngine.SceneManagement.SceneManager.LoadScene(
+            UnityEngine.SceneManagement.SceneManager.GetActiveScene().buildIndex);
     }
 
     // ── Endpoint helpers ─────────────────────────────────────────────────────
@@ -132,6 +171,8 @@ public class GameFlowManager : MonoBehaviour
 
     void Update()
     {
+        if (phase == GamePhase.GameOver) return;
+
         if (phase == GamePhase.Build)
         {
             // Space: commit and run
@@ -328,15 +369,12 @@ public class GameFlowManager : MonoBehaviour
         PathFlowManager.Instance?.ClearLiveLine();
         PathFlowManager.Instance?.AddFlow(path);
 
-        // Spawn unit at the visual face-centre of the first path node.
-        currentUnit = Instantiate(unitPrefab);
-        currentUnit.gameFlow = this;
-        currentUnit.transform.position =
-            gridSystem.GridToWorld(path[0].cell) + path[0].normal * (gridSystem.cellSize * 0.5f);
-        currentUnit.SetPath(path);
+        // No more music SurfaceUnit — combat timing is driven by the enemy
+        // wave. EndRunningPhase fires when EnemyBaseManager.OnWaveCompleted.
+        currentUnit = null;
 
         phase = GamePhase.Running;
-        enemyBaseManager?.BeginWave(path, currentUnit);
+        enemyBaseManager?.BeginWave(path);
         ResourceManager.Instance?.SetCombatActive(true);   // start turret currency regen
         ShopController.Instance?.OnCombatStart();           // collapse and hide shop
         placement.TriggerCombatRipple(path);                // wave grows along path, then off-path blocks bloom
@@ -430,18 +468,21 @@ public class GameFlowManager : MonoBehaviour
         phase = GamePhase.Build;
     }
 
-    // Called by SurfaceUnit when it finishes its first traversal.
+    // Called when the wave completes (EnemyBaseManager.OnWaveCompleted) — or
+    // legacy SurfaceUnit traversal end if music unit is ever re-enabled.
     public void EndRunningPhase()
     {
         if (phase != GamePhase.Running) return;
 
-        // Promote the finished unit to a permanent ambient loop.
-        currentUnit.SetLooping(true);
-        loopingUnits.Add(currentUnit);
-
-        // Retire the oldest loop layer if we've hit the limit.
-        while (loopingUnits.Count > maxLoopLayers)
-            RetireOldestLoop();
+        // Legacy SurfaceUnit-driven path: promote to loop layer. With the
+        // wave-driven flow currentUnit is null and we skip this entirely.
+        if (currentUnit != null)
+        {
+            currentUnit.SetLooping(true);
+            loopingUnits.Add(currentUnit);
+            while (loopingUnits.Count > maxLoopLayers)
+                RetireOldestLoop();
+        }
 
         // Add a new endpoint only every N completed runs.
         _runsSinceLastEndpoint++;
