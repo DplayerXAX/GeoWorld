@@ -513,6 +513,9 @@ public class GameFlowManager : MonoBehaviour
         runSeed = 0UL;
         _rng    = null;
 
+        UpgradeManager.Instance?.ResetForNewRun();
+        SynergyEvaluator.Instance?.ResetForNewRun();
+
         phase = GamePhase.Build;
     }
 
@@ -570,6 +573,12 @@ public class GameFlowManager : MonoBehaviour
         enemyBaseManager?.CancelWave();
         BackgroundReactor.Instance?.SetCombatMode(false);  // restore calm skybox
         phase = GamePhase.Build;
+
+        // Roguelite choice. Non-blocking — Build phase starts immediately,
+        // the picker UI overlays on top. If you later want it to block input,
+        // gate StartTurn() behind the picker's onPicked callback.
+        UpgradeManager.Instance?.OfferEndOfWave(EnsureRng());
+
         StartTurn();
     }
 

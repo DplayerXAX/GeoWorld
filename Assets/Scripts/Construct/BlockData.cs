@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 public enum BlockRarity
@@ -69,6 +70,9 @@ public class BlockData : ScriptableObject
     [Header("Type & Shape")]
     public BlockType   blockType;
     public BlockRarity rarity = BlockRarity.Common;
+
+    [Tooltip("Synergy themes this block contributes to. SynergyEvaluator counts placed blocks by tag; threshold activations fire matching SynergyDefinition tiers.")]
+    public List<BlockTag> tags = new();
 
     [Tooltip("Pick a preset shape then click  Apply Shape → cells  in the ⋮ menu.\n" +
              "Set to Custom to define cells manually.")]
