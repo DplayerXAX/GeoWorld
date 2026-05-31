@@ -1,0 +1,21 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 23cc04013fdcb60478bbb2ace6d228a5, type: 3}
+  m_Name: Rule_Abundance
+  m_EditorClassIdentifier: Assembly-CSharp::AbundanceRule
+  displayName: Abundance
+  color: 4
+  priority: 30
+  absorbAdditionalPieces: 1
+  effect: {fileID: 11400000, guid: 770657fb0b7345c40bbcd02a4d8a4eef, type: 2}
+  visualizer: {fileID: 11400000, guid: 732fa4af55760504381053cb5fce8fd5, type: 2}
+  flavorText: 

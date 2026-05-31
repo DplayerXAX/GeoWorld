@@ -1,0 +1,30 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5556c6afac7e90d46b8460c9e8ee695c, type: 3}
+  m_Name: Harmony_v
+  m_EditorClassIdentifier: Assembly-CSharp::HarmonyTotemFaceVisualizer
+  panelEnabled: 1
+  panelColor: {r: 0, g: 0, b: 0, a: 1}
+  panelSizeFraction: 1
+  panelDepth: 0.012
+  faceBias: 0.005
+  topFace: 1
+  sideFaces: 1
+  bottomFace: 0
+  barLength: 0.62
+  barWidth: 0.08
+  barOffset: 0.28
+  barDepth: 0.014
+  drawEye: 1
+  eyeRadius: 0.1
+  eyeDepth: 0.018
+  eyeLighten: 0.55

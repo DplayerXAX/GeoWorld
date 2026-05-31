@@ -70,6 +70,10 @@ public class BlockData : ScriptableObject
     public BlockType   blockType;
     public BlockRarity rarity = BlockRarity.Common;
 
+    // NOTE: synergy color is NOT stored on BlockData — it's assigned at
+    // runtime per spawned token (random per Build phase). See
+    // SynergyEvaluator.OnPiecePlaced(data, color, cells).
+
     [Tooltip("Pick a preset shape then click  Apply Shape → cells  in the ⋮ menu.\n" +
              "Set to Custom to define cells manually.")]
     public BlockShape blockShape = BlockShape.Custom;

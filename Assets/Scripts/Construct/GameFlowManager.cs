@@ -31,6 +31,28 @@ public class GameFlowManager : MonoBehaviour
     [Tooltip("Maximum concurrent ambient loop layers. Oldest retires when exceeded.")]
     public int maxLoopLayers   = 5;
 
+    [Header("Waves — Procedural (roguelite)")]
+    [Tooltip("If assigned, waves are generated procedurally from the run seed. Authored `waves` list (below) is used only for rounds with an explicit override.")]
+    public WaveGenerator waveGenerator;
+
+    [Tooltip("Seed for this run. 0 → randomize at first Run(). Persists for the whole run; resets to 0 (re-randomize) on RestartGame.")]
+    public ulong runSeed;
+
+    [Header("Waves — Authored overrides")]
+    [Tooltip("Optional: a hand-authored WaveDefinition at index N overrides the generator for round N. Use null entries to fall back to the generator.")]
+    public List<WaveDefinition> waves = new();
+    [Tooltip("If true and using authored waves only (no generator), runs past the end of the list loop back to the start.")]
+    public bool loopWaves = false;
+
+    [Header("Synergy")]
+    [Tooltip("Color assignment policy for tokens spawned each Build phase. If null, all tokens get BlockColor.None (no synergy participation).")]
+    public ColorDistribution colorDistribution;
+
+    // Run-scoped RNG. Lives for the whole run, fed by every random decision
+    // (wave gen, loot drops, shop offers, …) so the run is reproducible from
+    // `runSeed` alone.
+    Xoshiro256StarStar _rng;
+
     int _runsSinceLastEndpoint;
 
     // Roguelite accumulation — all endpoint cells and live looping units
@@ -105,6 +127,7 @@ public class GameFlowManager : MonoBehaviour
         Debug.Log("[GameFlow] Game Over — last life lost.");
         AbortRun();
         enemyBaseManager?.CancelWave();
+        BackgroundReactor.Instance?.SetCombatMode(false);
         phase = GamePhase.GameOver;
     }
 
@@ -317,6 +340,11 @@ public class GameFlowManager : MonoBehaviour
         placement.currentBlock = null;
         placement.mode = PlacementMode.Select;
         placement.ClearTray();                          // remove leftover tokens from last round
+
+        // Refresh the synergy color pool. In mode C this samples a new subset
+        // of colors for the round; in mode B it's a no-op snapshot.
+        colorDistribution?.BeginRound(EnsureRng());
+
         placement.SpawnRoundBlocks(blocksPerTurn, turretsPerTurn);
     }
 
@@ -362,6 +390,8 @@ public class GameFlowManager : MonoBehaviour
             Debug.Log("Path failed");
             phase = GamePhase.Build;
             PathFlowManager.Instance?.UpdateLiveLine(null);
+            PlacementController.Instance?.ShowPlacementPopup(
+                "No path — connect start to end before running.", 2f);
             return;
         }
 
@@ -374,10 +404,56 @@ public class GameFlowManager : MonoBehaviour
         currentUnit = null;
 
         phase = GamePhase.Running;
-        enemyBaseManager?.BeginWave(path);
+        enemyBaseManager?.BeginWave(path, PickWaveForThisRound());
         ResourceManager.Instance?.SetCombatActive(true);   // start turret currency regen
         ShopController.Instance?.OnCombatStart();           // collapse and hide shop
+        BackgroundReactor.Instance?.SetCombatMode(true);    // switch skybox to combat / distorted state
         placement.TriggerCombatRipple(path);                // wave grows along path, then off-path blocks bloom
+    }
+
+    // Lazy run-scoped RNG. First call rolls a fresh seed if runSeed==0 so the
+    // inspector value is sticky if the player set one, otherwise we get a new
+    // run. Subsequent calls return the same instance — its state accumulates
+    // across the run (wave gen, loot, shop, …).
+    public Xoshiro256StarStar Rng => EnsureRng();
+
+    Xoshiro256StarStar EnsureRng()
+    {
+        if (_rng != null) return _rng;
+
+        if (runSeed == 0UL)
+            runSeed = unchecked((ulong)System.DateTime.UtcNow.Ticks ^ 0xA5A5A5A5A5A5A5A5UL);
+
+        _rng = new Xoshiro256StarStar(runSeed);
+        Debug.Log($"[GameFlowManager] Run seed = {runSeed}");
+        return _rng;
+    }
+
+    // Per-round wave selection. Priority:
+    //   1. Authored waves[roundIndex] if present (non-null) → use its groups.
+    //   2. Else, WaveGenerator if assigned → procedural list driven by _rng.
+    //   3. Else null → EnemyBaseManager falls back to inspector spawnCount.
+    //
+    // Note: roundIndex only ticks when an endpoint is added (every
+    // `runsPerEndpoint` completed runs). For a per-run wave counter, replace
+    // `roundIndex` here with your own field that increments each Run().
+    IList<SpawnGroup> PickWaveForThisRound()
+    {
+        // 1. Authored override
+        if (waves != null && waves.Count > 0)
+        {
+            int i = roundIndex;
+            if (i >= waves.Count && loopWaves) i %= waves.Count;
+            if (i >= 0 && i < waves.Count && waves[i] != null)
+                return waves[i].groups;
+        }
+
+        // 2. Procedural
+        if (waveGenerator != null)
+            return waveGenerator.Generate(roundIndex, EnsureRng());
+
+        // 3. Fallback handled by EnemyBaseManager
+        return null;
     }
 
     public bool TryGetCurrentPath(out List<FaceNode> path)
@@ -440,6 +516,15 @@ public class GameFlowManager : MonoBehaviour
         _challengeCell         = Vector3Int.zero;
         _challengeIsStart      = false;
 
+        // New run → new seed. EnsureRng() in the next Run() will roll a fresh
+        // one if runSeed is still 0, or you can pre-set runSeed in the
+        // inspector / pause menu to share a specific run.
+        runSeed = 0UL;
+        _rng    = null;
+
+        UpgradeManager.Instance?.ResetForNewRun();
+        SynergyEvaluator.Instance?.ResetForNewRun();
+
         phase = GamePhase.Build;
     }
 
@@ -465,6 +550,7 @@ public class GameFlowManager : MonoBehaviour
         ArpeggiatorManager.Instance?.StopRecording();
         if (currentUnit != null) { Destroy(currentUnit.gameObject); currentUnit = null; }
         ResourceManager.Instance?.SetCombatActive(false);
+        BackgroundReactor.Instance?.SetCombatMode(false);
         phase = GamePhase.Build;
     }
 
@@ -494,7 +580,14 @@ public class GameFlowManager : MonoBehaviour
 
         ResourceManager.Instance?.SetCombatActive(false);  // stop turret regen, income in StartTurn
         enemyBaseManager?.CancelWave();
+        BackgroundReactor.Instance?.SetCombatMode(false);  // restore calm skybox
         phase = GamePhase.Build;
+
+        // Roguelite choice. Non-blocking — Build phase starts immediately,
+        // the picker UI overlays on top. If you later want it to block input,
+        // gate StartTurn() behind the picker's onPicked callback.
+        UpgradeManager.Instance?.OfferEndOfWave(EnsureRng());
+
         StartTurn();
     }
 

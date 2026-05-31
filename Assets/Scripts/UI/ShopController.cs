@@ -66,11 +66,11 @@ public class ShopController : MonoBehaviour
     [Header("Rift Atmosphere — deep void inside")]
     [Tooltip("Inner colour of the rift. Deep cosmic by default — adjust to taste.")]
     public Color shopBackground     = new Color(0.04f, 0.05f, 0.14f, 1f);
-    [Tooltip("Light over the block row — warm to read as 'music/construction'.")]
-    public Color blockLightColor    = new Color(1.00f, 0.82f, 0.25f, 1f);
-    [Tooltip("Light over the turret row — cool to separate from blocks visually.")]
-    public Color turretLightColor   = new Color(0.30f, 0.80f, 1.00f, 1f);
-    public float shopLightIntensity = 3.5f;
+    [Tooltip("Light over the block row. Kept near-neutral so synergy colours read the same in shop preview as on the placed board.")]
+    public Color blockLightColor    = new Color(1.00f, 0.96f, 0.88f, 1f);
+    [Tooltip("Light over the turret row. Slightly cool to separate from blocks, but close to neutral so turret previews stay readable.")]
+    public Color turretLightColor   = new Color(0.85f, 0.94f, 1.00f, 1f);
+    public float shopLightIntensity = 1.8f;
     public float shopLightRange     = 18f;
     [Tooltip("Inner vignette strength. 0 = no darkening at edges (recommended for rectangle panel).")]
     [Range(0f, 1f)] public float innerVignetteStrength = 0.15f;
@@ -444,6 +444,7 @@ public class ShopController : MonoBehaviour
     // All shop items on a single horizontal row: blocks first, small gap,
     // then turrets. Designed for the bottom-strip rift layout.
     public void SetShopItems(BlockData[] blockDatas, BlockData[] turretDatas,
+                             BlockColor[] blockColors, BlockColor[] turretColors,
                              GameObject cubePrefab, GridSystem grid)
     {
         ClearItems();
@@ -461,33 +462,46 @@ public class ShopController : MonoBehaviour
 
         for (int i = 0; i < blockN; i++)
         {
-            SpawnOne(blockDatas[i], new Vector3(xCursor, shopCenter.y, shopCenter.z),
+            var sCol = (blockColors != null && i < blockColors.Length) ? blockColors[i] : BlockColor.None;
+            SpawnOne(blockDatas[i], sCol, new Vector3(xCursor, shopCenter.y, shopCenter.z),
                      cubePrefab, grid, isTurret: false, idx++);
             xCursor += blockSpacing;
         }
         xCursor += gap;
         for (int i = 0; i < turretN; i++)
         {
-            SpawnOne(turretDatas[i], new Vector3(xCursor, shopCenter.y, shopCenter.z),
+            var sCol = (turretColors != null && i < turretColors.Length) ? turretColors[i] : BlockColor.None;
+            SpawnOne(turretDatas[i], sCol, new Vector3(xCursor, shopCenter.y, shopCenter.z),
                      cubePrefab, grid, isTurret: true, idx++);
             xCursor += blockSpacing;
         }
     }
 
-    void SpawnOne(BlockData data, Vector3 pos, GameObject cubePrefab, GridSystem grid,
-                  bool isTurret, int globalIndex)
+    void SpawnOne(BlockData data, BlockColor synergyColor, Vector3 pos,
+                  GameObject cubePrefab, GridSystem grid, bool isTurret, int globalIndex)
     {
         if (data == null || data.cells == null) return;
 
         var root = new GameObject($"Shop_{data.blockType}_{globalIndex}");
         root.transform.position = pos;
 
-        BlockType bt = isTurret ? BlockType.Turret : data.blockType;
-        Color col = PlacementController.Instance != null
-            ? PlacementController.Instance.PickPaletteColor(bt)
-            : (isTurret
-                ? new Color(0.25f, 0.85f, 0.95f)
-                : new Color(0.85f, 0.18f, 0.12f));
+        // Tint: synergy color drives the visual when set; turrets / None
+        // fall back to PlacementController's BlockType palette so they still
+        // read as distinct objects.
+        Color col;
+        if (synergyColor != BlockColor.None)
+        {
+            col = BlockColorPalette.Get(synergyColor);
+        }
+        else
+        {
+            BlockType bt = isTurret ? BlockType.Turret : data.blockType;
+            col = PlacementController.Instance != null
+                ? PlacementController.Instance.PickPaletteColor(bt)
+                : (isTurret
+                    ? new Color(0.25f, 0.85f, 0.95f)
+                    : new Color(0.85f, 0.18f, 0.12f));
+        }
 
         foreach (var cell in data.cells)
         {
@@ -497,7 +511,8 @@ public class ShopController : MonoBehaviour
         }
 
         var sb = root.AddComponent<SelectableBlock>();
-        sb.data = data;
+        sb.data  = data;
+        sb.color = synergyColor;
 
         float fluc     = Random.Range(0.82f, 1.22f);
         sb.cachedPrice = ResourceManager.Instance != null
@@ -1110,8 +1125,11 @@ public class ShopController : MonoBehaviour
         // Pin to the side of the rift's screen-space bounds so the tooltip
         // never covers items. Prefer right; fall back to left if right is
         // off-screen; finally try below / above as last resorts.
-        const float bw = 140f, bh = 60f;
-        const float pad = 12f;
+        const float bw = 160f;
+        bool        hasTheme = item.sb.color != BlockColor.None;
+        // Tooltip rows: title + price (+ tag name + 2-line description if themed)
+        float       bh       = hasTheme ? 96f : 44f;
+        const float pad      = 12f;
 
         float minX = float.MaxValue, maxX = float.MinValue;
         float minY = float.MaxValue, maxY = float.MinValue;
@@ -1150,19 +1168,41 @@ public class ShopController : MonoBehaviour
 
         GUI.Label(new Rect(tx, ty,        bw - 16f, 14f), item.sb.data.DisplayName, _ttTitle);
 
+        // Theme row — only when the token has a synergy color. Coloured swatch
+        // (8×8 chip) + theme name in matching tint so the player can read
+        // tag at a glance.
+        float yCursor = ty + 14f;
+        if (hasTheme)
+        {
+            var themeRgb = BlockColorPalette.Get(item.sb.color);
+
+            GUI.color = themeRgb;
+            GUI.DrawTexture(new Rect(tx, yCursor + 2f, 8f, 8f), Texture2D.whiteTexture);
+            GUI.color = Color.white;
+
+            _ttSub.normal.textColor = themeRgb;
+            GUI.Label(new Rect(tx + 12f, yCursor, bw - 28f, 12f), item.sb.color.ToString(), _ttSub);
+            yCursor += 14f;
+        }
+
         _ttPrice.normal.textColor = afford ? new Color(0.45f, 1f, 0.55f)
                                            : new Color(1f, 0.38f, 0.38f);
         string sfx       = type == BlockType.Turret ? " ¤T" : " ¤B";
         string priceText = afford ? $"{price}{sfx}" : $"{price}{sfx}  (-{deficit})";
-        GUI.Label(new Rect(tx, ty + 14f, bw - 16f, 14f), priceText, _ttPrice);
+        GUI.Label(new Rect(tx, yCursor, bw - 16f, 14f), priceText, _ttPrice);
+        yCursor += 16f;
 
-        _ttSub.normal.textColor = new Color(0.65f, 0.65f, 0.65f);
-        GUI.Label(new Rect(tx, ty + 28f, bw - 16f, 12f), $"×{placed} on grid", _ttSub);
-
-        string hint = afford ? "Click to pick up" : "Not enough ¤";
-        _ttSub.normal.textColor = afford ? new Color(0.65f, 0.65f, 0.65f)
-                                         : new Color(1f, 0.45f, 0.45f);
-        GUI.Label(new Rect(tx, ty + 42f, bw - 16f, 12f), hint, _ttSub);
+        // Synergy description — what this tag's effect does. Two-line wrap.
+        if (hasTheme)
+        {
+            string desc = BlockColorPalette.Description(item.sb.color);
+            if (!string.IsNullOrEmpty(desc))
+            {
+                _ttSub.normal.textColor = new Color(0.75f, 0.75f, 0.75f);
+                _ttSub.wordWrap         = true;
+                GUI.Label(new Rect(tx, yCursor, bw - 16f, 32f), desc, _ttSub);
+            }
+        }
     }
 
     // Per-item floating price tag, always visible above each shop block.

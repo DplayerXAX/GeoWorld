@@ -15,6 +15,11 @@ public class OrbitCamera : MonoBehaviour
     public float orthoZoomSpeed = 2f;
 
     public Vector3 orthoAngle = new Vector3(35f, 45f, 0f);
+
+    [Header("Projection toggle")]
+    public KeyCode projectionToggleKey = KeyCode.F8;
+    [Tooltip("Perspective FOV applied when switching out of ortho.")]
+    public float perspectiveFov = 50f;
     private float yaw;
     private float pitch = 20f;
 
@@ -63,6 +68,39 @@ public class OrbitCamera : MonoBehaviour
             desiredTarget = target;
             currentFocusPoint = target.position;
         }
+    }
+
+    void Update()
+    {
+        if (Input.GetKeyDown(projectionToggleKey))
+            ToggleProjection();
+    }
+
+    public void ToggleProjection() => SetOrthographic(!useOrthographic);
+
+    public void SetOrthographic(bool ortho)
+    {
+        if (ortho == useOrthographic) return;
+
+        // LateUpdate adds orthoAngle.y to yaw in ortho mode. Bake / unbake that
+        // offset so the visible camera direction stays continuous across the swap.
+        if (ortho) yaw -= orthoAngle.y;
+        else       yaw += orthoAngle.y;
+
+        useOrthographic = ortho;
+
+        if (myCam != null)
+        {
+            myCam.orthographic = ortho;
+            if (ortho) myCam.orthographicSize = orthoSize;
+            else       myCam.fieldOfView      = perspectiveFov;
+        }
+
+        // Re-clamp pitch to the active mode's range so the next mouse drag
+        // doesn't suddenly snap.
+        pitch = ortho
+            ? Mathf.Clamp(pitch, 10f, 80f)
+            : Mathf.Clamp(pitch, minPitch, maxPitch);
     }
 
     public void AddDistance(float delta)

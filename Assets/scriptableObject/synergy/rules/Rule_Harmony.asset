@@ -1,0 +1,22 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ba6a5852d6fa6b74d85f13f6554d17f0, type: 3}
+  m_Name: Rule_Harmony
+  m_EditorClassIdentifier: Assembly-CSharp::HarmonyRule
+  displayName: Harmony
+  color: 3
+  priority: 40
+  absorbAdditionalPieces: 1
+  effect: {fileID: 11400000, guid: 770657fb0b7345c40bbcd02a4d8a4eef, type: 2}
+  visualizer: {fileID: 11400000, guid: 1a9c27529edd7024d94bc2b6ff0e6a42, type: 2}
+  flavorText: 
+  minPieces: 4

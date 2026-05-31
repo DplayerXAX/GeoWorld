@@ -10,6 +10,11 @@ public class PlacementController : MonoBehaviour
     public BlockData[] blocks;
     public GridSystem grid;
     public BlockData currentBlock;
+    // Synergy theme color of the currently-held token. Set when picking up
+    // from shop / tray / repositioning an existing block; consumed by
+    // TryPlace to forward into SynergyEvaluator. BlockColor.None means the
+    // piece won't participate in synergies.
+    public BlockColor currentSynergyColor = BlockColor.None;
     public GameObject cubePrefab;
     public Transform previewParent;
     public OrbitCamera cam;
@@ -115,7 +120,7 @@ public class PlacementController : MonoBehaviour
         editFocusAnchor = new GameObject("EditFocusAnchor").transform;
     }
 
-    void ShowPlacementPopup(string msg, float duration = 1.5f)
+    public void ShowPlacementPopup(string msg, float duration = 1.5f)
     {
         if (string.IsNullOrEmpty(msg)) return;
         _popupMsg      = msg;
@@ -194,7 +199,16 @@ public class PlacementController : MonoBehaviour
         var blockRow  = RollRow(normalTypes, blockCount);
         var turretRow = RollRow(turretTypes, turretCount);
 
-        ShopController.Instance.SetShopItems(blockRow, turretRow, cubePrefab, grid);
+        // Roll a synergy color for each token. Non-turrets sample from the
+        // run's ColorDistribution; turrets stay BlockColor.None (combat
+        // pieces don't participate in synergies for now).
+        var dist  = GameFlowManager.Instance?.colorDistribution;
+        var rng   = GameFlowManager.Instance?.Rng;
+        var blockColors  = RollColors(blockRow.Length,  dist, rng, isTurret: false);
+        var turretColors = RollColors(turretRow.Length, dist, rng, isTurret: true);
+
+        ShopController.Instance.SetShopItems(
+            blockRow, turretRow, blockColors, turretColors, cubePrefab, grid);
     }
 
     static BlockData[] RollRow(List<BlockData> pool, int count)
@@ -204,6 +218,18 @@ public class PlacementController : MonoBehaviour
         for (int i = 0; i < count; i++)
             row[i] = pool[Random.Range(0, pool.Count)];
         return row;
+    }
+
+    static BlockColor[] RollColors(int count, ColorDistribution dist, Xoshiro256StarStar rng, bool isTurret)
+    {
+        if (count <= 0) return System.Array.Empty<BlockColor>();
+        var arr = new BlockColor[count];
+        for (int i = 0; i < count; i++)
+        {
+            if (isTurret || dist == null || rng == null) arr[i] = BlockColor.None;
+            else                                          arr[i] = dist.Pick(rng);
+        }
+        return arr;
     }
 
     // Hides or shows all tray tokens that haven't been consumed yet.
@@ -420,6 +446,7 @@ public class PlacementController : MonoBehaviour
 
                 // Update count before removing from grid.
                 ResourceManager.Instance?.OnBlockRemoved(selectedInstance.data.blockType);
+                SynergyEvaluator.Instance?.OnPieceRemoved(selectedInstance.placedPiece);
 
                 grid.RemoveInstance(selectedInstance);
                 NotifyBlockLifted(lastObjectCells);
@@ -487,7 +514,15 @@ public class PlacementController : MonoBehaviour
             }
 
             currentBlock        = sb.data;
-            currentColor        = MpbColor.Get(sb.GetComponentInChildren<Renderer>());
+            currentSynergyColor = sb.color;
+            // Derive the visual tint directly from the synergy color so the
+            // placed block matches the palette exactly, instead of round-
+            // tripping through the shop renderer (which has different
+            // lighting and would show subtle color drift). Falls back to
+            // reading the renderer's MPB for None / legacy tokens.
+            currentColor        = sb.color != BlockColor.None
+                ? BlockColorPalette.Get(sb.color)
+                : MpbColor.Get(sb.GetComponentInChildren<Renderer>());
             activePhysicsObject = sb.gameObject;
             selectedInstance    = null;
 
@@ -523,7 +558,12 @@ public class PlacementController : MonoBehaviour
         {
             selectedInstance    = instance;
             currentBlock        = instance.data;
-            currentColor        = MpbColor.Get(instance.visualObject.GetComponentInChildren<Renderer>());
+            currentSynergyColor = instance.color;
+            // Re-derive tint from synergy color when present — keeps placed
+            // block visuals exactly on-palette across pickup→replace cycles.
+            currentColor        = instance.color != BlockColor.None
+                ? BlockColorPalette.Get(instance.color)
+                : MpbColor.Get(instance.visualObject.GetComponentInChildren<Renderer>());
             activePhysicsObject = null;
 
             UpdateHighlight(instance.visualObject);
@@ -553,6 +593,7 @@ public class PlacementController : MonoBehaviour
 
                 // Update count before removing from grid.
                 ResourceManager.Instance?.OnBlockRemoved(instance.data.blockType);
+                SynergyEvaluator.Instance?.OnPieceRemoved(instance.placedPiece);
 
                 grid.RemoveInstance(instance);   // destroys visualObject
                 NotifyBlockLifted(lastObjectCells);
@@ -689,13 +730,21 @@ public class PlacementController : MonoBehaviour
         PlacedBlockInstance ins = new()
         {
             data         = currentBlock,
-            visualObject = obj
+            visualObject = obj,
+            color        = currentSynergyColor,
         };
 
         foreach (var c in cells)
             ins.occupiedCells.Add(currentGridPos + c);
 
         RegisterPlacedBlock(ins);
+
+        // Synergy hook: register the piece so SynergyEvaluator can re-run
+        // its pattern detection. Returns the PlacedPiece reference we stash
+        // for later removal.
+        ins.placedPiece = SynergyEvaluator.Instance?.OnPiecePlaced(
+            ins.data, ins.color, ins.occupiedCells.ToArray());
+
         StartCoroutine(GrowIn(obj));
 
         // ── Push undo record ──────────────────────────────────────────────────
@@ -819,8 +868,12 @@ public class PlacementController : MonoBehaviour
     // Direct block spawn that bypasses player input, payment, preview, and the
     // grow animation. Used by snapshot restore. Caller is responsible for
     // ensuring `worldCells` are unoccupied; this method does not validate.
+    //
+    // `synergyColor` defaults to None — snapshot restore should serialize and
+    // pass the original BlockColor so reloaded boards keep their synergies.
     public PlacedBlockInstance PlaceBlockDirect(
-        BlockData data, Vector3Int[] worldCells, Quaternion rotation, Color color)
+        BlockData data, Vector3Int[] worldCells, Quaternion rotation, Color color,
+        BlockColor synergyColor = BlockColor.None)
     {
         if (data == null || worldCells == null || worldCells.Length == 0) return null;
 
@@ -843,9 +896,13 @@ public class PlacementController : MonoBehaviour
         foreach (var r in obj.GetComponentsInChildren<Renderer>())
             MpbColor.Set(r, color);
 
-        var ins = new PlacedBlockInstance { data = data, visualObject = obj };
+        var ins = new PlacedBlockInstance { data = data, visualObject = obj, color = synergyColor };
         foreach (var c in worldCells) ins.occupiedCells.Add(c);
         RegisterPlacedBlock(ins);
+
+        ins.placedPiece = SynergyEvaluator.Instance?.OnPiecePlaced(
+            ins.data, ins.color, ins.occupiedCells.ToArray());
+
         return ins;
     }
 
@@ -933,6 +990,7 @@ public class PlacementController : MonoBehaviour
         });
 
         ResourceManager.Instance?.OnBlockRemoved(selectedInstance.data.blockType);
+        SynergyEvaluator.Instance?.OnPieceRemoved(selectedInstance.placedPiece);
         NotifyBlockLifted(selectedInstance.occupiedCells.ToArray());
         grid.RemoveInstance(selectedInstance);
         selectedInstance = null;
@@ -1004,6 +1062,7 @@ public class PlacementController : MonoBehaviour
         }
 
         ResourceManager.Instance?.OnBlockRemoved(rec.data.blockType);
+        SynergyEvaluator.Instance?.OnPieceRemoved(ins.placedPiece);
         NotifyBlockLifted(rec.cells);
         grid.RemoveInstance(ins);
 
@@ -1023,6 +1082,7 @@ public class PlacementController : MonoBehaviour
         }
 
         ResourceManager.Instance?.OnBlockRemoved(rec.data.blockType);
+        SynergyEvaluator.Instance?.OnPieceRemoved(ins.placedPiece);
         NotifyBlockLifted(rec.cells);
         grid.RemoveInstance(ins);
 
@@ -1341,7 +1401,10 @@ public class PlacementController : MonoBehaviour
         }
 
         currentBlock        = sb.data;
-        currentColor        = MpbColor.Get(sb.GetComponentInChildren<Renderer>());
+        currentSynergyColor = sb.color;
+        currentColor        = sb.color != BlockColor.None
+            ? BlockColorPalette.Get(sb.color)
+            : MpbColor.Get(sb.GetComponentInChildren<Renderer>());
         activePhysicsObject = sb.gameObject;
         selectedInstance    = null;
         isPickingUpObject   = false;   // new purchase, not a reposition
@@ -1387,13 +1450,18 @@ public class PlacementController : MonoBehaviour
             PlacedBlockInstance ins = new()
             {
                 data         = currentBlock,
-                visualObject = obj
+                visualObject = obj,
+                color        = currentSynergyColor,
             };
 
             foreach (var c in lastObjectCells)
                 ins.occupiedCells.Add(c);
 
             RegisterPlacedBlock(ins);
+
+            ins.placedPiece = SynergyEvaluator.Instance?.OnPiecePlaced(
+                ins.data, ins.color, ins.occupiedCells.ToArray());
+
             StartCoroutine(GrowIn(obj));
             // Restore count — OnBlockRemoved was called on pickup, balance it back.
             ResourceManager.Instance?.OnBlockPlaced(ins.data.blockType);
