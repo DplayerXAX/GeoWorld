@@ -19,8 +19,8 @@ public class UpgradeCard : ScriptableObject
 
     [Header("Classification")]
     public Rarity rarity = Rarity.Common;
-    [Tooltip("Themes this card relates to (e.g. card that boosts Development synergies). Drives future card-synergy interactions — purely metadata for now.")]
-    public List<BlockTag> tags = new();
+    [Tooltip("Theme colors this card relates to (e.g. card that boosts Order synergies). Drives future card↔synergy interactions — purely metadata for now.")]
+    public List<BlockColor> tags = new();
 
     [Header("Behavior")]
     [Tooltip("The effect to apply when picked. Author as a separate ScriptableObject subclass of GameEffect and drag it here.")]

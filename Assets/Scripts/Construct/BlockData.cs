@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using UnityEngine;
 
 public enum BlockRarity
@@ -71,8 +70,9 @@ public class BlockData : ScriptableObject
     public BlockType   blockType;
     public BlockRarity rarity = BlockRarity.Common;
 
-    [Tooltip("Synergy themes this block contributes to. SynergyEvaluator counts placed blocks by tag; threshold activations fire matching SynergyDefinition tiers.")]
-    public List<BlockTag> tags = new();
+    // NOTE: synergy color is NOT stored on BlockData — it's assigned at
+    // runtime per spawned token (random per Build phase). See
+    // SynergyEvaluator.OnPiecePlaced(data, color, cells).
 
     [Tooltip("Pick a preset shape then click  Apply Shape → cells  in the ⋮ menu.\n" +
              "Set to Custom to define cells manually.")]

@@ -44,6 +44,10 @@ public class GameFlowManager : MonoBehaviour
     [Tooltip("If true and using authored waves only (no generator), runs past the end of the list loop back to the start.")]
     public bool loopWaves = false;
 
+    [Header("Synergy")]
+    [Tooltip("Color assignment policy for tokens spawned each Build phase. If null, all tokens get BlockColor.None (no synergy participation).")]
+    public ColorDistribution colorDistribution;
+
     // Run-scoped RNG. Lives for the whole run, fed by every random decision
     // (wave gen, loot drops, shop offers, …) so the run is reproducible from
     // `runSeed` alone.
@@ -336,6 +340,11 @@ public class GameFlowManager : MonoBehaviour
         placement.currentBlock = null;
         placement.mode = PlacementMode.Select;
         placement.ClearTray();                          // remove leftover tokens from last round
+
+        // Refresh the synergy color pool. In mode C this samples a new subset
+        // of colors for the round; in mode B it's a no-op snapshot.
+        colorDistribution?.BeginRound(EnsureRng());
+
         placement.SpawnRoundBlocks(blocksPerTurn, turretsPerTurn);
     }
 

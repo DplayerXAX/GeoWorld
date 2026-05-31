@@ -7,6 +7,7 @@ public class AudioManager : MonoBehaviour
     [Header("Wwise GameObject")]
     public GameObject audioEmitter;
     public AK.Wwise.Event BGM;
+    public AK.Wwise.Event BGM_fight;
 
     [Header("Temp")]
     public GameObject[] pianoKey;
@@ -27,20 +28,22 @@ public class AudioManager : MonoBehaviour
     }
     private void Start()
     {
-        // BGM 发在 this.gameObject 上，Note 发在 audioEmitter 上。
-        // Switch Container Scope = Game Object 时两个物体都要设，否则其中一个
-        // 找不到 default Switch 就报 "No default Switch value selected"。
         SetChordOnObject(BlockType.Home, this.gameObject);
         SetChordOnObject(BlockType.Home, audioEmitter);
         BGM.Post(this.gameObject);
     }
 
-    // 内部：在指定物体上设 Switch（两个 emitter 都要覆盖到）
     void SetChordOnObject(BlockType type, GameObject target)
     {
         if (target == null) return;
         AkUnitySoundEngine.SetSwitch(chordSwitchGroup, type.ToString(), target);
     }
+
+    public void switchBGM() 
+    {
+        
+    }
+    
 
     public void PlayRotate() 
     {

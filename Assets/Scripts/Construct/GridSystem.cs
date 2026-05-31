@@ -6,6 +6,15 @@ public class PlacedBlockInstance
     public BlockData data;
     public List<Vector3Int> occupiedCells = new();
     public GameObject visualObject;
+
+    // Synergy theme color this piece was assigned at spawn time. Copied from
+    // SelectableBlock.color (or BlockColor.None for direct/legacy placements).
+    public BlockColor color = BlockColor.None;
+
+    // Reference returned by SynergyEvaluator.OnPiecePlaced. Stashed here so
+    // OnPieceRemoved can hand the exact same instance back. Null until the
+    // synergy hook fires (or if no evaluator is in the scene).
+    public PlacedPiece placedPiece;
 }
 
 public class GridSystem : MonoBehaviour

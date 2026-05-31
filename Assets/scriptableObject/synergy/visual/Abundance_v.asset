@@ -1,0 +1,34 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8fb03f8cecab46240918ff3dbac030b3, type: 3}
+  m_Name: Abundance_v
+  m_EditorClassIdentifier: Assembly-CSharp::EdgePrefabVisualizer
+  prefab: {fileID: 4434825823708753977, guid: 72eeb2535a5e7e344a50f2822dc53696, type: 3}
+  outwardOffset: 0
+  localScale: 1
+  alignToOutward: 1
+  extraEuler: {x: 0, y: 0, z: 0}
+  tintToThemeColor: 1
+  colorPalette:
+  - {r: 1, g: 0.55, b: 0.1, a: 1}
+  - {r: 0.2, g: 0.75, b: 0.3, a: 1}
+  - {r: 0.6, g: 0.2, b: 0.85, a: 1}
+  - {r: 0.88, g: 0.18, b: 0.2, a: 1}
+  rotationJitterDeg: 180
+  tiltJitterDeg: 25
+  scaleJitterMin: 0.7
+  scaleJitterMax: 1.3
+  positionJitter: 0.08
+  topEdges: 1
+  sideEdges: 1
+  bottomEdges: 0
+  skipInteriorEdges: 1
