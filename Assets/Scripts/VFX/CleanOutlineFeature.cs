@@ -3,6 +3,14 @@ using UnityEngine.Rendering;
 using UnityEngine.Rendering.RenderGraphModule;
 using UnityEngine.Rendering.Universal;
 
+// URP Compatibility-Mode APIs (Configure / Execute / cameraColorTargetHandle /
+// RenderingUtils.ReAllocateIfNeeded) are flagged obsolete in URP 17+. The
+// RecordRenderGraph path is the modern replacement and is fully present
+// below. These pragma suppress the obsolete-API warnings without removing
+// the compat-mode fallback — needed for projects that still toggle
+// URP_COMPATIBILITY_MODE.
+#pragma warning disable CS0618, CS0672
+
 // Constructivism-style hard black outline. Pure Sobel + binary threshold.
 // No noise / no charcoal feel — a graphic line that separates geometry from
 // the background as if cut from paper.

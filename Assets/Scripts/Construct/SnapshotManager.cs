@@ -44,7 +44,7 @@ public static class SnapshotManager
         foreach (var c in gfm.AllEnds)
             snap.endpoints.Add(new EndpointSnapshot { cell = c, isStart = false });
 
-        var cam = UnityEngine.Object.FindObjectOfType<OrbitCamera>();
+        var cam = UnityEngine.Object.FindFirstObjectByType<OrbitCamera>();
         if (cam != null)
         {
             snap.camera.focusPoint = cam.FocusPoint;
@@ -94,7 +94,7 @@ public static class SnapshotManager
 
         gfm.RestoreRoundState(snap.roundIndex, snap.runsSinceLastEndpoint, starts, ends);
 
-        var cam = UnityEngine.Object.FindObjectOfType<OrbitCamera>();
+        var cam = UnityEngine.Object.FindFirstObjectByType<OrbitCamera>();
         if (cam != null && snap.camera != null)
             cam.ApplyState(snap.camera.focusPoint, snap.camera.distance, snap.camera.yaw, snap.camera.pitch);
 

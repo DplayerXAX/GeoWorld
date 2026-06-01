@@ -17,10 +17,13 @@ using UnityEngine;
 public abstract class FaceMaterialVisualizerBase : SynergyVisualizer
 {
     [Header("Face panel (background)")]
-    [Tooltip("If true, a flat-colored panel covers each face before the pattern is drawn on top.")]
+    [Tooltip("If true, a flat-colored / textured panel covers each face before the pattern is drawn on top.")]
     public bool  panelEnabled = true;
 
-    [Tooltip("Panel color.")]
+    [Tooltip("Optional material for the panel. If set, used directly (good for textures — wood grain, wave fields, etc.). If null, falls back to solid panelColor via MPB.")]
+    public Material panelMaterial;
+
+    [Tooltip("Solid panel color (used when panelMaterial is null).")]
     public Color panelColor   = Color.black;
 
     [Tooltip("Panel size as a fraction of cellSize. <1.0 leaves a frame of the original face visible.")]
@@ -62,8 +65,15 @@ public abstract class FaceMaterialVisualizerBase : SynergyVisualizer
         float cellSize = grid.cellSize;
         float half     = cellSize * 0.5f;
 
+        // Optional per-cell filter: rules implementing ICellHighlightFilter
+        // (e.g. Enlightenment cube) restrict decoration to specific cells of
+        // a claimed piece. Rules without the interface decorate all cells.
+        var cellFilter = active.rule as ICellHighlightFilter;
+
         foreach (var worldCell in instance.occupiedCells)
         {
+            if (cellFilter != null && !cellFilter.ShouldHighlight(worldCell)) continue;
+
             var cellLocal = parent.InverseTransformPoint(grid.GridToWorld(worldCell));
             for (int i = 0; i < _faces.Length; i++)
             {
@@ -182,6 +192,18 @@ public abstract class FaceMaterialVisualizerBase : SynergyVisualizer
         panel.transform.localScale = new Vector3(side, panelDepth, side);
 
         var r = panel.GetComponent<Renderer>();
-        if (r != null) MpbColor.Set(r, col);
+        if (r != null)
+        {
+            if (panelMaterial != null)
+            {
+                // Use the authored material directly. Sharing one instance lets
+                // Unity batch identical panels — fine for textured patterns.
+                r.sharedMaterial = panelMaterial;
+            }
+            else
+            {
+                MpbColor.Set(r, col);
+            }
+        }
     }
 }

@@ -948,6 +948,7 @@ GameObject:
   m_Component:
   - component: {fileID: 417052013}
   - component: {fileID: 417052012}
+  - component: {fileID: 417052014}
   m_Layer: 0
   m_Name: GridOverlay
   m_TagString: Untagged
@@ -969,11 +970,19 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::GridOverlay
   grid: {fileID: 164805054}
   placement: {fileID: 164805052}
-  cam: {fileID: 330585548}
-  radiusXZ: 3
-  fadeStartPct: 0.35
-  lineColor: {r: 0.35, g: 0.88, b: 1, a: 0.45}
-  highlightColor: {r: 0, g: 0.9, b: 1, a: 0.7}
+  cam: {fileID: 0}
+  followCursor: 1
+  onlyInEditMode: 1
+  hideInRunningPhase: 1
+  radiusXZ: 6
+  fadeStartPct: 0.55
+  useGridSize: 1
+  customSize: {x: 10, y: 5, z: 10}
+  originOffset: {x: 0, y: 0, z: 0}
+  drawAllHorizontalPlanes: 1
+  drawVerticalWalls: 1
+  lineColor: {r: 1, g: 1, b: 1, a: 0.45}
+  highlightColor: {r: 0, g: 0.95, b: 1, a: 0.85}
   dashLen: 0.16
   gapLen: 0.13
   showCursor: 1
@@ -994,6 +1003,54 @@ Transform:
   m_Children: []
   m_Father: {fileID: 1215187697}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &417052014
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 417052011}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 084f9fef7d6b16f488b4269e5095374a, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PlacementHintOverlay
+  showAxisLines: 0
+  axisHalfLengthCells: 4
+  axisDashesPerSide: 6
+  axisLineWidth: 0.1
+  axisAlpha: 0.4
+  axisColorX: {r: 1, g: 0.3, b: 0.3, a: 1}
+  axisColorY: {r: 0.35, g: 0.95, b: 0.4, a: 1}
+  axisColorZ: {r: 0.35, g: 0.55, b: 1, a: 1}
+  showMovementArrows: 1
+  showMovementLabels: 0
+  arrowGap: 0.65
+  arrowSize: 0.22
+  arrowColor: {r: 0.95, g: 0.95, b: 0.95, a: 0.65}
+  arrowFlashColor: {r: 1, g: 0.85, b: 0.3, a: 1}
+  arrowFlashDuration: 0.35
+  hideForwardBackArrows: 1
+  toggleKey: 104
+  shiftHoldInverts: 1
+  bobAmplitude: 0.05
+  bobSpeedHz: 0.7
+  showRotationRings: 1
+  ringPadding: 0.3
+  ringSegments: 16
+  ringLineWidth: 0.05
+  ringAlpha: 0.6
+  ringSpinSpeed: 8
+  fadeInDuration: 0.25
+  labelFontSize: 14
+  labelScreenYOffset: 0
+  labelBrackets: 1
+  labelColor: {r: 0, g: 0, b: 0, a: 1}
+  labelBackground: {fileID: 0}
+  labelBackgroundColor: {r: 1, g: 1, b: 1, a: 1}
+  labelBackgroundScale: 1.6
+  labelBackgroundForRings: 1
+  labelScreenPushPx: 18
 --- !u!1 &621363996
 GameObject:
   m_ObjectHideFlags: 0
@@ -1907,7 +1964,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!4 &1427198834
 Transform:
   m_ObjectHideFlags: 0
@@ -2238,7 +2295,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 9adabea468bfc8b44a6adea1699b493e, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ShopBackdrop
-  enabled: 0
+  backdropEnabled: 0
   backDistance: 9
   quadSize: {x: 28, y: 18}
   paletteA: {r: 0.6, g: 0.3, b: 0.8, a: 1}
@@ -2328,8 +2385,8 @@ MonoBehaviour:
   startCell: {x: 0, y: 0, z: 0}
   endCell: {x: 0, y: 0, z: 0}
   allEndpoints: []
-  minDistance: 5
-  maxDistance: 10
+  minDistance: 6
+  maxDistance: 8
   firstStartScatter: 2
   yMax: 4
   shellSampleAttempts: 60
@@ -2365,13 +2422,13 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ResourceManager
   testing: 1
-  startingBlockCurrency: 80
-  blockCurrencyPerRound: 30
+  startingBlockCurrency: 120
+  blockCurrencyPerRound: 22
   cellBasePrice: 10
-  roundPriceScale: 0.06
+  roundPriceScale: 0.1
   startingTurretCurrency: 5
   turretCurrencyPerRound: 2
-  turretRegenPerSecond: 0.5
+  turretRegenPerSecond: 0.3
 --- !u!4 &2098137110
 Transform:
   m_ObjectHideFlags: 0

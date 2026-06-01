@@ -38,6 +38,13 @@ public class SynergyVisualFX : MonoBehaviour
         public ActiveSynergy       active;
         public GameObject          spawned;
 
+        // Snapshot of active.claimedPieces.Count at decoration time. If the
+        // current count differs (absorb grew the claim, or a piece was
+        // removed and the rule still satisfies), the decoration is rebuilt
+        // — important for ICellHighlightFilter rules where the highlight
+        // region can move/grow without the piece reference changing.
+        public int snapshotClaimCount;
+
         // Original (pre-tint) MPB colors for each renderer of the piece.
         // Only populated for Universal pieces when tintJokerPieces is on.
         public List<(Renderer r, Color original)> jokerRestore;
@@ -123,10 +130,15 @@ public class SynergyVisualFX : MonoBehaviour
 
             if (_decos.TryGetValue(pieceId, out var existing))
             {
-                if (existing.active.rule == active.rule)
-                    continue;   // same rule still owns it — leave decoration as-is
+                bool ruleSame  = existing.active.rule == active.rule;
+                bool claimSame = existing.active == active
+                              && existing.snapshotClaimCount == active.claimedPieces.Count;
 
-                // Different rule now owns this piece — release then re-claim.
+                // Same rule AND same claim signature → decoration is current.
+                // Rule changes (different synergy) OR claim grew/shrank (absorb,
+                // ICellHighlightFilter zone may have moved) → rebuild.
+                if (ruleSame && claimSame) continue;
+
                 SafeRelease(existing);
                 _decos.Remove(pieceId);
             }
@@ -149,11 +161,12 @@ public class SynergyVisualFX : MonoBehaviour
 
             _decos[pieceId] = new PieceDecoration
             {
-                instance     = ins,
-                visualizer   = newVis,
-                active       = active,
-                spawned      = spawned,
-                jokerRestore = jokerRestore,
+                instance           = ins,
+                visualizer         = newVis,
+                active             = active,
+                spawned            = spawned,
+                jokerRestore       = jokerRestore,
+                snapshotClaimCount = active.claimedPieces.Count,
             };
         }
     }

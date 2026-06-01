@@ -19,6 +19,10 @@ public class PlacementController : MonoBehaviour
     public Transform previewParent;
     public OrbitCamera cam;
     public Vector3Int SnappedGridPos => baseGridPos;
+    // baseGridPos + manualOffset — where the block is actually placed/previewed.
+    // Use this (not SnappedGridPos) for hints / fx that should follow the
+    // block as the player nudges it with WASDQE.
+    public Vector3Int CurrentGridPos => currentGridPos;
     [Range(0.5f, 4f)] public float snapGridRadius = 1.5f;
     public float minDepth = 2f, maxDepth = 40f, scrollSpeed = 3f, rotateSpeed = 10f;
     public float panSpeed = 8f;
@@ -63,6 +67,10 @@ public class PlacementController : MonoBehaviour
     [Tooltip("Clamp range for the ortho build-plane Y.")]
     public Vector2Int buildYRange = new Vector2Int(0, 20);
     private Quaternion _currentRotation = Quaternion.identity, _targetRotation = Quaternion.identity;
+
+    // Read-only: the rotation actually applied to the preview/placed block
+    // this frame. PlacementHintOverlay reads it to size hint arrows.
+    public Quaternion CurrentRotation => _currentRotation;
     private List<GameObject> previewCubes = new();
 
     private PlacedBlockInstance selectedInstance;
@@ -349,8 +357,9 @@ public class PlacementController : MonoBehaviour
     }
 
     // Edit mode only.
-    // WASD  → move block relative to camera's horizontal facing (snapped to grid axes)
-    // Q / E → move block down / up in world Y
+    // A / D → move block left/right relative to camera's horizontal facing
+    // W / S → move block UP / DOWN in world Y
+    // Q / E → move block forward / back relative to camera's horizontal facing
     void HandleKeyboardOffset()
     {
         Vector3Int right   = SnapToHorizontalAxis(cam.transform.right);
@@ -358,10 +367,10 @@ public class PlacementController : MonoBehaviour
 
         if (Input.GetKeyDown(KeyCode.A)) manualOffset -= right;
         if (Input.GetKeyDown(KeyCode.D)) manualOffset += right;
-        if (Input.GetKeyDown(KeyCode.W)) manualOffset += forward;
-        if (Input.GetKeyDown(KeyCode.S)) manualOffset -= forward;
-        if (Input.GetKeyDown(KeyCode.Q)) manualOffset += Vector3Int.down;
-        if (Input.GetKeyDown(KeyCode.E)) manualOffset += Vector3Int.up;
+        if (Input.GetKeyDown(KeyCode.W)) manualOffset += Vector3Int.up;
+        if (Input.GetKeyDown(KeyCode.S)) manualOffset += Vector3Int.down;
+        if (Input.GetKeyDown(KeyCode.Q)) manualOffset += forward;
+        if (Input.GetKeyDown(KeyCode.E)) manualOffset -= forward;
     }
 
     // Select mode: WASD pans the camera continuously along its horizontal facing,
@@ -375,10 +384,10 @@ public class PlacementController : MonoBehaviour
         Vector3 delta = Vector3.zero;
         if (Input.GetKey(KeyCode.D)) delta += right;
         if (Input.GetKey(KeyCode.A)) delta -= right;
-        if (Input.GetKey(KeyCode.W)) delta += fwd;
-        if (Input.GetKey(KeyCode.S)) delta -= fwd;
-        if (Input.GetKey(KeyCode.E)) delta += Vector3.up;
-        if (Input.GetKey(KeyCode.Q)) delta -= Vector3.up;
+        if (Input.GetKey(KeyCode.W)) delta += Vector3.up;
+        if (Input.GetKey(KeyCode.S)) delta -= Vector3.up;
+        if (Input.GetKey(KeyCode.Q)) delta += fwd;
+        if (Input.GetKey(KeyCode.E)) delta -= fwd;
 
         if (delta.sqrMagnitude > 0.0001f)
             cam.Pan(delta.normalized * panSpeed * Time.deltaTime);
@@ -400,22 +409,26 @@ public class PlacementController : MonoBehaviour
     {
         bool shift = Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift);
 
-        if (Input.GetKeyDown(KeyCode.Alpha1)) 
+        // World-space rotation (pre-multiply). delta * old applies delta in
+        // world frame, so 1/2/3 always rotate around world X/Y/Z regardless
+        // of how the block has been turned before. Keeps the visual ring
+        // overlay axis-aligned and predictable.
+        if (Input.GetKeyDown(KeyCode.Alpha1))
         {
             AudioManager.Instance.PlayRotate();
-            _targetRotation *= Quaternion.Euler(90, 0, 0);
+            _targetRotation = Quaternion.Euler(90, 0, 0) * _targetRotation;
         }
 
-        if (Input.GetKeyDown(KeyCode.Alpha2)) 
+        if (Input.GetKeyDown(KeyCode.Alpha2))
         {
             AudioManager.Instance.PlayRotate();
-            _targetRotation *= Quaternion.Euler(0, 90, 0);
+            _targetRotation = Quaternion.Euler(0, 90, 0) * _targetRotation;
         }
 
-        if (Input.GetKeyDown(KeyCode.Alpha3)) 
+        if (Input.GetKeyDown(KeyCode.Alpha3))
         {
             AudioManager.Instance.PlayRotate();
-            _targetRotation *= Quaternion.Euler(0, 0, 90);
+            _targetRotation = Quaternion.Euler(0, 0, 90) * _targetRotation;
         }
     }
 

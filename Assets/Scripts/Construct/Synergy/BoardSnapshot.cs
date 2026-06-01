@@ -34,6 +34,15 @@ public sealed class BoardSnapshot
     readonly List<PlacedPiece>                        _all       = new();
     readonly Dictionary<BlockColor, List<PlacedPiece>> _byColor   = new();
 
+    // Per-color "data version" that bumps on Add/Remove of a piece of that
+    // color (or Universal, which counts as every theme's pool via joker).
+    // SynergyEvaluator reads VersionFor(rule.color) to skip rules whose
+    // relevant pool hasn't changed since the last evaluation.
+    readonly Dictionary<BlockColor, int> _versionByColor = new();
+
+    public int VersionFor(BlockColor c)
+        => _versionByColor.TryGetValue(c, out var v) ? v : 0;
+
     // ── Mutation ────────────────────────────────────────────────────────
 
     // Returns false if any of the piece's cells are already occupied.
@@ -51,6 +60,7 @@ public sealed class BoardSnapshot
 
         _all.Add(p);
         BucketFor(p.color).Add(p);
+        BumpVersions(p.color);
         return true;
     }
 
@@ -65,6 +75,7 @@ public sealed class BoardSnapshot
                 _cellOwner.Remove(p.cells[i]);
         }
         BucketFor(p.color).Remove(p);
+        BumpVersions(p.color);
         return true;
     }
 
@@ -73,6 +84,37 @@ public sealed class BoardSnapshot
         _cellOwner.Clear();
         _all.Clear();
         _byColor.Clear();
+        _versionByColor.Clear();
+    }
+
+    // A piece of `pieceColor` was added or removed. Bump the relevant
+    // versions:
+    //   • If pieceColor == Universal: bumps every theme color (jokers are
+    //     in every theme's pool, so every rule needs to re-eval).
+    //   • Else: bumps just that color.
+    void BumpVersions(BlockColor pieceColor)
+    {
+        if (pieceColor == BlockColor.Universal)
+        {
+            // Bump all theme colors. Iterating known enum values is cheap.
+            BumpOne(BlockColor.Order);
+            BumpOne(BlockColor.Harmony);
+            BumpOne(BlockColor.Abundance);
+            BumpOne(BlockColor.Heresy);
+            BumpOne(BlockColor.Enlightenment);
+            BumpOne(BlockColor.Exploration);
+            BumpOne(BlockColor.Universal);
+        }
+        else if (pieceColor != BlockColor.None)
+        {
+            BumpOne(pieceColor);
+        }
+    }
+
+    void BumpOne(BlockColor c)
+    {
+        _versionByColor.TryGetValue(c, out var v);
+        _versionByColor[c] = v + 1;
     }
 
     // ── Basic reads ─────────────────────────────────────────────────────

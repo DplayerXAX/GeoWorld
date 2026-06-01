@@ -10,8 +10,8 @@ using UnityEngine;
 public class ShopBackdrop : MonoBehaviour
 {
     [Header("Enabled")]
-    [Tooltip("Turn off entirely for a clean solid-colour shop interior.")]
-    public bool   enabled = false;
+    [Tooltip("Turn off entirely for a clean solid-colour shop interior. Named `backdropEnabled` to avoid shadowing MonoBehaviour.enabled.")]
+    public bool   backdropEnabled = false;
 
     [Header("Placement")]
     [Tooltip("How far behind shopCenter (from camera POV) the backdrop sits.")]
@@ -38,7 +38,7 @@ public class ShopBackdrop : MonoBehaviour
 
     void Start()
     {
-        if (!enabled) return;
+        if (!backdropEnabled) return;
 
         _shop = ShopController.Instance;
         if (_shop == null) { Debug.LogWarning("[ShopBackdrop] ShopController.Instance is null."); return; }

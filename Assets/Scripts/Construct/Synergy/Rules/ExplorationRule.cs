@@ -7,18 +7,20 @@ using UnityEngine;
 // "Run" is measured in CELLS, not pieces, so multi-cell pieces (I3, I4)
 // contribute their full length. The claimed set is every piece owning at
 // least one cell of the longest run — those pieces may extend beyond the
-// line and are still claimed in full.
+// line and are still claimed in full (lock-wise). The visualizer only
+// decorates the IN-LINE cells via ICellHighlightFilter — overhang cells
+// stay visually plain.
 //
 // Tie-breaking: the FIRST axis/start found wins. Deterministic given the
 // underlying iteration order; rarely matters because the longest run is
 // usually unique.
 [CreateAssetMenu(menuName = "GeoWorld/Synergy/Rules/Exploration Rule",
                  fileName = "ExplorationRule")]
-public class ExplorationRule : SynergyRule
+public class ExplorationRule : SynergyRule, ICellHighlightFilter
 {
     [Header("Exploration — straight line of N+ cells")]
     [Tooltip("Minimum cell count in the longest run for the rule to fire.")]
-    [Min(2)] public int minLength = 4;
+    [Min(2)] public int minLength = 7;
 
     static readonly Vector3Int[] _axes =
     {
@@ -27,11 +29,16 @@ public class ExplorationRule : SynergyRule
         new(0, 0, 1),
     };
 
+    // ── ICellHighlightFilter state (cells of the last detected line) ──
+    [System.NonSerialized] readonly HashSet<Vector3Int> _lineCells = new();
+
     void Reset()
     {
         absorbAdditionalPieces = true;
         priority               = 20;
     }
+
+    public bool ShouldHighlight(Vector3Int worldCell) => _lineCells.Contains(worldCell);
 
     public override bool TryEvaluate(BoardSnapshot board, HashSet<PlacedPiece> pool,
                                      out HashSet<PlacedPiece> claimed, out int tier)
@@ -39,13 +46,17 @@ public class ExplorationRule : SynergyRule
         claimed = null;
         tier    = 0;
 
-        if (color == BlockColor.None || color == BlockColor.Universal) return false;
+        if (color == BlockColor.None || color == BlockColor.Universal)
+        {
+            _lineCells.Clear();
+            return false;
+        }
 
         var usable = new HashSet<PlacedPiece>();
         foreach (var p in board.PiecesUsableAs(color))
             if (pool.Contains(p)) usable.Add(p);
 
-        if (usable.Count == 0) return false;
+        if (usable.Count == 0) { _lineCells.Clear(); return false; }
 
         // Flatten to a cell set for fast adjacency walking.
         var cells = new HashSet<Vector3Int>();
@@ -53,7 +64,7 @@ public class ExplorationRule : SynergyRule
             for (int i = 0; i < p.cells.Length; i++)
                 cells.Add(p.cells[i]);
 
-        if (cells.Count < minLength) return false;
+        if (cells.Count < minLength) { _lineCells.Clear(); return false; }
 
         HashSet<Vector3Int> bestRun = null;
         int bestLen = 0;
@@ -84,7 +95,11 @@ public class ExplorationRule : SynergyRule
             }
         }
 
-        if (bestRun == null) return false;
+        if (bestRun == null) { _lineCells.Clear(); return false; }
+
+        // Snapshot the line cells for the cell-highlight filter.
+        _lineCells.Clear();
+        foreach (var c in bestRun) _lineCells.Add(c);
 
         var pieces = new HashSet<PlacedPiece>();
         foreach (var rc in bestRun)
@@ -92,7 +107,7 @@ public class ExplorationRule : SynergyRule
             var owner = board.GetOwner(rc);
             if (owner != null && usable.Contains(owner)) pieces.Add(owner);
         }
-        if (pieces.Count == 0) return false;
+        if (pieces.Count == 0) { _lineCells.Clear(); return false; }
 
         claimed = pieces;
         tier    = 1;
