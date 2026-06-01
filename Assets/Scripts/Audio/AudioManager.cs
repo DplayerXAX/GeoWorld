@@ -9,6 +9,15 @@ public class AudioManager : MonoBehaviour
     public AK.Wwise.Event BGM;
     public AK.Wwise.Event BGM_fight;
 
+    [Header("Battle music — Wwise State path (preferred)")]
+    [Tooltip("Optional. If your Wwise project drives the music via a State Group (e.g. Music_Mode → Calm/Battle), drag the BATTLE state value here. When set, Enter/ExitBattleBGM uses SetValue() — the container handles transitions per the Wwise authoring (beat-aligned, crossfade, etc.) and skips Post/Stop.")]
+    public AK.Wwise.State BGM_StateBattle;
+    public AK.Wwise.State BGM_StateCalm;
+
+    [Header("Battle music — Event-swap fallback")]
+    [Tooltip("Fade-out duration (ms) when stopping the previous BGM event in event-swap mode.")]
+    [Min(0)] public int   bgmFadeOutMs = 500;
+
     [Header("Temp")]
     public GameObject[] pianoKey;
 
@@ -21,16 +30,29 @@ public class AudioManager : MonoBehaviour
     // The Switch Group name in your Wwise project. Switch values must
     // match BlockType enum names (Home / Lift / Pull / Shadow).
     public string chordSwitchGroup = "BlockChord";
+
+    // Tracked so we can stop the right playing instance when swapping BGMs
+    // (event-swap path). 0 = nothing playing.
+    uint _currentBgmPlayingId;
+
     void Awake()
     {
         Instance = this;
-
     }
+
     private void Start()
     {
         SetChordOnObject(BlockType.Home, this.gameObject);
         SetChordOnObject(BlockType.Home, audioEmitter);
-        BGM.Post(this.gameObject);
+
+        // Force the initial music state to Calm BEFORE posting the BGM event.
+        // Wwise doesn't always honor a "default state" config in the authoring
+        // tool reliably, so we set it explicitly here.
+        if (BGM_StateCalm != null && BGM_StateCalm.IsValid())
+            BGM_StateCalm.SetValue();
+
+        if (BGM != null && BGM.IsValid())
+            _currentBgmPlayingId = BGM.Post(this.gameObject);
     }
 
     void SetChordOnObject(BlockType type, GameObject target)
@@ -39,13 +61,61 @@ public class AudioManager : MonoBehaviour
         AkUnitySoundEngine.SetSwitch(chordSwitchGroup, type.ToString(), target);
     }
 
-    public void switchBGM() 
-    {
-        
-    }
-    
+    // ===== BATTLE MUSIC TRANSITIONS =====
+    //
+    // Two paths, picked automatically:
+    //
+    // 1. STATE PATH (preferred) — drag BGM_StateBattle / BGM_StateCalm in
+    //    the inspector. Wwise's Music Switch Container reacts to the state
+    //    change with whatever transition you authored (beat-aligned, fade,
+    //    silent gap, etc.). Nothing posted from C#; clean and smooth.
+    //
+    // 2. EVENT-SWAP FALLBACK — when state values aren't set, the previous
+    //    BGM event is stopped with a `bgmFadeOutMs` fade and the new event
+    //    is posted. Simpler to set up but transitions are abrupt.
+    //
+    // Call EnterBattleBGM() when combat starts and ExitBattleBGM() when it
+    // ends. Hooked from GameFlowManager.Run / EndRunningPhase / HandleGameOver.
 
-    public void PlayRotate() 
+    public void EnterBattleBGM()
+    {
+        if (BGM_StateBattle != null && BGM_StateBattle.IsValid())
+        {
+            BGM_StateBattle.SetValue();
+            return;
+        }
+        SwapBgmEvent(BGM_fight);
+    }
+
+    public void ExitBattleBGM()
+    {
+        if (BGM_StateCalm != null && BGM_StateCalm.IsValid())
+        {
+            BGM_StateCalm.SetValue();
+            return;
+        }
+        SwapBgmEvent(BGM);
+    }
+
+    void SwapBgmEvent(AK.Wwise.Event next)
+    {
+        if (next == null || !next.IsValid()) return;
+        var host = audioEmitter != null ? audioEmitter : gameObject;
+
+        // Fade out previous BGM, if any.
+        if (_currentBgmPlayingId != 0)
+        {
+            AkUnitySoundEngine.StopPlayingID(
+                (uint)_currentBgmPlayingId,
+                bgmFadeOutMs,
+                AkCurveInterpolation.AkCurveInterpolation_Linear);
+            _currentBgmPlayingId = 0;
+        }
+
+        _currentBgmPlayingId = next.Post(host);
+    }
+
+    public void PlayRotate()
     {
         rotate.Post(this.gameObject);
     }
