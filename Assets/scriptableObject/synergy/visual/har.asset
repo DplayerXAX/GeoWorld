@@ -9,10 +9,11 @@ MonoBehaviour:
   m_GameObject: {fileID: 0}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 5556c6afac7e90d46b8460c9e8ee695c, type: 3}
-  m_Name: Harmony_v
-  m_EditorClassIdentifier: Assembly-CSharp::HarmonyTotemFaceVisualizer
+  m_Script: {fileID: 11500000, guid: f0e130ed6595e7643a77b40a3094327d, type: 3}
+  m_Name: har
+  m_EditorClassIdentifier: Assembly-CSharp::FaceTextureVisualizer
   panelEnabled: 1
+  panelMaterial: {fileID: 2100000, guid: 8cf31e59828eef8409b0bfbb2b3ef741, type: 2}
   panelColor: {r: 0, g: 0, b: 0, a: 1}
   panelSizeFraction: 1
   panelDepth: 0.012
@@ -20,11 +21,3 @@ MonoBehaviour:
   topFace: 1
   sideFaces: 1
   bottomFace: 0
-  barLength: 0.62
-  barWidth: 0.08
-  barOffset: 0.28
-  barDepth: 0.014
-  drawEye: 1
-  eyeRadius: 0.1
-  eyeDepth: 0.018
-  eyeLighten: 0.55

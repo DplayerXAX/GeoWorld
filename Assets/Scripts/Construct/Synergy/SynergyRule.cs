@@ -43,6 +43,11 @@ public abstract class SynergyRule : ScriptableObject
     [Header("Flavor")]
     [TextArea] public string flavorText;
 
+    // Cache: last BoardSnapshot.VersionFor(this.color) seen when the
+    // evaluator tried to (re-)activate this rule. If the version hasn't
+    // changed since, no relevant piece moved → skip TryEvaluate.
+    [System.NonSerialized] public int LastEvalVersion = -1;
+
     // Try to satisfy the rule using ONLY pieces in `pool` (which is the
     // current unclaimed set, or claimed-plus-unclaimed during absorption).
     // On success, populate `claimed` with the pieces this rule wants to

@@ -256,6 +256,15 @@ public class ResourceManager : MonoBehaviour
         OnTurretCurrencyChanged?.Invoke(_turretCurrency);
     }
 
+    /// <summary>Adds <paramref name="amount"/> to block currency. Used by passive
+    /// income effects (Abundance synergy, upgrade cards, etc.).</summary>
+    public void AddBlockCurrency(int amount)
+    {
+        if (amount == 0) return;
+        _blockCurrency += amount;
+        OnBlockCurrencyChanged?.Invoke(_blockCurrency);
+    }
+
     // ── Battle-system API (other team calls these) ────────────────────────────
     /// <summary>Call each time an enemy walks over a block. Earns 1 turret currency.</summary>
     public void OnEnemyPassedBlock(BlockType blockType) => AddTurretCurrency(1);

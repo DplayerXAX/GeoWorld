@@ -3,6 +3,13 @@ using UnityEngine.Rendering;
 using UnityEngine.Rendering.RenderGraphModule;
 using UnityEngine.Rendering.Universal;
 
+// Suppress URP Compatibility-Mode obsolete-API warnings (Configure /
+// Execute / cameraColorTargetHandle / RenderingUtils.ReAllocateIfNeeded).
+// The compat path is intentionally retained as a fallback alongside the
+// modern RecordRenderGraph implementation.
+#pragma warning disable CS0618, CS0672
+
+
 // Adds a sketchy black outline to all geometry edges (silhouette + creases).
 // Uses Sobel on the camera depth + normals textures, with hash-driven UV
 // jitter so the outline reads like an ink/brush stroke instead of a clean

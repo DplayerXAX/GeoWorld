@@ -91,10 +91,14 @@ public class SynergyEvaluator : MonoBehaviour
         if (!_board.RemovePiece(piece)) return;
         _byId.Remove(piece.id);
 
-        // Scrub the removed piece from every active claim so IsStillSatisfied
-        // doesn't see a stale reference.
+        // Scrub the removed piece from every active claim. If the active
+        // contained it, mark dirty so the version-skip in Pass 1 still
+        // re-validates (the claim shape has changed).
         for (int i = 0; i < _actives.Count; i++)
-            _actives[i].claimedPieces.Remove(piece);
+        {
+            if (_actives[i].claimedPieces.Remove(piece))
+                _actives[i].dirty = true;
+        }
 
         if (verboseLogging) Debug.Log($"[Synergy] -{piece}");
         ReEvaluate();
@@ -109,6 +113,11 @@ public class SynergyEvaluator : MonoBehaviour
         _byId.Clear();
         _actives.Clear();
         _nextId = 0;
+
+        // Clear cached version on every rule so the next run starts fresh.
+        if (rules != null)
+            for (int i = 0; i < rules.Count; i++)
+                if (rules[i] != null) rules[i].LastEvalVersion = -1;
     }
 
     // ── Re-evaluation pipeline ──────────────────────────────────────────
@@ -125,18 +134,32 @@ public class SynergyEvaluator : MonoBehaviour
             var rule   = active.rule;
             if (rule == null) { _actives.RemoveAt(i); continue; }
 
-            if (!rule.IsStillSatisfied(_board, active.claimedPieces))
+            int curVer = _board.VersionFor(rule.color);
+
+            // Skip validation when: claim wasn't shrunk by a removal AND no
+            // piece of this rule's color (or Universal) has been added/removed
+            // since last check. Nothing relevant could have changed.
+            bool needCheck = active.dirty || active.lastVersionChecked != curVer;
+            active.lastVersionChecked = curVer;
+            active.dirty = false;
+
+            if (needCheck && !rule.IsStillSatisfied(_board, active.claimedPieces))
             {
                 int oldTier = active.tier;
                 SafeRevoke(rule, oldTier, game);
                 _actives.RemoveAt(i);
+                // After revoke, Pass 2 should be able to re-try this rule
+                // immediately at the current version (claim just collapsed,
+                // remaining pool may form a different valid claim).
+                rule.LastEvalVersion = -1;
                 if (verboseLogging) Debug.Log($"[Synergy] ✗ {rule.displayName} deactivated");
                 OnTierChanged?.Invoke(rule, oldTier, 0);
                 OnClaimChanged?.Invoke(rule, null);
                 continue;
             }
 
-            if (rule.absorbAdditionalPieces)
+            // Only try absorbing when this rule's pool actually changed.
+            if (needCheck && rule.absorbAdditionalPieces)
                 TryAbsorb(active, game);
         }
 
@@ -145,6 +168,14 @@ public class SynergyEvaluator : MonoBehaviour
         for (int i = 0; i < inactive.Count; i++)
         {
             var rule = inactive[i];
+
+            // Skip rules whose relevant pool hasn't changed since last try.
+            // (If a previous attempt already returned false, nothing new is
+            // there to satisfy it.)
+            int curVer = _board.VersionFor(rule.color);
+            if (rule.LastEvalVersion == curVer) continue;
+            rule.LastEvalVersion = curVer;
+
             var unclaimed = ComputeUnclaimed();
             if (unclaimed.Count == 0) break;
 

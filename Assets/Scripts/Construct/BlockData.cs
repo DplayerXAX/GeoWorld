@@ -88,6 +88,11 @@ public class BlockData : ScriptableObject
     // ── Display name used by ShopController tooltip ───────────────────────────
     public string DisplayName => $"{blockType}  {ShapeLabel(blockShape)}";
 
+    // Shape-only label for the shop tooltip's title row. BlockType (music role)
+    // is intentionally omitted — players browsing the shop care about shape +
+    // theme color, not the audio assignment.
+    public string ShapeName => ShapeLabel(blockShape);
+
     static string ShapeLabel(BlockShape s) => s switch
     {
         BlockShape.Custom   => "",

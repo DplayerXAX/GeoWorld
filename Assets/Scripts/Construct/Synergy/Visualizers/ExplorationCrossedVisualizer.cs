@@ -17,8 +17,8 @@ public class ExplorationCrossedVisualizer : FaceMaterialVisualizerBase
     [Tooltip("Depth of each stroke off the panel.")]
     [Min(0.001f)] public float strokeDepth = 0.015f;
 
-    [Tooltip("Color of the X strokes.")]
-    public Color crossColor = new(0.98f, 0.85f, 0.20f);
+    [Tooltip("Color of the X strokes. Default is bright red — matches the Exploration theme and reads sharp against the black panel.")]
+    public Color crossColor = new(1.00f, 0.30f, 0.30f);
 
     protected override void BuildPattern(Transform parent, Vector3 faceCenter,
                                           Vector3 normal, float cellSize, Color themeColor)

@@ -3,6 +3,13 @@ using UnityEngine.Rendering;
 using UnityEngine.Rendering.RenderGraphModule;
 using UnityEngine.Rendering.Universal;
 
+// Suppress URP Compatibility-Mode obsolete-API warnings (Configure /
+// Execute / cameraColorTargetHandle / RenderingUtils.ReAllocateIfNeeded).
+// The compat path is intentionally retained as a fallback alongside the
+// modern RecordRenderGraph implementation.
+#pragma warning disable CS0618, CS0672
+
+
 // Fullscreen "oil paint" overlay: UV jitter + canvas grain + sat/contrast bump.
 // Pair with SketchyOutlineFeature for the full painted-canvas look.
 //

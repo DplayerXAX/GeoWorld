@@ -1,24 +1,25 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-// 启发 (Enlightenment) — pieces of `color` (plus jokers) form a perfect
-// axis-aligned cube of cells.
+// 启发 (Enlightenment) — pieces of `color` (plus jokers) cover an axis-
+// aligned cube of cells.
 //
 // Tiers:
 //   • Tier 1: 2×2×2 cube  ( 8 cells)
 //   • Tier 2: 3×3×3 cube  (27 cells)
 //   • Tier 3: 4×4×4 cube  (64 cells)
 //
-// "Perfect" = every cell in the N×N×N region is occupied, AND every owning
-// piece is fully contained inside the region. Pieces that span the boundary
-// disqualify the cube — keeps the visual contract clean.
+// Pieces are claimed whole if any of their cells lies inside the cube —
+// they may extend beyond freely. ICellHighlightFilter exposes which cells
+// are actually in-cube so visualizers only decorate those cells; overhang
+// cells stay visually plain until absorbed into a bigger cube.
 //
 // On absorption, larger cubes upgrade the tier in place. Use tiered effects
 // (override ApplyAt/RevokeAt) if you want different rewards per tier;
 // otherwise the single `effect` fires/refires on tier change.
 [CreateAssetMenu(menuName = "GeoWorld/Synergy/Rules/Enlightenment Rule",
                  fileName = "EnlightenmentRule")]
-public class EnlightenmentRule : SynergyRule
+public class EnlightenmentRule : SynergyRule, ICellHighlightFilter
 {
     [Header("Enlightenment — N×N×N cube")]
     [Tooltip("Smallest cube side accepted as a hit (tier 1). 2 = 8 cells.")]
@@ -31,10 +32,24 @@ public class EnlightenmentRule : SynergyRule
     [Tooltip("Per-tier override effects. If set and length > tier-1, used instead of base `effect`. Useful for 2³ small reward, 3³ medium, 4³ big.")]
     public GameEffect[] perTierEffects;
 
+    // ── ICellHighlightFilter state (last successful cube) ──────────────
+    // Set on every successful TryEvaluate. Used by visualizers via the
+    // ICellHighlightFilter cast to decorate only cells inside the cube.
+    [System.NonSerialized] Vector3Int _cubeOrigin;
+    [System.NonSerialized] int        _cubeSide;
+
     void Reset()
     {
         absorbAdditionalPieces = true;
         priority               = 60;   // > Order, snags cube pieces first
+    }
+
+    public bool ShouldHighlight(Vector3Int worldCell)
+    {
+        if (_cubeSide <= 0) return false;
+        return worldCell.x >= _cubeOrigin.x && worldCell.x < _cubeOrigin.x + _cubeSide
+            && worldCell.y >= _cubeOrigin.y && worldCell.y < _cubeOrigin.y + _cubeSide
+            && worldCell.z >= _cubeOrigin.z && worldCell.z < _cubeOrigin.z + _cubeSide;
     }
 
     public override void ApplyAt(GameFlowManager game, int tier)
@@ -75,13 +90,18 @@ public class EnlightenmentRule : SynergyRule
             int needed = side * side * side;
             if (totalCells < needed) continue;
 
-            if (TryFindCube(board, usable, side, out var match))
+            if (TryFindCube(board, usable, side, out var match, out var origin))
             {
-                claimed = match;
-                tier    = side - minSide + 1;
+                claimed     = match;
+                tier        = side - minSide + 1;
+                _cubeOrigin = origin;
+                _cubeSide   = side;
                 return true;
             }
         }
+        // No cube found — clear cached highlight zone so stale data doesn't
+        // leak into the next evaluation.
+        _cubeSide = 0;
         return false;
     }
 
@@ -89,9 +109,10 @@ public class EnlightenmentRule : SynergyRule
     // possible cube origin where that cell could sit. For typical board
     // sizes (~dozens of pieces, side ≤ 4) this is well under 1ms.
     static bool TryFindCube(BoardSnapshot board, HashSet<PlacedPiece> usable,
-                            int side, out HashSet<PlacedPiece> matched)
+                            int side, out HashSet<PlacedPiece> matched, out Vector3Int foundOrigin)
     {
-        matched = null;
+        matched      = null;
+        foundOrigin  = Vector3Int.zero;
         if (side <= 0) return false;
 
         foreach (var p in usable)
@@ -105,7 +126,10 @@ public class EnlightenmentRule : SynergyRule
                 {
                     var origin = cell - new Vector3Int(dx, dy, dz);
                     if (TryCubeAt(board, usable, origin, side, out matched))
+                    {
+                        foundOrigin = origin;
                         return true;
+                    }
                 }
             }
         }
@@ -127,20 +151,10 @@ public class EnlightenmentRule : SynergyRule
             matched.Add(owner);
         }
 
-        // Verify all matched pieces sit FULLY inside the cube — no cell hangs out.
-        foreach (var p in matched)
-        {
-            for (int i = 0; i < p.cells.Length; i++)
-            {
-                var c = p.cells[i];
-                if (c.x < origin.x || c.x >= origin.x + side ||
-                    c.y < origin.y || c.y >= origin.y + side ||
-                    c.z < origin.z || c.z >= origin.z + side)
-                {
-                    return false;
-                }
-            }
-        }
+        // Pieces may extend BEYOND the cube — we just need every cell inside
+        // the cube to be filled by pool pieces. The whole piece is claimed
+        // (lock-wise) but only the in-cube cells get visualizer decoration
+        // via ICellHighlightFilter.
         return true;
     }
 }

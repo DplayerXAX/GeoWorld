@@ -1125,10 +1125,11 @@ public class ShopController : MonoBehaviour
         // Pin to the side of the rift's screen-space bounds so the tooltip
         // never covers items. Prefer right; fall back to left if right is
         // off-screen; finally try below / above as last resorts.
-        const float bw = 160f;
+        const float bw = 170f;
         bool        hasTheme = item.sb.color != BlockColor.None;
-        // Tooltip rows: title + price (+ tag name + 2-line description if themed)
-        float       bh       = hasTheme ? 96f : 44f;
+        // Tooltip rows: title (shape + colored tag) + price
+        //             + 2-line synergy description if themed.
+        float       bh       = hasTheme ? 82f : 44f;
         const float pad      = 12f;
 
         float minX = float.MaxValue, maxX = float.MinValue;
@@ -1166,41 +1167,43 @@ public class ShopController : MonoBehaviour
         GUI.DrawTexture(new Rect(tx - 8f, ty - 8f, bw, 2f), Texture2D.whiteTexture);
         GUI.color = Color.white;
 
-        GUI.Label(new Rect(tx, ty,        bw - 16f, 14f), item.sb.data.DisplayName, _ttTitle);
+        // Row 1 — title: shape · colored tag name (single rich-text line).
+        string shape = item.sb.data.ShapeName;
+        if (string.IsNullOrEmpty(shape)) shape = "Block";
 
-        // Theme row — only when the token has a synergy color. Coloured swatch
-        // (8×8 chip) + theme name in matching tint so the player can read
-        // tag at a glance.
-        float yCursor = ty + 14f;
+        string title;
         if (hasTheme)
         {
             var themeRgb = BlockColorPalette.Get(item.sb.color);
-
-            GUI.color = themeRgb;
-            GUI.DrawTexture(new Rect(tx, yCursor + 2f, 8f, 8f), Texture2D.whiteTexture);
-            GUI.color = Color.white;
-
-            _ttSub.normal.textColor = themeRgb;
-            GUI.Label(new Rect(tx + 12f, yCursor, bw - 28f, 12f), item.sb.color.ToString(), _ttSub);
-            yCursor += 14f;
+            string hex   = ColorUtility.ToHtmlStringRGB(themeRgb);
+            title = $"{shape}  ·  <color=#{hex}>{item.sb.color}</color>";
+        }
+        else
+        {
+            title = shape;
         }
 
+        _ttTitle.richText = true;
+        GUI.Label(new Rect(tx, ty, bw - 16f, 16f), title, _ttTitle);
+
+        // Row 2 — price (color-coded affordability).
+        float yCursor = ty + 18f;
         _ttPrice.normal.textColor = afford ? new Color(0.45f, 1f, 0.55f)
                                            : new Color(1f, 0.38f, 0.38f);
         string sfx       = type == BlockType.Turret ? " ¤T" : " ¤B";
         string priceText = afford ? $"{price}{sfx}" : $"{price}{sfx}  (-{deficit})";
         GUI.Label(new Rect(tx, yCursor, bw - 16f, 14f), priceText, _ttPrice);
-        yCursor += 16f;
+        yCursor += 18f;
 
-        // Synergy description — what this tag's effect does. Two-line wrap.
+        // Row 3 — synergy effect description (only when themed). Two-line wrap.
         if (hasTheme)
         {
             string desc = BlockColorPalette.Description(item.sb.color);
             if (!string.IsNullOrEmpty(desc))
             {
-                _ttSub.normal.textColor = new Color(0.75f, 0.75f, 0.75f);
+                _ttSub.normal.textColor = new Color(0.78f, 0.78f, 0.78f);
                 _ttSub.wordWrap         = true;
-                GUI.Label(new Rect(tx, yCursor, bw - 16f, 32f), desc, _ttSub);
+                GUI.Label(new Rect(tx, yCursor, bw - 16f, 36f), desc, _ttSub);
             }
         }
     }
