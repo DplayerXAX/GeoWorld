@@ -128,6 +128,7 @@ public class GameFlowManager : MonoBehaviour
         AbortRun();
         enemyBaseManager?.CancelWave();
         BackgroundReactor.Instance?.SetCombatMode(false);
+        AudioManager.Instance?.ExitBattleBGM();   // safety: dropping into Game Over also leaves battle music
         phase = GamePhase.GameOver;
     }
 
@@ -408,6 +409,7 @@ public class GameFlowManager : MonoBehaviour
         ResourceManager.Instance?.SetCombatActive(true);   // start turret currency regen
         ShopController.Instance?.OnCombatStart();           // collapse and hide shop
         BackgroundReactor.Instance?.SetCombatMode(true);    // switch skybox to combat / distorted state
+        AudioManager.Instance?.EnterBattleBGM();            // BGM → battle track
         placement.TriggerCombatRipple(path);                // wave grows along path, then off-path blocks bloom
     }
 
@@ -551,6 +553,7 @@ public class GameFlowManager : MonoBehaviour
         if (currentUnit != null) { Destroy(currentUnit.gameObject); currentUnit = null; }
         ResourceManager.Instance?.SetCombatActive(false);
         BackgroundReactor.Instance?.SetCombatMode(false);
+        AudioManager.Instance?.ExitBattleBGM();
         phase = GamePhase.Build;
     }
 
@@ -581,6 +584,7 @@ public class GameFlowManager : MonoBehaviour
         ResourceManager.Instance?.SetCombatActive(false);  // stop turret regen, income in StartTurn
         enemyBaseManager?.CancelWave();
         BackgroundReactor.Instance?.SetCombatMode(false);  // restore calm skybox
+        AudioManager.Instance?.ExitBattleBGM();            // BGM → calm track
         phase = GamePhase.Build;
 
         // Roguelite choice. Non-blocking — Build phase starts immediately,

@@ -10,7 +10,7 @@
     "Type": "User",
     "GUID": "{701ECBBD-9C7B-4030-8CDB-749EE5D1C7B9}",
     "Language": "SFX",
-    "Hash": "{64E1D501-C52F-A0EF-6F11-866D6F7E2025}",
+    "Hash": "{7E980C7A-DBDB-F357-98D5-D2062245DE4A}",
     "ObjectPath": "Init",
     "ShortName": "Init",
     "Path": "Init.bnk",
@@ -114,6 +114,28 @@
       "Name": "SS_Air_Turbulence",
       "ObjectPath": "\\Game Parameters\\Factory Soundseed Air Game Syncs\\SS_Air_Turbulence",
       "GUID": "{EDA87B19-73AA-40A0-9F19-2073606DB710}"
+     }
+    ],
+    "StateGroups": [
+     {
+      "Id": "1496058784",
+      "Name": "Music_Mode",
+      "ObjectPath": "\\States\\Default Work Unit\\Music_Mode",
+      "GUID": "{E748B71C-E59F-46F4-BB6D-A5E375DF535C}",
+      "States": [
+       {
+        "Id": "2937832959",
+        "Name": "Battle",
+        "ObjectPath": "\\States\\Default Work Unit\\Music_Mode\\Battle",
+        "GUID": "{89F431A7-637D-4C8C-AEA4-D1E118E87F0A}"
+       },
+       {
+        "Id": "3753286132",
+        "Name": "Calm",
+        "ObjectPath": "\\States\\Default Work Unit\\Music_Mode\\Calm",
+        "GUID": "{B201E0A1-E53B-4A54-9DEB-8084B10E8370}"
+       }
+      ]
      }
     ],
     "SwitchGroups": [
@@ -650,6 +672,6 @@
     ]
    }
   ],
-  "FileHash": "{5DD95EBD-DC87-1727-6D91-133E5B72F83E}"
+  "FileHash": "{8B9CE45A-C6D9-B950-B95A-81119A7AB66D}"
  }
 }

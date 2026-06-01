@@ -25,6 +25,21 @@ namespace AK
         static const AkUniqueID SCROLL = 454121546U;
     } // namespace EVENTS
 
+    namespace STATES
+    {
+        namespace MUSIC_MODE
+        {
+            static const AkUniqueID GROUP = 1496058784U;
+
+            namespace STATE
+            {
+                static const AkUniqueID BATTLE = 2937832959U;
+                static const AkUniqueID CALM = 3753286132U;
+            } // namespace STATE
+        } // namespace MUSIC_MODE
+
+    } // namespace STATES
+
     namespace SWITCHES
     {
         namespace NOTERANGE

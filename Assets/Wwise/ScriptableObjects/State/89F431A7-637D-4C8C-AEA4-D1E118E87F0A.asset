@@ -1,0 +1,18 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f12b41d06db6a1c4b8c4c5e57b80e8f4, type: 3}
+  m_Name: 89F431A7-637D-4C8C-AEA4-D1E118E87F0A
+  m_EditorClassIdentifier: AK.Wwise.Unity.API.WwiseTypes::WwiseStateReference
+  objectName: Battle
+  id: 2937832959
+  guid: 89F431A7-637D-4C8C-AEA4-D1E118E87F0A
+  WwiseStateGroupReference: {fileID: 11400000, guid: bb78d3a530094e14795742f55b8b7080, type: 2}

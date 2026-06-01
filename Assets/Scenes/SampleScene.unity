@@ -1964,7 +1964,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 0
+  m_IsActive: 1
 --- !u!4 &1427198834
 Transform:
   m_ObjectHideFlags: 0
@@ -2010,7 +2010,7 @@ MonoBehaviour:
     rule: {fileID: 11400000, guid: d9039b95152056241912309f37894387, type: 2}
   startCell: {x: 0, y: 0, z: 0}
   cellSpacing: {x: 3, y: 0, z: 0}
-  toggleKey: 285
+  toggleKey: 116
   showLabels: 1
   labelYOffset: 22
   labelColor: {r: 1, g: 1, b: 1, a: 0.95}
@@ -2114,6 +2114,19 @@ MonoBehaviour:
     idInternal: 0
     valueGuidInternal: 
     WwiseObjectReference: {fileID: 0}
+  BGM_StateBattle:
+    idInternal: 0
+    valueGuidInternal: 
+    groupIdInternal: 0
+    groupGuidInternal: 
+    WwiseObjectReference: {fileID: 11400000, guid: 0d8cc650b677c0e43ba4a16f9f1345d2, type: 2}
+  BGM_StateCalm:
+    idInternal: 0
+    valueGuidInternal: 
+    groupIdInternal: 0
+    groupGuidInternal: 
+    WwiseObjectReference: {fileID: 11400000, guid: e56425f7c45fc5d4886c3b47663d4c19, type: 2}
+  bgmFadeOutMs: 500
   pianoKey:
   - {fileID: 0}
   - {fileID: 0}
