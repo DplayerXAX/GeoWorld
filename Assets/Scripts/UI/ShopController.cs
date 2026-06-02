@@ -33,6 +33,8 @@ public class ShopController : MonoBehaviour
     [Header("Rift Shape & Position")]
     [Tooltip("Rift centre in normalised screen space (0=left/top, 1=right/bottom). Clamped at runtime so the rift never overflows.")]
     public Vector2 riftScreenPos  = new Vector2(0.5f, 0.85f);
+    [Tooltip("Extra Y offset added to the rift center ONLY when collapsed (small / hint state). Positive = lower on screen, can go past 0.5 to hug the bottom edge. The expanded position stays at riftScreenPos.y.")]
+    public float riftCollapsedYOffset = 0.05f;
     [Tooltip("Strip width as a fraction of screen width when fully open.")]
     [Range(0.1f, 1.0f)] public float riftWidth  = 0.60f;
     [Tooltip("Strip height as a fraction of screen height when fully open.")]
@@ -210,6 +212,7 @@ public class ShopController : MonoBehaviour
     bool    _expanded;
     float   _riftScale;         // current animated scale
     float   _riftTarget;        // target scale
+    float   _expandT;           // 0=fully collapsed, 1=fully expanded (lerp'd alongside scale)
     Vector3 _currentOffset;     // animated camera offset
 
     // Computed each Update �?used by hover/click and GL draw
@@ -378,6 +381,10 @@ public class ShopController : MonoBehaviour
         _riftScale     = Mathf.Lerp(_riftScale, _riftTarget, t);
         _currentOffset = Vector3.Lerp(_currentOffset,
                              _expanded ? cameraOffsetLarge : cameraOffsetSmall, t);
+
+        // Track expanded-ness for screen-position offset interpolation.
+        float expandTarget = (combat || !_expanded) ? 0f : 1f;
+        _expandT = Mathf.Lerp(_expandT, expandTarget, t);
     }
 
     void ApplyCameraTransform()
@@ -399,13 +406,23 @@ public class ShopController : MonoBehaviour
         _riftSizeY        = Screen.height * riftHeight * 0.5f;
         _riftScreenSize   = Mathf.Max(_riftSizeX, _riftSizeY);   // legacy fields rely on this
 
-        // Clamp centre so the rift's full-open footprint never leaves the screen.
+        // Y offset: collapsed state drops further toward the bottom of the
+        // screen, expanded snaps back to riftScreenPos.y. Lerp via _expandT
+        // (0 collapsed → 1 expanded) so the motion mirrors the scale anim.
+        float yOff = riftCollapsedYOffset * (1f - _expandT);
+
+        // Clamp center keeping the rift on screen — but use the EFFECTIVE
+        // half-extent (scaled by _riftScale on Y, since collapse-anim shrinks
+        // it). This lets the collapsed hint slide much closer to the bottom
+        // edge than the fully-expanded footprint would allow.
+        float effectiveSizeY = _riftSizeY * Mathf.Max(0.05f, _riftScale);
+
         float cx = Mathf.Clamp(riftScreenPos.x * Screen.width,
                                _riftSizeX + screenEdgeMargin,
                                Screen.width - _riftSizeX - screenEdgeMargin);
-        float cy = Mathf.Clamp(riftScreenPos.y * Screen.height,
-                               _riftSizeY + screenEdgeMargin,
-                               Screen.height - _riftSizeY - screenEdgeMargin);
+        float cy = Mathf.Clamp((riftScreenPos.y + yOff) * Screen.height,
+                               effectiveSizeY + screenEdgeMargin,
+                               Screen.height - effectiveSizeY - screenEdgeMargin);
         _riftScreenCenter = new Vector2(cx, cy);
 
         // Rebuild crack shape if the subdivision setting changed at runtime.

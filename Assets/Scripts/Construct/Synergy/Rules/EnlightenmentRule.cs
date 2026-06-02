@@ -38,6 +38,11 @@ public class EnlightenmentRule : SynergyRule, ICellHighlightFilter
     [System.NonSerialized] Vector3Int _cubeOrigin;
     [System.NonSerialized] int        _cubeSide;
 
+    // Public read-only accessors for scene effects (e.g. center-radiate FX)
+    // that need to know where + how big the active cube is.
+    public Vector3Int CurrentCubeOrigin => _cubeOrigin;
+    public int        CurrentCubeSide   => _cubeSide;
+
     void Reset()
     {
         absorbAdditionalPieces = true;
