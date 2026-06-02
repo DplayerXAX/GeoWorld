@@ -24,7 +24,7 @@ public class SurfaceGraphBuilder
 
             // Turrets are obstacles, not walkable. Their cells stay occupied
             // (so paths can't pass through), but we skip generating face nodes
-            // for them â€” the unit can't walk onto a turret's surface.
+            // for them â€?the unit can't walk onto a turret's surface.
             if (IsTurretCell(kv.Key)) continue;
 
             var allCellFaces = FaceBuilder.BuildFaces(kv.Key, gridSystem.cellSize);
@@ -50,13 +50,13 @@ public class SurfaceGraphBuilder
     bool IsTurretCell(Vector3Int cell)
     {
         var ins = gridSystem.GetInstanceAt(cell);
-        return ins?.data != null && ins.data.blockType == BlockType.Turret;
+        return ins?.data != null && TurretTypes.Is(ins.data.blockType);
     }
 
     // Locality-based O(V Ã— ~12) instead of O(VÂ²). For each face check:
-    //   Type A â€” parallel face on cell C+T (one cell over in a tangent direction)
-    //   Type B â€” perpendicular face on cell C+N+T (wraps a convex edge across cubes)
-    //   Type C â€” perpendicular sibling on the same cell (wraps a convex edge of this cube)
+    //   Type A â€?parallel face on cell C+T (one cell over in a tangent direction)
+    //   Type B â€?perpendicular face on cell C+N+T (wraps a convex edge across cubes)
+    //   Type C â€?perpendicular sibling on the same cell (wraps a convex edge of this cube)
     // After collecting, sort by normal.y desc so BFS tie-breaks toward top faces.
     void BuildNeighbors()
     {

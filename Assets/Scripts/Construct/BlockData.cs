@@ -14,7 +14,9 @@ public enum BlockType
     Pull,
     Shadow,
     Turret,
-    Empty
+    Empty,
+    SlowTurret,
+    AoeTurret
 }
 
 // Predefined Tetris-style shapes.

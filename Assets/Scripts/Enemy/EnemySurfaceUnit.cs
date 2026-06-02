@@ -22,6 +22,7 @@ public class EnemySurfaceUnit : MonoBehaviour
     int _health;
     float _secPerBeat;
     float _beatTimer;
+    float _speedMultiplier = 1f;
 
     bool _isMoving;
     Vector3 _moveFrom;
@@ -69,14 +70,20 @@ public class EnemySurfaceUnit : MonoBehaviour
             Die();
     }
 
+    public void SetSpeedMultiplier(float multiplier)
+    {
+        _speedMultiplier = Mathf.Max(0.01f, multiplier);
+    }
+
     void Update()
     {
         if (_path == null || _health <= 0) return;
 
         _beatTimer += Time.deltaTime;
-        if (_beatTimer >= _secPerBeat)
+        float secPerBeat = _secPerBeat / _speedMultiplier;
+        if (_beatTimer >= secPerBeat)
         {
-            _beatTimer -= _secPerBeat;
+            _beatTimer -= secPerBeat;
 
             if (_index < _path.Count)
             {
@@ -115,7 +122,7 @@ public class EnemySurfaceUnit : MonoBehaviour
     {
         _moveFrom = transform.position;
         _moveTo = FaceCenter(node);
-        _moveDuration = _secPerBeat * moveRatio;
+        _moveDuration = (_secPerBeat / _speedMultiplier) * moveRatio;
         _moveTimer = 0f;
         _isMoving = true;
 
