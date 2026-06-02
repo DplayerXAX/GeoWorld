@@ -2232,6 +2232,7 @@ MonoBehaviour:
   cameraOffsetSmall: {x: 0, y: 4, z: -10}
   cameraOffsetLarge: {x: 0, y: 7, z: -6.5}
   riftScreenPos: {x: 0.5, y: 1}
+  riftCollapsedYOffset: 0.3
   riftWidth: 0.92
   riftHeight: 0.46
   screenEdgeMargin: 0
@@ -2465,6 +2466,10 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 0}
     m_Modifications:
+    - target: {fileID: 61225932705266449, guid: 2d67442949634b046a787f5c9948be95, type: 3}
+      propertyPath: m_Mesh
+      value: 
+      objectReference: {fileID: -2432090755550338912, guid: bc85e298661588a4f9b4d004bf4f11c3, type: 3}
     - target: {fileID: 1023551722679838635, guid: 2d67442949634b046a787f5c9948be95, type: 3}
       propertyPath: m_Materials.Array.size
       value: 2
