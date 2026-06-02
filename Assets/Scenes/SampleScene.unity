@@ -240,6 +240,8 @@ MonoBehaviour:
   - {fileID: 11400000, guid: 820a88ddf0392914889d66c41c3658a0, type: 2}
   - {fileID: 11400000, guid: 73ed5d4e29e4f7e4ab87f85650c2863a, type: 2}
   - {fileID: 11400000, guid: 3bcfeb02226d44d49a6df82d6c36a1a7, type: 2}
+  - {fileID: 11400000, guid: a7f28c36612c9dcda3e860f226e14c3b, type: 2}
+  - {fileID: 11400000, guid: fb46f09fe6cabf35093865bc2d050931, type: 2}
   grid: {fileID: 164805054}
   currentBlock: {fileID: 11400000, guid: c8bcfd2efd3263845ad3ea61c80c0fe7, type: 2}
   currentSynergyColor: 0

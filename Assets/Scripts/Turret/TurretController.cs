@@ -4,6 +4,11 @@ public class TurretController : MonoBehaviour
 {
     const string BulletAssetPath = "Assets/Prefab/Bullet.prefab";
 
+    public enum Mode { Basic, Slow, Aoe }
+
+    [Header("Turret")]
+    public Mode mode = Mode.Basic;
+
     [Header("Targeting")]
     public float attackRange = 5f;
     public float fireInterval = 0.6f;
@@ -16,10 +21,29 @@ public class TurretController : MonoBehaviour
     public float bulletLifetime = 3f;
     public Vector3 muzzleOffset = new Vector3(0f, 0.6f, 0f);
 
+    [Header("Effects")]
+    public float slowDuration = 2.5f;
+    public float slowMultiplier = 0.1f;
+    public float aoeRadius = 1.75f;
+
     EnemySurfaceUnit _target;
     float _fireTimer;
 
-    void Awake() => ResolveBulletPrefab();
+    public void Configure(BlockType type)
+    {
+        if (!TurretTypes.Is(type)) return;
+
+        mode = TurretTypes.Mode(type);
+        ApplyModeColor();
+    }
+
+    void Awake()
+    {
+        ResolveBulletPrefab();
+        ApplyModeColor();
+    }
+
+    void Start() => ApplyModeColor();
 
     void Update()
     {
@@ -38,7 +62,7 @@ public class TurretController : MonoBehaviour
     bool InRange(EnemySurfaceUnit e)
     {
         return e != null && e.CurrentHealth > 0
-            && (e.transform.position - transform.position).sqrMagnitude <= attackRange * attackRange;
+            && (e.transform.position - Origin).sqrMagnitude <= attackRange * attackRange;
     }
 
     EnemySurfaceUnit FindClosest()
@@ -46,10 +70,10 @@ public class TurretController : MonoBehaviour
         EnemySurfaceUnit best = null;
         float bestSqr = attackRange * attackRange;
 
-        foreach (var e in FindObjectsByType<EnemySurfaceUnit>(FindObjectsSortMode.None))
+        foreach (var e in FindObjectsOfType<EnemySurfaceUnit>())
         {
             if (e == null || e.CurrentHealth <= 0) continue;
-            float sqr = (e.transform.position - transform.position).sqrMagnitude;
+            float sqr = (e.transform.position - Origin).sqrMagnitude;
             if (sqr <= bestSqr) { best = e; bestSqr = sqr; }
         }
         return best;
@@ -63,7 +87,7 @@ public class TurretController : MonoBehaviour
             return;
         }
 
-        Vector3 spawn = transform.position + muzzleOffset;
+        Vector3 spawn = Origin + muzzleOffset;
         Vector3 dir = target.transform.position - spawn;
         Quaternion rot = dir.sqrMagnitude > 0.001f ? Quaternion.LookRotation(dir) : Quaternion.identity;
 
@@ -73,7 +97,7 @@ public class TurretController : MonoBehaviour
         if (!bullet.TryGetComponent(out TurretBullet projectile))
             projectile = bullet.AddComponent<TurretBullet>();
         projectile.enabled = true;
-        projectile.Init(target, bulletSpeed, bulletDamage, bulletLifetime);
+        projectile.Init(target, this);
     }
 
     GameObject ResolveBulletPrefab()
@@ -90,9 +114,20 @@ public class TurretController : MonoBehaviour
         return bulletPrefab;
     }
 
+    void ApplyModeColor()
+    {
+        Transform root = transform.parent != null ? transform.parent : transform;
+        Color color = TurretTypes.DisplayColor(mode);
+
+        foreach (var r in root.GetComponentsInChildren<Renderer>())
+            r.material.color = color;
+    }
+
+    Vector3 Origin => transform.parent != null ? transform.parent.position : transform.position;
+
     void OnDrawGizmosSelected()
     {
         Gizmos.color = new Color(1f, 0.85f, 0.15f, 0.35f);
-        Gizmos.DrawWireSphere(transform.position, attackRange);
+        Gizmos.DrawWireSphere(Origin, attackRange);
     }
 }
