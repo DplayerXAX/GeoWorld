@@ -75,7 +75,7 @@ public class TurretController : MonoBehaviour
 
         _fireTimer -= Time.deltaTime;
 
-        if (!InRange(_target)) _target = FindClosest();
+        _target = FindClosest();
         if (_target == null || _fireTimer > 0f) return;
 
         Fire(_target);
@@ -92,12 +92,22 @@ public class TurretController : MonoBehaviour
     {
         EnemySurfaceUnit best = null;
         float bestSqr = attackRange * attackRange;
+        int bestPriority = int.MinValue;
 
         foreach (var e in FindObjectsOfType<EnemySurfaceUnit>())
         {
             if (e == null || e.CurrentHealth <= 0) continue;
+
             float sqr = (e.transform.position - Origin).sqrMagnitude;
-            if (sqr <= bestSqr) { best = e; bestSqr = sqr; }
+            if (sqr > attackRange * attackRange) continue;
+
+            int priority = e.targetPriority;
+            if (priority > bestPriority || (priority == bestPriority && sqr <= bestSqr))
+            {
+                best = e;
+                bestSqr = sqr;
+                bestPriority = priority;
+            }
         }
         return best;
     }
