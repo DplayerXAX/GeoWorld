@@ -3,6 +3,7 @@ using UnityEngine;
 public class TurretController : MonoBehaviour
 {
     const string BulletAssetPath = "Assets/Prefab/Bullet.prefab";
+    const float MinFireInterval = 0.05f;
 
     public enum Mode { Basic, Slow, Aoe }
 
@@ -28,6 +29,28 @@ public class TurretController : MonoBehaviour
 
     EnemySurfaceUnit _target;
     float _fireTimer;
+
+    public void AddAttackSpeed(float percent)
+    {
+        if (percent <= 0f) return;
+
+        fireInterval = Mathf.Max(MinFireInterval, fireInterval / (1f + percent));
+        _fireTimer = Mathf.Min(_fireTimer, fireInterval);
+    }
+
+    public void AddDamage(int amount)
+    {
+        if (amount <= 0) return;
+
+        bulletDamage += amount;
+    }
+
+    public void AddRange(float amount)
+    {
+        if (amount <= 0f) return;
+
+        attackRange += amount;
+    }
 
     public void Configure(BlockType type)
     {
