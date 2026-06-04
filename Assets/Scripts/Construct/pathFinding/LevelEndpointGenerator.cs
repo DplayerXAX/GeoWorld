@@ -100,30 +100,61 @@ public class LevelEndpointGenerator : MonoBehaviour
         );
     }
 
-    // Y is clamped so endpoints don't drift underground or above the play area.
+    // Samples a cell whose HORIZONTAL (XZ) distance from `center` lies in
+    // [minD, maxD]. The previous version sampled on a 3D unit sphere and
+    // then clamped Y to [0, yMax] — when a mostly-vertical direction got
+    // picked, the Y clamp consumed almost all the distance budget and the
+    // final cell ended up right next to the anchor.
+    //
+    // Fix:
+    //   1. Pick the direction in the XZ plane only (the play area is mostly
+    //      horizontal anyway).
+    //   2. Pick Y independently inside [0, yMax].
+    //   3. After integer rounding, VERIFY the final horizontal distance is
+    //      still in [minD, maxD] — RoundToInt can shift cells around by ½
+    //      a cell which matters at small minD.
     Vector3Int ShellSample(Vector3Int center, float minD, float maxD)
     {
         for (int attempt = 0; attempt < shellSampleAttempts; attempt++)
         {
-            Vector3 dir = Random.onUnitSphere;
-            float   d   = Random.Range(minD, maxD);
-            Vector3 raw = (Vector3)center + dir * d;
+            float ang = Random.Range(0f, Mathf.PI * 2f);
+            float d   = Random.Range(minD, maxD);
+
+            float dx = Mathf.Cos(ang) * d;
+            float dz = Mathf.Sin(ang) * d;
+            int   y  = Mathf.Clamp(Random.Range(0, yMax + 1), 0, yMax);
+
             var cell = new Vector3Int(
-                Mathf.RoundToInt(raw.x),
-                Mathf.Clamp(Mathf.RoundToInt(raw.y), 0, yMax),
-                Mathf.RoundToInt(raw.z)
+                center.x + Mathf.RoundToInt(dx),
+                y,
+                center.z + Mathf.RoundToInt(dz)
             );
+
             if (cell == center) continue;
             if (gridSystem.IsOccupied(cell)) continue;
+
+            // Verify final horizontal distance — integer rounding can pull
+            // the cell inside minD or push it past maxD.
+            float fdx = cell.x - center.x;
+            float fdz = cell.z - center.z;
+            float horizDist = Mathf.Sqrt(fdx * fdx + fdz * fdz);
+            if (horizDist < minD || horizDist > maxD) continue;
+
             return cell;
         }
 
+        // Deterministic fallback: sweep +X at maxD until we find a free cell.
+        // Guarantees the distance is at least maxD (not within range, but
+        // never below minD).
         int dist = Mathf.Max(1, Mathf.CeilToInt(maxD));
         for (int i = 0; i < 8; i++)
         {
-            var c = center + new Vector3Int(dist + i, 0, 0);
+            var c = new Vector3Int(
+                center.x + dist + i,
+                Mathf.Clamp(center.y, 0, yMax),
+                center.z);
             if (!gridSystem.IsOccupied(c)) return c;
         }
-        return center + new Vector3Int(dist, 0, 0);
+        return new Vector3Int(center.x + dist, Mathf.Clamp(center.y, 0, yMax), center.z);
     }
 }

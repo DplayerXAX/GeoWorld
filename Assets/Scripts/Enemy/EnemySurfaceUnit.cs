@@ -11,6 +11,10 @@ public class EnemySurfaceUnit : MonoBehaviour
     [Header("Health")]
     public int maxHealth = 3;
 
+    [Header("Placement")]
+    [Tooltip("Extra world-space clearance ABOVE the 0.5×cellSize face offset. Bump this up if the visual's bottom shards dip into the block surface. Applies to both the initial spawn position and each step along the path.")]
+    public float faceClearance = 0.15f;
+
     public event Action<EnemySurfaceUnit> OnReachedEnd;
     public event Action<EnemySurfaceUnit> OnDied;
 
@@ -112,10 +116,12 @@ public class EnemySurfaceUnit : MonoBehaviour
             _isMoving = false;
     }
 
-    static Vector3 FaceCenter(FaceNode node)
+    Vector3 FaceCenter(FaceNode node)
     {
         var gs = GridSystem.instance;
-        return gs.GridToWorld(node.cell) + node.normal * (gs.cellSize * 0.5f);
+        // Half a cell + a tunable clearance so taller / bulkier enemy visuals
+        // don't dip into the block surface.
+        return gs.GridToWorld(node.cell) + node.normal * (gs.cellSize * 0.5f + faceClearance);
     }
 
     void StepToNode(FaceNode node)
