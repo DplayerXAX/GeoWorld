@@ -13,7 +13,6 @@ GameObject:
   - component: {fileID: 1023551722679838635}
   - component: {fileID: 3144105436405880234}
   - component: {fileID: -4956694485317395707}
-  - component: {fileID: 7995070990291760107}
   m_Layer: 0
   m_Name: start
   m_TagString: Untagged
@@ -126,24 +125,3 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 93be9b5b2ace7d641bc497609716f2dd, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::GridEndpoint
---- !u!114 &7995070990291760107
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 5859562048836445988}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: e8c484d3c31a1b6449bfc57625a34be2, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::EndpointVisual
-  orbScale: 0.6
-  bobHeight: 0.07
-  bobSpeed: 1.1
-  postHeight: 0.32
-  postRadius: 0.055
-  ringRadius: 0.82
-  ringThickness: 0.038
-  ringTilt: 18
-  ringRotSpeed: 38

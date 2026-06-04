@@ -13,7 +13,7 @@ GameObject:
   - component: {fileID: 1023551722679838635}
   - component: {fileID: 3144105436405880234}
   - component: {fileID: 1449257119469315012}
-  - component: {fileID: 1344997876318124568}
+  - component: {fileID: 6107968888440039348}
   m_Layer: 0
   m_Name: end
   m_TagString: Untagged
@@ -126,7 +126,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 93be9b5b2ace7d641bc497609716f2dd, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::GridEndpoint
---- !u!114 &1344997876318124568
+--- !u!114 &6107968888440039348
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -135,15 +135,15 @@ MonoBehaviour:
   m_GameObject: {fileID: 5859562048836445988}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: e8c484d3c31a1b6449bfc57625a34be2, type: 3}
+  m_Script: {fileID: 11500000, guid: 218f905512810be43881236a6423431b, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::EndpointVisual
-  orbScale: 0.6
-  bobHeight: 0.07
-  bobSpeed: 1.1
-  postHeight: 0.32
-  postRadius: 0.055
-  ringRadius: 0.82
-  ringThickness: 0.038
-  ringTilt: 18
-  ringRotSpeed: 38
+  m_EditorClassIdentifier: Assembly-CSharp::EndpointPortalVisual
+  mode: 1
+  portalMaterial: {fileID: 0}
+  discScale: 0.85
+  discYLift: 0.02
+  frameScale: 0.95
+  frameThickness: 0.04
+  startFrameColor: {r: 0.3, g: 0.1, b: 0.4, a: 1}
+  endFrameColor: {r: 1, g: 0.82, b: 0.3, a: 1}
+  frameOutlineMaterial: {fileID: 0}

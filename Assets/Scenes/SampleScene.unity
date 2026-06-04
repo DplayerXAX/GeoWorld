@@ -150,6 +150,7 @@ Transform:
   m_Children:
   - {fileID: 680953393}
   - {fileID: 1427198834}
+  - {fileID: 737134994}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &85239780
@@ -270,6 +271,7 @@ MonoBehaviour:
   trayLocalOffset: {x: 4, y: -2.5, z: 6}
   traySpacing: 1.5
   trayBlockScale: 0.4
+  selectionOutlineColor: {r: 1, g: 0.85, b: 0.1, a: 1}
   _buildY: 0
   buildYRange: {x: 0, y: 20}
 --- !u!4 &164805053
@@ -1546,12 +1548,12 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 737134992}
   serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 1.24775, y: -0, z: 4.20732}
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
+  m_LocalPosition: {x: 7.67338, y: 0, z: 5.03839}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
-  m_Father: {fileID: 0}
+  m_Father: {fileID: 25065609}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &745744072
 GameObject:
@@ -2549,7 +2551,6 @@ SceneRoots:
   - {fileID: 173873515}
   - {fileID: 1188158438}
   - {fileID: 764464399}
-  - {fileID: 737134994}
   - {fileID: 2098137110}
   - {fileID: 85239782}
   - {fileID: 351851393}
