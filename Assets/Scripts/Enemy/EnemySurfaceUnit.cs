@@ -7,6 +7,7 @@ public class EnemySurfaceUnit : MonoBehaviour
     [Header("Movement")]
     public float bpm = 120f;
     [Range(0.5f, 0.95f)] public float moveRatio = 0.8f;
+    [Min(0.01f)] public float baseSpeedMultiplier = 1f;
 
     [Header("Health")]
     public int maxHealth = 3;
@@ -14,6 +15,8 @@ public class EnemySurfaceUnit : MonoBehaviour
     [Header("Placement")]
     [Tooltip("Extra world-space clearance ABOVE the 0.5×cellSize face offset. Bump this up if the visual's bottom shards dip into the block surface. Applies to both the initial spawn position and each step along the path.")]
     public float faceClearance = 0.15f;
+    [Header("Targeting")]
+    public int targetPriority = 0;
 
     public event Action<EnemySurfaceUnit> OnReachedEnd;
     public event Action<EnemySurfaceUnit> OnDied;
@@ -26,7 +29,7 @@ public class EnemySurfaceUnit : MonoBehaviour
     int _health;
     float _secPerBeat;
     float _beatTimer;
-    float _speedMultiplier = 1f;
+    float _temporarySpeedMultiplier = 1f;
 
     bool _isMoving;
     Vector3 _moveFrom;
@@ -60,6 +63,7 @@ public class EnemySurfaceUnit : MonoBehaviour
         _index = 0;
         _prevNode = null;
         _lastRewardCell = null;
+        _temporarySpeedMultiplier = 1f;
 
         StepToNode(_path[0]);
         _index = 1;
@@ -76,7 +80,7 @@ public class EnemySurfaceUnit : MonoBehaviour
 
     public void SetSpeedMultiplier(float multiplier)
     {
-        _speedMultiplier = Mathf.Max(0.01f, multiplier);
+        _temporarySpeedMultiplier = Mathf.Max(0.01f, multiplier);
     }
 
     void Update()
@@ -84,7 +88,7 @@ public class EnemySurfaceUnit : MonoBehaviour
         if (_path == null || _health <= 0) return;
 
         _beatTimer += Time.deltaTime;
-        float secPerBeat = _secPerBeat / _speedMultiplier;
+        float secPerBeat = _secPerBeat / EffectiveSpeedMultiplier;
         if (_beatTimer >= secPerBeat)
         {
             _beatTimer -= secPerBeat;
@@ -128,7 +132,7 @@ public class EnemySurfaceUnit : MonoBehaviour
     {
         _moveFrom = transform.position;
         _moveTo = FaceCenter(node);
-        _moveDuration = (_secPerBeat / _speedMultiplier) * moveRatio;
+        _moveDuration = (_secPerBeat / EffectiveSpeedMultiplier) * moveRatio;
         _moveTimer = 0f;
         _isMoving = true;
 
@@ -181,4 +185,6 @@ public class EnemySurfaceUnit : MonoBehaviour
         _path = null;
         OnDied?.Invoke(this);
     }
+
+    float EffectiveSpeedMultiplier => Mathf.Max(0.01f, baseSpeedMultiplier * _temporarySpeedMultiplier);
 }

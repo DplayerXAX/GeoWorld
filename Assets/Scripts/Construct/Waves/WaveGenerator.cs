@@ -112,7 +112,27 @@ public class WaveGenerator : ScriptableObject
             first   = false;
         }
 
+        BiasTauntAheadOfFast(groups);
         return groups;
+    }
+
+    void BiasTauntAheadOfFast(List<SpawnGroup> groups)
+    {
+        if (groups == null || groups.Count <= 1) return;
+
+        groups.Sort((a, b) => SpawnOrderRank(a).CompareTo(SpawnOrderRank(b)));
+
+        for (int i = 0; i < groups.Count; i++)
+            groups[i].preDelay = i == 0 ? 0f : groupSpacing;
+    }
+
+    static int SpawnOrderRank(SpawnGroup group)
+    {
+        var prefab = group?.prefab;
+        if (prefab == null) return 2;
+        if (prefab.targetPriority > 0) return 0;
+        if (prefab.baseSpeedMultiplier > 1f) return 1;
+        return 2;
     }
 }
 

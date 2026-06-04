@@ -13,6 +13,7 @@ public class TurretController : MonoBehaviour
     [Header("Targeting")]
     public float attackRange = 5f;
     public float fireInterval = 0.6f;
+    public float lineOfSightPadding = 0.05f;
 
     [Header("Bullet")]
     public GameObject bulletPrefab;
@@ -60,6 +61,29 @@ public class TurretController : MonoBehaviour
         ApplyModeColor();
     }
 
+    public bool CanShoot(EnemySurfaceUnit target)
+    {
+        return InRange(target) && !IsShotBlocked(MuzzlePosition, target.transform.position);
+    }
+
+    public bool IsShotBlocked(Vector3 from, Vector3 to, Transform extraIgnoreRoot = null)
+    {
+        Vector3 dir = to - from;
+        float distance = dir.magnitude;
+        if (distance <= 0.001f) return false;
+
+        foreach (var hit in Physics.RaycastAll(from, dir / distance, distance, ~0, QueryTriggerInteraction.Collide))
+        {
+            if (IsIgnoredHit(hit.collider, extraIgnoreRoot)) continue;
+            if (!IsPlacedBlockHit(hit.collider)) continue;
+            if (hit.distance >= distance - lineOfSightPadding) continue;
+
+            return true;
+        }
+
+        return false;
+    }
+
     void Awake()
     {
         ResolveBulletPrefab();
@@ -75,7 +99,7 @@ public class TurretController : MonoBehaviour
 
         _fireTimer -= Time.deltaTime;
 
-        if (!InRange(_target)) _target = FindClosest();
+        _target = FindClosest();
         if (_target == null || _fireTimer > 0f) return;
 
         Fire(_target);
@@ -92,12 +116,24 @@ public class TurretController : MonoBehaviour
     {
         EnemySurfaceUnit best = null;
         float bestSqr = attackRange * attackRange;
+        int bestPriority = int.MinValue;
 
         foreach (var e in FindObjectsOfType<EnemySurfaceUnit>())
         {
             if (e == null || e.CurrentHealth <= 0) continue;
+
+            if (!CanShoot(e)) continue;
+
             float sqr = (e.transform.position - Origin).sqrMagnitude;
-            if (sqr <= bestSqr) { best = e; bestSqr = sqr; }
+            if (sqr > attackRange * attackRange) continue;
+
+            int priority = e.targetPriority;
+            if (priority > bestPriority || (priority == bestPriority && sqr <= bestSqr))
+            {
+                best = e;
+                bestSqr = sqr;
+                bestPriority = priority;
+            }
         }
         return best;
     }
@@ -110,7 +146,7 @@ public class TurretController : MonoBehaviour
             return;
         }
 
-        Vector3 spawn = Origin + muzzleOffset;
+        Vector3 spawn = MuzzlePosition;
         Vector3 dir = target.transform.position - spawn;
         Quaternion rot = dir.sqrMagnitude > 0.001f ? Quaternion.LookRotation(dir) : Quaternion.identity;
 
@@ -147,6 +183,34 @@ public class TurretController : MonoBehaviour
     }
 
     Vector3 Origin => transform.parent != null ? transform.parent.position : transform.position;
+    Vector3 MuzzlePosition => Origin + muzzleOffset;
+
+    bool IsIgnoredHit(Collider col, Transform extraIgnoreRoot)
+    {
+        if (col == null) return true;
+        if (col.GetComponentInParent<EnemySurfaceUnit>() != null) return true;
+        if (extraIgnoreRoot != null
+            && (col.transform == extraIgnoreRoot || col.transform.IsChildOf(extraIgnoreRoot)))
+            return true;
+
+        Transform root = transform.parent != null ? transform.parent : transform;
+        return col.transform == root || col.transform.IsChildOf(root);
+    }
+
+    bool IsPlacedBlockHit(Collider col)
+    {
+        var grid = GridSystem.instance;
+        if (grid == null) return true;
+
+        foreach (var ins in grid.GetAllInstances())
+        {
+            Transform placed = ins?.visualObject != null ? ins.visualObject.transform : null;
+            if (placed != null && (col.transform == placed || col.transform.IsChildOf(placed)))
+                return true;
+        }
+
+        return false;
+    }
 
     void OnDrawGizmosSelected()
     {
