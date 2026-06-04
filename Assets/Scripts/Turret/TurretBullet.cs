@@ -34,7 +34,14 @@ public class TurretBullet : MonoBehaviour
         }
 
         Vector3 to = _target.transform.position;
-        transform.position = Vector3.MoveTowards(transform.position, to, _speed * Time.deltaTime);
+        Vector3 next = Vector3.MoveTowards(transform.position, to, _speed * Time.deltaTime);
+        if (_turret != null && _turret.IsShotBlocked(transform.position, next, transform))
+        {
+            Destroy(gameObject);
+            return;
+        }
+
+        transform.position = next;
 
         Vector3 dir = to - transform.position;
         if (dir.sqrMagnitude > 0.001f) transform.rotation = Quaternion.LookRotation(dir);
