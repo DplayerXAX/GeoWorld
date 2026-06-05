@@ -1,0 +1,85 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: cdfb573c7e26e5e44a628fbec0155443, type: 3}
+  m_Name: BalanceTable
+  m_EditorClassIdentifier: Assembly-CSharp::BalanceTable
+  blockStartingCurrency: 200
+  blockIncomeByRound: 1e0000002000000023000000260000002a0000002e00000032000000370000003c00000042000000480000004e000000550000005c00000064000000
+  blockIncomeEndlessGrowth: 8
+  turretStartingCurrency: 20
+  turretIncomeByRound: 030000000300000004000000040000000500000005000000060000000600000007000000070000000800000008000000090000000900000014000000
+  turretIncomeEndlessGrowth: 1
+  turretRegenPerSecond: 0.3
+  turretPerPassedBlock: 0
+  turretBonusPerWaveComplete: 5
+  cellBasePrice: 10
+  roundPriceScale: 0.06
+  fluctuationRange: {x: 0.82, y: 1.22}
+  commonRarityMult: 1
+  uncommonRarityMult: 1.4
+  rareRarityMult: 2
+  liftTypeMult: 1.4
+  shadowTypeMult: 0.85
+  startingLives: 10
+  enemies:
+  - name: Fast
+    prefab: {fileID: 1000000000000000004, guid: 8e112c6d7d9b44b29b6d28b4cf5a5401, type: 3}
+    maxHealth: 3
+    speedMultiplier: 2
+    rewardOnKill: 0
+    targetPriority: 0
+    spawnCost: 1
+    minRound: 0
+    spawnWeight: 2
+    groupSize: {x: 3, y: 6}
+    spawnInterval: 0.5
+  - name: Taunt
+    prefab: {fileID: 2000000000000000004, guid: 9cd11ec29906452fae87b242eaa57704, type: 3}
+    maxHealth: 5
+    speedMultiplier: 1.5
+    rewardOnKill: 0
+    targetPriority: 100
+    spawnCost: 1
+    minRound: 1
+    spawnWeight: 1.5
+    groupSize: {x: 6, y: 10}
+    spawnInterval: 0.25
+  waveBaseBudget: 10
+  waveBudgetGrowth: 4
+  waveBudgetVariance: 0.15
+  waveBudgetMax: 80
+  waveGroupSpacing: 1.5
+  waveAffordSlack: 1.2
+  basicTurret:
+    cost: 3
+    damage: 1
+    range: 4
+    fireRate: 1.5
+    slowFactor: 1
+    slowDuration: 0
+    aoeRadius: 0
+  slowTurret:
+    cost: 5
+    damage: 0.3
+    range: 3
+    fireRate: 1
+    slowFactor: 0.5
+    slowDuration: 1.5
+    aoeRadius: 0
+  aoeTurret:
+    cost: 8
+    damage: 2
+    range: 3.5
+    fireRate: 0.6
+    slowFactor: 1
+    slowDuration: 0
+    aoeRadius: 1.5

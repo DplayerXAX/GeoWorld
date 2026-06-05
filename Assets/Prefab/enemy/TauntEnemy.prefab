@@ -9,8 +9,8 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 2000000000000000002}
-  - component: {fileID: 2000000000000000003}
   - component: {fileID: 2000000000000000004}
+  - component: {fileID: 1123970622199118428}
   m_Layer: 0
   m_Name: TauntEnemy
   m_TagString: Untagged
@@ -33,40 +33,6 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!114 &2000000000000000003
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 2000000000000000001}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: dd29de17648d24f4a8f14a0dc6fdd401, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::SurfaceUnitVisual
-  coreColor: {r: 0.08, g: 0.04, b: 0.18, a: 1}
-  coreRadius: 0.27
-  corePulseHz: 2
-  corePulseDepth: 0.2
-  ringColorA: {r: 0.22, g: 0.08, b: 0.45, a: 1}
-  ringColorB: {r: 0.10, g: 0.06, b: 0.28, a: 1}
-  ringColorC: {r: 0.42, g: 0.12, b: 0.55, a: 1}
-  ringRadius: 0.66
-  ringThickness: 0.048
-  spinSpeedA: 88
-  spinSpeedB: -60
-  spinSpeedC: 42
-  nodeColor: {r: 0.06, g: 0.04, b: 0.14, a: 1}
-  nodeSize: 0.12
-  nodeOrbitRadius: 0.465
-  nodeSpeedA: 110
-  nodeSpeedB: -82
-  nodeSpeedC: 67
-  nodeSpeedD: -120
-  bodyRotSpeed: 12
-  glowIntensity: 0.5
-  darkMode: 1
 --- !u!114 &2000000000000000004
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -83,4 +49,39 @@ MonoBehaviour:
   moveRatio: 0.8
   baseSpeedMultiplier: 1
   maxHealth: 3
+  rewardOnKill: 1
+  faceClearance: 0.15
   targetPriority: 100
+--- !u!114 &1123970622199118428
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2000000000000000001}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 735b9c52af41b9b4da09c5bc959f2508, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::EnemyChaoticVisual
+  shardCount: 6
+  accentCount: 1
+  shardMaterial: {fileID: 0}
+  accentMaterial: {fileID: 0}
+  forceUnlit: 1
+  layoutRadius: 0.4
+  shardSizeRange: {x: 0.3, y: 0.42}
+  accentSizeRange: {x: 0.06, y: 0.11}
+  shardPalette:
+  - {r: 0.6289307, g: 0.11181392, b: 0.04153307, a: 1}
+  - {r: 0.33775842, g: 0.14556375, b: 0.40251565, a: 1}
+  - {r: 0.5345911, g: 0.3012932, b: 0.18324025, a: 1}
+  accentPalette:
+  - {r: 0.9559748, g: 0.66212296, b: 0.18337865, a: 1}
+  - {r: 0.8679245, g: 0.18832313, b: 0.30154714, a: 1}
+  bodyRotSpeed: 4
+  shardSpinSpeed: 10
+  bobAmplitude: 0.07
+  bobSpeed: 0.04
+  orbitDriftSpeed: 6
+  randomizeRootTilt: 1

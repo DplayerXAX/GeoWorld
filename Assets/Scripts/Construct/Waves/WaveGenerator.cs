@@ -20,7 +20,11 @@ using UnityEngine;
 [CreateAssetMenu(menuName = "GeoWorld/Wave Generator", fileName = "WaveGenerator")]
 public class WaveGenerator : ScriptableObject
 {
-    [Header("Pool")]
+    [Header("Balance")]
+    [Tooltip("Central balance asset. When set, this generator uses BalanceTable.enemies + waveBaseBudget / growth / variance / maxBudget INSTEAD of the local fields below. Local fields stay as a legacy / fallback path.")]
+    public BalanceTable balance;
+
+    [Header("Pool (legacy fallback — ignored when balance is set)")]
     [Tooltip("Each entry: pick a prefab and the wave-system metadata for using it. Leave prefab null to fall back to EnemyBaseManager's default dark orb.")]
     public List<SpawnEntry> entries = new();
 
@@ -48,6 +52,11 @@ public class WaveGenerator : ScriptableObject
     // Safe to pass to EnemyBaseManager.BeginWave.
     public List<SpawnGroup> Generate(int round, Xoshiro256StarStar rng)
     {
+        // Balance-driven path: ignore local entries/budget fields entirely
+        // and read everything from the BalanceTable. Identical loop shape
+        // but pulls EnemyRecord stats instead of SpawnEntry.
+        if (balance != null) return GenerateFromBalance(round, rng);
+
         var groups = new List<SpawnGroup>();
         if (rng == null || entries == null || entries.Count == 0) return groups;
 
@@ -112,18 +121,99 @@ public class WaveGenerator : ScriptableObject
             first   = false;
         }
 
-        BiasTauntAheadOfFast(groups);
+        BiasTauntAheadOfFast(groups, groupSpacing);
         return groups;
     }
 
-    void BiasTauntAheadOfFast(List<SpawnGroup> groups)
+    // Mirror of Generate() but sourced entirely from the BalanceTable.
+    // Same loop shape, just reads from EnemyRecord / waveBaseBudget /
+    // waveBudgetGrowth / waveBudgetVariance / waveBudgetMax / waveAffordSlack
+    // instead of the local SpawnEntry / baseBudget / growthPerRound fields.
+    List<SpawnGroup> GenerateFromBalance(int round, Xoshiro256StarStar rng)
+    {
+        var groups = new List<SpawnGroup>();
+        if (rng == null || balance.enemies == null || balance.enemies.Count == 0) return groups;
+
+        float raw    = balance.GetWaveBudgetForRound(round);
+        float jit    = 1f + (rng.NextFloat() * 2f - 1f) * balance.waveBudgetVariance;
+        float budget = Mathf.Min(raw * jit, balance.waveBudgetMax);
+
+        var pool = new List<BalanceTable.EnemyRecord>();
+        for (int i = 0; i < balance.enemies.Count; i++)
+        {
+            var e = balance.enemies[i];
+            if (e != null && e.spawnWeight > 0f && round >= e.minRound)
+                pool.Add(e);
+        }
+        if (pool.Count == 0) return groups;
+
+        bool first = true;
+        int safety = 32;
+
+        while (budget > 0f && safety-- > 0)
+        {
+            float ceiling = budget * balance.waveAffordSlack;
+            float totalW  = 0f;
+            for (int i = 0; i < pool.Count; i++)
+                if (pool[i].spawnCost <= ceiling) totalW += pool[i].spawnWeight;
+            if (totalW <= 0f) break;
+
+            float r = rng.NextFloat() * totalW;
+            float acc = 0f;
+            BalanceTable.EnemyRecord picked = null;
+            for (int i = 0; i < pool.Count; i++)
+            {
+                if (pool[i].spawnCost > ceiling) continue;
+                acc += pool[i].spawnWeight;
+                if (r < acc) { picked = pool[i]; break; }
+            }
+            if (picked == null) break;
+
+            int size = rng.NextIntInclusive(
+                Mathf.Max(1, picked.groupSize.x),
+                Mathf.Max(picked.groupSize.x, picked.groupSize.y));
+
+            int maxAffordableSize = Mathf.FloorToInt(ceiling / Mathf.Max(1, picked.spawnCost));
+            if (maxAffordableSize > 0 && size > maxAffordableSize) size = maxAffordableSize;
+            if (size <= 0) break;
+
+            groups.Add(new SpawnGroup
+            {
+                prefab   = picked.prefab,
+                count    = size,
+                interval = picked.spawnInterval,
+                preDelay = first ? 0f : balance.waveGroupSpacing,
+            });
+
+            budget -= picked.spawnCost * size;
+            first   = false;
+        }
+
+        BiasTauntAheadOfFastFromBalance(groups, balance);
+        return groups;
+    }
+
+    void BiasTauntAheadOfFast(List<SpawnGroup> groups, float spacing)
     {
         if (groups == null || groups.Count <= 1) return;
 
         groups.Sort((a, b) => SpawnOrderRank(a).CompareTo(SpawnOrderRank(b)));
 
         for (int i = 0; i < groups.Count; i++)
-            groups[i].preDelay = i == 0 ? 0f : groupSpacing;
+            groups[i].preDelay = i == 0 ? 0f : spacing;
+    }
+
+    // Balance-driven sort: reads targetPriority / speedMultiplier from the
+    // matching EnemyRecord so a Tank or Swarm authored ONLY in BalanceTable
+    // (prefab Inspector defaults left at 1.0 / 0) is still bucketed correctly.
+    void BiasTauntAheadOfFastFromBalance(List<SpawnGroup> groups, BalanceTable bal)
+    {
+        if (groups == null || groups.Count <= 1) return;
+
+        groups.Sort((a, b) => RankFromBalance(a, bal).CompareTo(RankFromBalance(b, bal)));
+
+        for (int i = 0; i < groups.Count; i++)
+            groups[i].preDelay = i == 0 ? 0f : bal.waveGroupSpacing;
     }
 
     static int SpawnOrderRank(SpawnGroup group)
@@ -132,6 +222,32 @@ public class WaveGenerator : ScriptableObject
         if (prefab == null) return 2;
         if (prefab.targetPriority > 0) return 0;
         if (prefab.baseSpeedMultiplier > 1f) return 1;
+        return 2;
+    }
+
+    // Looks up the EnemyRecord by prefab reference, then ranks by record
+    // values (not prefab Inspector defaults). Falls back to prefab fields
+    // for groups whose prefab isn't in the balance roster.
+    static int RankFromBalance(SpawnGroup group, BalanceTable bal)
+    {
+        var prefab = group?.prefab;
+        if (prefab == null) return 2;
+        if (bal != null && bal.enemies != null)
+        {
+            for (int i = 0; i < bal.enemies.Count; i++)
+            {
+                var rec = bal.enemies[i];
+                if (rec != null && rec.prefab == prefab)
+                {
+                    if (rec.targetPriority > 0)        return 0;
+                    if (rec.speedMultiplier > 1f)      return 1;
+                    return 2;
+                }
+            }
+        }
+        // Prefab-only fallback (no record matched).
+        if (prefab.targetPriority > 0)         return 0;
+        if (prefab.baseSpeedMultiplier > 1f)   return 1;
         return 2;
     }
 }

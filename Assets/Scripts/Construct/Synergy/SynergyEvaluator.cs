@@ -192,7 +192,10 @@ public class SynergyEvaluator : MonoBehaviour
     }
 
     // Try to grow an active claim by re-evaluating against (claim ∪ unclaimed).
-    // Only commit if the new result is strictly bigger or at a higher tier.
+    // Commits when the result is strictly bigger, higher tier, OR a different
+    // set of pieces (rule may have shifted its "best fit" to a different
+    // configuration of the same count — filter-state-dependent visualizers
+    // need to refresh in that case).
     void TryAbsorb(ActiveSynergy active, GameFlowManager game)
     {
         var extended = new HashSet<PlacedPiece>(active.claimedPieces);
@@ -203,7 +206,13 @@ public class SynergyEvaluator : MonoBehaviour
 
         bool grew    = newClaim.Count > active.claimedPieces.Count;
         bool leveled = newTier > active.tier;
-        if (!grew && !leveled) return;
+        // For ICellHighlightFilter rules, also re-commit when the claimed SET
+        // changes at the same count — the cube origin may have moved to a
+        // different valid position, which changes which cells should glow
+        // even though the piece count stays the same.
+        bool setMoved = active.rule is ICellHighlightFilter
+                     && !newClaim.SetEquals(active.claimedPieces);
+        if (!grew && !leveled && !setMoved) return;
 
         int oldTier = active.tier;
         SafeRevoke(active.rule, oldTier, game);

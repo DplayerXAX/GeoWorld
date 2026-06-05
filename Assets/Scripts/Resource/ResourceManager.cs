@@ -6,37 +6,41 @@ using UnityEngine;
 //
 // Two resource pools:
 //
-//   blockCurrency  �?spent at the block shop to buy path blocks.
+//   blockCurrency  �?spent at the block shop to buy path blocks.
 //
 //   Shop price formula (computed once per shop spawn, stored in cachedPrice):
 //     price = cells × cellBasePrice × rarityMult × typeMult × roundMult × fluctuation
 //       rarityMult : Common 1.0 / Uncommon 1.4 / Rare 2.0
 //       typeMult   : Lift 1.4 / Shadow 0.85 / others 1.0
 //       roundMult  : 1 + RoundIndex × roundPriceScale
-//       fluctuation: Random [0.82, 1.22], rolled once at shop spawn �?Slay the Spire style
+//       fluctuation: Random [0.82, 1.22], rolled once at shop spawn �?Slay the Spire style
 //
-//   turretCurrency �?spent by the turret system (another team).
+//   turretCurrency �?spent by the turret system (another team).
 //                    Slowly regenerates during combat.
 //
 // INCOME
-//   GrantRoundIncome() �?called by GameFlowManager.StartTurn() each build phase.
+//   GrantRoundIncome() �?called by GameFlowManager.StartTurn() each build phase.
 //   Turret currency regenerates at turretRegenPerSecond while combat is active.
 //
 // PHASE LOCKING (driven by GameFlowManager)
-//   SetCombatActive(true)  �?call when Running phase starts (enables regen)
-//   SetCombatActive(false) �?call when transitioning back to Build
+//   SetCombatActive(true)  �?call when Running phase starts (enables regen)
+//   SetCombatActive(false) �?call when transitioning back to Build
 //
 // UI
 //   Subscribe to OnBlockCurrencyChanged(int) and OnTurretCurrencyChanged(int).
 //   Subscribe to OnInsufficientFunds(BlockType) for "can't afford" feedback.
 //
 // BATTLE-SYSTEM API (other team)
-//   OnEnemyPassedBlock(BlockType) �?earns turret currency per block walked over
-//   OnWaveComplete()              �?wave-end bonus + triggers round income
+//   OnEnemyPassedBlock(BlockType) �?earns turret currency per block walked over
+//   OnWaveComplete()              �?wave-end bonus + triggers round income
 // ─────────────────────────────────────────────────────────────────────────────
 public class ResourceManager : MonoBehaviour
 {
     public static ResourceManager Instance;
+
+    [Header("Balance")]
+    [Tooltip("Central balance asset. When set, overrides all Inspector defaults below on Awake — those values become fallbacks for when this slot is empty.")]
+    public BalanceTable balance;
 
     public bool testing = false;
     [Header("Block Currency")]
@@ -45,7 +49,7 @@ public class ResourceManager : MonoBehaviour
     [Tooltip("Block currency earned at the start of each build phase.")]
     public int blockCurrencyPerRound = 30;
 
-    [Header("Block Shop �?Pricing")]
+    [Header("Block Shop �?Pricing")]
     [Tooltip("Base price per cell. Single=10, I2=20, L4=40 before modifiers.")]
     public int cellBasePrice = 10;
     [Tooltip("Price multiplier increase per completed round. 0.06 = +6%/round.")]
@@ -56,7 +60,7 @@ public class ResourceManager : MonoBehaviour
     [Tooltip("Turret currency earned at the start of each build phase.")]
     public int turretCurrencyPerRound = 2;
     [Tooltip("Turret currency gained per second during combat.")]
-    public float turretRegenPerSecond = 0.5f;
+    public float turretRegenPerSecond = 0.25f;
 
     // ── Events ────────────────────────────────────────────────────────────────
     /// <summary>Fires when block currency amount changes. Subscribe for UI updates.</summary>
@@ -76,7 +80,7 @@ public class ResourceManager : MonoBehaviour
     float _turretRegenAccum;
     bool  _combatActive;
 
-    // Number of each type currently placed on the grid �?drives price scaling.
+    // Number of each type currently placed on the grid �?drives price scaling.
     readonly Dictionary<BlockType, int> _placedCounts = new();
 
     // ── Lifecycle ─────────────────────────────────────────────────────────────
@@ -84,13 +88,27 @@ public class ResourceManager : MonoBehaviour
     {
         Instance = this;
 
+        // Pull authoritative values from the BalanceTable asset if assigned.
+        // Inspector fields stay as fallbacks for when no balance is wired.
+        if (balance != null)
+        {
+            startingBlockCurrency  = balance.blockStartingCurrency;
+            startingTurretCurrency = balance.turretStartingCurrency;
+            cellBasePrice          = balance.cellBasePrice;
+            roundPriceScale        = balance.roundPriceScale;
+            turretRegenPerSecond   = balance.turretRegenPerSecond;
+            // Per-round income values come from balance.GetXxxIncomeForRound()
+            // dynamically (not stored as fields here) so the curve takes
+            // effect immediately when the asset is edited.
+        }
+
         _blockCurrency  = startingBlockCurrency;
         _turretCurrency = startingTurretCurrency;
-        if (testing) 
+        if (testing)
         {
             _blockCurrency = 9999;
             _turretCurrency = 9999;
-        
+
         }
         foreach (BlockType t in Enum.GetValues(typeof(BlockType)))
             _placedCounts[t] = 0;
@@ -124,8 +142,16 @@ public class ResourceManager : MonoBehaviour
     /// <summary>Called by GameFlowManager.StartTurn() at the start of each build phase.</summary>
     public void GrantRoundIncome()
     {
-        _blockCurrency  += blockCurrencyPerRound;
-        _turretCurrency += turretCurrencyPerRound;
+        int round = GameFlowManager.Instance != null ? GameFlowManager.Instance.RoundIndex : 0;
+        int blockInc = balance != null
+            ? balance.GetBlockIncomeForRound(round)
+            : blockCurrencyPerRound;
+        int turretInc = balance != null
+            ? balance.GetTurretIncomeForRound(round)
+            : turretCurrencyPerRound;
+
+        _blockCurrency  += blockInc;
+        _turretCurrency += turretInc;
         OnBlockCurrencyChanged?.Invoke(_blockCurrency);
         OnTurretCurrencyChanged?.Invoke(_turretCurrency);
     }
@@ -141,7 +167,7 @@ public class ResourceManager : MonoBehaviour
         _                    => 1.0f
     };
 
-    // Lift enables vertical routing �?longer paths �?stronger blocks �?pricier.
+    // Lift enables vertical routing �?longer paths �?stronger blocks �?pricier.
     // Shadow is slightly cheaper since it adds less path utility.
     static float TypeMult(BlockType t) => t switch
     {
@@ -153,14 +179,18 @@ public class ResourceManager : MonoBehaviour
     /// <summary>
     /// Computes the final shop price for <paramref name="data"/>.
     /// <paramref name="fluctuation"/> is a one-time random [0.82, 1.22] rolled
-    /// at shop spawn time (Slay-the-Spire style) �?pass the value stored on
+    /// at shop spawn time (Slay-the-Spire style) �?pass the value stored on
     /// SelectableBlock.cachedPrice rather than calling this on every frame.
     /// </summary>
     public int ComputePrice(BlockData data, float fluctuation)
     {
         if (data == null) return 0;
+        int round = GameFlowManager.Instance?.RoundIndex ?? 0;
+
+        // Route through the balance asset's identical formula when wired.
+        if (balance != null) return balance.ComputePrice(data, round, fluctuation);
+
         int   cells     = (data.cells != null && data.cells.Length > 0) ? data.cells.Length : 1;
-        int   round     = GameFlowManager.Instance?.RoundIndex ?? 0;
         float roundMult = 1f + round * roundPriceScale;
         float raw       = cells * cellBasePrice
                           * RarityMult(data.rarity)
@@ -193,7 +223,7 @@ public class ResourceManager : MonoBehaviour
     /// Deducts <paramref name="price"/> from the pool that matches <paramref name="type"/>:
     /// turret currency for Turret blocks, block currency for everything else.
     /// Returns false (and fires OnInsufficientFunds) if insufficient.
-    /// Only call for NEW purchases �?repositioning is always free.
+    /// Only call for NEW purchases �?repositioning is always free.
     /// </summary>
     public bool TryBuy(int price, BlockType type)
     {
@@ -215,7 +245,7 @@ public class ResourceManager : MonoBehaviour
             _blockCurrency -= price;
             OnBlockCurrencyChanged?.Invoke(_blockCurrency);
         }
-        Debug.Log($"[Resource] Bought {type} for {price} ¤ �?{(isTurret ? _turretCurrency : _blockCurrency)} remaining");
+        Debug.Log($"[Resource] Bought {type} for {price} ¤ �?{(isTurret ? _turretCurrency : _blockCurrency)} remaining");
         return true;
     }
 
@@ -232,7 +262,7 @@ public class ResourceManager : MonoBehaviour
 
     /// <summary>
     /// Call when a block is removed from the grid (picked up for reposition or destroyed).
-    /// Decrements the count �?temporarily lowers the price for that type.
+    /// Decrements the count �?temporarily lowers the price for that type.
     /// </summary>
     public void OnBlockRemoved(BlockType type)
     {
@@ -266,15 +296,20 @@ public class ResourceManager : MonoBehaviour
     }
 
     // ── Battle-system API (other team calls these) ────────────────────────────
-    /// <summary>Call each time an enemy walks over a block. Earns 1 turret currency.</summary>
-    public void OnEnemyPassedBlock(BlockType blockType) => AddTurretCurrency(1);
+    /// <summary>Call each time an enemy walks over a block. Earns turret currency per BalanceTable.turretPerPassedBlock (default 1).</summary>
+    public void OnEnemyPassedBlock(BlockType blockType)
+    {
+        int amt = balance != null ? balance.turretPerPassedBlock : 1;
+        if (amt > 0) AddTurretCurrency(amt);
+    }
 
     /// <summary>Call at wave end. Grants bonus turret currency + round income for next build.</summary>
     public void OnWaveComplete()
     {
-        AddTurretCurrency(3);
+        int bonus = balance != null ? balance.turretBonusPerWaveComplete : 3;
+        if (bonus > 0) AddTurretCurrency(bonus);
         GrantRoundIncome();
     }
 
-    // OnGUI removed �?use DebugUI.cs for all display.
+    // OnGUI removed �?use DebugUI.cs for all display.
 }

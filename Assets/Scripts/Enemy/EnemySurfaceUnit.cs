@@ -12,6 +12,10 @@ public class EnemySurfaceUnit : MonoBehaviour
     [Header("Health")]
     public int maxHealth = 3;
 
+    [Header("Reward")]
+    [Tooltip("BLOCK currency awarded when this enemy is killed (combat-success income that feeds the building budget). Set by EnemyBaseManager from BalanceTable when a matching EnemyRecord is found, otherwise uses this Inspector default.")]
+    public int rewardOnKill = 1;
+
     [Header("Placement")]
     [Tooltip("Extra world-space clearance ABOVE the 0.5×cellSize face offset. Bump this up if the visual's bottom shards dip into the block surface. Applies to both the initial spawn position and each step along the path.")]
     public float faceClearance = 0.15f;
@@ -45,6 +49,16 @@ public class EnemySurfaceUnit : MonoBehaviour
     void Awake()
     {
         _health = maxHealth;
+    }
+
+    // Sets BOTH maxHealth and current _health. Call after Instantiate when
+    // overriding the prefab's authored HP (e.g. from a BalanceTable record).
+    // Plain `maxHealth = x` doesn't work because Awake() has already copied
+    // the prefab value into _health.
+    public void SetMaxHealth(int hp)
+    {
+        maxHealth = Mathf.Max(1, hp);
+        _health   = maxHealth;
     }
 
     public void SetPath(List<FaceNode> path, float pathBpm, float pathMoveRatio)

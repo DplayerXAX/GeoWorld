@@ -7,12 +7,16 @@ public class TurretController : MonoBehaviour
 
     public enum Mode { Basic, Slow, Aoe }
 
+    [Header("Balance")]
+    [Tooltip("Central balance asset. When set, Configure(BlockType) overrides damage / range / fireRate / slow / AOE stats from BalanceTable.GetTurretStats(mode). Leave empty to use the Inspector defaults below.")]
+    public BalanceTable balance;
+
     [Header("Turret")]
     public Mode mode = Mode.Basic;
 
     [Header("Targeting")]
     public float attackRange = 5f;
-    public float fireInterval = 0.6f;
+    public float fireInterval = 1f;
     public float lineOfSightPadding = 0.05f;
 
     [Header("Bullet")]
@@ -58,6 +62,26 @@ public class TurretController : MonoBehaviour
         if (!TurretTypes.Is(type)) return;
 
         mode = TurretTypes.Mode(type);
+
+        // Pull authoritative per-mode stats from BalanceTable when wired.
+        // Inspector defaults stay as fallback for un-wired turrets.
+        if (balance != null)
+        {
+            var s = balance.GetTurretStats(mode);
+            attackRange  = s.range;
+            fireInterval = s.fireRate > 0f ? Mathf.Max(MinFireInterval, 1f / s.fireRate) : fireInterval;
+            bulletDamage = Mathf.Max(1, Mathf.RoundToInt(s.damage));
+            if (mode == Mode.Slow)
+            {
+                slowDuration   = s.slowDuration;
+                slowMultiplier = s.slowFactor;
+            }
+            else if (mode == Mode.Aoe)
+            {
+                aoeRadius = s.aoeRadius;
+            }
+        }
+
         ApplyModeColor();
     }
 

@@ -10,7 +10,7 @@
     "Type": "User",
     "GUID": "{701ECBBD-9C7B-4030-8CDB-749EE5D1C7B9}",
     "Language": "SFX",
-    "Hash": "{7E980C7A-DBDB-F357-98D5-D2062245DE4A}",
+    "Hash": "{844414B2-2962-E159-913E-08CF3D04724B}",
     "ObjectPath": "Init",
     "ShortName": "Init",
     "Path": "Init.bnk",
@@ -123,6 +123,12 @@
       "ObjectPath": "\\States\\Default Work Unit\\Music_Mode",
       "GUID": "{E748B71C-E59F-46F4-BB6D-A5E375DF535C}",
       "States": [
+       {
+        "Id": "748895195",
+        "Name": "None",
+        "ObjectPath": "\\States\\Default Work Unit\\Music_Mode\\None",
+        "GUID": "{B1D76136-2323-45EF-8DDF-D9366E8BDBF3}"
+       },
        {
         "Id": "2937832959",
         "Name": "Battle",
@@ -672,6 +678,6 @@
     ]
    }
   ],
-  "FileHash": "{8B9CE45A-C6D9-B950-B95A-81119A7AB66D}"
+  "FileHash": "{65E7BDE9-1733-DCC7-263B-726614BBFAB6}"
  }
 }

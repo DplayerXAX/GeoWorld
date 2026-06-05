@@ -130,13 +130,20 @@ public class SynergyVisualFX : MonoBehaviour
 
             if (_decos.TryGetValue(pieceId, out var existing))
             {
-                bool ruleSame  = existing.active.rule == active.rule;
-                bool claimSame = existing.active == active
-                              && existing.snapshotClaimCount == active.claimedPieces.Count;
+                bool ruleSame = existing.active.rule == active.rule;
 
-                // Same rule AND same claim signature → decoration is current.
-                // Rule changes (different synergy) OR claim grew/shrank (absorb,
-                // ICellHighlightFilter zone may have moved) → rebuild.
+                // ICellHighlightFilter rules pull which cells to decorate from
+                // internal filter state (e.g. EnlightenmentRule._cubeOrigin /
+                // _cubeSide). That state can change WITHOUT claimedPieces.Count
+                // changing — cube grows to absorb existing pieces' overhang
+                // cells, or cube origin shifts to a different position with
+                // the same number of claimed pieces. Force rebuild every event
+                // for filter rules so the new filter state is re-queried.
+                bool isFilterRule = active.rule is ICellHighlightFilter;
+                bool claimSame    = !isFilterRule
+                                 && existing.active == active
+                                 && existing.snapshotClaimCount == active.claimedPieces.Count;
+
                 if (ruleSame && claimSame) continue;
 
                 SafeRelease(existing);
