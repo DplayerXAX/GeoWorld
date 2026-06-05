@@ -12,6 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 6f0fbc2744de40a40a2e2a1dadd7e9fd, type: 3}
   m_Name: WaveGenerator
   m_EditorClassIdentifier: Assembly-CSharp::WaveGenerator
+  balance: {fileID: 11400000, guid: 5d6ea2d422ee8524d9d9f084e3920c53, type: 2}
   entries:
   - prefab: {fileID: 0}
     cost: 2
@@ -34,7 +35,7 @@ MonoBehaviour:
     groupSizeMin: 1
     groupSizeMax: 2
     interval: 0.75
-  baseBudget: 6
+  baseBudget: 15
   growthPerRound: 4
   variance: 0.15
   maxBudget: 80

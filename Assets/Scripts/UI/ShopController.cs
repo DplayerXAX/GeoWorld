@@ -1,22 +1,5 @@
 using System.Collections.Generic;
 using UnityEngine;
-
-// ── ShopController ────────────────────────────────────────────────────────────
-//
-// Renders the shop as a dimensional rift �?a crack in screen-space through
-// which floating 3D blocks are visible.  Powered by RenderTexture + GL mesh.
-//
-// Unity setup:
-//   1. Create empty GameObject "ShopController", attach this script.
-//   2. Create a Camera "ShopCamera":
-//        Clear Flags  �?Solid Color  (set shopBackground in Inspector)
-//        Depth        �?1
-//        Target Texture �?leave blank (assigned at runtime)
-//   3. Drag ShopCamera into shopCam field.
-//
-// F (configurable) �?open / close the rift.
-// Auto-closes during combat (Running phase).
-// ─────────────────────────────────────────────────────────────────────────────
 public enum RiftShapePreset { Rectangle, Triangle, Lens, Oval, Slash, Crack, Diamond, Custom }
 
 public class ShopController : MonoBehaviour
@@ -65,8 +48,8 @@ public class ShopController : MonoBehaviour
     public float   tumbleAmplitude = 0f;
     public float   tumbleSpeed     = 0.45f;
 
-    [Header("Rift Atmosphere �?deep void inside")]
-    [Tooltip("Inner colour of the rift. Deep cosmic by default �?adjust to taste.")]
+    [Header("Rift Atmosphere")]
+    [Tooltip("Inner colour of the rift. Deep cosmic by default.")]
     public Color shopBackground     = new Color(0.04f, 0.05f, 0.14f, 1f);
     [Tooltip("Light over the block row. Kept near-neutral so synergy colours read the same in shop preview as on the placed board.")]
     public Color blockLightColor    = new Color(1.00f, 0.96f, 0.88f, 1f);
@@ -87,7 +70,7 @@ public class ShopController : MonoBehaviour
     [Range(-180f, 180f)] public float riftRotationDeg = 0f;
     [Tooltip("RenderTexture width. Aspect should match the on-screen strip (riftWidth × Screen.width : riftHeight × Screen.height) to avoid item stretch.")]
     public int rtWidth  = 1280;
-    [Tooltip("RenderTexture height. 1280×288 �?4.4:1, matches a 0.92×0.20 strip on a 16:9 screen.")]
+    [Tooltip("RenderTexture height.")]
     public int rtHeight = 288;
 
     [Header("Rift Edge FX �?bright tear in the glass")]
@@ -166,7 +149,6 @@ public class ShopController : MonoBehaviour
         new(-0.62f,  0.60f), new(-0.45f,  0.85f), new(-0.20f,  1.00f),
     };
 
-    // Long thin slash �?narrow on X.
     static readonly Vector2[] RiftShape_Slash =
     {
         new( 0.00f,  1.00f), new( 0.10f,  0.65f), new( 0.18f,  0.30f),
@@ -175,7 +157,6 @@ public class ShopController : MonoBehaviour
         new(-0.22f,  0.00f), new(-0.18f,  0.30f), new(-0.10f,  0.65f),
     };
 
-    // Clean horizontal slit �?pointy ends, flat top/bottom in the middle.
     // No jagged noise. Reads as a "crack opening" laid horizontally.
     static readonly Vector2[] RiftShape_Crack =
     {
@@ -187,7 +168,6 @@ public class ShopController : MonoBehaviour
         new(-0.70f, -1.00f),  // bottom-left transition
     };
 
-    // Four-pointed diamond �?clean geometric look.
     static readonly Vector2[] RiftShape_Diamond =
     {
         new( 0.00f,  1.00f), new( 0.55f,  0.30f), new( 0.80f,  0.00f),
@@ -227,8 +207,8 @@ public class ShopController : MonoBehaviour
 
     // GL rendering
     RenderTexture _shopRT;
-    Material      _riftMat;    // Unlit/Texture �?draws RT content
-    Material      _colorMat;   // Hidden/Internal-Colored �?draws colored geometry
+    Material      _riftMat;    
+    Material      _colorMat;   
 
     Light _blockLight;
     Light _turretLight;
@@ -647,7 +627,6 @@ public class ShopController : MonoBehaviour
         if (!IsMouseInShopView()) return false;
         if (_hovered == null) return true;
 
-        // Affordable check �?block the grab if the player can't pay.
         var rm = ResourceManager.Instance;
         if (rm != null && !rm.CanAfford(_hovered.sb.cachedPrice, _hovered.sb.data.blockType))
         {
@@ -701,8 +680,6 @@ public class ShopController : MonoBehaviour
             );
             item.root.transform.position = item.basePos + drift;
 
-            // Tumble: gentle wobble in all 3 axes. Absolute rotation (no
-            // accumulation) �?irrational-ish multipliers stop the axes syncing.
             Vector3 euler = new Vector3(
                 Mathf.Sin(t * tumbleSpeed         + item.tumblePhase.x),
                 Mathf.Sin(t * tumbleSpeed * 0.73f + item.tumblePhase.y),
@@ -742,7 +719,6 @@ public class ShopController : MonoBehaviour
         }
     }
 
-    // Input.mousePosition (y=0 bottom) �?shop camera viewport (0..1, y=0 bottom).
     Vector3 ScreenToShopViewport(Vector2 mp)
     {
         // 1. Offset from rift centre in normalised rift-screen units (still in rotated space).
@@ -939,13 +915,6 @@ public class ShopController : MonoBehaviour
         float rx = Mathf.Max(maxX - minX, 0.001f);
         float ry = Mathf.Max(maxY - minY, 0.001f);
 
-        // UV helper: shape normalised �?RT UV.
-        // Camera LookAt uses cross(worldUp, forward) �?camera.right = world +X,
-        // so no U flip needed: left shape �?left RT �?left items.
-        // V is flipped for D3D/URP (V=0 at top of texture).
-        // Y-only crop: as the rift closes (riftScale �?0), sample a narrower
-        // band of the RT centred on V=0.5. Items inside stay at native size
-        // and the rift just "reveals" more of them as it opens.
         float scaleY = Mathf.Max(_riftScale, 0.0001f);
         System.Func<Vector2, Vector2> toUV =
             p =>
@@ -1041,8 +1010,6 @@ public class ShopController : MonoBehaviour
         GL.End();
     }
 
-    // Straight rays emanating from rift centre �?gives the "energy lance"
-    // feel (cf. reference: cosmic beam projecting outward).
     void DrawRadialRays()
     {
         if (rayCount <= 0) return;
@@ -1076,9 +1043,6 @@ public class ShopController : MonoBehaviour
         }
         GL.End();
     }
-
-    // Tiny twinkling cross sparkles scattered around the rift �?
-    // geometric stand-in for "cosmic dust" without the messy noise.
     void DrawSparkles()
     {
         if (sparkleCount <= 0 || _riftScale < 0.02f) return;
@@ -1088,14 +1052,11 @@ public class ShopController : MonoBehaviour
         float t = Time.time;
         for (int i = 0; i < sparkleCount; i++)
         {
-            // Golden-angle distribution + per-index pseudo-random radius �?
-            // stable per session, no allocations.
-            float angle  = i * 2.3998f;   // �?137.5°
+            float angle  = i * 2.3998f;   
             float radNorm = 0.65f + ((i * 31 + 17) % 100) / 100f * 0.85f;
             float radius  = radNorm * sparkleRadius * _riftScreenSize;
             Vector2 pos   = _riftScreenCenter + new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)) * radius;
 
-            // Sharp twinkle �?pow 3 so most of the time they're dim, brief flash.
             float twink = 0.5f + 0.5f * Mathf.Sin(t * sparkleTwinkleSpeed + i * 0.91f);
             twink = twink * twink * twink;
             if (twink < 0.03f) continue;
@@ -1185,7 +1146,6 @@ public class ShopController : MonoBehaviour
         GUI.DrawTexture(new Rect(tx - 8f, ty - 8f, bw, 2f), Texture2D.whiteTexture);
         GUI.color = Color.white;
 
-        // Row 1 �?title: shape · colored tag name (single rich-text line).
         string shape = TurretTypes.Is(type) ? TurretTypes.DisplayName(type) : item.sb.data.ShapeName;
         if (string.IsNullOrEmpty(shape)) shape = "Block";
 
@@ -1204,7 +1164,6 @@ public class ShopController : MonoBehaviour
         _ttTitle.richText = true;
         GUI.Label(new Rect(tx, ty, bw - 16f, 16f), title, _ttTitle);
 
-        // Row 2 �?price (color-coded affordability).
         float yCursor = ty + 18f;
         _ttPrice.normal.textColor = afford ? new Color(0.45f, 1f, 0.55f)
                                            : new Color(1f, 0.38f, 0.38f);
@@ -1213,7 +1172,6 @@ public class ShopController : MonoBehaviour
         GUI.Label(new Rect(tx, yCursor, bw - 16f, 14f), priceText, _ttPrice);
         yCursor += 18f;
 
-        // Row 3 �?synergy effect description (only when themed). Two-line wrap.
         if (hasTheme)
         {
             string desc = BlockColorPalette.Description(item.sb.color);
@@ -1365,7 +1323,6 @@ public class ShopController : MonoBehaviour
 
     void BuildShapeFromSprite()
     {
-        // Built-in preset takes priority �?sprite only consulted for Custom.
         if (shapePreset != RiftShapePreset.Custom)
         {
             _runtimeRiftShape = BuiltinShape();

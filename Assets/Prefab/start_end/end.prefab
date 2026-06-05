@@ -133,15 +133,14 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 5859562048836445988}
-  m_Enabled: 1
+  m_Enabled: 0
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 218f905512810be43881236a6423431b, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::EndpointPortalVisual
   mode: 1
   portalMaterial: {fileID: 0}
-  discScale: 0.85
-  discYLift: 0.02
+  coreScale: 0.7
   frameScale: 0.95
   frameThickness: 0.04
   startFrameColor: {r: 0.3, g: 0.1, b: 0.4, a: 1}

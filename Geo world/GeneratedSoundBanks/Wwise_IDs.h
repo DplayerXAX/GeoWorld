@@ -35,6 +35,7 @@ namespace AK
             {
                 static const AkUniqueID BATTLE = 2937832959U;
                 static const AkUniqueID CALM = 3753286132U;
+                static const AkUniqueID NONE = 748895195U;
             } // namespace STATE
         } // namespace MUSIC_MODE
 

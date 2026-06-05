@@ -8,6 +8,7 @@
 						<Property Name="DefaultTransitionTime" Type="Real64" Value="0"/>
 					</PropertyList>
 					<ChildrenList>
+						<State Name="None" ID="{B1D76136-2323-45EF-8DDF-D9366E8BDBF3}"/>
 						<State Name="Calm" ID="{B201E0A1-E53B-4A54-9DEB-8084B10E8370}"/>
 						<State Name="Battle" ID="{89F431A7-637D-4C8C-AEA4-D1E118E87F0A}"/>
 					</ChildrenList>

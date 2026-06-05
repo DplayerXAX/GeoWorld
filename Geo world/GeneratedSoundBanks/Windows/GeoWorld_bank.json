@@ -501,6 +501,12 @@
       "GUID": "{E748B71C-E59F-46F4-BB6D-A5E375DF535C}",
       "States": [
        {
+        "Id": "748895195",
+        "Name": "None",
+        "ObjectPath": "\\States\\Default Work Unit\\Music_Mode\\None",
+        "GUID": "{B1D76136-2323-45EF-8DDF-D9366E8BDBF3}"
+       },
+       {
         "Id": "2937832959",
         "Name": "Battle",
         "ObjectPath": "\\States\\Default Work Unit\\Music_Mode\\Battle",
@@ -572,6 +578,6 @@
     ]
    }
   ],
-  "FileHash": "{CA145C4D-CE8E-FDF0-CCBB-145549CBCB45}"
+  "FileHash": "{25CC1433-9954-3706-335B-FC322262F1C8}"
  }
 }

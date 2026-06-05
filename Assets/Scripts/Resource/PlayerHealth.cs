@@ -7,6 +7,10 @@ public class PlayerHealth : MonoBehaviour
 {
     public static PlayerHealth Instance;
 
+    [Header("Balance")]
+    [Tooltip("Central balance asset. When set, startingLives overrides maxLives below at Awake.")]
+    public BalanceTable balance;
+
     [Header("Health")]
     public int maxLives = 10;
 
@@ -21,7 +25,8 @@ public class PlayerHealth : MonoBehaviour
     void Awake()
     {
         Instance = this;
-        _lives   = maxLives;
+        if (balance != null) maxLives = Mathf.Max(1, balance.startingLives);
+        _lives = maxLives;
     }
 
     public void TakeDamage(int amount = 1)
