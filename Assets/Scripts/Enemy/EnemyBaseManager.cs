@@ -279,6 +279,7 @@ public class EnemyBaseManager : MonoBehaviour
 
     void HandleEnemyReachedEnd(EnemySurfaceUnit enemy)
     {
+        BackgroundReactor.Instance?.TriggerDamageFlash();
         if (PlayerHealth.Instance != null)
         {
             PlayerHealth.Instance.TakeDamage(1);
