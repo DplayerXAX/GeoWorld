@@ -19,6 +19,8 @@ namespace AK
         static const AkUniqueID C = 84696444U;
         static const AkUniqueID DM = 1836525772U;
         static const AkUniqueID F = 84696441U;
+        static const AkUniqueID FIGHT_FINISH = 1796482997U;
+        static const AkUniqueID FIGHT_START = 1037822516U;
         static const AkUniqueID G = 84696440U;
         static const AkUniqueID PLAY_ARP_NOTE = 2050041828U;
         static const AkUniqueID ROTATE = 1302771492U;

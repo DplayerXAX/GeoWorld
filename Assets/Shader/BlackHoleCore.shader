@@ -1,127 +1,196 @@
-// Glowing plasma sphere: coloured inner core + accretion disk ring + flowing streams.
-//
-// Single additive pass — no dark centre.  The sphere adds light everywhere:
-//   • Centre : faint _DiskColor inner glow (_CoreGlow controls brightness)
-//   • Mid    : sharp bright ring (_DiskColor) + flowing plasma streams (_StreamColor)
-//   • Edge   : soft nebula haze (_HazeColor)
-//
-// Streams use three overlapping directional sine waves on the world-space normal
-// — seamless (no UV seam) and continuously animated.
-Shader "Custom/BlackHoleCore"
+Shader "Custom/GlassySupernova_VolumeCube"
 {
     Properties
     {
-        [Header(Colors)]
-        _DiskColor    ("Disk Ring Color",      Color)  = (1.0, 0.55, 0.12, 1)
-        _StreamColor  ("Flow Stream Color",    Color)  = (1.0, 0.85, 0.30, 1)
-        _HazeColor    ("Outer Haze Color",     Color)  = (0.8, 0.25, 1.00, 1)
+        [Header(Colors And Core)]
+        [HDR] _CoreColor       ("Core Blast (blinding gold)", Color) = (1.5, 1.2, 0.8, 1)
+        _ColorA                ("Streak A (muted gold)",     Color) = (0.92, 0.72, 0.32, 1)
+        _ColorB                ("Streak B (rust orange)",    Color) = (0.78, 0.38, 0.20, 1)
+        
+        _CoreRadius            ("Core Gateway Radius",       Range(0.01, 0.5))  = 0.15
+        _OuterFade             ("Outer Fade Start",          Range(0.5, 2.0))   = 1.1   // 增大以允许光芒到达边角
+        _EruptionSpeed         ("Outward Eruption Speed",    Range(0.5, 5.0))   = 2.5
+        _EffectSpread          ("Halo Spread Size",          Range(0.5, 3.0))   = 1.35  // 控制整体在 Mesh 内的缩放比例
 
-        [Header(Inner Core Glow)]
-        _CoreGlow     ("Core Brightness",      Float)  = 0.35
-        _CorePower    ("Core Falloff",         Float)  = 1.6
+        [Header(Manifold Stylization)]
+        _GlassSharpness        ("Glass Quantization",        Range(0.0, 1.0))   = 0.85
+        _ShardSteps            ("Shard Detail Levels",       Range(2.0, 10.0))  = 5.0
+        
+        [Header(Crystalline Rays)]
+        _SwirlArms             ("Ray Count",                 Range(1, 16))      = 9.0
+        _SwirlTwist            ("Spiral Twist",              Range(0, 5))       = 0.8
+        _SwirlWarp             ("Streak Warp Amount",        Range(0, 6))       = 2.5
+        _StreakSharp           ("Streak Sharpness",          Range(0.3, 10))    = 4.5
+        _NoiseScale            ("Noise Scale",               Range(0.5, 12))    = 4.0
 
-        [Header(Disk Ring)]
-        _DiskRadius   ("Ring Position",        Float)  = 0.60
-        _DiskWidth    ("Ring Half-Width",      Float)  = 0.15
-        _DiskSharp    ("Ring Sharpness",       Float)  = 5.0
-
-        [Header(Flowing Streams)]
-        _FlowSpeed    ("Flow Speed",           Float)  = 0.85
-        _FlowScale    ("Flow Frequency",       Float)  = 4.2
-        _FlowStrength ("Stream Brightness",    Float)  = 0.55
-        _FlowContrast ("Stream Contrast",      Float)  = 2.8
-
-        [Header(Outer Haze)]
-        _HazePower    ("Haze Falloff",         Float)  = 1.5
-        _HazeScale    ("Haze Brightness",      Float)  = 0.40
-
-        [Header(Global)]
-        _Intensity    ("Glow Intensity",       Float)  = 6.5
-        _PulseSpeed   ("Pulse Speed",          Float)  = 2.2
-        _PulseDepth   ("Pulse Depth",          Float)  = 0.28
+        [Header(Blend And Alpha)]
+        _Intensity             ("Overall Intensity",         Range(0.2, 3.0))   = 1.2
+        _AlphaBoost            ("Core Alpha Boost",          Range(0.0, 2.0))   = 1.0
+        _GrainAmount           ("Paper Grain",               Range(0, 0.1))     = 0.035
     }
 
     SubShader
     {
-        Tags { "RenderType"="Transparent" "Queue"="Transparent+1" }
-
+        Tags { "Queue"="Transparent" "RenderType"="Transparent" }
         Pass
         {
-            Name "PlasmaGlow"
-            Blend SrcAlpha One      // purely additive — sphere adds light, never blacks out
+            Blend SrcAlpha OneMinusSrcAlpha
             ZWrite Off
-            Cull Off
+            Cull Back 
 
             HLSLPROGRAM
-            #pragma vertex   vert
+            #pragma vertex vert
             #pragma fragment frag
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
 
-            struct A { float4 pos : POSITION; float3 nrm : NORMAL; };
-            struct V { float4 cs : SV_POSITION; float3 nW : TEXCOORD0; float3 pW : TEXCOORD1; };
-
-            float4 _DiskColor, _StreamColor, _HazeColor;
-            float  _CoreGlow, _CorePower;
-            float  _DiskRadius, _DiskWidth, _DiskSharp;
-            float  _FlowSpeed, _FlowScale, _FlowStrength, _FlowContrast;
-            float  _HazePower, _HazeScale;
-            float  _Intensity, _PulseSpeed, _PulseDepth;
-
-            V vert(A v)
+            struct Attributes
             {
-                V o;
-                o.pW = TransformObjectToWorld(v.pos.xyz);
-                o.cs = TransformWorldToHClip(o.pW);
-                o.nW = TransformObjectToWorldNormal(v.nrm);
+                float4 positionOS : POSITION;
+            };
+
+            struct Varyings
+            {
+                float4 positionCS : SV_POSITION;
+                float3 objPos     : TEXCOORD0;
+            };
+
+            float4 _CoreColor, _ColorA, _ColorB;
+            float  _CoreRadius, _OuterFade, _EruptionSpeed, _EffectSpread;
+            float  _GlassSharpness, _ShardSteps;
+            float  _SwirlArms, _SwirlTwist, _SwirlWarp, _StreakSharp, _NoiseScale;
+            float  _Intensity, _AlphaBoost, _GrainAmount;
+
+            Varyings vert(Attributes v)
+            {
+                Varyings o;
+                o.positionCS = TransformObjectToHClip(v.positionOS.xyz);
+                o.objPos = v.positionOS.xyz;
                 return o;
             }
 
-            half4 frag(V i) : SV_Target
+            // 基础 2D Hash & Noise 
+            float Hash21(float2 p)
             {
-                float3 N   = normalize(i.nW);
-                float3 Vd  = normalize(GetCameraPositionWS() - i.pW);
-                float  ndv = abs(dot(N, Vd));   // 1 = centre of sphere, 0 = silhouette
-                float  rim = 1.0 - ndv;
+                p = frac(p * float2(123.34, 456.21));
+                p += dot(p, p + 45.32);
+                return frac(p.x * p.y);
+            }
 
-                // ── Inner core glow (centre) ──────────────────────────────────
-                // Warm/cool colour at the centre, falls off toward the edge.
-                float core = pow(ndv, _CorePower) * _CoreGlow;
+            float Noise2(float2 p)
+            {
+                float2 i = floor(p);
+                float2 f = frac(p);
+                float a = Hash21(i);
+                float b = Hash21(i + float2(1, 0));
+                float c = Hash21(i + float2(0, 1));
+                float d = Hash21(i + float2(1, 1));
+                float2 u = f * f * (3.0 - 2.0 * f);
+                return lerp(lerp(a, b, u.x), lerp(c, d, u.x), u.y);
+            }
 
-                // ── Disk ring ─────────────────────────────────────────────────
-                float d    = abs(rim - _DiskRadius) / max(_DiskWidth * 0.5, 0.001);
-                float disk = pow(saturate(1.0 - d), _DiskSharp);
+            // 晶体切割噪声
+            float GlassyNoise2(float2 p, float sharpness, float steps)
+            {
+                float n = Noise2(p);
+                float quantized = floor(n * steps) / steps;
+                return lerp(n, quantized, sharpness);
+            }
 
-                // ── Flowing plasma streams ────────────────────────────────────
-                // Three overlapping directional waves on world-space N — no UV seam.
-                float t  = _Time.y * _FlowSpeed;
-                float w1 = sin(dot(N, float3( 2.831,  1.713,  3.141)) * _FlowScale + t * 1.00);
-                float w2 = sin(dot(N, float3(-1.907,  3.284, -2.376)) * _FlowScale + t * 0.71);
-                float w3 = sin(dot(N, float3( 3.517, -2.063,  1.841)) * _FlowScale + t * 1.29);
-                float flow = w1 * 0.50 + w2 * 0.33 + w3 * 0.17;           // [-1, 1]
-                flow = pow(saturate(flow * 0.5 + 0.5), _FlowContrast);     // [0, 1], sharpened
+            half4 frag(Varyings i) : SV_Target
+            {
+                // ==========================================
+                // 1. 体积射线与无限大平面的交点 (Ray-Plane)
+                // 解除了之前 0.5 半径内切球的限制，光束可以到达立方体边角
+                // ==========================================
+                float3 rayOrigin = TransformWorldToObject(GetCameraPositionWS());
+                float3 rayDir = normalize(i.objPos - rayOrigin);
+                
+                // 建立一个永远朝向摄像机的虚拟平面，法线直接指向摄像机
+                float3 planeNormal = normalize(rayOrigin); 
+                float denom = dot(planeNormal, rayDir);
+                
+                // 避免射线与平面平行（或者背面剔除）
+                if (abs(denom) < 0.0001) discard; 
+                
+                // 计算相交距离 t
+                float tDist = -dot(planeNormal, rayOrigin) / denom;
+                if (tDist < 0.0) discard;
+                
+                // 获取三维物理击中点
+                float3 hitPos = rayOrigin + rayDir * tDist;
 
-                // Streams cover the whole sphere; fade only at the extreme silhouette
-                // so they don't bleed into empty space around the ball.
-                float edgeFade = pow(saturate(1.05 - rim), 0.6);
-                float streams  = flow * edgeFade * _FlowStrength;
+                // ==========================================
+                // 2. 构建纯平面的局部 2D 坐标系 (真正释放 Halo 潜力)
+                // ==========================================
+                float3 upOS = float3(0, 1, 0);
+                float3 rightOS = normalize(cross(upOS, planeNormal) + float3(1e-4, 0, 0));
+                upOS = normalize(cross(planeNormal, rightOS));
+                
+                // 投射到 2D 并加入 _EffectSpread 控制整体弥漫大小
+                float2 planar = float2(dot(hitPos, rightOS), dot(hitPos, upOS)) / max(0.01, _EffectSpread); 
+                
+                float r = length(planar);
+                float theta = atan2(planar.y, planar.x);
 
-                // ── Outer nebula haze ─────────────────────────────────────────
-                float haze = pow(saturate(rim - 0.02), _HazePower) * _HazeScale;
+                // ==========================================
+                // 3. 琉璃超新星几何核心逻辑 (Halo Style)
+                // ==========================================
+                float tTime = _Time.y * _EruptionSpeed;
+                float lr = log(max(r, 0.01));
+                
+                // 极坐标螺旋
+                float spin = theta * _SwirlArms - lr * _SwirlTwist;
+                float2 warpUV = float2(spin * 0.2, r * _NoiseScale - tTime);
+                float warp = GlassyNoise2(warpUV, _GlassSharpness, _ShardSteps);
+                float spinW = spin + (warp - 0.5) * _SwirlWarp * 6.28;
 
-                // ── Heartbeat pulse ───────────────────────────────────────────
-                float pulse = 1.0 - _PulseDepth + _PulseDepth * sin(_Time.y * _PulseSpeed);
+                // 锋利的光束边缘
+                float smoothStreak = pow(abs(sin(spinW * 0.5)), _StreakSharp);
+                float sharpStreak = step(0.85, smoothStreak) * smoothStreak;
+                float streak = lerp(smoothStreak, sharpStreak, _GlassSharpness);
 
-                // ── Composite ────────────────────────────────────────────────
-                float3 col = _DiskColor.rgb   * (core + disk)
-                           + _StreamColor.rgb * streams
-                           + _HazeColor.rgb   * haze;
+                // 色彩混合
+                float colorN = GlassyNoise2(warpUV * 2.0 + float2(17.3, 5.1), _GlassSharpness, 3.0);
+                float mixT   = saturate((colorN - 0.5) * 2.0 + 0.5);
+                half3 streakCol = lerp(_ColorA.rgb, _ColorB.rgb, mixT);
 
-                float a = saturate(core * 0.55 + disk * 0.90
-                                 + streams * 0.70 + haze * 0.45) * pulse;
+                // 平滑的边缘衰减，没有物理球体的切割感
+                // _OuterFade 默认 1.1，会让光芒自然填满并消失在立方体边缘
+                float outerFadeMask = 1.0 - smoothstep(_OuterFade, _OuterFade + 0.5, r);
+                float radialTaper = (1.0 - smoothstep(_CoreRadius, _OuterFade, r)) * outerFadeMask;
 
-                return half4(col * _Intensity * pulse, a);
+                // 超新星核心 (Blinding Core)
+                float coreNoise = GlassyNoise2(float2(theta * 5.0, -tTime * 2.0), 1.0, 4.0);
+                float jaggedRadius = _CoreRadius + (coreNoise - 0.5) * 0.08;
+                float coreBlast = step(r, jaggedRadius) + smoothstep(jaggedRadius * 1.5, jaggedRadius, r) * 0.5;
+
+                // 结晶碎片
+                float shards = step(0.95, GlassyNoise2(warpUV * 4.0 + tTime, 1.0, 5.0)) * radialTaper;
+
+                // ==========================================
+                // 4. 最终合成
+                // ==========================================
+                half3 col = float3(0, 0, 0);
+                
+                col += streakCol * streak * radialTaper * 1.8;
+                col += _ColorA.rgb * shards * 2.5;
+                col += _CoreColor.rgb * coreBlast * 1.5;
+
+                // 纸张杂色
+                float grain = Hash21(planar * 240.0 + _Time.y * 0.05) - 0.5;
+                col += grain * _GrainAmount;
+
+                col = saturate(col) * _Intensity;
+
+                // 提取亮度作为 Alpha
+                float luma = dot(col, float3(0.299, 0.587, 0.114));
+                float alpha = saturate(luma + coreBlast * _AlphaBoost);
+                alpha *= outerFadeMask;
+
+                return half4(col, alpha);
             }
             ENDHLSL
         }
     }
+    Fallback "Transparent/VertexLit"
 }

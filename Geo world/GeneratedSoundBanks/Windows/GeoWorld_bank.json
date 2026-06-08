@@ -10,7 +10,7 @@
     "Type": "User",
     "GUID": "{FBAC0406-FA36-4CC0-8121-80F7B6376C7E}",
     "Language": "SFX",
-    "Hash": "{63BE1DA7-0B04-0901-3841-73CE10011969}",
+    "Hash": "{F0D801FE-3DFF-080B-0A4B-9EB0800FF48C}",
     "ObjectPath": "\\SoundBanks\\Default Work Unit\\GeoWorld_bank",
     "ShortName": "GeoWorld_bank",
     "Path": "GeoWorld_bank.bnk",
@@ -120,12 +120,28 @@
       "CachePath": "32/{32258BDC-6032-D42F-8789-5FDD1B559970}.wem"
      },
      {
+      "Id": "480639662",
+      "Language": "SFX",
+      "Streaming": "false",
+      "Location": "Memory",
+      "ShortName": "Geo world\\Originals\\SFX\\start fight.wav",
+      "CachePath": "3B/{3BA3F625-0E4B-99CD-B686-D30C81E1F10A}.wem"
+     },
+     {
       "Id": "529299935",
       "Language": "SFX",
       "Streaming": "false",
       "Location": "Memory",
       "ShortName": "6.wav",
       "CachePath": "D6/{D6A2925D-B22E-9968-6871-0901DE7C381A}.wem"
+     },
+     {
+      "Id": "532162984",
+      "Language": "SFX",
+      "Streaming": "false",
+      "Location": "Memory",
+      "ShortName": "Geo world\\Originals\\SFX\\完璧.wav",
+      "CachePath": "3B/{3B77E4F8-81DB-8B8A-6735-C4CB80FC8E9C}.wem"
      },
      {
       "Id": "566543099",
@@ -323,6 +339,34 @@
        },
        {
         "Id": "1072811695"
+       }
+      ]
+     },
+     {
+      "Id": "1796482997",
+      "Name": "fight_finish",
+      "ObjectPath": "\\Events\\Default Work Unit\\fight_finish",
+      "GUID": "{F86A791E-8754-4CBE-BDA1-C0642D056C88}",
+      "DurationType": "OneShot",
+      "DurationMin": "2",
+      "DurationMax": "2",
+      "MediaRefs": [
+       {
+        "Id": "532162984"
+       }
+      ]
+     },
+     {
+      "Id": "1037822516",
+      "Name": "fight_start",
+      "ObjectPath": "\\Events\\Default Work Unit\\fight_start",
+      "GUID": "{ECE38540-761C-4C47-94DE-38127713B664}",
+      "DurationType": "OneShot",
+      "DurationMin": "2",
+      "DurationMax": "2",
+      "MediaRefs": [
+       {
+        "Id": "480639662"
        }
       ]
      },
@@ -578,6 +622,6 @@
     ]
    }
   ],
-  "FileHash": "{25CC1433-9954-3706-335B-FC322262F1C8}"
+  "FileHash": "{2A539AC4-0909-B8A0-F9AD-9A4F419F32E7}"
  }
 }

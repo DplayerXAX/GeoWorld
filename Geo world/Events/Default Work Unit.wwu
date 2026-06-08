@@ -113,6 +113,28 @@
 						</Action>
 					</ChildrenList>
 				</Event>
+				<Event Name="fight_start" ID="{ECE38540-761C-4C47-94DE-38127713B664}">
+					<ChildrenList>
+						<Action Name="" ID="{F5D4E11A-920A-4BD0-A6B0-8B1B1BF84AC8}" ShortID="966524033">
+							<ReferenceList>
+								<Reference Name="Target">
+									<ObjectRef Name="start fight" ID="{CABCDE92-D0B5-46D7-ADFA-AA39F3DEC419}" WorkUnitID="{48502AC3-EE10-4952-8017-84D50D1C5C35}"/>
+								</Reference>
+							</ReferenceList>
+						</Action>
+					</ChildrenList>
+				</Event>
+				<Event Name="fight_finish" ID="{F86A791E-8754-4CBE-BDA1-C0642D056C88}">
+					<ChildrenList>
+						<Action Name="" ID="{BD4EF38E-7C02-4816-9156-B9C7242D5BF9}" ShortID="374694269">
+							<ReferenceList>
+								<Reference Name="Target">
+									<ObjectRef Name="完璧" ID="{A1C3E4EA-9172-453C-AB50-EB06AD5FE090}" WorkUnitID="{48502AC3-EE10-4952-8017-84D50D1C5C35}"/>
+								</Reference>
+							</ReferenceList>
+						</Action>
+					</ChildrenList>
+				</Event>
 			</ChildrenList>
 		</WorkUnit>
 	</Events>
