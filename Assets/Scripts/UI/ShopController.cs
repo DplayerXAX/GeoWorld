@@ -73,13 +73,13 @@ public class ShopController : MonoBehaviour
     [Tooltip("RenderTexture height.")]
     public int rtHeight = 288;
 
-    [Header("Rift Edge FX �?bright tear in the glass")]
+    [Header("Rift Edge FX ")]
     public Color riftEdgeColor  = new Color(0.92f, 0.96f, 1.00f, 0.85f);
     public Color riftGlowColor  = new Color(0.40f, 0.55f, 0.80f, 0.06f);
     public int   riftGlowLayers = 3;
     [Range(0f, 5f)] public float edgePulseSpeed = 1.4f;
 
-    [Header("Cosmic Energy �?off for clean rectangle panel; turn up if you want flavour")]
+    [Header("Cosmic Energy ")]
     public Color energyRayColor   = new Color(0.75f, 0.85f, 1.00f, 0.15f);
     [Range(0, 32)] public int rayCount = 0;          // 0 = no rays for the clean rect panel
     public Vector2 rayLengthRange = new Vector2(0.40f, 0.90f);
@@ -106,7 +106,7 @@ public class ShopController : MonoBehaviour
     [Header("Tooltip")]
     public Color tooltipBg = new Color(0.04f, 0.04f, 0.08f, 0.90f);
 
-    [Header("Hover correction (empirical �?toggle if hover hits the wrong item after a rift rotation)")]
+    [Header("Hover correction")]
     public bool flipHoverX;
     public bool flipHoverY;
 
@@ -812,8 +812,63 @@ public class ShopController : MonoBehaviour
                 GUI.Label(new Rect(px, py - 16f, 120f, 16f), "RT preview (debug)", _ttSub);
             }
         }
+        if (_expanded)
+        {
+            DrawRefreshButton();
+        }
     }
 
+    void DrawRefreshButton()
+    {
+        if (PlacementController.Instance == null)
+            return;
+
+        // 确保裂口顶点数据存在
+        if (_screenVerts == null || _screenVerts.Length == 0)
+            return;
+
+        // 计算裂口的屏幕包围盒
+        float minX = float.MaxValue, maxX = float.MinValue;
+        float minY = float.MaxValue, maxY = float.MinValue;
+        foreach (var v in _screenVerts)
+        {
+            if (v.x < minX) minX = v.x;
+            if (v.x > maxX) maxX = v.x;
+            if (v.y < minY) minY = v.y;
+            if (v.y > maxY) maxY = v.y;
+        }
+
+        float w = 140f;
+        float h = 40f;
+        float padding = 12f;
+
+        float btnX = (minX + maxX) * 0.5f - w * 0.5f;
+        float btnY = maxY + padding;
+
+        if (btnY + h > Screen.height)
+            btnY = minY - h - padding;
+        btnX = Mathf.Clamp(btnX, 4f, Screen.width - w - 4f);
+
+        Rect r = new Rect(btnX, btnY, w, h);
+
+        Color oldColor = GUI.color;
+        GUI.color = new Color(0.2f, 0.2f, 0.3f, 0.85f);
+        GUI.DrawTexture(r, Texture2D.whiteTexture);
+        GUI.color = new Color(0.9f, 0.9f, 1f, 1f);
+        GUI.DrawTexture(new Rect(r.x, r.y, r.width, 2f), Texture2D.whiteTexture);
+        GUI.color = oldColor;
+
+        GUIStyle btnStyle = new GUIStyle(GUI.skin.button);
+        btnStyle.fontSize = 12;
+        btnStyle.fontStyle = FontStyle.Bold;
+        btnStyle.normal.textColor = Color.white;
+        btnStyle.alignment = TextAnchor.MiddleCenter;
+
+        if (GUI.Button(r, $"Refresh ({PlacementController.Instance.RefreshCost})", btnStyle))
+        {
+            PlacementController.Instance.TryRefreshShop();
+        }
+    }
     // ── GL rift rendering ─────────────────────────────────────────────────────
 
     void DrawRift()

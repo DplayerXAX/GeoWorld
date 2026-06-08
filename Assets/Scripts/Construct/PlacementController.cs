@@ -19,9 +19,6 @@ public class PlacementController : MonoBehaviour
     public Transform previewParent;
     public OrbitCamera cam;
     public Vector3Int SnappedGridPos => baseGridPos;
-    // baseGridPos + manualOffset �?where the block is actually placed/previewed.
-    // Use this (not SnappedGridPos) for hints / fx that should follow the
-    // block as the player nudges it with WASDQE.
     public Vector3Int CurrentGridPos => currentGridPos;
     [Range(0.5f, 4f)] public float snapGridRadius = 1.5f;
     public float minDepth = 2f, maxDepth = 40f, scrollSpeed = 3f, rotateSpeed = 10f;
@@ -78,6 +75,12 @@ public class PlacementController : MonoBehaviour
     public Vector2Int buildYRange = new Vector2Int(0, 20);
     private Quaternion _currentRotation = Quaternion.identity, _targetRotation = Quaternion.identity;
 
+
+    [Header("Shop Refresh")]
+    public int refreshBaseCost = 5;
+    public int refreshCostStep = 2;
+    public int RefreshCost => currentRefreshCost;
+    int currentRefreshCost;
     // Read-only: the rotation actually applied to the preview/placed block
     // this frame. PlacementHintOverlay reads it to size hint arrows.
     public Quaternion CurrentRotation => _currentRotation;
@@ -146,6 +149,28 @@ public class PlacementController : MonoBehaviour
         _popupExpire   = Time.unscaledTime + duration;
     }
 
+    public bool TryRefreshShop()
+    {
+        if (ResourceManager.Instance == null)
+            return false;
+
+        if (!ResourceManager.Instance.CanAfford(currentRefreshCost, BlockType.Home))
+            return false;
+
+        ResourceManager.Instance.TryBuy(currentRefreshCost, BlockType.Home);
+
+        currentRefreshCost += refreshCostStep;
+
+        ShopController.Instance.ClearItems();
+
+        var gfm = GameFlowManager.Instance;
+
+        SpawnRoundBlocks(
+            gfm.blocksPerTurn,
+            gfm.turretsPerTurn);
+
+        return true;
+    }
     void OnGUI()
     {
         if (string.IsNullOrEmpty(_popupMsg)) return;
@@ -183,11 +208,15 @@ public class PlacementController : MonoBehaviour
 
     void Start()
     {
-        // currentBlock starts null �?the tray is the source of truth for what's
-        // available to place. GameFlowManager.StartTurn populates the tray.
         currentColor = GetRandomColor();
+        currentRefreshCost = refreshBaseCost;
     }
 
+
+    public void ResetRefreshCost()
+    {
+        currentRefreshCost = refreshBaseCost;
+    }
     // Clears all shop items for the new round.
     public void ClearTray()
     {
