@@ -25,6 +25,8 @@ public class AudioManager : MonoBehaviour
     public AK.Wwise.Event Note;
     public AK.Wwise.Event scroll;
     public AK.Wwise.Event rotate;
+    public AK.Wwise.Event fight_start;
+    public AK.Wwise.Event fight_end;
 
     [Header("Chord pad (Wwise Switch driving the BGM pad layer)")]
     // The Switch Group name in your Wwise project. Switch values must
@@ -79,6 +81,8 @@ public class AudioManager : MonoBehaviour
 
     public void EnterBattleBGM()
     {
+        if(fight_start!=null)
+            fight_start.Post(this.gameObject);
         if (BGM_StateBattle != null && BGM_StateBattle.IsValid())
         {
             BGM_StateBattle.SetValue();
@@ -89,6 +93,9 @@ public class AudioManager : MonoBehaviour
 
     public void ExitBattleBGM()
     {
+
+        if (fight_end != null)
+            fight_end.Post(this.gameObject);
         if (BGM_StateCalm != null && BGM_StateCalm.IsValid())
         {
             BGM_StateCalm.SetValue();

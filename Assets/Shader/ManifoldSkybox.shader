@@ -5,7 +5,7 @@ Shader "Custom/ManifoldSkybox"
         _ZenithColor   ("Zenith Color",   Color) = (0.02, 0.02, 0.06, 1)
         _HorizonColor  ("Horizon Color",  Color) = (0.06, 0.08, 0.15, 1)
         _FogColor      ("Fog/Haze Color", Color) = (0.10, 0.12, 0.22, 1)
-
+        _DamageTint ("Damage Tint", Range(0,1)) = 0
         _GridColor     ("Grid Line Color",Color) = (0.25, 0.35, 0.65, 1)
         _GridScale     ("Grid Scale",     Float) = 12.0
         _GridThickness ("Grid Thickness", Range(0.01, 0.1)) = 0.03
@@ -47,6 +47,7 @@ Shader "Custom/ManifoldSkybox"
             float _HorizonSharp, _TimeSpeed;
             float _BeatPulse, _MusicIntensity, _ColorShift, _TypeHue, _PitchGlow;
             float _CombatMode;
+            float _DamageTint;
 
             struct Attributes { float4 positionOS : POSITION; };
             struct Varyings
@@ -259,7 +260,7 @@ Shader "Custom/ManifoldSkybox"
                         // Sort so greatest axis is x (octahedral fold)
                         if (foldedDir.x < foldedDir.y) { float tmp = foldedDir.x; foldedDir.x = foldedDir.y; foldedDir.y = tmp; }
                         if (foldedDir.x < foldedDir.z) { float tmp = foldedDir.x; foldedDir.x = foldedDir.z; foldedDir.z = tmp; }
-                        float fk  = float(k);
+                        float fk   = float(k);
                         float ang = _Time.y * rotSpeed * (0.11 + fk * 0.06) + fk * 0.7854;
                         float fca = cos(ang), fsa = sin(ang);
                         foldedDir.xy = float2(fca * foldedDir.x - fsa * foldedDir.y,
@@ -279,8 +280,26 @@ Shader "Custom/ManifoldSkybox"
                 float up = dir.y * 0.5 + 0.5;
                 float t  = pow(saturate(up), 1.0 / _HorizonSharp);
                 // Combat: deep void — dark indigo/purple.  NO red-orange (avoids bloom).
-                half3 combatZenith  = lerp(_ZenithColor.rgb,  half3(0.04, 0.01, 0.20), cm);
-                half3 combatHorizon = lerp(_HorizonColor.rgb, half3(0.02, 0.04, 0.22), cm);
+               half3 damageRed =
+    half3(0.35, 0.02, 0.04);
+
+half3 combatZenith =
+    lerp(
+        lerp(_ZenithColor.rgb,
+             half3(0.04,0.01,0.20),
+             cm),
+        damageRed,
+        _DamageTint
+    );
+
+half3 combatHorizon =
+    lerp(
+        lerp(_HorizonColor.rgb,
+             half3(0.02,0.04,0.22),
+             cm),
+        damageRed * 0.6,
+        _DamageTint
+    );
                 half3 zenith = combatZenith * (1.0 + _PitchGlow * 3.5 * up);
                 half3 sky    = lerp(combatHorizon, zenith, t);
 
@@ -338,8 +357,8 @@ Shader "Custom/ManifoldSkybox"
                 half3 result = sky;
                 result = lerp(result, gridCol,                            sphereGrid  * lerp(0.55, 0.85, cm));
                 result = lerp(result, grid2Col * beatBoost * intensity,   sphereGrid2 * 0.28);
-                result = lerp(result, floorCol,                           floorGrid   * lerp(0.85, 1.10, cm));
-                result = lerp(result, gridCol * 1.3,                      cubes       * lerp(0.40, 0.75, cm));
+                result = lerp(result, floorCol,                            floorGrid   * lerp(0.85, 1.10, cm));
+                result = lerp(result, gridCol * 1.3,                        cubes       * lerp(0.40, 0.75, cm));
                 result += gridCol * ripple * lerp(0.5, 1.0, cm);
 
                 // ── Geometric orbit-trap rings (rift-tear lines) ────────────────
@@ -368,12 +387,15 @@ Shader "Custom/ManifoldSkybox"
                     }
                     riftGlow = saturate(riftGlow) * cm * (0.40 + beat * 0.30);
                     // Ring color: dim blue-white — structural, not glaring
-                    result  += half3(0.50, 0.88, 1.00) * riftGlow * 0.30;
+                    result   += half3(0.50, 0.88, 1.00) * riftGlow * 0.30;
                 }
 
                 // ── Final hue rotation ──────────────────────────────────────────
-                result = HsvShift(result, _ColorShift + cm * 0.04);
-
+                result = HsvShift(
+                    result,
+                    _ColorShift + cm * 0.04
+                );
+                
                 // ── Combat comfort pass ─────────────────────────────────────────
                 // Pull colors toward a cool-tinted grey and slightly darken.
                 // Preserves geometric structure; removes the eye-straining saturation.
@@ -381,6 +403,13 @@ Shader "Custom/ManifoldSkybox"
                 float luma = dot(result, float3(0.299, 0.587, 0.114));
                 result = lerp(result, luma * half3(0.80, 0.84, 0.98), cm * 0.45);
                 result *= lerp(1.0, 0.82, cm);
+
+                // ── 全全局伤害滤镜 (Damage Tint Pass Fix) ──────────────────────────
+                // 基于最终画面的亮度计算出一个兼顾结构亮度的血红/深红调色盘
+                float finalLuma = dot(result, float3(0.299, 0.587, 0.114));
+                // 将原画面压至红黑色调，同时保留发光的线条和几何体质感
+                half3 damagePalette = half3(result.r * 1.3 + finalLuma * 0.3, result.g * 0.1, result.b * 0.12);
+                result = lerp(result, damagePalette, _DamageTint);
 
                 return half4(result, 1.0);
             }

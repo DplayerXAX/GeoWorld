@@ -341,7 +341,7 @@ public class GameFlowManager : MonoBehaviour
         placement.currentBlock = null;
         placement.mode = PlacementMode.Select;
         placement.ClearTray();                          // remove leftover tokens from last round
-
+        PlacementController.Instance.ResetRefreshCost();
         // Refresh the synergy color pool. In mode C this samples a new subset
         // of colors for the round; in mode B it's a no-op snapshot.
         colorDistribution?.BeginRound(EnsureRng());

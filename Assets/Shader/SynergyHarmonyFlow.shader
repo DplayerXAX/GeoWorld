@@ -1,127 +1,236 @@
-// 和谐 (Harmony) — flowing watercolor field of greens. Two layers of
-// domain-warped fbm noise drive a 5-stop green palette, producing organic
-// painterly transitions with no hard edges. Subtle paint-grain on top.
-//
-// Reads as: balanced, breathing, hand-painted — closer to a Chinese
-// landscape wash than a tiled mosaic.
-Shader "GeoWorld/Synergy/HarmonyFlow"
+// HarmonyCore — Volumetric Shattered Emerald
+Shader "GeoWorld/Synergy/HarmonyCore_GlassyVolume"
 {
     Properties
     {
-        _Green1      ("Deepest Green",     Color) = (0.05, 0.18, 0.10, 1)
-        _Green2      ("Forest",            Color) = (0.15, 0.40, 0.20, 1)
-        _Green3      ("Sage",              Color) = (0.38, 0.65, 0.35, 1)
-        _Green4      ("Mint",              Color) = (0.62, 0.85, 0.55, 1)
-        _Green5      ("Highlight",         Color) = (0.88, 0.96, 0.78, 1)
-
-        _Scale       ("Pattern Scale",     Range(0.3, 8))    = 2.2
-        _WarpAmount  ("Domain Warp",       Range(0, 3))      = 1.4
-        _Contrast    ("Color Contrast",    Range(0.5, 3))    = 1.3
-        _GrainAmount ("Paint Grain",       Range(0, 0.15))   = 0.04
-        _LowSat      ("Shadow Saturation", Range(0.5, 1.3))  = 0.95
+        [Header(Emerald Radiance)]
+        [HDR] _CoreColor       ("Core Blast (Blinding Green)", Color) = (1.2, 2.0, 0.8, 1.0)
+        _MidColor              ("Crystal Body (Emerald)", Color) = (0.2, 0.8, 0.4, 1.0)
+        _DarkColor             ("Deep Shadow (Forest)", Color) = (0.05, 0.15, 0.08, 1.0)
+        _Absorption            ("Absorption Density", Range(0.1, 10.0)) = 3.5
+        
+        [Header(Crystalline Stylization)]
+        _GlassSharpness        ("Glass Quantization", Range(0.0, 1.0)) = 0.85
+        _ShardSteps            ("Shard Detail Levels", Range(2.0, 10.0)) = 4.0
+        _TwistSpeed            ("Crystal Twist Speed", Range(0.0, 3.0)) = 1.0
+        
+        [Header(Surface Properties)]
+        _Glossiness            ("Surface Smoothness", Range(0.1, 1.0)) = 0.9
+        _Specular              ("Specular Intensity", Range(0.0, 5.0)) = 3.5
+        _GrainAmount           ("Paper Grain", Range(0, 0.08)) = 0.035
+        
+        [Header(Raymarching Settings)]
+        _MaxSteps              ("Max Ray Steps", Integer) = 96
+        _StepSize              ("Ray Step Size", Range(0.01, 0.1)) = 0.02
     }
+
     SubShader
     {
-        Tags { "RenderType" = "Opaque" "RenderPipeline" = "UniversalPipeline" }
+        Tags { "RenderType" = "Transparent" "Queue" = "Transparent" "RenderPipeline" = "UniversalPipeline" }
+
         Pass
         {
-            Name "Forward"
+            Name "VolumeRaymarching"
             Tags { "LightMode" = "UniversalForward" }
 
+            Blend SrcAlpha OneMinusSrcAlpha 
+            ZWrite Off
+            Cull Front
+
             HLSLPROGRAM
-            #pragma vertex   Vert
+            #pragma vertex Vert
             #pragma fragment Frag
+            #pragma target 4.5 
 
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
+            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
 
             CBUFFER_START(UnityPerMaterial)
-                float4 _Green1, _Green2, _Green3, _Green4, _Green5;
-                float  _Scale;
-                float  _WarpAmount;
-                float  _Contrast;
-                float  _GrainAmount;
-                float  _LowSat;
+                float4 _CoreColor, _MidColor, _DarkColor;
+                float  _Absorption, _GlassSharpness, _ShardSteps, _TwistSpeed;
+                float  _Glossiness, _Specular, _GrainAmount;
+                int    _MaxSteps;
+                float  _StepSize;
             CBUFFER_END
 
-            struct Attributes { float4 positionOS : POSITION; float2 uv : TEXCOORD0; };
-            struct Varyings   { float4 positionCS : SV_POSITION; float2 uv : TEXCOORD0; };
+            struct Attributes
+            {
+                float4 positionOS : POSITION;
+            };
+
+            struct Varyings
+            {
+                float4 positionCS : SV_POSITION;
+                float3 positionWS : TEXCOORD0;
+                float3 positionOS : TEXCOORD1;
+            };
 
             Varyings Vert(Attributes IN)
             {
                 Varyings OUT;
-                OUT.positionCS = TransformObjectToHClip(IN.positionOS.xyz);
-                OUT.uv         = IN.uv;
+                OUT.positionOS = IN.positionOS.xyz;
+                OUT.positionWS = TransformObjectToWorld(IN.positionOS.xyz);
+                OUT.positionCS = TransformWorldToHClip(OUT.positionWS);
                 return OUT;
             }
 
-            float Hash(float2 p)
+            float Hash21(float2 p)
             {
                 p = frac(p * float2(123.34, 456.21));
                 p += dot(p, p + 45.32);
                 return frac(p.x * p.y);
             }
 
-            float Noise(float2 p)
+            float Hash(float3 p)
             {
-                float2 i = floor(p);
-                float2 f = frac(p);
-                float a = Hash(i);
-                float b = Hash(i + float2(1, 0));
-                float c = Hash(i + float2(0, 1));
-                float d = Hash(i + float2(1, 1));
-                float2 u = f * f * (3.0 - 2.0 * f);
-                return lerp(lerp(a, b, u.x), lerp(c, d, u.x), u.y);
+                p = frac(p * 0.3183099 + 0.1);
+                p *= 17.0;
+                return frac(p.x * p.y * p.z * (p.x + p.y + p.z));
             }
 
-            float Fbm(float2 p)
+            float Noise(float3 p)
             {
-                float a = 0.5, v = 0;
-                [unroll]
-                for (int i = 0; i < 5; i++) { v += a * Noise(p); p *= 2.05; a *= 0.5; }
+                float3 i = floor(p); float3 f = frac(p);
+                f = f * f * (3.0 - 2.0 * f);
+                float n000 = Hash(i); float n100 = Hash(i + float3(1,0,0));
+                float n010 = Hash(i + float3(0,1,0)); float n110 = Hash(i + float3(1,1,0));
+                float n001 = Hash(i + float3(0,0,1)); float n101 = Hash(i + float3(1,0,1));
+                float n011 = Hash(i + float3(0,1,1)); float n111 = Hash(i + float3(1,1,1));
+                float x00 = lerp(n000,n100,f.x); float x10 = lerp(n010,n110,f.x);
+                float x01 = lerp(n001,n101,f.x); float x11 = lerp(n011,n111,f.x);
+                float y0 = lerp(x00,x10,f.y); float y1 = lerp(x01,x11,f.y);
+                return lerp(y0,y1,f.z);
+            }
+
+            float Fbm(float3 p)
+            {
+                float v = 0; float a = 0.5;
+                [unroll] for(int i=0; i<4; i++) { v += Noise(p) * a; p *= 2.0; a *= 0.5; }
                 return v;
             }
 
-            // 5-stop palette lookup with smoothstep transitions.
-            half3 GreenRamp(float t)
+            float GlassyFBM(float3 p, float sharpness, float steps)
             {
-                t = saturate(t);
-                if (t < 0.25)      return lerp(_Green1.rgb, _Green2.rgb, smoothstep(0.00, 0.25, t));
-                else if (t < 0.50) return lerp(_Green2.rgb, _Green3.rgb, smoothstep(0.25, 0.50, t));
-                else if (t < 0.75) return lerp(_Green3.rgb, _Green4.rgb, smoothstep(0.50, 0.75, t));
-                else               return lerp(_Green4.rgb, _Green5.rgb, smoothstep(0.75, 1.00, t));
+                float n = Fbm(p);
+                float quantized = floor(n * steps) / steps;
+                return lerp(n, quantized, sharpness);
+            }
+
+            float sdOctahedron(float3 p, float s)
+            {
+                p = abs(p);
+                return (p.x + p.y + p.z - s) * 0.57735027;
+            }
+
+            float MapInternalVolume(float3 p)
+            {
+                float t = _Time.y * _TwistSpeed;
+                float theta = p.y * 3.0 - t;
+                float c = cos(theta); float s = sin(theta);
+                float2x2 rot = float2x2(c, -s, s, c);
+                
+                float3 q = p;
+                q.xz = mul(rot, q.xz);
+
+                float crystal = sdOctahedron(q, 0.40);
+                float noiseMask = GlassyFBM(q * 5.0 + float3(0, t * 0.5, 0), _GlassSharpness, _ShardSteps);
+                
+                return crystal + (noiseMask - 0.5) * 0.3;
+            }
+
+            float3 CalcInternalNormal(float3 p)
+            {
+                float2 e = float2(0.01, 0.0);
+                return normalize(float3(
+                    MapInternalVolume(p + e.xyy) - MapInternalVolume(p - e.xyy),
+                    MapInternalVolume(p + e.yxy) - MapInternalVolume(p - e.yxy),
+                    MapInternalVolume(p + e.yyx) - MapInternalVolume(p - e.yyx)
+                ));
+            }
+
+            float2 IntersectAABB(float3 rayOrigin, float3 rayDir, float3 boxMin, float3 boxMax)
+            {
+                float3 tMin = (boxMin - rayOrigin) / rayDir;
+                float3 tMax = (boxMax - rayOrigin) / rayDir;
+                float3 t1 = min(tMin, tMax); float3 t2 = max(tMin, tMax);
+                float tNear = max(max(t1.x, t1.y), t1.z); float tFar = min(min(t2.x, t2.y), t2.z);
+                return float2(tNear, tFar);
             }
 
             half4 Frag(Varyings IN) : SV_Target
             {
-                float2 uv = IN.uv * _Scale;
+                float3 viewPosWS = GetCameraPositionWS();
+                float3 viewDirWS = normalize(IN.positionWS - viewPosWS);
+                
+                float3 rayOriginOS = TransformWorldToObject(viewPosWS);
+                float3 rayDirOS    = normalize(TransformWorldToObjectDir(viewDirWS));
 
-                // Two-layer domain warp — classic IQ-style "warped warp" for
-                // rich painterly flow instead of plain fbm blobs.
-                float2 q = float2(Fbm(uv + float2(0.0, 0.0)),
-                                  Fbm(uv + float2(5.2, 1.3)));
-                float2 r = float2(Fbm(uv + 4.0 * q + float2(1.7, 9.2)),
-                                  Fbm(uv + 4.0 * q + float2(8.3, 2.8)));
-                uv += r * _WarpAmount;
+                float3 boxMin = float3(-0.5, -0.5, -0.5);
+                float3 boxMax = float3( 0.5,  0.5,  0.5);
 
-                // Base noise → contrast-shaped → palette
-                float n = Fbm(uv);
-                n = saturate((n - 0.5) * _Contrast + 0.5);
+                float2 hitAABB = IntersectAABB(rayOriginOS, rayDirOS, boxMin, boxMax);
+                if(hitAABB.x > hitAABB.y || hitAABB.y < 0.0) return half4(0,0,0,0);
 
-                half3 col = GreenRamp(n);
+                float tStart = max(hitAABB.x, 0.0);
+                float tEnd   = hitAABB.y;
+                
+                float currentT = tStart;
+                float3 currentPos = rayOriginOS + rayDirOS * currentT;
+                
+                float accumulatedThickness = 0.0;
+                float3 crystalNormalOS = float3(0, 1, 0);
+                float hitCrystal = 0.0;
 
-                // Darker areas slightly desaturated so shadows feel like wash
-                // pigment rather than pure tint.
-                float lum = dot(col, half3(0.299, 0.587, 0.114));
-                col = lerp(half3(lum, lum, lum), col, lerp(_LowSat, 1.0, n));
+                [loop]
+                for(int i = 0; i < _MaxSteps; i++)
+                {
+                    if(currentT > tEnd) break;
 
-                // Paint grain — high-freq dither for "brush" feel.
-                float grain = (Hash(IN.uv * 1234.0) - 0.5) * _GrainAmount;
-                col += grain;
+                    float dist = MapInternalVolume(currentPos);
+                    
+                    if(dist < 0.0)
+                    {
+                        if (hitCrystal == 0.0)
+                        {
+                            crystalNormalOS = CalcInternalNormal(currentPos);
+                            hitCrystal = 1.0;
+                        }
+                        accumulatedThickness += _StepSize;
+                    }
+                    
+                    currentT += _StepSize;
+                    currentPos = rayOriginOS + rayDirOS * currentT;
+                }
 
-                return half4(saturate(col), 1);
+                if (hitCrystal == 0.0) return half4(0, 0, 0, 0);
+
+                float thickness = saturate(accumulatedThickness * _Absorption);
+                float sharpThickness = lerp(thickness, floor(thickness * _ShardSteps) / _ShardSteps, _GlassSharpness * 0.5);
+
+                half3 finalColor = lerp(_DarkColor.rgb, _MidColor.rgb, sharpThickness);
+                finalColor = lerp(finalColor, _CoreColor.rgb, pow(sharpThickness, 3.0));
+
+                float3 normalWS_Crystal = normalize(TransformObjectToWorldNormal(crystalNormalOS));
+
+                Light mainLight = GetMainLight();
+                float3 lightDirWS = normalize(mainLight.direction);
+                float3 halfDir = normalize(lightDirWS - viewDirWS); 
+                
+                float specPower = exp2(10.0 * _Glossiness + 1.0);
+                float spec = pow(saturate(dot(normalWS_Crystal, halfDir)), specPower);
+                finalColor += mainLight.color * spec * _Specular;
+
+                float fresnel = pow(1.0 - saturate(dot(normalWS_Crystal, -viewDirWS)), 5.0);
+                finalColor += fresnel * _CoreColor.rgb * 1.5;
+
+                float grain = Hash21(IN.positionOS.xy + IN.positionOS.zz * 240.0 + _Time.y * 0.05) - 0.5;
+                finalColor += grain * _GrainAmount;
+
+                float alpha = saturate(accumulatedThickness * 5.0);
+
+                return half4(finalColor, alpha);
             }
             ENDHLSL
         }
     }
-    FallBack "Hidden/Universal Render Pipeline/FallbackError"
 }

@@ -29,8 +29,10 @@ public class BackgroundReactor : MonoBehaviour
     [Range(0f, 0.15f)] public float tensionColorKick = 0.06f;
 
     [Header("Intensity")]
-    [Range(0f, 1f)] public float idleIntensity = 0.5f;
-
+    [Range(0f, 1f)] public float idleIntensity = 0.5f; 
+    float _damageTint;
+    static readonly int DamageTintId =
+    Shader.PropertyToID("_DamageTint");
     [Header("Combat Mode")]
     [Tooltip("Press to toggle combat skybox for testing (auto-driven by GameFlowManager in play).")]
     public KeyCode combatTestKey        = KeyCode.G;
@@ -85,7 +87,7 @@ public class BackgroundReactor : MonoBehaviour
     void Update()
     {
         float dt = Time.deltaTime;
-
+        
         // ── Combat mode: test key toggle ─────────────────────────────────────
         // G toggles freely at any time.
         // For auto-drive, call SetCombatMode() from GameFlowManager on phase change.
@@ -103,13 +105,21 @@ public class BackgroundReactor : MonoBehaviour
         _beatPulse       = Mathf.Lerp(_beatPulse,       0f,       1f - Mathf.Exp(-beatDecay      * dt));
         _pitchGlow       = Mathf.Lerp(_pitchGlow,       0f,       1f - Mathf.Exp(-pitchGlowDecay * dt));
         _smoothIntensity = Mathf.Lerp(_smoothIntensity, targetInt, dt * 2f);
-
+     
         _typeHue    = Mathf.Lerp(_typeHue, _targetTypeHue, dt * typeHueLerpSpeed);
         _colorShift = (_colorShift + ambientColorDrift * dt) % 1f;
-
+        _damageTint = Mathf.Lerp(
+    _damageTint,
+    0f,
+    1f - Mathf.Exp(-4f * dt)
+);
         if (skyboxMaterial == null) return;
         skyboxMaterial.SetFloat(BeatPulseId,  _beatPulse);
-        skyboxMaterial.SetFloat(IntensityId,  _smoothIntensity);
+        skyboxMaterial.SetFloat(IntensityId,  _smoothIntensity); 
+        skyboxMaterial.SetFloat(
+    DamageTintId,
+    _damageTint
+);
         skyboxMaterial.SetFloat(ColorShiftId, _colorShift);
         skyboxMaterial.SetFloat(TypeHueId,    _typeHue);
         skyboxMaterial.SetFloat(PitchGlowId,  _pitchGlow);
@@ -124,6 +134,11 @@ public class BackgroundReactor : MonoBehaviour
         _targetCombatMode = active ? 1f : 0f;
 
     // ── Simple call (scan notes, bass roots, backward-compat) ────────────────
+
+    public void TriggerDamageFlash()
+    {
+        _damageTint = 1f;
+    }
     public void OnNote(float strength = 1f)
     {
         _beatPulse  = Mathf.Min(1f, _beatPulse + strength * beatStrength);

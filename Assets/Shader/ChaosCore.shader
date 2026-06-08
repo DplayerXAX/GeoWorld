@@ -216,7 +216,7 @@ Shader "GeoWorld/ChaosCore"
                 // === Paper grain (subtle hand-painted surface) ===
                 float grain = Hash21(planar * 240.0 + _Time.y * 0.05) - 0.5;
                 col += grain * _GrainAmount;
-
+                
                 // Heartbeat pulse + master brightness.
                 float pulse = 1.0 + sin(_Time.y * _PulseSpeed) * _PulseDepth;
                 col *= pulse * _Brightness;

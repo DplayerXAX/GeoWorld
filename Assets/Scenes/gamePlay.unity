@@ -2317,6 +2317,14 @@ MonoBehaviour:
     idInternal: 0
     valueGuidInternal: 
     WwiseObjectReference: {fileID: 11400000, guid: c514317f6f8ad7f45a03196a393bff60, type: 2}
+  fight_start:
+    idInternal: 0
+    valueGuidInternal: 
+    WwiseObjectReference: {fileID: 11400000, guid: d0b9cee5878f33d4998d056771d1caaa, type: 2}
+  fight_end:
+    idInternal: 0
+    valueGuidInternal: 
+    WwiseObjectReference: {fileID: 11400000, guid: a769a98ee568cdc45828c71ac6fc2119, type: 2}
   chordSwitchGroup: BlockChord
 --- !u!114 &1746692275
 MonoBehaviour:
