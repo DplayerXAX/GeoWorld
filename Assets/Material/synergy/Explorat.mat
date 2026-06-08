@@ -7,8 +7,8 @@ Material:
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_Name: M_EnlightmentWave
-  m_Shader: {fileID: 4800000, guid: a219bfcf9f2a4834791b5c738180fea5, type: 3}
+  m_Name: Explorat
+  m_Shader: {fileID: 4800000, guid: 405b4b74b11e69243905f4f326459215, type: 3}
   m_Parent: {fileID: 0}
   m_ModifiedSerializedProperties: 0
   m_ValidKeywords: []
@@ -85,7 +85,6 @@ Material:
     - _AddPrecomputedVelocity: 0
     - _AlphaClip: 0
     - _AlphaToMask: 0
-    - _BandFreq: 6
     - _Blend: 0
     - _BlendModePreserveSpecular: 1
     - _BumpScale: 1
@@ -93,49 +92,47 @@ Material:
     - _ClearCoatSmoothness: 0
     - _Cull: 2
     - _Cutoff: 0.5
-    - _Density: 5
-    - _Detail: 1.2
     - _DetailAlbedoMapScale: 1
     - _DetailNormalMapScale: 1
-    - _Direction: 45
     - _DstBlend: 0
     - _DstBlendAlpha: 0
     - _EnvironmentReflections: 1
-    - _ExpandSpeed: 1
-    - _Falloff: 0.35
+    - _FogDensity: 8
     - _GlossMapScale: 0
     - _Glossiness: 0
     - _GlossyReflections: 0
-    - _LineWidth: 0.08
+    - _MaxSteps: 96
     - _Metallic: 0
     - _OcclusionStrength: 1
     - _Parallax: 0.005
     - _QueueOffset: 0
     - _ReceiveShadows: 1
-    - _RotateSpeed: 0.4
-    - _Scale: 4
+    - _RelicScale: 0.15
+    - _ScanSpeed: 1
+    - _ScanWidth: 0.04
+    - _SignalGlitch: 0.03
     - _Smoothness: 0.5
     - _SmoothnessTextureChannel: 0
-    - _Softness: 0.25
     - _SpecularHighlights: 1
     - _SrcBlend: 1
     - _SrcBlendAlpha: 1
+    - _StepSize: 0.016
     - _Surface: 0
+    - _TerrainRoughness: 2.94
     - _WorkflowMode: 1
     - _XRMotionVectorsPass: 1
     - _ZWrite: 1
     m_Colors:
     - _BaseColor: {r: 1, g: 1, b: 1, a: 1}
-    - _BgColor: {r: 0.049999982, g: 0.079999976, b: 0.17999998, a: 1}
+    - _BgColor: {r: 0.01, g: 0.03, b: 0.059999965, a: 1}
     - _Color: {r: 1, g: 1, b: 1, a: 1}
-    - _ColorDark: {r: 0.079999976, g: 0.089999996, b: 0.12999997, a: 1}
-    - _ColorLight: {r: 0.95, g: 0.96, b: 1, a: 1}
     - _EmissionColor: {r: 0, g: 0, b: 0, a: 1}
-    - _FrameColor: {r: 0.29999998, g: 0.65, b: 1, a: 1}
+    - _RelicColor: {r: 0.2, g: 1.8, b: 2, a: 1}
+    - _ScanColor: {r: 2.1411636, g: 0, b: 0.110216506, a: 1}
     - _SpecColor: {r: 0.19999996, g: 0.19999996, b: 0.19999996, a: 1}
   m_BuildTextureStacks: []
   m_AllowLocking: 1
---- !u!114 &2289414613921856579
+--- !u!114 &1320301205364790436
 MonoBehaviour:
   m_ObjectHideFlags: 11
   m_CorrespondingSourceObject: {fileID: 0}

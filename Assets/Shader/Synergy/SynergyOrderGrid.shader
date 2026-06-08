@@ -1,27 +1,26 @@
-// HarmonyCore — Volumetric Shattered Emerald
-Shader "GeoWorld/Synergy/HarmonyCore_GlassyVolume"
+// OrderCore — Volumetric Architectural Blueprint Cube
+Shader "GeoWorld/Synergy/OrderCore_ArchitecturalVolume"
 {
     Properties
     {
-        [Header(Emerald Radiance)]
-        [HDR] _CoreColor       ("Core Blast (Blinding Green)", Color) = (1.2, 2.0, 0.8, 1.0)
-        _MidColor              ("Crystal Body (Emerald)", Color) = (0.2, 0.8, 0.4, 1.0)
-        _DarkColor             ("Deep Shadow (Forest)", Color) = (0.05, 0.15, 0.08, 1.0)
-        _Absorption            ("Absorption Density", Range(0.1, 10.0)) = 3.5
+        [Header(Blueprint Laser Colors)]
+        [HDR] _CoreColor       ("Central Matrix Core (Neon Cyan)", Color) = (0.4, 2.3, 2.5, 1.0)
+        _MidColor              ("Structural Frames (Teal)", Color)       = (0.15, 0.6, 0.65, 1.0)
+        _DarkColor             ("Deep Volume Shadows (Dark Teal)", Color) = (0.02, 0.08, 0.1, 1.0)
+        _Absorption            ("Volumetric Density", Range(0.1, 10.0))   = 4.0
         
-        [Header(Crystalline Stylization)]
-        _GlassSharpness        ("Glass Quantization", Range(0.0, 1.0)) = 0.85
-        _ShardSteps            ("Shard Detail Levels", Range(2.0, 10.0)) = 4.0
-        _TwistSpeed            ("Crystal Twist Speed", Range(0.0, 3.0)) = 1.0
+        [Header(Architectural Geometry)]
+        _FrameCount            ("Nested Frame Layers", Range(1.0, 4.0))   = 3.0
+        _BarThickness          ("Beam/Column Thickness", Range(0.005, 0.04)) = 0.012
         
         [Header(Surface Properties)]
-        _Glossiness            ("Surface Smoothness", Range(0.1, 1.0)) = 0.9
-        _Specular              ("Specular Intensity", Range(0.0, 5.0)) = 3.5
-        _GrainAmount           ("Paper Grain", Range(0, 0.08)) = 0.035
+        _Glossiness            ("Acrylic Surface Smoothness", Range(0.1, 1.0)) = 0.95
+        _Specular              ("Laser Flash Intensity", Range(0.0, 5.0))  = 4.0
+        _GrainAmount           ("Technical Paper Grain", Range(0, 0.08))  = 0.025
         
-        [Header(Raymarching Settings)]
+        [Header(Raymarching Engine)]
         _MaxSteps              ("Max Ray Steps", Integer) = 96
-        _StepSize              ("Ray Step Size", Range(0.01, 0.1)) = 0.02
+        _StepSize              ("Ray Step Size", Range(0.01, 0.1)) = 0.015
     }
 
     SubShader
@@ -47,23 +46,14 @@ Shader "GeoWorld/Synergy/HarmonyCore_GlassyVolume"
 
             CBUFFER_START(UnityPerMaterial)
                 float4 _CoreColor, _MidColor, _DarkColor;
-                float  _Absorption, _GlassSharpness, _ShardSteps, _TwistSpeed;
+                float  _Absorption, _FrameCount, _BarThickness;
                 float  _Glossiness, _Specular, _GrainAmount;
                 int    _MaxSteps;
                 float  _StepSize;
             CBUFFER_END
 
-            struct Attributes
-            {
-                float4 positionOS : POSITION;
-            };
-
-            struct Varyings
-            {
-                float4 positionCS : SV_POSITION;
-                float3 positionWS : TEXCOORD0;
-                float3 positionOS : TEXCOORD1;
-            };
+            struct Attributes { float4 positionOS : POSITION; };
+            struct Varyings   { float4 positionCS : SV_POSITION; float3 positionWS : TEXCOORD0; float3 positionOS : TEXCOORD1; };
 
             Varyings Vert(Attributes IN)
             {
@@ -74,73 +64,54 @@ Shader "GeoWorld/Synergy/HarmonyCore_GlassyVolume"
                 return OUT;
             }
 
-            float Hash21(float2 p)
+            float sdBox(float3 p, float3 b)
             {
-                p = frac(p * float2(123.34, 456.21));
-                p += dot(p, p + 45.32);
-                return frac(p.x * p.y);
+                float3 d = abs(p) - b;
+                return min(max(d.x, max(d.y, d.z)), 0.0) + length(max(d, 0.0));
             }
 
-            float Hash(float3 p)
+            float sdBoxFrame(float3 p, float3 b, float e)
             {
-                p = frac(p * 0.3183099 + 0.1);
-                p *= 17.0;
-                return frac(p.x * p.y * p.z * (p.x + p.y + p.z));
-            }
-
-            float Noise(float3 p)
-            {
-                float3 i = floor(p); float3 f = frac(p);
-                f = f * f * (3.0 - 2.0 * f);
-                float n000 = Hash(i); float n100 = Hash(i + float3(1,0,0));
-                float n010 = Hash(i + float3(0,1,0)); float n110 = Hash(i + float3(1,1,0));
-                float n001 = Hash(i + float3(0,0,1)); float n101 = Hash(i + float3(1,0,1));
-                float n011 = Hash(i + float3(0,1,1)); float n111 = Hash(i + float3(1,1,1));
-                float x00 = lerp(n000,n100,f.x); float x10 = lerp(n010,n110,f.x);
-                float x01 = lerp(n001,n101,f.x); float x11 = lerp(n011,n111,f.x);
-                float y0 = lerp(x00,x10,f.y); float y1 = lerp(x01,x11,f.y);
-                return lerp(y0,y1,f.z);
-            }
-
-            float Fbm(float3 p)
-            {
-                float v = 0; float a = 0.5;
-                [unroll] for(int i=0; i<4; i++) { v += Noise(p) * a; p *= 2.0; a *= 0.5; }
-                return v;
-            }
-
-            float GlassyFBM(float3 p, float sharpness, float steps)
-            {
-                float n = Fbm(p);
-                float quantized = floor(n * steps) / steps;
-                return lerp(n, quantized, sharpness);
-            }
-
-            float sdOctahedron(float3 p, float s)
-            {
-                p = abs(p);
-                return (p.x + p.y + p.z - s) * 0.57735027;
+                p = abs(p) - b;
+                float3 q = abs(p + e) - e;
+                return min(min(
+                    max(max(p.x, q.y), q.z),
+                    max(max(q.x, p.y), q.z)),
+                    max(max(q.x, q.y), p.z));
             }
 
             float MapInternalVolume(float3 p)
             {
-                float t = _Time.y * _TwistSpeed;
-                float theta = p.y * 3.0 - t;
-                float c = cos(theta); float s = sin(theta);
-                float2x2 rot = float2x2(c, -s, s, c);
+                float d = 1e5;
                 
-                float3 q = p;
-                q.xz = mul(rot, q.xz);
-
-                float crystal = sdOctahedron(q, 0.40);
-                float noiseMask = GlassyFBM(q * 5.0 + float3(0, t * 0.5, 0), _GlassSharpness, _ShardSteps);
+                float centerCore = sdBox(p, float3(0.06, 0.06, 0.06));
+                d = min(d, centerCore);
                 
-                return crystal + (noiseMask - 0.5) * 0.3;
+                [unroll(4)]
+                for(int i = 1; i <= 4; i++)
+                {
+                    if ((float)i > _FrameCount) break;
+                    
+                    float frameSize = 0.11 * (float)i; 
+                    float subFrame = sdBoxFrame(p, float3(frameSize, frameSize, frameSize), _BarThickness);
+                    d = min(d, subFrame);
+                }
+                
+                float3 absP = abs(p);
+                float rodX = max(absP.y, absP.z) - _BarThickness * 0.6;
+                float rodY = max(absP.x, absP.z) - _BarThickness * 0.6;
+                float rodZ = max(absP.x, absP.y) - _BarThickness * 0.6;
+                
+                float boundary = sdBox(p, float3(0.45, 0.45, 0.45));
+                float internalRods = max(boundary, min(rodX, min(rodY, rodZ)));
+                
+                d = min(d, internalRods);
+                return d;
             }
 
             float3 CalcInternalNormal(float3 p)
             {
-                float2 e = float2(0.01, 0.0);
+                float2 e = float2(0.005, 0.0);
                 return normalize(float3(
                     MapInternalVolume(p + e.xyy) - MapInternalVolume(p - e.xyy),
                     MapInternalVolume(p + e.yxy) - MapInternalVolume(p - e.yxy),
@@ -155,6 +126,13 @@ Shader "GeoWorld/Synergy/HarmonyCore_GlassyVolume"
                 float3 t1 = min(tMin, tMax); float3 t2 = max(tMin, tMax);
                 float tNear = max(max(t1.x, t1.y), t1.z); float tFar = min(min(t2.x, t2.y), t2.z);
                 return float2(tNear, tFar);
+            }
+
+            float Hash21(float2 p)
+            {
+                p = frac(p * float2(123.34, 456.21));
+                p += dot(p, p + 45.32);
+                return frac(p.x * p.y);
             }
 
             half4 Frag(Varyings IN) : SV_Target
@@ -179,6 +157,7 @@ Shader "GeoWorld/Synergy/HarmonyCore_GlassyVolume"
                 
                 float accumulatedThickness = 0.0;
                 float3 crystalNormalOS = float3(0, 1, 0);
+                float3 firstHitPosOS = float3(0, 0, 0);
                 float hitCrystal = 0.0;
 
                 [loop]
@@ -193,6 +172,7 @@ Shader "GeoWorld/Synergy/HarmonyCore_GlassyVolume"
                         if (hitCrystal == 0.0)
                         {
                             crystalNormalOS = CalcInternalNormal(currentPos);
+                            firstHitPosOS = currentPos;
                             hitCrystal = 1.0;
                         }
                         accumulatedThickness += _StepSize;
@@ -204,14 +184,17 @@ Shader "GeoWorld/Synergy/HarmonyCore_GlassyVolume"
 
                 if (hitCrystal == 0.0) return half4(0, 0, 0, 0);
 
-                float thickness = saturate(accumulatedThickness * _Absorption);
-                float sharpThickness = lerp(thickness, floor(thickness * _ShardSteps) / _ShardSteps, _GlassSharpness * 0.5);
+                float3 absHitPos = abs(firstHitPosOS);
+                float chebyshevRadius = max(absHitPos.x, max(absHitPos.y, absHitPos.z)) * 2.0;
 
-                half3 finalColor = lerp(_DarkColor.rgb, _MidColor.rgb, sharpThickness);
-                finalColor = lerp(finalColor, _CoreColor.rgb, pow(sharpThickness, 3.0));
+                float thickness = saturate(accumulatedThickness * _Absorption);
+
+                half3 finalColor = lerp(_DarkColor.rgb, _MidColor.rgb, thickness);
+                
+                float coreMask = smoothstep(0.25, 0.0, chebyshevRadius);
+                finalColor = lerp(finalColor, _CoreColor.rgb, coreMask * thickness);
 
                 float3 normalWS_Crystal = normalize(TransformObjectToWorldNormal(crystalNormalOS));
-
                 Light mainLight = GetMainLight();
                 float3 lightDirWS = normalize(mainLight.direction);
                 float3 halfDir = normalize(lightDirWS - viewDirWS); 
@@ -220,13 +203,13 @@ Shader "GeoWorld/Synergy/HarmonyCore_GlassyVolume"
                 float spec = pow(saturate(dot(normalWS_Crystal, halfDir)), specPower);
                 finalColor += mainLight.color * spec * _Specular;
 
-                float fresnel = pow(1.0 - saturate(dot(normalWS_Crystal, -viewDirWS)), 5.0);
-                finalColor += fresnel * _CoreColor.rgb * 1.5;
+                float fresnel = pow(1.0 - saturate(dot(normalWS_Crystal, -viewDirWS)), 4.0);
+                finalColor += fresnel * _CoreColor.rgb * 1.2;
 
-                float grain = Hash21(IN.positionOS.xy + IN.positionOS.zz * 240.0 + _Time.y * 0.05) - 0.5;
+                float grain = Hash21(IN.positionOS.xy * 150.0 + IN.positionOS.zz) - 0.5;
                 finalColor += grain * _GrainAmount;
 
-                float alpha = saturate(accumulatedThickness * 5.0);
+                float alpha = saturate(accumulatedThickness * 6.0);
 
                 return half4(finalColor, alpha);
             }

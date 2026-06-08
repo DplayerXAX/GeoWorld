@@ -19,8 +19,8 @@ public class SynergyVisualizerPreview : MonoBehaviour
     [Serializable]
     public class Entry
     {
-        public string      label;   // optional display name
-        public BlockColor  color;   // theme color used for the placeholder cube
+        public string label;   // optional display name
+        public BlockColor color;   // theme color used for the placeholder cube
         public SynergyRule rule;    // rule whose visualizer.OnPieceClaimed is invoked
     }
 
@@ -29,16 +29,16 @@ public class SynergyVisualizerPreview : MonoBehaviour
 
     [Header("Layout")]
     [Tooltip("First cell position. Other entries are laid out at startCell + cellSpacing × index.")]
-    public Vector3Int startCell   = Vector3Int.zero;
+    public Vector3Int startCell = Vector3Int.zero;
     public Vector3Int cellSpacing = new(3, 0, 0);
 
     [Header("Hotkey")]
     public KeyCode toggleKey = KeyCode.F4;
 
     [Header("Label overlay")]
-    public bool   showLabels      = true;
-    public float  labelYOffset    = 22f;
-    public Color  labelColor      = new(1f, 1f, 1f, 0.95f);
+    public bool showLabels = true;
+    public float labelYOffset = 22f;
+    public Color labelColor = new(1f, 1f, 1f, 0.95f);
 
     bool _visible;
     readonly List<GameObject> _spawned = new();
@@ -52,7 +52,7 @@ public class SynergyVisualizerPreview : MonoBehaviour
     public void Toggle()
     {
         if (_visible) Teardown();
-        else          Build();
+        else Build();
     }
 
     public void Build()
@@ -81,7 +81,7 @@ public class SynergyVisualizerPreview : MonoBehaviour
         var cube = GameObject.CreatePrimitive(PrimitiveType.Cube);
         cube.name = $"SynergyPreview_{entry.color}";
         cube.transform.SetParent(transform, false);
-        cube.transform.position   = grid.GridToWorld(cell);
+        cube.transform.position = grid.GridToWorld(cell);
         cube.transform.localScale = Vector3.one * grid.cellSize;
         var col = cube.GetComponent<Collider>();
         if (col != null) Destroy(col);
@@ -93,15 +93,32 @@ public class SynergyVisualizerPreview : MonoBehaviour
         var ins = new PlacedBlockInstance
         {
             visualObject = cube,
-            color        = entry.color,
+            color = entry.color,
         };
         ins.occupiedCells.Add(cell);
 
-        var fakePiece  = new PlacedPiece(0, null, entry.color, new[] { cell });
+        var fakePiece = new PlacedPiece(0, null, entry.color, new[] { cell });
         var fakeActive = new ActiveSynergy(
             entry.rule,
             new HashSet<PlacedPiece> { fakePiece },
             tier: 1);
+
+        // 🎇 ✨ HACK: 强行注入判定数据，骗过形状过滤器（专为预览模式使用）
+        if (entry.rule is EnlightenmentRule enl)
+        {
+            var flags = System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance;
+            typeof(EnlightenmentRule).GetField("_cubeSide", flags)?.SetValue(enl, 2);
+            typeof(EnlightenmentRule).GetField("_cubeOrigin", flags)?.SetValue(enl, cell);
+        }
+        else if (entry.rule is ExplorationRule exp)
+        {
+            var flags = System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance;
+            if (typeof(ExplorationRule).GetField("_lineCells", flags)?.GetValue(exp) is HashSet<Vector3Int> cells)
+            {
+                cells.Add(cell);
+            }
+        }
+        // 🎇 ✨ 强行注入结束
 
         if (entry.rule.visualizer != null)
         {
@@ -148,7 +165,7 @@ public class SynergyVisualizerPreview : MonoBehaviour
         {
             _labelStyle = new GUIStyle(GUI.skin.label)
             {
-                fontSize  = 14,
+                fontSize = 14,
                 fontStyle = FontStyle.Bold,
                 alignment = TextAnchor.MiddleCenter,
             };
@@ -156,14 +173,14 @@ public class SynergyVisualizerPreview : MonoBehaviour
 
         for (int i = 0; i < _labelData.Count; i++)
         {
-            var (world, text, col) = _labelData[i];
+            var (world, text, guiCol) = _labelData[i];
             var screen = cam.WorldToScreenPoint(world);
             if (screen.z < 0f) continue;
 
             float x = screen.x - 80f;
             float y = Screen.height - screen.y + labelYOffset;
 
-            _labelStyle.normal.textColor = col;
+            _labelStyle.normal.textColor = guiCol;
             GUI.Label(new Rect(x, y, 160f, 20f), text, _labelStyle);
         }
     }

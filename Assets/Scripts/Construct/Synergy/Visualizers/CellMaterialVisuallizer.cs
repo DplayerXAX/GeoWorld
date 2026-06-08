@@ -1,17 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-public class CellMaterialBackup : MonoBehaviour
-{
-    public struct RendererState
-    {
-        public Renderer renderer;
-        public Material originalMaterial;
-    }
-
-    public List<RendererState> savedStates = new List<RendererState>();
-}
-
 [CreateAssetMenu(menuName = "GeoWorld/Synergy/Visualizers/CellMaterialVisualizer",
                  fileName = "CellMaterialVisualizer")]
 public class CellMaterialVisualizer : SynergyVisualizer
@@ -48,26 +37,33 @@ public class CellMaterialVisualizer : SynergyVisualizer
 
         foreach (var worldCell in instance.occupiedCells)
         {
-            if (cellFilter != null && !cellFilter.ShouldHighlight(worldCell)) continue;
-
             Vector3 targetWorldPos = grid.GridToWorld(worldCell);
-
             Renderer targetRenderer = FindRendererAtWorldPos(allRenderers, targetWorldPos, grid.cellSize);
 
             if (targetRenderer != null)
             {
+                // 无条件备份原始材质
                 backupComp.savedStates.Add(new CellMaterialBackup.RendererState
                 {
                     renderer = targetRenderer,
                     originalMaterial = targetRenderer.sharedMaterial
                 });
 
-                if (replacementMaterial != null)
+                // 核心过滤逻辑
+                if (cellFilter == null || cellFilter.ShouldHighlight(worldCell))
                 {
-                    targetRenderer.sharedMaterial = replacementMaterial;
+                    if (replacementMaterial != null)
+                    {
+                        targetRenderer.sharedMaterial = replacementMaterial;
+                    }
+                    MpbColor.Set(targetRenderer, targetColor);
                 }
-
-                MpbColor.Set(targetRenderer, targetColor);
+                else
+                {
+                    // 对超出的格子进行剔除，强制还原
+                    targetRenderer.sharedMaterial = targetRenderer.sharedMaterial;
+                    targetRenderer.SetPropertyBlock(null);
+                }
             }
         }
 

@@ -227,8 +227,6 @@ public class PlacementController : MonoBehaviour
         ClearUndoHistory();   // history is round-scoped; stale on new round
     }
 
-    // Rolls two independent shop rows �?`blockCount` normal blocks, `turretCount`
-    // turrets �?and hands them to the shop. Each row uses its own currency.
     public void SpawnRoundBlocks(int blockCount, int turretCount)
     {
         if (cubePrefab == null || blocks == null || blocks.Length == 0) return;
@@ -423,10 +421,10 @@ public class PlacementController : MonoBehaviour
         Vector3 delta = Vector3.zero;
         if (Input.GetKey(KeyCode.D)) delta += right;
         if (Input.GetKey(KeyCode.A)) delta -= right;
-        if (Input.GetKey(KeyCode.W)) delta += Vector3.up;
-        if (Input.GetKey(KeyCode.S)) delta -= Vector3.up;
-        if (Input.GetKey(KeyCode.Q)) delta += fwd;
-        if (Input.GetKey(KeyCode.E)) delta -= fwd;
+        if (Input.GetKey(KeyCode.W)) delta += fwd;
+        if (Input.GetKey(KeyCode.S)) delta -= fwd;
+        if (Input.GetKey(KeyCode.Q)) delta += Vector3.up; 
+        if (Input.GetKey(KeyCode.E)) delta -= Vector3.up; 
 
         if (delta.sqrMagnitude > 0.0001f)
             cam.Pan(delta.normalized * panSpeed * Time.deltaTime);
@@ -516,7 +514,6 @@ public class PlacementController : MonoBehaviour
         }
     }
 
-    // Shared cancel path �?called by Tab (HandleModeSwitch) and Delete key.
     void CancelEditMode()
     {
         if (isPickingUpObject)
