@@ -9,15 +9,9 @@ MonoBehaviour:
   m_GameObject: {fileID: 0}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: f0e130ed6595e7643a77b40a3094327d, type: 3}
-  m_Name: harmony_vfx
-  m_EditorClassIdentifier: Assembly-CSharp::FaceTextureVisualizer
-  panelEnabled: 1
-  panelMaterial: {fileID: 2100000, guid: 8cf31e59828eef8409b0bfbb2b3ef741, type: 2}
-  panelColor: {r: 0, g: 0, b: 0, a: 1}
-  panelSizeFraction: 1
-  panelDepth: 0.012
-  faceBias: 0.005
-  topFace: 1
-  sideFaces: 1
-  bottomFace: 0
+  m_Script: {fileID: 11500000, guid: c31b7869a5111354188f8809ccdbf580, type: 3}
+  m_Name: Harmony_vfx
+  m_EditorClassIdentifier: Assembly-CSharp::CellMaterialVisualizer
+  replacementMaterial: {fileID: 2100000, guid: 8cf31e59828eef8409b0bfbb2b3ef741, type: 2}
+  overrideColor: {r: 1, g: 1, b: 1, a: 1}
+  useThemeColor: 1

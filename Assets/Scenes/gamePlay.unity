@@ -370,6 +370,8 @@ MonoBehaviour:
   selectionOutlineColor: {r: 1, g: 0.85, b: 0.1, a: 1}
   _buildY: 0
   buildYRange: {x: 0, y: 20}
+  refreshBaseCost: 2
+  refreshCostStep: 1
 --- !u!4 &164805053
 Transform:
   m_ObjectHideFlags: 0
@@ -2656,6 +2658,10 @@ PrefabInstance:
       propertyPath: m_Materials.Array.size
       value: 2
       objectReference: {fileID: 0}
+    - target: {fileID: 1023551722679838635, guid: 2d67442949634b046a787f5c9948be95, type: 3}
+      propertyPath: 'm_Materials.Array.data[0]'
+      value: 
+      objectReference: {fileID: 2100000, guid: 31321ba15b8f8eb4c954353edc038b1d, type: 2}
     - target: {fileID: 1023551722679838635, guid: 2d67442949634b046a787f5c9948be95, type: 3}
       propertyPath: 'm_Materials.Array.data[1]'
       value: 
