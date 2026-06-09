@@ -135,6 +135,26 @@ public class PlacementController : MonoBehaviour
     float    _popupDuration;
     GUIStyle _popupStyle;
 
+    // ── Selection info panel (Arknights-style) ────────────────────────────────
+    [Header("Selection info panel")]
+    [Tooltip("Color (with alpha) of the semi-transparent attack-range sphere shown when a turret is selected.")]
+    public Color rangeSphereColor = new Color(1f, 0.85f, 0.20f, 0.12f);
+    [Tooltip("Fraction of a block's recomputed base price returned when sold.")]
+    [Range(0f, 1f)] public float sellRefundFraction = 0.5f;
+
+    // Cached screen rect of the info panel this frame; used to swallow clicks so
+    // clicking the panel doesn't deselect. default (zero) when hidden.
+    Rect _panelRect;
+    // Deferred button actions — set in OnGUI, consumed in Update so grid/mode
+    // mutations never run mid-IMGUI-layout (which corrupts GUILayout state).
+    bool _panelPickUpRequested;
+    bool _panelSellRequested;
+
+    // Semi-transparent sphere visualizing a selected turret's spherical range.
+    GameObject _rangeSphere;
+
+    GUIStyle _panelBox, _panelTitle, _panelLabel, _panelValue, _panelButton;
+
     void Awake()
     {
         Instance        = this;
@@ -151,27 +171,33 @@ public class PlacementController : MonoBehaviour
 
     public bool TryRefreshShop()
     {
-        if (ResourceManager.Instance == null)
+        // Validate every dependency BEFORE charging. If we charged first and
+        // then bailed on a null manager, the player would lose currency for a
+        // refresh that never happened.
+        var rm   = ResourceManager.Instance;
+        var gfm  = GameFlowManager.Instance;
+        var shop = ShopController.Instance;
+        if (rm == null || gfm == null || shop == null)
             return false;
 
-        if (!ResourceManager.Instance.CanAfford(currentRefreshCost, BlockType.Home))
+        if (!rm.CanAfford(currentRefreshCost, BlockType.Home))
             return false;
 
-        ResourceManager.Instance.TryBuy(currentRefreshCost, BlockType.Home);
-
+        rm.TryBuy(currentRefreshCost, BlockType.Home);
         currentRefreshCost += refreshCostStep;
 
-        ShopController.Instance.ClearItems();
-
-        var gfm = GameFlowManager.Instance;
-
-        SpawnRoundBlocks(
-            gfm.blocksPerTurn,
-            gfm.turretsPerTurn);
+        shop.ClearItems();
+        SpawnRoundBlocks(gfm.blocksPerTurn, gfm.turretsPerTurn);
 
         return true;
     }
     void OnGUI()
+    {
+        DrawSelectionPanel();
+        DrawPopup();
+    }
+
+    void DrawPopup()
     {
         if (string.IsNullOrEmpty(_popupMsg)) return;
         float remaining = _popupExpire - Time.unscaledTime;
@@ -308,9 +334,18 @@ public class PlacementController : MonoBehaviour
 
         UpdatePreview();
 
+        // Process deferred info-panel button clicks (queued during OnGUI).
+        if (_panelPickUpRequested) { _panelPickUpRequested = false; PickUpSelected(); }
+        if (_panelSellRequested)   { _panelSellRequested   = false; SellSelected();   }
+
         if (Input.GetMouseButtonDown(0))
         {
-            if (mode == PlacementMode.Edit)
+            if (IsPointerOverSelectionPanel())
+            {
+                // Click landed on the info panel — its IMGUI buttons handle it.
+                // Skip world selection so the panel doesn't deselect itself.
+            }
+            else if (mode == PlacementMode.Edit)
             {
                 if (currentBlock != null) TryPlace();
             }
@@ -339,6 +374,8 @@ public class PlacementController : MonoBehaviour
             TryUndo();
 
         currentGridPos = baseGridPos + manualOffset;
+
+        UpdateRangeIndicator();
     }
 
     // =========================
@@ -476,42 +513,52 @@ public class PlacementController : MonoBehaviour
         if (mode == PlacementMode.Select)
         {
             if (selectedInstance != null)
-            {
-                // Non-turret blocks are locked during combat.
-                if (GameFlowManager.Instance?.phase == GamePhase.Running
-                    && !TurretTypes.Is(selectedInstance.data?.blockType ?? BlockType.Empty))
-                {
-                    Debug.Log("[Placement] Block editing locked during combat.");
-                    return;
-                }
-
-                isPickingUpObject = true;
-                lastObjectPos   = selectedInstance.visualObject.transform.position;
-                lastObjectRot   = selectedInstance.visualObject.transform.rotation;
-                lastObjectCells = selectedInstance.occupiedCells.ToArray();
-
-                // Snap depth so the preview block materialises where the picked-up block was.
-                // This also prevents the camera from flying when editFocusAnchor is set below.
-                SnapDepthToWorldPos(lastObjectPos);
-
-                // Update count before removing from grid.
-                ResourceManager.Instance?.OnBlockRemoved(selectedInstance.data.blockType);
-                SynergyEvaluator.Instance?.OnPieceRemoved(selectedInstance.placedPiece);
-
-                grid.RemoveInstance(selectedInstance);
-                NotifyBlockLifted(lastObjectCells);
-                selectedInstance = null;
-                EnterEditMode(lastObjectPos);
-            }
+                PickUpSelected();   // no-op + log if combat-locked
             else
-            {
                 EnterEditMode(null);
-            }
         }
         else
         {
             CancelEditMode();
         }
+    }
+
+    // Lifts the currently-selected placed block off the grid and enters Edit
+    // mode holding it, so it can be repositioned. Shared by Tab, double-click,
+    // and the info-panel "Pick up" button. Returns false (and logs) when there
+    // is nothing selected or the block is combat-locked.
+    bool PickUpSelected()
+    {
+        if (selectedInstance == null || selectedInstance.visualObject == null)
+            return false;
+
+        // Non-turret blocks are locked during combat.
+        if (GameFlowManager.Instance?.phase == GamePhase.Running
+            && !TurretTypes.Is(selectedInstance.data?.blockType ?? BlockType.Empty))
+        {
+            Debug.Log("[Placement] Block editing locked during combat.");
+            return false;
+        }
+
+        isPickingUpObject = true;
+        lastObjectPos   = selectedInstance.visualObject.transform.position;
+        lastObjectRot   = selectedInstance.visualObject.transform.rotation;
+        lastObjectCells = selectedInstance.occupiedCells.ToArray();
+
+        // Snap depth so the preview block materialises where the picked-up block was.
+        // This also prevents the camera from flying when editFocusAnchor is set below.
+        SnapDepthToWorldPos(lastObjectPos);
+
+        // Update count before removing from grid.
+        ResourceManager.Instance?.OnBlockRemoved(selectedInstance.data.blockType);
+        SynergyEvaluator.Instance?.OnPieceRemoved(selectedInstance.placedPiece);
+
+        grid.RemoveInstance(selectedInstance);
+        NotifyBlockLifted(lastObjectCells);
+        selectedInstance = null;
+        HideRangeIndicator();
+        EnterEditMode(lastObjectPos);
+        return true;
     }
 
     void CancelEditMode()
@@ -545,6 +592,8 @@ public class PlacementController : MonoBehaviour
 
         if (!Physics.Raycast(ray, out RaycastHit hit))
         {
+            // Empty-space click — dismiss any current selection (Arknights-style).
+            selectedInstance = null;
             UpdateHighlight(null);
             _lastClickTarget = null;
             return;
@@ -622,33 +671,11 @@ public class PlacementController : MonoBehaviour
             _lastClickTime   = Time.time;
             _lastClickTarget = instance.visualObject;
 
+            // Double-click picks the block back up for repositioning, same as
+            // Tab. selectedInstance == instance here, so PickUpSelected handles
+            // the combat lock + lift uniformly.
             if (isDouble)
-            {
-                // Non-turret blocks are locked during combat.
-                if (GameFlowManager.Instance?.phase == GamePhase.Running
-                    && !TurretTypes.Is(instance.data?.blockType ?? BlockType.Empty))
-                {
-                    Debug.Log("[Placement] Block editing locked during combat.");
-                    return;
-                }
-
-                // Pick the block back up, same as Tab �?remove from grid and re-enter edit mode.
-                isPickingUpObject = true;
-                lastObjectPos     = instance.visualObject.transform.position;
-                lastObjectRot     = instance.visualObject.transform.rotation;
-                lastObjectCells   = instance.occupiedCells.ToArray();
-
-                SnapDepthToWorldPos(lastObjectPos);
-
-                // Update count before removing from grid.
-                ResourceManager.Instance?.OnBlockRemoved(instance.data.blockType);
-                SynergyEvaluator.Instance?.OnPieceRemoved(instance.placedPiece);
-
-                grid.RemoveInstance(instance);   // destroys visualObject
-                NotifyBlockLifted(lastObjectCells);
-                selectedInstance = null;
-                EnterEditMode(lastObjectPos);
-            }
+                PickUpSelected();
         }
     }
 
@@ -705,6 +732,377 @@ public class PlacementController : MonoBehaviour
             _highlightMpb.SetColor(_OutlineColorID, color);
             r.SetPropertyBlock(_highlightMpb);
         }
+    }
+
+    // =========================
+    // SELL
+    // =========================
+
+    // Recomputes a fresh base price for the block (fluctuation 1.0) and returns
+    // the sell value. Placed instances don't store what was actually paid (only
+    // the consumed tray token did), so this is the best available estimate.
+    int ComputeSellRefund(PlacedBlockInstance ins)
+    {
+        if (ins?.data == null || ResourceManager.Instance == null) return 0;
+        int basePrice = ResourceManager.Instance.ComputePrice(ins.data, 1f);
+        return Mathf.Max(1, Mathf.RoundToInt(basePrice * sellRefundFraction));
+    }
+
+    // Removes the selected block and refunds part of its value to the matching
+    // currency pool (turret pool for turrets, block pool otherwise). Selling is
+    // final — no undo record is pushed.
+    void SellSelected()
+    {
+        var ins = selectedInstance;
+        if (ins == null || ins.data == null) return;
+
+        bool isTurret = TurretTypes.Is(ins.data.blockType);
+
+        // Phase gate — same rule as pickup / delete (non-turrets combat-locked).
+        if (GameFlowManager.Instance?.phase == GamePhase.Running && !isTurret)
+        {
+            Debug.Log("[Placement] Block selling locked during combat.");
+            return;
+        }
+
+        int refund = ComputeSellRefund(ins);
+
+        ResourceManager.Instance?.OnBlockRemoved(ins.data.blockType);
+        SynergyEvaluator.Instance?.OnPieceRemoved(ins.placedPiece);
+        NotifyBlockLifted(ins.occupiedCells.ToArray());
+        grid.RemoveInstance(ins);     // destroys visualObject
+
+        selectedInstance = null;
+        UpdateHighlight(null);
+        HideRangeIndicator();
+
+        if (isTurret) ResourceManager.Instance?.AddTurretCurrency(refund);
+        else          ResourceManager.Instance?.RefundBlock(refund);
+
+        GameFlowManager.Instance?.EvaluateGrid();
+        ShowPlacementPopup($"Sold for +{refund}");
+    }
+
+    // =========================
+    // SELECTION INFO PANEL
+    // =========================
+
+    // True when the cursor is over the info panel this frame. Used in Update to
+    // swallow the click so the panel's own IMGUI buttons handle it instead of
+    // the world-selection raycast (which would deselect). Input.mousePosition is
+    // bottom-left origin; GUI rects are top-left, hence the Y flip.
+    bool IsPointerOverSelectionPanel()
+    {
+        if (_panelRect.width <= 0f || _panelRect.height <= 0f) return false;
+        Vector2 p = new Vector2(Input.mousePosition.x, Screen.height - Input.mousePosition.y);
+        return _panelRect.Contains(p);
+    }
+
+    void DrawSelectionPanel()
+    {
+        var ins = selectedInstance;
+        if (mode != PlacementMode.Select || ins == null
+            || ins.visualObject == null || ins.data == null)
+        {
+            _panelRect = default;
+            return;
+        }
+
+        EnsurePanelStyles();
+
+        bool  isTurret = TurretTypes.Is(ins.data.blockType);
+        float panelW   = 236f;
+        float panelH   = EstimatePanelHeight(ins, isTurret);
+        float margin   = 12f;
+        float x = Screen.width  - panelW - margin;
+        float y = (Screen.height - panelH) * 0.5f;
+        _panelRect = new Rect(x, y, panelW, panelH);
+
+        GUILayout.BeginArea(_panelRect, GUIContent.none, _panelBox);
+
+        GUILayout.Label(isTurret
+            ? TurretTypes.DisplayName(ins.data.blockType)
+            : ins.data.DisplayName, _panelTitle);
+
+        PanelDivider();
+
+        if (isTurret) DrawTurretStats(ins);
+        else          DrawBlockStats(ins);
+
+        GUILayout.FlexibleSpace();
+        PanelDivider();
+        DrawPanelButtons(ins, isTurret);
+
+        GUILayout.EndArea();
+    }
+
+    // Slightly-generous content-height estimate so the panel hugs its content
+    // (no big empty gap) without ever clipping the bottom buttons.
+    float EstimatePanelHeight(PlacedBlockInstance ins, bool isTurret)
+    {
+        const float row = 22f, title = 30f, divider = 12f, button = 34f, buttonGap = 8f, padding = 28f;
+        int   rows  = 0;
+        float extra = 0f;
+
+        if (isTurret)
+        {
+            var t = ins.visualObject.GetComponentInChildren<TurretController>();
+            if (t == null) rows = 1;
+            else
+            {
+                rows = 4;   // Damage, Range, Fire rate, DPS
+                if      (t.mode == TurretController.Mode.Slow) rows += 2;
+                else if (t.mode == TurretController.Mode.Aoe)  rows += 1;
+            }
+        }
+        else
+        {
+            rows = 4;       // Shape, Rarity, Cells + synergy row
+            if (ins.color != BlockColor.None)
+            {
+                string d = BlockColorPalette.Description(ins.color);
+                if (!string.IsNullOrEmpty(d)) extra += d.Split('\n').Length * (row - 2f);
+            }
+        }
+
+        bool combatLocked = GameFlowManager.Instance != null
+            && GameFlowManager.Instance.phase == GamePhase.Running && !isTurret;
+        if (combatLocked) extra += row;
+
+        return padding + title + divider + rows * row + extra
+             + 12f + divider + (button * 2f + buttonGap) + 12f;
+    }
+
+    void DrawBlockStats(PlacedBlockInstance ins)
+    {
+        var d = ins.data;
+        PanelRow("Shape",  string.IsNullOrEmpty(d.ShapeName) ? "Custom" : d.ShapeName);
+        PanelRow("Rarity", d.rarity.ToString());
+        PanelRow("Cells",  ins.occupiedCells.Count.ToString());
+
+        GUILayout.Space(4f);
+        if (ins.color != BlockColor.None)
+        {
+            GUILayout.BeginHorizontal();
+            GUILayout.Label("Synergy", _panelLabel, GUILayout.Width(72f));
+            Rect sw = GUILayoutUtility.GetRect(14f, 14f, GUILayout.Width(14f), GUILayout.Height(14f));
+            var prev = GUI.color;
+            GUI.color = BlockColorPalette.Get(ins.color);
+            GUI.DrawTexture(sw, Texture2D.whiteTexture);
+            GUI.color = prev;
+            GUILayout.Space(6f);
+            GUILayout.Label(ins.color.ToString(), _panelValue);
+            GUILayout.EndHorizontal();
+
+            string desc = BlockColorPalette.Description(ins.color);
+            if (!string.IsNullOrEmpty(desc))
+            {
+                GUILayout.Space(2f);
+                GUILayout.Label(desc, _panelLabel);
+            }
+        }
+        else
+        {
+            PanelRow("Synergy", "None");
+        }
+    }
+
+    void DrawTurretStats(PlacedBlockInstance ins)
+    {
+        var turret = ins.visualObject.GetComponentInChildren<TurretController>();
+        if (turret == null)
+        {
+            GUILayout.Label("(turret stats unavailable)", _panelLabel);
+            return;
+        }
+
+        float fireRate = turret.fireInterval > 0.0001f ? 1f / turret.fireInterval : 0f;
+        float dps      = turret.fireInterval > 0.0001f ? turret.bulletDamage / turret.fireInterval : 0f;
+
+        PanelRow("Damage",    turret.bulletDamage.ToString());
+        PanelRow("Range",     turret.attackRange.ToString("0.#"));
+        PanelRow("Fire rate", fireRate.ToString("0.0") + "/s");
+        PanelRow("DPS",       dps.ToString("0.#"));
+
+        if (turret.mode == TurretController.Mode.Slow)
+        {
+            PanelRow("Slow to",  Mathf.RoundToInt(turret.slowMultiplier * 100f) + "% spd");
+            PanelRow("Duration", turret.slowDuration.ToString("0.#") + "s");
+        }
+        else if (turret.mode == TurretController.Mode.Aoe)
+        {
+            PanelRow("AOE radius", turret.aoeRadius.ToString("0.#"));
+        }
+    }
+
+    void DrawPanelButtons(PlacedBlockInstance ins, bool isTurret)
+    {
+        bool combatLocked = GameFlowManager.Instance != null
+            && GameFlowManager.Instance.phase == GamePhase.Running
+            && !isTurret;
+
+        GUI.enabled = !combatLocked;
+
+        if (GUILayout.Button("Pick up", _panelButton, GUILayout.Height(34f)))
+            _panelPickUpRequested = true;
+
+        GUILayout.Space(8f);
+
+        int refund = ComputeSellRefund(ins);
+        var prevBg = GUI.backgroundColor;
+        GUI.backgroundColor = new Color(0.86f, 0.36f, 0.32f);
+        if (GUILayout.Button($"Sell  +{refund}", _panelButton, GUILayout.Height(34f)))
+            _panelSellRequested = true;
+        GUI.backgroundColor = prevBg;
+
+        GUI.enabled = true;
+
+        if (combatLocked)
+            GUILayout.Label("Locked during combat", _panelLabel);
+    }
+
+    void PanelRow(string label, string value)
+    {
+        GUILayout.BeginHorizontal();
+        GUILayout.Label(label, _panelLabel, GUILayout.Width(72f));
+        GUILayout.Label(value, _panelValue);
+        GUILayout.EndHorizontal();
+    }
+
+    void PanelDivider()
+    {
+        GUILayout.Space(4f);
+        Rect r = GUILayoutUtility.GetRect(1f, 1f, GUILayout.ExpandWidth(true), GUILayout.Height(1f));
+        var prev = GUI.color;
+        GUI.color = new Color(1f, 1f, 1f, 0.18f);
+        GUI.DrawTexture(r, Texture2D.whiteTexture);
+        GUI.color = prev;
+        GUILayout.Space(4f);
+    }
+
+    void EnsurePanelStyles()
+    {
+        if (_panelBox != null) return;
+
+        _panelBox = new GUIStyle(GUI.skin.box)
+        {
+            padding   = new RectOffset(12, 12, 10, 10),
+            alignment = TextAnchor.UpperLeft,
+        };
+
+        _panelTitle = new GUIStyle(GUI.skin.label)
+        {
+            fontSize  = 18,
+            fontStyle = FontStyle.Bold,
+            wordWrap  = true,
+        };
+        _panelTitle.normal.textColor = Color.white;
+
+        _panelLabel = new GUIStyle(GUI.skin.label)
+        {
+            fontSize = 14,
+            wordWrap = true,
+        };
+        _panelLabel.normal.textColor = new Color(0.78f, 0.78f, 0.80f);
+
+        _panelValue = new GUIStyle(GUI.skin.label)
+        {
+            fontSize  = 14,
+            fontStyle = FontStyle.Bold,
+            wordWrap  = true,
+        };
+        _panelValue.normal.textColor = Color.white;
+
+        _panelButton = new GUIStyle(GUI.skin.button)
+        {
+            fontSize  = 15,
+            fontStyle = FontStyle.Bold,
+        };
+    }
+
+    // =========================
+    // TURRET RANGE SPHERE
+    // =========================
+
+    // Driven every frame from Update: shows a semi-transparent sphere centered
+    // on the selected turret's firing origin, sized to its attackRange (the
+    // turret tests range in 3D, so a sphere is the honest shape). Hidden when no
+    // turret is selected.
+    void UpdateRangeIndicator()
+    {
+        if (mode == PlacementMode.Select
+            && selectedInstance != null
+            && selectedInstance.visualObject != null
+            && selectedInstance.data != null
+            && TurretTypes.Is(selectedInstance.data.blockType))
+        {
+            var turret = selectedInstance.visualObject.GetComponentInChildren<TurretController>();
+            if (turret != null && turret.attackRange > 0f)
+            {
+                ShowRangeSphere(selectedInstance.visualObject.transform.position, turret.attackRange);
+                return;
+            }
+        }
+        HideRangeIndicator();
+    }
+
+    void ShowRangeSphere(Vector3 center, float radius)
+    {
+        EnsureRangeSphere();
+        if (!_rangeSphere.activeSelf) _rangeSphere.SetActive(true);
+
+        _rangeSphere.transform.position   = center;
+        // Unity's sphere primitive has diameter 1 at scale 1, so scale = 2·radius.
+        _rangeSphere.transform.localScale = Vector3.one * (radius * 2f);
+    }
+
+    void HideRangeIndicator()
+    {
+        if (_rangeSphere != null && _rangeSphere.activeSelf)
+            _rangeSphere.SetActive(false);
+    }
+
+    void EnsureRangeSphere()
+    {
+        if (_rangeSphere != null) return;
+
+        _rangeSphere = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+        _rangeSphere.name = "TurretRangeSphere";
+        _rangeSphere.transform.SetParent(transform, worldPositionStays: false);
+
+        // No collider — it must not block selection raycasts or turret line-of-sight.
+        var col = _rangeSphere.GetComponent<Collider>();
+        if (col != null) Destroy(col);
+
+        var rend = _rangeSphere.GetComponent<Renderer>();
+        rend.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        rend.receiveShadows    = false;
+        rend.sharedMaterial    = BuildTransparentMaterial(rangeSphereColor);
+    }
+
+    // Builds an unlit, double-sided, alpha-blended material so the range bubble
+    // reads cleanly from outside AND inside (camera may zoom into it). Mirrors
+    // the URP transparent setup used by ConfigurePreviewMaterial.
+    static Material BuildTransparentMaterial(Color color)
+    {
+        Shader sh = Shader.Find("Universal Render Pipeline/Unlit");
+        if (sh == null) sh = Shader.Find("Universal Render Pipeline/Lit");
+        if (sh == null) sh = Shader.Find("Sprites/Default");
+        var mat = new Material(sh);
+
+        if (mat.HasProperty("_Surface"))
+        {
+            mat.SetFloat("_Surface", 1f);   // 1 = Transparent
+            mat.SetFloat("_ZWrite",  0f);
+            mat.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
+            mat.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+            mat.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
+            mat.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent;
+        }
+        if (mat.HasProperty("_Cull")) mat.SetInt("_Cull", (int)UnityEngine.Rendering.CullMode.Off);
+        if (mat.HasProperty("_BaseColor")) mat.SetColor("_BaseColor", color);
+        if (mat.HasProperty("_Color"))     mat.SetColor("_Color", color);
+        return mat;
     }
 
     // =========================

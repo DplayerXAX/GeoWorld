@@ -93,16 +93,20 @@ Material:
         m_Texture: {fileID: 0}
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
-    m_Ints: []
+    m_Ints:
+    - _MaxSteps: 96
     m_Floats:
+    - _Absorption: 4.4
     - _AddPrecomputedVelocity: 0
     - _AlphaClip: 0
     - _AlphaToMask: 0
+    - _BarThickness: 0.04
     - _Blend: 0
     - _BlendModePreserveSpecular: 1
     - _BumpScale: 1
     - _ClearCoatMask: 0
     - _ClearCoatSmoothness: 0
+    - _CoreGlow: 0.55
     - _Cull: 2
     - _Cutoff: 0.5
     - _DetailAlbedoMapScale: 1
@@ -110,11 +114,12 @@ Material:
     - _DstBlend: 0
     - _DstBlendAlpha: 0
     - _EnvironmentReflections: 1
-    - _FrameCount: 3
+    - _FrameCount: 4
     - _FrameWidth: 0.018
     - _GlossMapScale: 0
-    - _Glossiness: 0
+    - _Glossiness: 0.2
     - _GlossyReflections: 0
+    - _GrainAmount: 0.025
     - _GridDensity: 8
     - _GridWidth: 0.05
     - _Metallic: 0
@@ -124,10 +129,13 @@ Material:
     - _ReceiveShadows: 1
     - _Smoothness: 0.5
     - _SmoothnessTextureChannel: 0
+    - _Specular: 4
     - _SpecularHighlights: 1
     - _SrcBlend: 1
     - _SrcBlendAlpha: 1
+    - _StepSize: 0.015
     - _Surface: 0
+    - _TechBevel: 0.02
     - _WorkflowMode: 1
     - _XRMotionVectorsPass: 1
     - _ZWrite: 1
@@ -136,8 +144,12 @@ Material:
     - _BaseColor: {r: 1, g: 1, b: 1, a: 1}
     - _BgColor: {r: 0.04, g: 0.09999997, b: 0.11999995, a: 1}
     - _Color: {r: 1, g: 1, b: 1, a: 1}
+    - _CoreColor: {r: 0.4, g: 2.3, b: 2.5, a: 1}
+    - _DarkColor: {r: 0, g: 0.028301865, b: 0.03773582, a: 1}
     - _EmissionColor: {r: 0, g: 0, b: 0, a: 1}
     - _GridColor: {r: 0.14999998, g: 0.54999995, b: 0.54999995, a: 1}
+    - _MainColor: {r: 0.2, g: 0.65, b: 0.65, a: 1}
+    - _MidColor: {r: 0.14999998, g: 0.6, b: 0.65, a: 1}
     - _SpecColor: {r: 0.19999996, g: 0.19999996, b: 0.19999996, a: 1}
   m_BuildTextureStacks: []
   m_AllowLocking: 1

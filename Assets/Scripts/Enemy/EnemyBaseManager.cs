@@ -50,12 +50,11 @@ public class EnemyBaseManager : MonoBehaviour
     bool _waveActive;
     int _spawnedCount;
 
-    // One path per active START point. Enemies are distributed across these
-    // round-robin so EVERY spawn point emits, instead of all enemies funneling
-    // out of the single start the BFS happened to pick. Single-path waves are
-    // just a one-element list.
+    // One path per active START point. Each spawn "tick" emits one enemy at
+    // EVERY route, so every spawn point runs the FULL wave (total enemies =
+    // wave size × spawn-point count) instead of the wave being split across
+    // points. Single-path waves are just a one-element list.
     List<List<FaceNode>> _currentPaths;
-    int _pathCursor;
 
     void Awake()
     {
@@ -68,9 +67,9 @@ public class EnemyBaseManager : MonoBehaviour
     public void BeginWave(List<FaceNode> path, IList<SpawnGroup> groups, SurfaceUnit tempoSource = null)
         => BeginWave(path != null ? new List<List<FaceNode>> { path } : null, groups, tempoSource);
 
-    // Multi-path overload: each entry is an independent start→end route. Spawned
-    // enemies are dealt out across the routes round-robin so all spawn points
-    // are used. Pass a single-element list for classic one-spawn behavior.
+    // Multi-path overload: each entry is an independent start→end route. Every
+    // spawn tick emits one enemy at EACH route, so each spawn point runs the
+    // full wave. Pass a single-element list for classic one-spawn behavior.
     public void BeginWave(IList<List<FaceNode>> paths, IList<SpawnGroup> groups, SurfaceUnit tempoSource = null)
     {
         // Keep only valid (non-empty) routes.
@@ -89,7 +88,6 @@ public class EnemyBaseManager : MonoBehaviour
         CancelWave();
 
         _currentPaths  = valid;
-        _pathCursor    = 0;
         _currentGroups = groups;
         _spawnedCount  = 0;
         _spawnTotal    = CountSpawns(groups);
@@ -128,7 +126,6 @@ public class EnemyBaseManager : MonoBehaviour
 
         _activeEnemies.Clear();
         _currentPaths  = null;
-        _pathCursor    = 0;
         _currentGroups = null;
         _spawnTotal    = 0;
         _waveActive    = false;
@@ -189,17 +186,6 @@ public class EnemyBaseManager : MonoBehaviour
     {
         if (_currentPaths == null || _currentPaths.Count == 0) return;
 
-        // Round-robin across spawn points so every start emits. Skip any path
-        // that went empty mid-wave (block lifted) and advance to the next.
-        List<FaceNode> path = null;
-        for (int tries = 0; tries < _currentPaths.Count; tries++)
-        {
-            var cand = _currentPaths[(_pathCursor + tries) % _currentPaths.Count];
-            if (cand != null && cand.Count > 0) { path = cand; break; }
-        }
-        _pathCursor++;
-        if (path == null) return;
-
         EnemySurfaceUnit source = prefabOverride != null ? prefabOverride : enemyPrefab;
 
         if (source == null)
@@ -211,6 +197,19 @@ public class EnemyBaseManager : MonoBehaviour
             return;
         }
 
+        // Full wave from EVERY spawn point: emit one enemy at each active route
+        // this tick. Skip any route that went empty mid-wave (block lifted).
+        for (int i = 0; i < _currentPaths.Count; i++)
+        {
+            var path = _currentPaths[i];
+            if (path != null && path.Count > 0)
+                SpawnOneEnemy(source, path);
+        }
+    }
+
+    // Instantiates and launches a single enemy of `source` along `path`.
+    void SpawnOneEnemy(EnemySurfaceUnit source, List<FaceNode> path)
+    {
         EnemySurfaceUnit enemy = Instantiate(source);
         // Prefabs can be lean: drop in EnemyChaoticVisual + BlockOutlineApplier
         // with empty material slots and we fill them with the manager's

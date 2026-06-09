@@ -589,6 +589,7 @@ public class GameFlowManager : MonoBehaviour
         ResourceManager.Instance?.SetCombatActive(false);
         BackgroundReactor.Instance?.SetCombatMode(false);
         AudioManager.Instance?.ExitBattleBGM();
+        Time.timeScale = 1f;                               // restore normal speed when bailing out of combat
         phase = GamePhase.Build;
     }
 
@@ -620,6 +621,7 @@ public class GameFlowManager : MonoBehaviour
         enemyBaseManager?.CancelWave();
         BackgroundReactor.Instance?.SetCombatMode(false);  // restore calm skybox
         AudioManager.Instance?.ExitBattleBGM();            // BGM → calm track
+        Time.timeScale = 1f;                               // combat over → drop any fast-forward back to 1×
         phase = GamePhase.Build;
 
         // Roguelite choice. Non-blocking — Build phase starts immediately,
