@@ -125,9 +125,15 @@ public class OrbitCamera : MonoBehaviour
 
     public void SetFocus(Transform newTarget)
     {
-        if (desiredTarget != newTarget)
-            _panOffset = Vector3.zero; // new focus → cancel any free-pan
+        // Always cancel any accumulated free-pan so a focus request truly
+        // re-centers on the target. Block focus reuses ONE shared anchor
+        // (PlacementController.editFocusAnchor) that is just repositioned each
+        // time, so comparing references here would skip the reset on every
+        // focus after the first — the camera would then jump to
+        // target + stalePan instead of centering, which feels like the camera
+        // "flying off" / moving weirdly after a double-click focus.
         desiredTarget = newTarget;
+        _panOffset    = Vector3.zero;
     }
 
     // Called by PlacementController on WASD/QE in Select mode.

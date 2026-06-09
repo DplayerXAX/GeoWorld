@@ -396,20 +396,32 @@ public class GameFlowManager : MonoBehaviour
             return;
         }
 
-        // Live preview line → tracked loop line.
+        // Enemies spawn from EVERY connected start, not just the one the
+        // challenge path traced back to. `path` above still gates the run (the
+        // round's challenge endpoint must be connected); `spawnPaths` drives
+        // the actual emission.
+        var spawnPaths = FindAllSpawnPaths();
+        if (spawnPaths.Count == 0) spawnPaths.Add(path);   // safety net
+
+        // Live preview line → tracked loop lines, one per active route so the
+        // player can see where every wave of enemies will come from.
         PathFlowManager.Instance?.ClearLiveLine();
-        PathFlowManager.Instance?.AddFlow(path);
+        foreach (var p in spawnPaths)
+            PathFlowManager.Instance?.AddFlow(p);
 
         // No more music SurfaceUnit — combat timing is driven by the enemy
         // wave. EndRunningPhase fires when EnemyBaseManager.OnWaveCompleted.
         currentUnit = null;
 
         phase = GamePhase.Running;
-        enemyBaseManager?.BeginWave(path, PickWaveForThisRound());
+        enemyBaseManager?.BeginWave(spawnPaths, PickWaveForThisRound());
         ResourceManager.Instance?.SetCombatActive(true);   // start turret currency regen
         ShopController.Instance?.OnCombatStart();           // collapse and hide shop
         BackgroundReactor.Instance?.SetCombatMode(true);    // switch skybox to combat / distorted state
         AudioManager.Instance?.EnterBattleBGM();            // BGM → battle track
+        // Combat ripple is a one-shot grow animation that touches every cube;
+        // run it once on the challenge path (running it per-route would have
+        // multiple coroutines fighting over the same cube scales).
         placement.TriggerCombatRipple(path);                // wave grows along path, then off-path blocks bloom
     }
 
@@ -464,6 +476,29 @@ public class GameFlowManager : MonoBehaviour
         graph.Build();
         path = FindCurrentPath();
         return path != null && path.Count > 0;
+    }
+
+    // Builds one path per START cell that can still reach ANY end. Used to
+    // spawn enemies from EVERY connected start point, not just whichever start
+    // SurfacePathfinding's multi-source BFS happened to trace back to (which,
+    // combined with the _challengeCell restriction below, was always the
+    // last-added start — so enemies only ever emerged from one spawn point).
+    // Requires `graph` to be built first (Run() / TryGetCurrentPath() do this).
+    List<List<FaceNode>> FindAllSpawnPaths()
+    {
+        var paths    = new List<List<FaceNode>>();
+        var endFaces = CollectFaces(allEnds);
+        if (endFaces.Count == 0) return paths;
+
+        foreach (var startCell in allStarts)
+        {
+            var startFaces = CollectFaces(new List<Vector3Int> { startCell });
+            if (startFaces.Count == 0) continue;
+
+            var p = SurfacePathfinding.FindPath(startFaces, endFaces);
+            if (p != null && p.Count > 0) paths.Add(p);
+        }
+        return paths;
     }
 
     // Builds and returns the path for the current challenge state,

@@ -22,7 +22,6 @@ Shader "GeoWorld/Synergy/HarmonyCore_GlassyVolume_Scaleable"
         _MaxSteps              ("Max Ray Steps", Integer) = 96
         _StepSize              ("Ray Step Size", Range(0.01, 0.1)) = 0.02
         
-        // 新增：体积缩放系数（只放大视觉形状，不改变模型transform）
         _VolumeScale           ("Volume Scale", Range(0.5, 5.0)) = 1.0
     }
 
@@ -53,7 +52,7 @@ Shader "GeoWorld/Synergy/HarmonyCore_GlassyVolume_Scaleable"
                 float  _Glossiness, _Specular, _GrainAmount;
                 int    _MaxSteps;
                 float  _StepSize;
-                float  _VolumeScale;        // 新增
+                float  _VolumeScale;      
             CBUFFER_END
 
             struct Attributes
@@ -77,7 +76,6 @@ Shader "GeoWorld/Synergy/HarmonyCore_GlassyVolume_Scaleable"
                 return OUT;
             }
 
-            // 噪声函数保持不变...
             float Hash21(float2 p)
             {
                 p = frac(p * float2(123.34, 456.21));
@@ -120,7 +118,6 @@ Shader "GeoWorld/Synergy/HarmonyCore_GlassyVolume_Scaleable"
                 return lerp(n, quantized, sharpness);
             }
 
-            // 修改：八面体半径受 _VolumeScale 影响
             float sdOctahedron(float3 p, float s)
             {
                 p = abs(p);
@@ -129,7 +126,6 @@ Shader "GeoWorld/Synergy/HarmonyCore_GlassyVolume_Scaleable"
 
             float MapInternalVolume(float3 p)
             {
-                // 关键：将采样坐标按 _VolumeScale 缩放，使得 SDF 形状被放大
                 float3 scaledP = p / _VolumeScale;
                 
                 float t = _Time.y * _TwistSpeed;
@@ -140,7 +136,6 @@ Shader "GeoWorld/Synergy/HarmonyCore_GlassyVolume_Scaleable"
                 float3 q = scaledP;
                 q.xz = mul(rot, q.xz);
 
-                // 基础八面体半径 0.4 保持不变，但因为 scaledP 被放大了，实际效果相当于半径放大 _VolumeScale 倍
                 float crystal = sdOctahedron(q, 0.40);
                 float noiseMask = GlassyFBM(q * 5.0 + float3(0, t * 0.5, 0), _GlassSharpness, _ShardSteps);
                 
@@ -157,7 +152,6 @@ Shader "GeoWorld/Synergy/HarmonyCore_GlassyVolume_Scaleable"
                 ));
             }
 
-            // 修改：边界盒也按 _VolumeScale 缩放
             float2 IntersectAABB(float3 rayOrigin, float3 rayDir, float3 boxMin, float3 boxMax)
             {
                 float3 tMin = (boxMin - rayOrigin) / rayDir;
@@ -175,7 +169,6 @@ Shader "GeoWorld/Synergy/HarmonyCore_GlassyVolume_Scaleable"
                 float3 rayOriginOS = TransformWorldToObject(viewPosWS);
                 float3 rayDirOS    = normalize(TransformWorldToObjectDir(viewDirWS));
 
-                // 边界盒范围按 _VolumeScale 缩放，保持和内部体积形状一致
                 float3 boxMin = float3(-0.5, -0.5, -0.5) * _VolumeScale;
                 float3 boxMax = float3( 0.5,  0.5,  0.5) * _VolumeScale;
 
@@ -192,7 +185,6 @@ Shader "GeoWorld/Synergy/HarmonyCore_GlassyVolume_Scaleable"
                 float3 crystalNormalOS = float3(0, 1, 0);
                 float hitCrystal = 0.0;
 
-                // 重要：步长也随缩放调整，否则穿过大体积时步数不够
                 float adjustedStepSize = _StepSize * _VolumeScale;
 
                 [loop]
