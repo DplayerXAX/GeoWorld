@@ -372,6 +372,8 @@ MonoBehaviour:
   buildYRange: {x: 0, y: 20}
   refreshBaseCost: 2
   refreshCostStep: 1
+  rangeSphereColor: {r: 0.07861614, g: 0.5672784, b: 1, a: 0.12}
+  sellRefundFraction: 0.5
 --- !u!4 &164805053
 Transform:
   m_ObjectHideFlags: 0
