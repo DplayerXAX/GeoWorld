@@ -49,7 +49,13 @@ public class EnemyBaseManager : MonoBehaviour
     Coroutine _spawnRoutine;
     bool _waveActive;
     int _spawnedCount;
-    List<FaceNode> _currentPath;
+
+    // One path per active START point. Enemies are distributed across these
+    // round-robin so EVERY spawn point emits, instead of all enemies funneling
+    // out of the single start the BFS happened to pick. Single-path waves are
+    // just a one-element list.
+    List<List<FaceNode>> _currentPaths;
+    int _pathCursor;
 
     void Awake()
     {
@@ -60,8 +66,21 @@ public class EnemyBaseManager : MonoBehaviour
         => BeginWave(path, (IList<SpawnGroup>)null, tempoSource);
 
     public void BeginWave(List<FaceNode> path, IList<SpawnGroup> groups, SurfaceUnit tempoSource = null)
+        => BeginWave(path != null ? new List<List<FaceNode>> { path } : null, groups, tempoSource);
+
+    // Multi-path overload: each entry is an independent start→end route. Spawned
+    // enemies are dealt out across the routes round-robin so all spawn points
+    // are used. Pass a single-element list for classic one-spawn behavior.
+    public void BeginWave(IList<List<FaceNode>> paths, IList<SpawnGroup> groups, SurfaceUnit tempoSource = null)
     {
-        if (path == null || path.Count == 0)
+        // Keep only valid (non-empty) routes.
+        var valid = new List<List<FaceNode>>();
+        if (paths != null)
+            foreach (var p in paths)
+                if (p != null && p.Count > 0)
+                    valid.Add(new List<FaceNode>(p));
+
+        if (valid.Count == 0)
         {
             Debug.LogWarning("[EnemyBaseManager] Cannot begin wave without a valid path.");
             return;
@@ -69,7 +88,8 @@ public class EnemyBaseManager : MonoBehaviour
 
         CancelWave();
 
-        _currentPath   = new List<FaceNode>(path);
+        _currentPaths  = valid;
+        _pathCursor    = 0;
         _currentGroups = groups;
         _spawnedCount  = 0;
         _spawnTotal    = CountSpawns(groups);
@@ -107,7 +127,8 @@ public class EnemyBaseManager : MonoBehaviour
                 Destroy(enemy.gameObject);
 
         _activeEnemies.Clear();
-        _currentPath   = null;
+        _currentPaths  = null;
+        _pathCursor    = 0;
         _currentGroups = null;
         _spawnTotal    = 0;
         _waveActive    = false;
@@ -166,7 +187,18 @@ public class EnemyBaseManager : MonoBehaviour
 
     void SpawnEnemy(EnemySurfaceUnit prefabOverride)
     {
-        if (_currentPath == null || _currentPath.Count == 0) return;
+        if (_currentPaths == null || _currentPaths.Count == 0) return;
+
+        // Round-robin across spawn points so every start emits. Skip any path
+        // that went empty mid-wave (block lifted) and advance to the next.
+        List<FaceNode> path = null;
+        for (int tries = 0; tries < _currentPaths.Count; tries++)
+        {
+            var cand = _currentPaths[(_pathCursor + tries) % _currentPaths.Count];
+            if (cand != null && cand.Count > 0) { path = cand; break; }
+        }
+        _pathCursor++;
+        if (path == null) return;
 
         EnemySurfaceUnit source = prefabOverride != null ? prefabOverride : enemyPrefab;
 
@@ -203,7 +235,7 @@ public class EnemyBaseManager : MonoBehaviour
             enemy.targetPriority      = record.targetPriority;
         }
 
-        var first = _currentPath[0];
+        var first = path[0];
         enemy.transform.position = GridSystem.instance.GridToWorld(first.cell)
                                    + first.normal * (GridSystem.instance.cellSize * 0.5f + enemyFaceClearance);
         enemy.OnReachedEnd += HandleEnemyReachedEnd;
@@ -212,7 +244,7 @@ public class EnemyBaseManager : MonoBehaviour
         // Wave bpm is the global tempo — per-enemy speed variation is via
         // baseSpeedMultiplier above, NOT by multiplying bpm here (would
         // desync the on-beat movement feel for the whole wave).
-        enemy.SetPath(_currentPath, enemyBpm, enemyMoveRatio);
+        enemy.SetPath(path, enemyBpm, enemyMoveRatio);
     }
 
     // Fills empty material slots on a freshly-instantiated prefab so a
