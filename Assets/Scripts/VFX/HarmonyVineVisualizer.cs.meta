@@ -1,0 +1,12 @@
+fileFormatVersion: 2
+guid: fd686bbe41e95d144897a43e4b1111c1
+MonoImporter:
+  externalObjects: {}
+  serializedVersion: 2
+  defaultReferences:
+  - vinePrefab: {fileID: 5386003392207672047, guid: 835a92ac1a661154b973e5d4184d2def, type: 3}
+  executionOrder: 0
+  icon: {instanceID: 0}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 

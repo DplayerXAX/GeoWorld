@@ -6,6 +6,9 @@ Shader "Custom/ManifoldSkybox"
         _HorizonColor  ("Horizon Color",  Color) = (0.06, 0.08, 0.15, 1)
         _FogColor      ("Fog/Haze Color", Color) = (0.10, 0.12, 0.22, 1)
         _DamageTint ("Damage Tint", Range(0,1)) = 0
+        // Synergy-activation flash (driven from BackgroundReactor.cs)
+        _FlashColor  ("Flash Color",  Color)      = (1,1,1,1)
+        _FlashAmount ("Flash Amount", Range(0,1)) = 0
         _GridColor     ("Grid Line Color",Color) = (0.25, 0.35, 0.65, 1)
         _GridScale     ("Grid Scale",     Float) = 12.0
         _GridThickness ("Grid Thickness", Range(0.01, 0.1)) = 0.03
@@ -48,6 +51,8 @@ Shader "Custom/ManifoldSkybox"
             float _BeatPulse, _MusicIntensity, _ColorShift, _TypeHue, _PitchGlow;
             float _CombatMode;
             float _DamageTint;
+            half4 _FlashColor;
+            float _FlashAmount;
 
             struct Attributes { float4 positionOS : POSITION; };
             struct Varyings
@@ -410,6 +415,13 @@ half3 combatHorizon =
                 // 将原画面压至红黑色调，同时保留发光的线条和几何体质感
                 half3 damagePalette = half3(result.r * 1.3 + finalLuma * 0.3, result.g * 0.1, result.b * 0.12);
                 result = lerp(result, damagePalette, _DamageTint);
+
+                // ── Theme flash (synergy activation) ──────────────────────────
+                // Wash the whole sky toward a theme colour; brightness follows the
+                // scene luma so the grid / geometry still reads through the flash.
+                float flashLuma    = dot(result, float3(0.299, 0.587, 0.114));
+                half3 flashPalette = _FlashColor.rgb * (0.35 + flashLuma * 1.1);
+                result = lerp(result, flashPalette, _FlashAmount);
 
                 return half4(result, 1.0);
             }

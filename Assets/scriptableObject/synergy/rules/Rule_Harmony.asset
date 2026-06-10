@@ -17,6 +17,6 @@ MonoBehaviour:
   priority: 40
   absorbAdditionalPieces: 1
   effect: {fileID: 11400000, guid: 770657fb0b7345c40bbcd02a4d8a4eef, type: 2}
-  visualizer: {fileID: 11400000, guid: 7a44b82b157bf74459fb6c3c23a3f1d2, type: 2}
+  visualizer: {fileID: 11400000, guid: f08f1736f2d311d488fe0bbfd3113d35, type: 2}
   flavorText: 
-  minPieces: 4
+  minPieces: 3

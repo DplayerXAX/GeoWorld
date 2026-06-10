@@ -50,12 +50,18 @@ public class WaveGenerator : ScriptableObject
 
     // Returns a fresh list of SpawnGroups for the given round.
     // Safe to pass to EnemyBaseManager.BeginWave.
-    public List<SpawnGroup> Generate(int round, Xoshiro256StarStar rng)
+    //
+    // `forecastOut` (optional): when supplied, a {name, count} pair is appended
+    // for each emitted group AT GENERATION TIME (before BiasTaunt re-sorts the
+    // returned list, so it can't rely on positional pairing). Used by Forecast()
+    // so UI can show "5× Runner" even when SpawnGroup.prefab is null (procedural
+    // default). Spawning ignores it.
+    public List<SpawnGroup> Generate(int round, Xoshiro256StarStar rng, List<WaveForecastGroup> forecastOut = null)
     {
         // Balance-driven path: ignore local entries/budget fields entirely
         // and read everything from the BalanceTable. Identical loop shape
         // but pulls EnemyRecord stats instead of SpawnEntry.
-        if (balance != null) return GenerateFromBalance(round, rng);
+        if (balance != null) return GenerateFromBalance(round, rng, forecastOut);
 
         var groups = new List<SpawnGroup>();
         if (rng == null || entries == null || entries.Count == 0) return groups;
@@ -116,6 +122,11 @@ public class WaveGenerator : ScriptableObject
                 interval = picked.interval,
                 preDelay = first ? 0f : groupSpacing,
             });
+            forecastOut?.Add(new WaveForecastGroup
+            {
+                name  = picked.prefab != null ? picked.prefab.name : "Enemy",
+                count = size,
+            });
 
             budget -= picked.cost * size;
             first   = false;
@@ -125,11 +136,31 @@ public class WaveGenerator : ScriptableObject
         return groups;
     }
 
+    // Display-ready preview of the wave THIS call would build, aggregated by
+    // enemy name (e.g. "Runner ×7, Tank ×2"). The caller MUST make this
+    // non-destructive by save/restoring the rng around it (see
+    // GameFlowManager.GetNextWaveForecast) — Generate advances the stream.
+    public List<WaveForecastGroup> Forecast(int round, Xoshiro256StarStar rng)
+    {
+        var raw = new List<WaveForecastGroup>();
+        Generate(round, rng, raw);                 // fills `raw` with per-group {name,count}
+
+        // Merge duplicate names, preserving first-seen order.
+        var agg = new List<WaveForecastGroup>();
+        for (int i = 0; i < raw.Count; i++)
+        {
+            int at = agg.FindIndex(e => e.name == raw[i].name);
+            if (at >= 0) { var e = agg[at]; e.count += raw[i].count; agg[at] = e; }
+            else         agg.Add(raw[i]);
+        }
+        return agg;
+    }
+
     // Mirror of Generate() but sourced entirely from the BalanceTable.
     // Same loop shape, just reads from EnemyRecord / waveBaseBudget /
     // waveBudgetGrowth / waveBudgetVariance / waveBudgetMax / waveAffordSlack
     // instead of the local SpawnEntry / baseBudget / growthPerRound fields.
-    List<SpawnGroup> GenerateFromBalance(int round, Xoshiro256StarStar rng)
+    List<SpawnGroup> GenerateFromBalance(int round, Xoshiro256StarStar rng, List<WaveForecastGroup> forecastOut = null)
     {
         var groups = new List<SpawnGroup>();
         if (rng == null || balance.enemies == null || balance.enemies.Count == 0) return groups;
@@ -183,6 +214,12 @@ public class WaveGenerator : ScriptableObject
                 count    = size,
                 interval = picked.spawnInterval,
                 preDelay = first ? 0f : balance.waveGroupSpacing,
+            });
+            forecastOut?.Add(new WaveForecastGroup
+            {
+                name  = !string.IsNullOrEmpty(picked.name) ? picked.name
+                      : (picked.prefab != null ? picked.prefab.name : "Enemy"),
+                count = size,
             });
 
             budget -= picked.spawnCost * size;
@@ -249,6 +286,14 @@ public class WaveGenerator : ScriptableObject
         if (prefab.targetPriority > 0)         return 0;
         if (prefab.baseSpeedMultiplier > 1f)   return 1;
         return 2;
+    }
+
+    // One line of a wave forecast: an enemy display name and how many of it the
+    // upcoming wave will emit (per spawn point). Produced by Forecast().
+    public struct WaveForecastGroup
+    {
+        public string name;
+        public int    count;
     }
 }
 

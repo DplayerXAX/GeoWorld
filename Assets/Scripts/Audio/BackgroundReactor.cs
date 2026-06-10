@@ -33,6 +33,18 @@ public class BackgroundReactor : MonoBehaviour
     float _damageTint;
     static readonly int DamageTintId =
     Shader.PropertyToID("_DamageTint");
+
+    // ── Theme flash (synergy activation) — mirrors the damage flash but tinted
+    //    to a caller-chosen colour instead of red.
+    Color _flashColor = Color.white;
+    float _flashAmount;
+    static readonly int FlashColorId  = Shader.PropertyToID("_FlashColor");
+    static readonly int FlashAmountId = Shader.PropertyToID("_FlashAmount");
+
+    [Header("Theme Flash")]
+    [Tooltip("How fast the synergy-activation skybox flash fades out.")]
+    [Range(0.5f, 8f)] public float themeFlashDecay = 3f;
+
     [Header("Combat Mode")]
     [Tooltip("Press to toggle combat skybox for testing (auto-driven by GameFlowManager in play).")]
     public KeyCode combatTestKey        = KeyCode.G;
@@ -113,6 +125,7 @@ public class BackgroundReactor : MonoBehaviour
     0f,
     1f - Mathf.Exp(-4f * dt)
 );
+        _flashAmount = Mathf.Lerp(_flashAmount, 0f, 1f - Mathf.Exp(-themeFlashDecay * dt));
         if (skyboxMaterial == null) return;
         skyboxMaterial.SetFloat(BeatPulseId,  _beatPulse);
         skyboxMaterial.SetFloat(IntensityId,  _smoothIntensity); 
@@ -120,6 +133,8 @@ public class BackgroundReactor : MonoBehaviour
     DamageTintId,
     _damageTint
 );
+        skyboxMaterial.SetColor(FlashColorId,  _flashColor);
+        skyboxMaterial.SetFloat(FlashAmountId, _flashAmount);
         skyboxMaterial.SetFloat(ColorShiftId, _colorShift);
         skyboxMaterial.SetFloat(TypeHueId,    _typeHue);
         skyboxMaterial.SetFloat(PitchGlowId,  _pitchGlow);
@@ -138,6 +153,15 @@ public class BackgroundReactor : MonoBehaviour
     public void TriggerDamageFlash()
     {
         _damageTint = 1f;
+    }
+
+    // Flash the skybox toward an arbitrary theme colour, then fade out (mirrors
+    // the damage flash, but the caller picks the colour). Called on synergy
+    // activation so the background briefly washes toward the activated theme.
+    public void TriggerThemeFlash(Color color, float strength = 0.6f)
+    {
+        _flashColor  = color;
+        _flashAmount = Mathf.Max(_flashAmount, Mathf.Clamp01(strength));
     }
     public void OnNote(float strength = 1f)
     {

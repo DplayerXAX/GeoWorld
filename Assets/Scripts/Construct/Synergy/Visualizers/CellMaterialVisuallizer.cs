@@ -15,6 +15,15 @@ public class CellMaterialVisualizer : SynergyVisualizer
     [Tooltip("Use the Synergy Rule's theme color instead of the overrideColor?")]
     public bool useThemeColor = true;
 
+    [Tooltip("The cube carries an inverse-hull cartoon outline in material slot 1. " +
+             "Against a TRANSPARENT replacement (e.g. the raymarched synergy volumes) " +
+             "it has no opaque face to clip it, so it fills a solid dark cube that " +
+             "bleeds through the volume. When ON, the outline slot is stripped while " +
+             "the synergy is active (restored on release) ONLY if the replacement " +
+             "material is transparent â€” opaque replacements keep their rim untouched. " +
+             "Turn OFF to always keep the hard cartoon rim.")]
+    public bool stripBlockOutlineWhileActive = true;
+
     public override GameObject OnPieceClaimed(PlacedBlockInstance instance, ActiveSynergy active)
     {
         if (instance?.visualObject == null) return null;
@@ -31,6 +40,20 @@ public class CellMaterialVisualizer : SynergyVisualizer
 
         var cellFilter = active.rule as ICellHighlightFilter;
 
+        // Only strip the inverse-hull outline (slot 1) for TRANSPARENT replacements
+        // (renderQueue in the transparent range), where it would otherwise fill dark
+        // behind the volume. Opaque replacements clip the hull to a proper rim on
+        // their own, so leave their material array untouched.
+        bool stripOutline = stripBlockOutlineWhileActive
+                            && replacementMaterial != null
+                            && replacementMaterial.renderQueue > 2500;
+
+        // World center of the whole synergy's highlighted cells. Each swapped
+        // cube offsets its object-space raymarch by its position relative to
+        // this, so the group renders as ONE continuous volume instead of a
+        // self-centered copy per cube.
+        Vector3 groupCenterWorld = ComputeGroupCenter(active, cellFilter, grid, parent.position);
+
         GameObject stateTracker = new GameObject($"SynergyMaterialBackup_{active.rule.name}");
         stateTracker.transform.SetParent(parent, false);
         var backupComp = stateTracker.AddComponent<CellMaterialBackup>();
@@ -42,26 +65,39 @@ public class CellMaterialVisualizer : SynergyVisualizer
 
             if (targetRenderer != null)
             {
-                // ÎÞÌõ¼þ±¸·ÝÔ­Ê¼²ÄÖÊ
+                // Back up the FULL material array (surface + inverse-hull
+                // outline slot) so OnPieceReleased restores every slot exactly.
                 backupComp.savedStates.Add(new CellMaterialBackup.RendererState
                 {
                     renderer = targetRenderer,
-                    originalMaterial = targetRenderer.sharedMaterial
+                    originalMaterials = targetRenderer.sharedMaterials
                 });
 
-                // ºËÐÄ¹ýÂËÂß¼­
+                // Core highlight logic.
                 if (cellFilter == null || cellFilter.ShouldHighlight(worldCell))
                 {
                     if (replacementMaterial != null)
                     {
-                        targetRenderer.sharedMaterial = replacementMaterial;
+                        // The cube's slot 1 holds an inverse-hull cartoon outline.
+                        // With a transparent synergy surface there is no opaque
+                        // face to clip it, so it fills a solid dark cube that
+                        // shows through the volume. Strip to a single slot to
+                        // kill that bleed (restored on release); otherwise just
+                        // swap slot 0 and leave the outline in place.
+                        if (stripOutline)
+                            targetRenderer.sharedMaterials = new[] { replacementMaterial };
+                        else
+                            targetRenderer.sharedMaterial = replacementMaterial;
                     }
-                    MpbColor.Set(targetRenderer, targetColor);
+                    // Group-shared raymarch space: offset = this cube's center
+                    // relative to the group center, in the cube's object space.
+                    Vector3 cubeCenterWorld = targetRenderer.transform.position;
+                    Vector3 groupOffsetOS = targetRenderer.transform.InverseTransformVector(cubeCenterWorld - groupCenterWorld);
+                    ApplyCellMpb(targetRenderer, targetColor, groupOffsetOS);
                 }
                 else
                 {
-                    // ¶Ô³¬³öµÄ¸ñ×Ó½øÐÐÌÞ³ý£¬Ç¿ÖÆ»¹Ô­
-                    targetRenderer.sharedMaterial = targetRenderer.sharedMaterial;
+                    // Filtered-out cell: leave it untouched and clear any MPB.
                     targetRenderer.SetPropertyBlock(null);
                 }
             }
@@ -81,7 +117,8 @@ public class CellMaterialVisualizer : SynergyVisualizer
                 {
                     if (state.renderer != null)
                     {
-                        state.renderer.sharedMaterial = state.originalMaterial;
+                        if (state.originalMaterials != null)
+                            state.renderer.sharedMaterials = state.originalMaterials;
                         state.renderer.SetPropertyBlock(null);
                     }
                 }
@@ -115,5 +152,49 @@ public class CellMaterialVisualizer : SynergyVisualizer
         }
 
         return null;
+    }
+
+    // â”€â”€ Group-shared raymarch helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
+    static readonly int _BaseColorID   = Shader.PropertyToID("_BaseColor");
+    static readonly int _GroupOffsetID = Shader.PropertyToID("_GroupOffset");
+    static MaterialPropertyBlock _mpb;
+
+    // World-space center of every HIGHLIGHTED cell across the WHOLE synergy
+    // claim (all pieces). Filtered cells (ICellHighlightFilter) are excluded so
+    // the center tracks the lit region (e.g. Enlightenment's cube), not the
+    // claimed overhang. Falls back to the piece root when nothing highlights.
+    static Vector3 ComputeGroupCenter(ActiveSynergy active, ICellHighlightFilter filter,
+                                      GridSystem grid, Vector3 fallback)
+    {
+        if (active?.claimedPieces == null) return fallback;
+        Vector3 sum = Vector3.zero;
+        int n = 0;
+        foreach (var piece in active.claimedPieces)
+        {
+            if (piece?.cells == null) continue;
+            for (int i = 0; i < piece.cells.Length; i++)
+            {
+                var c = piece.cells[i];
+                if (filter == null || filter.ShouldHighlight(c))
+                {
+                    sum += grid.GridToWorld(c);
+                    n++;
+                }
+            }
+        }
+        return n > 0 ? sum / n : fallback;
+    }
+
+    // Writes _BaseColor + _GroupOffset in one MPB pass (keeps GPU instancing
+    // friendly; never instantiates a per-renderer material).
+    static void ApplyCellMpb(Renderer r, Color color, Vector3 groupOffsetOS)
+    {
+        if (r == null) return;
+        if (_mpb == null) _mpb = new MaterialPropertyBlock();
+        r.GetPropertyBlock(_mpb);
+        _mpb.SetColor(_BaseColorID, color);
+        _mpb.SetVector(_GroupOffsetID, new Vector4(groupOffsetOS.x, groupOffsetOS.y, groupOffsetOS.z, 0f));
+        r.SetPropertyBlock(_mpb);
     }
 }
