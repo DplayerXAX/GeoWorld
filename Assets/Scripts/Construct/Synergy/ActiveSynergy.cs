@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using UnityEngine;
 
 // Live record of one rule currently fired.
 //
@@ -12,7 +13,7 @@ public sealed class ActiveSynergy
     public readonly SynergyRule rule;
     public HashSet<PlacedPiece> claimedPieces;
     public int tier;
-
+    public Dictionary<PlacedPiece, GameObject> spawnedMap = new();
     // Bumped by SynergyEvaluator whenever this active's `claimedPieces` is
     // mutated (e.g. piece removed from board). If false at validation time
     // AND board.VersionFor(rule.color) hasn't changed, the IsStillSatisfied

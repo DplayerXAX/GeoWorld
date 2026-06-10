@@ -36,7 +36,7 @@ public class DevPanel : MonoBehaviour
         if (Input.GetKeyDown(toggleKey))    _visible = !_visible;
         if (Input.GetKeyDown(slowMoKey))    Time.timeScale = 0.25f;
         if (Input.GetKeyDown(normalKey))    Time.timeScale = 1f;
-        if (Input.GetKeyDown(fastFwdKey))   Time.timeScale = 4f;
+        if (Input.GetKeyDown(fastFwdKey))   Time.timeScale = 2f;
         if (Input.GetKeyDown(quickSaveKey)) QuickSave();
         if (Input.GetKeyDown(quickLoadKey)) QuickLoad();
         if (Input.GetKeyDown(browseKey))    ToggleBrowse();
@@ -114,7 +114,7 @@ public class DevPanel : MonoBehaviour
         GUILayout.BeginHorizontal();
         if (GUILayout.Button("0.25x", _btn)) Time.timeScale = 0.25f;
         if (GUILayout.Button("1x",    _btn)) Time.timeScale = 1f;
-        if (GUILayout.Button("4x",    _btn)) Time.timeScale = 4f;
+        if (GUILayout.Button("2x",    _btn)) Time.timeScale = 2f;
         GUILayout.EndHorizontal();
 
         GUILayout.Space(6);

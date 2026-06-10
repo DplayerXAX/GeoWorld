@@ -942,6 +942,7 @@ GameObject:
   m_Component:
   - component: {fileID: 351851393}
   - component: {fileID: 351851392}
+  - component: {fileID: 351851394}
   m_Layer: 0
   m_Name: SynergyEvaluator
   m_TagString: Untagged
@@ -984,6 +985,26 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &351851394
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 351851391}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6be019429c7027a4a83572b2e73c3913, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::SynergyActivationPulse
+  pulseOnTierUp: 1
+  pulseMaterial: {fileID: 0}
+  useThemeColor: 1
+  pulseColor: {r: 1, g: 1, b: 1, a: 1}
+  startAlpha: 0.5
+  expandScale: 1.8
+  duration: 0.5
+  riseHeight: 0
 --- !u!1 &410087039
 GameObject:
   m_ObjectHideFlags: 0
@@ -2621,7 +2642,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ResourceManager
   balance: {fileID: 11400000, guid: 5d6ea2d422ee8524d9d9f084e3920c53, type: 2}
-  testing: 0
+  testing: 1
   startingBlockCurrency: 120
   blockCurrencyPerRound: 22
   cellBasePrice: 10

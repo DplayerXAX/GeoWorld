@@ -1,4 +1,4 @@
-Shader "GeoWorld/Synergy/RadiantFrames"
+Shader "GeoWorld/Synergy/RadiantFrames_SolidBase"
 {
     Properties
     {
@@ -6,6 +6,7 @@ Shader "GeoWorld/Synergy/RadiantFrames"
         [HDR] _CoreColor     ("Core Glow (Blinding White)", Color) = (1.5, 2.2, 2.5, 1.0)
         _InnerColor          ("Vortex Inner (Electric Cyan)", Color) = (0.2, 0.7, 1.0, 1.0)
         _OuterColor          ("Vortex Outer (Deep Sapphire)", Color) = (0.04, 0.12, 0.35, 1.0)
+        _BgColor             ("Abyss Background (Deep Blue)", Color) = (0.01, 0.03, 0.12, 1.0) // 新增：深蓝底色
         
         [Header(3D Vortex Geometry)]
         _Layers              ("Vortex Density (Layers)", Range(4, 16)) = 10
@@ -25,20 +26,22 @@ Shader "GeoWorld/Synergy/RadiantFrames"
 
         [Header(Raymarching Settings)]
         _MaxSteps            ("Max Ray Steps", Integer) = 64
+
+        [HideInInspector] _GroupOffset ("Group Offset (OS)", Vector) = (0, 0, 0, 0)
     }
-    
+
     SubShader
     {
-        Tags { "RenderType" = "Transparent" "Queue" = "Transparent" "RenderPipeline" = "UniversalPipeline" }
-        
+        Tags { "RenderType" = "Opaque" "Queue" = "Geometry" "RenderPipeline" = "UniversalPipeline" }
+
         Pass
         {
             Name "VolumeRaymarching"
             Tags { "LightMode" = "UniversalForward" }
 
-            Blend SrcAlpha OneMinusSrcAlpha 
-            ZWrite Off
-            Cull Front
+            Blend One Zero  
+            ZWrite On      
+            Cull Front     
 
             HLSLPROGRAM
             #pragma vertex Vert
@@ -52,6 +55,7 @@ Shader "GeoWorld/Synergy/RadiantFrames"
                 float4 _CoreColor;
                 float4 _InnerColor;
                 float4 _OuterColor;
+                float4 _BgColor; 
                 float  _Layers;
                 float  _ScaleMultiplier;
                 float  _RotationPerLayer;
@@ -63,19 +67,11 @@ Shader "GeoWorld/Synergy/RadiantFrames"
                 float  _CrystalGloss;
                 float  _GlowIntensity;
                 int    _MaxSteps;
+                float4 _GroupOffset;
             CBUFFER_END
 
-            struct Attributes
-            {
-                float4 positionOS : POSITION;
-            };
-
-            struct Varyings
-            {
-                float4 positionCS : SV_POSITION;
-                float3 positionWS : TEXCOORD0;
-                float3 positionOS : TEXCOORD1;
-            };
+            struct Attributes { float4 positionOS : POSITION; };
+            struct Varyings   { float4 positionCS : SV_POSITION; float3 positionWS : TEXCOORD0; float3 positionOS : TEXCOORD1; };
 
             Varyings Vert(Attributes IN)
             {
@@ -107,26 +103,23 @@ Shader "GeoWorld/Synergy/RadiantFrames"
 
             float2 MapInternalVolume(float3 p)
             {
+                p += _GroupOffset.xyz;
                 float minDist = 1000.0;
                 float layerZ = 0.0;
-
                 float time = _Time.y;
                 float progress = frac(time * _ExpandSpeed);
                 float t = time * _RotateSpeed;
-
                 int maxLayers = (int)_Layers;
 
                 [unroll(16)]
                 for(int i = 0; i < 16; i++)
                 {
                     if (i >= maxLayers) break;
-
                     float z = float(i) - progress;
                     if (z < -0.5) continue; 
 
                     float scale = 0.1 * pow(_ScaleMultiplier, z);
                     float angle = z * _RotationPerLayer + t;
-
                     float3 q = Rotate3D(p, angle);
                     
                     float thickness = scale * _FrameThickness;
@@ -172,7 +165,7 @@ Shader "GeoWorld/Synergy/RadiantFrames"
                 float3 boxMax = float3( 0.5,  0.5,  0.5);
 
                 float2 hitAABB = IntersectAABB(rayOriginOS, rayDirOS, boxMin, boxMax);
-                if(hitAABB.x > hitAABB.y || hitAABB.y < 0.0) return half4(0,0,0,0);
+                if(hitAABB.x > hitAABB.y || hitAABB.y < 0.0) return half4(_BgColor.rgb, 1.0);
 
                 float tStart = max(hitAABB.x, 0.0);
                 float tEnd   = hitAABB.y;
@@ -181,7 +174,6 @@ Shader "GeoWorld/Synergy/RadiantFrames"
                 float hitCrystal = 0.0;
                 float2 finalMapData = float2(0, 0);
                 float3 hitPosOS = float3(0,0,0);
-                
                 float accumulatedGlow = 0.0;
 
                 [loop]
@@ -241,9 +233,11 @@ Shader "GeoWorld/Synergy/RadiantFrames"
                 }
 
                 float edgeFade = smoothstep(0.0, 0.05, tEnd - currentT) * smoothstep(0.0, 0.05, currentT - tStart);
-                alpha *= edgeFade;
+                float finalAlpha = saturate(alpha * edgeFade);
 
-                return half4(finalColor, saturate(alpha));
+                half3 compositedColor = finalColor * finalAlpha + _BgColor.rgb * (1.0 - finalAlpha);
+
+                return half4(compositedColor, 1.0);
             }
             ENDHLSL
         }

@@ -23,10 +23,22 @@ Shader "GeoWorld/Synergy/HarmonyCore_GlassyVolume_Scaleable"
         _StepSize              ("Ray Step Size", Range(0.01, 0.1)) = 0.02
         
         _VolumeScale           ("Volume Scale", Range(0.5, 5.0)) = 1.0
+
+        // Set per-renderer via MaterialPropertyBlock by CellMaterialVisualizer.
+        // Shifts this cube's raymarch sampling into a GROUP-shared space so the
+        // whole synergy reads as one continuous crystal (not one per cube).
+        [HideInInspector] _GroupOffset ("Group Offset (OS)", Vector) = (0, 0, 0, 0)
     }
 
     SubShader
     {
+        // Transparent queue: a glassy raymarched volume that must blend over the
+        // skybox/scene, so it renders AFTER the skybox (blends over sky, not
+        // black) and with ZWrite Off so the GROUP-shared volume stays continuous
+        // (a front cube's empty space reveals the volume in the cubes behind it).
+        // The cube's cartoon block outline (inverse-hull material, slot 1) is
+        // stripped by CellMaterialVisualizer while the synergy is active, so
+        // there is no opaque hull left to bleed dark through the transparency.
         Tags { "RenderType" = "Transparent" "Queue" = "Transparent" "RenderPipeline" = "UniversalPipeline" }
 
         Pass
@@ -34,7 +46,7 @@ Shader "GeoWorld/Synergy/HarmonyCore_GlassyVolume_Scaleable"
             Name "VolumeRaymarching"
             Tags { "LightMode" = "UniversalForward" }
 
-            Blend SrcAlpha OneMinusSrcAlpha 
+            Blend SrcAlpha OneMinusSrcAlpha
             ZWrite Off
             Cull Front
 
@@ -52,7 +64,8 @@ Shader "GeoWorld/Synergy/HarmonyCore_GlassyVolume_Scaleable"
                 float  _Glossiness, _Specular, _GrainAmount;
                 int    _MaxSteps;
                 float  _StepSize;
-                float  _VolumeScale;      
+                float  _VolumeScale;
+                float4 _GroupOffset;
             CBUFFER_END
 
             struct Attributes
@@ -126,20 +139,21 @@ Shader "GeoWorld/Synergy/HarmonyCore_GlassyVolume_Scaleable"
 
             float MapInternalVolume(float3 p)
             {
+                p += _GroupOffset.xyz;
+
                 float3 scaledP = p / _VolumeScale;
-                
+    
                 float t = _Time.y * _TwistSpeed;
                 float theta = scaledP.y * 3.0 - t;
                 float c = cos(theta); float s = sin(theta);
                 float2x2 rot = float2x2(c, -s, s, c);
-                
+    
                 float3 q = scaledP;
                 q.xz = mul(rot, q.xz);
 
-                float crystal = sdOctahedron(q, 0.40);
-                float noiseMask = GlassyFBM(q * 5.0 + float3(0, t * 0.5, 0), _GlassSharpness, _ShardSteps);
-                
-                return crystal + (noiseMask - 0.5) * 0.3;
+                float noiseMask = GlassyFBM(q * 2.5 + float3(0, t * 0.5, 0), _GlassSharpness, _ShardSteps);
+    
+                return noiseMask - 0.55; 
             }
 
             float3 CalcInternalNormal(float3 p)

@@ -470,6 +470,89 @@ public class GameFlowManager : MonoBehaviour
         return null;
     }
 
+    // ── Wave forecast (UI) ────────────────────────────────────────────────────
+    // Display-ready preview of the NEXT wave, computed WITHOUT advancing the run
+    // RNG (save/restore xoshiro state around the generator). Surfaced by the
+    // spawn-point info panel. Deterministic from current state, so repeated
+    // calls within the same Build phase return identical results.
+    public struct WaveForecast
+    {
+        public bool valid;          // false → no generator/authored wave available
+        public int  waveNumber;     // perceived, 1-based count of runs incl. this one
+        public int  round;          // difficulty tier driving wave budget (roundIndex)
+        public int  totalCount;     // enemies emitted per spawn point this wave
+        public List<WaveGenerator.WaveForecastGroup> groups;
+    }
+
+    // 1-based ordinal of the upcoming run. Each Run() is one wave from the
+    // player's POV, but roundIndex only ticks every runsPerEndpoint runs — so
+    // this derived counter is the monotonic "which wave is this" number for UI.
+    public int UpcomingWaveNumber =>
+        roundIndex * Mathf.Max(1, runsPerEndpoint) + _runsSinceLastEndpoint + 1;
+
+    public WaveForecast GetNextWaveForecast()
+    {
+        var fc = new WaveForecast
+        {
+            valid      = false,
+            waveNumber = UpcomingWaveNumber,
+            round      = roundIndex,
+            totalCount = 0,
+            groups     = new List<WaveGenerator.WaveForecastGroup>(),
+        };
+
+        // 1. Authored override for this round.
+        if (waves != null && waves.Count > 0)
+        {
+            int i = roundIndex;
+            if (i >= waves.Count && loopWaves) i %= waves.Count;
+            if (i >= 0 && i < waves.Count && waves[i] != null)
+            {
+                AggregateGroups(waves[i].groups, fc.groups);
+                fc.totalCount = SumCounts(fc.groups);
+                fc.valid = true;
+                return fc;
+            }
+        }
+
+        // 2. Procedural — non-destructive: save → forecast → restore.
+        if (waveGenerator != null)
+        {
+            var rng   = EnsureRng();
+            var saved = rng.SaveState();
+            fc.groups = waveGenerator.Forecast(roundIndex, rng);
+            rng.LoadState(saved);
+            fc.totalCount = SumCounts(fc.groups);
+            fc.valid = true;
+            return fc;
+        }
+
+        // 3. No generator / authored waves → leave invalid; UI shows a fallback.
+        return fc;
+    }
+
+    static int SumCounts(List<WaveGenerator.WaveForecastGroup> groups)
+    {
+        int n = 0;
+        if (groups != null) foreach (var g in groups) n += g.count;
+        return n;
+    }
+
+    // Merge authored SpawnGroups into name-aggregated forecast lines, resolving
+    // the display name from the prefab (authored waves carry a real prefab).
+    static void AggregateGroups(List<SpawnGroup> src, List<WaveGenerator.WaveForecastGroup> dst)
+    {
+        if (src == null) return;
+        foreach (var g in src)
+        {
+            if (g == null || g.count <= 0) continue;
+            string name = g.prefab != null ? g.prefab.name : "Enemy";
+            int at = dst.FindIndex(e => e.name == name);
+            if (at >= 0) { var e = dst[at]; e.count += g.count; dst[at] = e; }
+            else dst.Add(new WaveGenerator.WaveForecastGroup { name = name, count = g.count });
+        }
+    }
+
     public bool TryGetCurrentPath(out List<FaceNode> path)
     {
         graph.SetData(gridSystem);
@@ -628,7 +711,7 @@ public class GameFlowManager : MonoBehaviour
         // the picker UI overlays on top. If you later want it to block input,
         // gate StartTurn() behind the picker's onPicked callback.
         UpgradeManager.Instance?.OfferEndOfWave(EnsureRng());
-
+        Time.timeScale = 1f;
         StartTurn();
     }
 

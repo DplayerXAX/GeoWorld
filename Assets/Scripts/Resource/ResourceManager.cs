@@ -6,33 +6,33 @@ using UnityEngine;
 //
 // Two resource pools:
 //
-//   blockCurrency  �?spent at the block shop to buy path blocks.
+//   blockCurrency  spent at the block shop to buy path blocks.
 //
 //   Shop price formula (computed once per shop spawn, stored in cachedPrice):
 //     price = cells × cellBasePrice × rarityMult × typeMult × roundMult × fluctuation
 //       rarityMult : Common 1.0 / Uncommon 1.4 / Rare 2.0
 //       typeMult   : Lift 1.4 / Shadow 0.85 / others 1.0
 //       roundMult  : 1 + RoundIndex × roundPriceScale
-//       fluctuation: Random [0.82, 1.22], rolled once at shop spawn �?Slay the Spire style
+//       fluctuation: Random [0.82, 1.22], rolled once at shop spawn Slay the Spire style
 //
-//   turretCurrency �?spent by the turret system (another team).
+//   turretCurrency spent by the turret system (another team).
 //                    Slowly regenerates during combat.
 //
 // INCOME
-//   GrantRoundIncome() �?called by GameFlowManager.StartTurn() each build phase.
+//   GrantRoundIncome() called by GameFlowManager.StartTurn() each build phase.
 //   Turret currency regenerates at turretRegenPerSecond while combat is active.
 //
 // PHASE LOCKING (driven by GameFlowManager)
-//   SetCombatActive(true)  �?call when Running phase starts (enables regen)
-//   SetCombatActive(false) �?call when transitioning back to Build
+//   SetCombatActive(true)  call when Running phase starts (enables regen)
+//   SetCombatActive(false) call when transitioning back to Build
 //
 // UI
 //   Subscribe to OnBlockCurrencyChanged(int) and OnTurretCurrencyChanged(int).
 //   Subscribe to OnInsufficientFunds(BlockType) for "can't afford" feedback.
 //
 // BATTLE-SYSTEM API (other team)
-//   OnEnemyPassedBlock(BlockType) �?earns turret currency per block walked over
-//   OnWaveComplete()              �?wave-end bonus + triggers round income
+//   OnEnemyPassedBlock(BlockType) earns turret currency per block walked over
+//   OnWaveComplete()              wave-end bonus + triggers round income
 // ─────────────────────────────────────────────────────────────────────────────
 public class ResourceManager : MonoBehaviour
 {
@@ -49,7 +49,7 @@ public class ResourceManager : MonoBehaviour
     [Tooltip("Block currency earned at the start of each build phase.")]
     public int blockCurrencyPerRound = 30;
 
-    [Header("Block Shop �?Pricing")]
+    [Header("Block Shop pricing")]
     [Tooltip("Base price per cell. Single=10, I2=20, L4=40 before modifiers.")]
     public int cellBasePrice = 10;
     [Tooltip("Price multiplier increase per completed round. 0.06 = +6%/round.")]
@@ -80,7 +80,7 @@ public class ResourceManager : MonoBehaviour
     float _turretRegenAccum;
     bool  _combatActive;
 
-    // Number of each type currently placed on the grid �?drives price scaling.
+    // Number of each type currently placed on the grid drives price scaling.
     readonly Dictionary<BlockType, int> _placedCounts = new();
 
     // ── Lifecycle ─────────────────────────────────────────────────────────────
@@ -167,7 +167,7 @@ public class ResourceManager : MonoBehaviour
         _                    => 1.0f
     };
 
-    // Lift enables vertical routing �?longer paths �?stronger blocks �?pricier.
+    // Lift enables vertical routing longer paths stronger blocks pricier.
     // Shadow is slightly cheaper since it adds less path utility.
     static float TypeMult(BlockType t) => t switch
     {
@@ -179,7 +179,7 @@ public class ResourceManager : MonoBehaviour
     /// <summary>
     /// Computes the final shop price for <paramref name="data"/>.
     /// <paramref name="fluctuation"/> is a one-time random [0.82, 1.22] rolled
-    /// at shop spawn time (Slay-the-Spire style) �?pass the value stored on
+    /// at shop spawn time (Slay-the-Spire style) pass the value stored on
     /// SelectableBlock.cachedPrice rather than calling this on every frame.
     /// </summary>
     public int ComputePrice(BlockData data, float fluctuation)
@@ -223,7 +223,7 @@ public class ResourceManager : MonoBehaviour
     /// Deducts <paramref name="price"/> from the pool that matches <paramref name="type"/>:
     /// turret currency for Turret blocks, block currency for everything else.
     /// Returns false (and fires OnInsufficientFunds) if insufficient.
-    /// Only call for NEW purchases �?repositioning is always free.
+    /// Only call for NEW purchases repositioning is always free.
     /// </summary>
     public bool TryBuy(int price, BlockType type)
     {
@@ -245,7 +245,7 @@ public class ResourceManager : MonoBehaviour
             _blockCurrency -= price;
             OnBlockCurrencyChanged?.Invoke(_blockCurrency);
         }
-        Debug.Log($"[Resource] Bought {type} for {price} ¤ �?{(isTurret ? _turretCurrency : _blockCurrency)} remaining");
+        Debug.Log($"[Resource] Bought {type} for {price} ¤ {(isTurret ? _turretCurrency : _blockCurrency)} remaining");
         return true;
     }
 
@@ -262,7 +262,7 @@ public class ResourceManager : MonoBehaviour
 
     /// <summary>
     /// Call when a block is removed from the grid (picked up for reposition or destroyed).
-    /// Decrements the count �?temporarily lowers the price for that type.
+    /// Decrements the count temporarily lowers the price for that type.
     /// </summary>
     public void OnBlockRemoved(BlockType type)
     {
@@ -311,5 +311,5 @@ public class ResourceManager : MonoBehaviour
         GrantRoundIncome();
     }
 
-    // OnGUI removed �?use DebugUI.cs for all display.
+    // OnGUI removed use DebugUI.cs for all display.
 }

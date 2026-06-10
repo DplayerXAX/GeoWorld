@@ -99,7 +99,7 @@ public class PlacementController : MonoBehaviour
     private Quaternion lastObjectRot;
     private Vector3Int[] lastObjectCells;
 
-    // Tray tracking �?kept so we can show/hide tokens on edit mode enter/exit.
+    // Tray tracking kept so we can show/hide tokens on edit mode enter/exit.
     private List<GameObject> trayBlocks = new();
 
     // Double-click detection for placed-block and endpoint focus.
@@ -121,7 +121,7 @@ public class PlacementController : MonoBehaviour
         public Quaternion   rotation;
         public Vector3Int[] cells;      // world-grid cells after the action
         public Vector3      worldCenter;
-        public int          pricePaid;  // > 0 only for NewPlace �?refunded on undo
+        public int          pricePaid;  // > 0 only for NewPlace refunded on undo
         // Reposition only: state before the move
         public Vector3Int[] prevCells;
         public Vector3      prevCenter;
@@ -154,6 +154,15 @@ public class PlacementController : MonoBehaviour
     GameObject _rangeSphere;
 
     GUIStyle _panelBox, _panelTitle, _panelLabel, _panelValue, _panelButton;
+
+    // ── Spawn-point ("起点") selection → wave-intel panel ──────────────────────
+    // When the player clicks a start endpoint we show the upcoming wave's
+    // forecast instead of the block/turret stats panel. Cached per round so the
+    // (non-destructive) forecast isn't recomputed every OnGUI pass.
+    GameObject _selectedEndpoint;
+    bool       _selectedEndpointIsStart;
+    GameFlowManager.WaveForecast _startForecast;
+    int        _startForecastRound = int.MinValue;
 
     void Awake()
     {
@@ -338,6 +347,11 @@ public class PlacementController : MonoBehaviour
         if (_panelPickUpRequested) { _panelPickUpRequested = false; PickUpSelected(); }
         if (_panelSellRequested)   { _panelSellRequested   = false; SellSelected();   }
 
+        if (Input.GetKeyDown(KeyCode.R)) 
+        {
+            TryRefreshShop();
+
+        }
         if (Input.GetMouseButtonDown(0))
         {
             if (IsPointerOverSelectionPanel())
@@ -351,7 +365,7 @@ public class PlacementController : MonoBehaviour
             }
             else if (ShopController.Instance != null && ShopController.Instance.TryHandleClick())
             {
-                // Shop viewport consumed the click �?don't run main-camera selection.
+                // Shop viewport consumed the click don't run main-camera selection.
             }
             else
             {
@@ -359,7 +373,7 @@ public class PlacementController : MonoBehaviour
             }
         }
 
-        // Delete �?cancel current hold (Edit mode) or remove selected placed block.
+        // Delete cancel current hold (Edit mode) or remove selected placed block.
         if (Input.GetKeyDown(KeyCode.Delete))
         {
             if (mode == PlacementMode.Edit)
@@ -368,7 +382,7 @@ public class PlacementController : MonoBehaviour
                 TryDelete();
         }
 
-        // Ctrl+Z �?undo last placement or deletion.
+        // Ctrl+Z undo last placement or deletion.
         if (Input.GetKeyDown(KeyCode.Z)
             && (Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl)))
             TryUndo();
@@ -397,7 +411,7 @@ public class PlacementController : MonoBehaviour
         if (cam != null && cam.useOrthographic)
         {
             // Ortho: scroll moves the build plane up/down. Discrete steps so
-            // each notch == one cell �?visible AND grid-snapped.
+            // each notch == one cell visible AND grid-snapped.
             int step  = s > 0f ? 1 : -1;
             _buildY   = Mathf.Clamp(_buildY + step, buildYRange.x, buildYRange.y);
         }
@@ -431,9 +445,9 @@ public class PlacementController : MonoBehaviour
     }
 
     // Edit mode only.
-    // A / D �?move block left/right relative to camera's horizontal facing
-    // W / S �?move block UP / DOWN in world Y
-    // Q / E �?move block forward / back relative to camera's horizontal facing
+    // A / D move block left/right relative to camera's horizontal facing
+    // W / S move block UP / DOWN in world Y
+    // Q / E move block forward / back relative to camera's horizontal facing
     void HandleKeyboardOffset()
     {
         Vector3Int right   = SnapToHorizontalAxis(cam.transform.right);
@@ -569,7 +583,7 @@ public class PlacementController : MonoBehaviour
         }
         else if (activePhysicsObject != null && _pendingShopPrice > 0)
         {
-            // Player grabbed a shop item but cancelled before placing �?give it back.
+            // Player grabbed a shop item but cancelled before placing give it back.
             ShopController.Instance?.RestoreItem(activePhysicsObject);
             _pendingShopPrice   = 0;
             currentBlock        = null;
@@ -593,13 +607,14 @@ public class PlacementController : MonoBehaviour
         if (!Physics.Raycast(ray, out RaycastHit hit))
         {
             // Empty-space click — dismiss any current selection (Arknights-style).
-            selectedInstance = null;
+            selectedInstance  = null;
+            _selectedEndpoint = null;
             UpdateHighlight(null);
             _lastClickTarget = null;
             return;
         }
 
-        // --- Tray token: single click �?immediately grab and enter Edit ---
+        // --- Tray token: single click immediately grab and enter Edit ---
         var sb = hit.transform.GetComponentInParent<SelectableBlock>();
         if (sb != null)
         {
@@ -623,6 +638,7 @@ public class PlacementController : MonoBehaviour
                 : MpbColor.Get(sb.GetComponentInChildren<Renderer>());
             activePhysicsObject = sb.gameObject;
             selectedInstance    = null;
+            _selectedEndpoint   = null;
 
             UpdateHighlight(activePhysicsObject);
             EnterEditMode(null);
@@ -636,6 +652,14 @@ public class PlacementController : MonoBehaviour
             UpdateHighlight(ep.gameObject);
             selectedInstance    = null;
             activePhysicsObject = null;
+
+            // Track the endpoint so the spawn-intel panel can show the upcoming
+            // wave when it's a START point. Endpoints are named "startBlock" /
+            // "endBlock" by LevelEndpointGenerator.
+            _selectedEndpoint        = ep.gameObject;
+            _selectedEndpointIsStart = ep.gameObject.name.IndexOf(
+                "start", System.StringComparison.OrdinalIgnoreCase) >= 0;
+            _startForecastRound      = int.MinValue;   // force a fresh forecast
 
             bool isDouble = ep.gameObject == _lastClickTarget
                          && Time.time - _lastClickTime < DoubleClickInterval;
@@ -655,9 +679,10 @@ public class PlacementController : MonoBehaviour
         if (instance != null)
         {
             selectedInstance    = instance;
+            _selectedEndpoint   = null;
             currentBlock        = instance.data;
             currentSynergyColor = instance.color;
-            // Re-derive tint from synergy color when present �?keeps placed
+            // Re-derive tint from synergy color when present keeps placed
             // block visuals exactly on-palette across pickup→replace cycles.
             currentColor        = instance.color != BlockColor.None
                 ? BlockColorPalette.Get(instance.color)
@@ -800,6 +825,16 @@ public class PlacementController : MonoBehaviour
 
     void DrawSelectionPanel()
     {
+        // Spawn point ("起点") selected → show the upcoming-wave intel panel
+        // instead of block/turret stats. Hidden during combat (forecast is for
+        // the NEXT wave, which is ambiguous mid-run).
+        if (mode == PlacementMode.Select && _selectedEndpoint != null && _selectedEndpointIsStart
+            && (GameFlowManager.Instance == null || GameFlowManager.Instance.phase != GamePhase.Running))
+        {
+            DrawStartPanel();
+            return;
+        }
+
         var ins = selectedInstance;
         if (mode != PlacementMode.Select || ins == null
             || ins.visualObject == null || ins.data == null)
@@ -836,6 +871,70 @@ public class PlacementController : MonoBehaviour
         GUILayout.EndArea();
     }
 
+    // Spawn-point intel panel: upcoming wave number, total enemy count, and the
+    // per-type breakdown ("Runner ×7"). No pick-up / sell — endpoints aren't
+    // editable. Forecast is cached per round (non-destructive to the run RNG).
+    void DrawStartPanel()
+    {
+        EnsurePanelStyles();
+
+        var gfm   = GameFlowManager.Instance;
+        int round = gfm != null ? gfm.RoundIndex : 0;
+        if (gfm != null && _startForecastRound != round)
+        {
+            _startForecast      = gfm.GetNextWaveForecast();
+            _startForecastRound = round;
+        }
+        var fc = _startForecast;
+
+        float panelW = 236f;
+        float panelH = EstimateStartPanelHeight(fc);
+        float margin = 12f;
+        float x = Screen.width  - panelW - margin;
+        float y = (Screen.height - panelH) * 0.5f;
+        _panelRect = new Rect(x, y, panelW, panelH);
+
+        GUILayout.BeginArea(_panelRect, GUIContent.none, _panelBox);
+
+        GUILayout.Label("Spawn Point", _panelTitle);
+        PanelDivider();
+
+        PanelRow("Wave",    fc.waveNumber.ToString());
+        PanelRow("Enemies", fc.valid ? fc.totalCount.ToString() : "—");
+
+        GUILayout.Space(4f);
+        GUILayout.Label("Incoming", _panelLabel);
+        GUILayout.Space(2f);
+
+        if (fc.valid && fc.groups != null && fc.groups.Count > 0)
+        {
+            for (int i = 0; i < fc.groups.Count; i++)
+            {
+                GUILayout.BeginHorizontal();
+                GUILayout.Label(fc.groups[i].name, _panelValue);
+                GUILayout.FlexibleSpace();
+                GUILayout.Label("×" + fc.groups[i].count, _panelValue);
+                GUILayout.EndHorizontal();
+            }
+        }
+        else
+        {
+            GUILayout.Label("Composition unknown", _panelLabel);
+        }
+
+        GUILayout.EndArea();
+    }
+
+    float EstimateStartPanelHeight(GameFlowManager.WaveForecast fc)
+    {
+        const float row = 22f, title = 30f, divider = 12f, padding = 28f;
+        int header = 1;   // "Incoming" sub-header
+        int lines  = (fc.valid && fc.groups != null && fc.groups.Count > 0)
+            ? fc.groups.Count : 1;
+        // rows: Wave + Enemies (2) + header + per-type lines.
+        return padding + title + divider + (2 + header + lines) * row + 10f;
+    }
+
     // Slightly-generous content-height estimate so the panel hugs its content
     // (no big empty gap) without ever clipping the bottom buttons.
     float EstimatePanelHeight(PlacedBlockInstance ins, bool isTurret)
@@ -857,7 +956,7 @@ public class PlacementController : MonoBehaviour
         }
         else
         {
-            rows = 4;       // Shape, Rarity, Cells + synergy row
+            rows = 3;       // Rarity, Cells + synergy row
             if (ins.color != BlockColor.None)
             {
                 string d = BlockColorPalette.Description(ins.color);
@@ -876,8 +975,7 @@ public class PlacementController : MonoBehaviour
     void DrawBlockStats(PlacedBlockInstance ins)
     {
         var d = ins.data;
-        PanelRow("Shape",  string.IsNullOrEmpty(d.ShapeName) ? "Custom" : d.ShapeName);
-        PanelRow("Rarity", d.rarity.ToString());
+        //PanelRow("Rarity", d.rarity.ToString());
         PanelRow("Cells",  ins.occupiedCells.Count.ToString());
 
         GUILayout.Space(4f);
@@ -1123,6 +1221,7 @@ public class PlacementController : MonoBehaviour
     void EnterEditMode(Vector3? focusPos)
     {
         mode = PlacementMode.Edit;
+        _selectedEndpoint = null;   // leaving Select hides the spawn-intel panel
         SetTrayVisible(false);  // hide tokens while placing so they don't clutter the view
         previewParent.gameObject.SetActive(currentBlock != null);
         if (focusPos == null) manualOffset = Vector3Int.zero;
@@ -1142,7 +1241,7 @@ public class PlacementController : MonoBehaviour
         var cells = GetRotatedCells();
         if (cells.Length == 0) return;
 
-        // Priority-ordered checks: combat lock �?path block �?funds �?geometry.
+        // Priority-ordered checks: combat lock path block funds geometry.
         var  gfm       = GameFlowManager.Instance;
         bool inRunning = gfm != null && gfm.phase == GamePhase.Running;
         bool isTurret  = TurretTypes.Is(currentBlock.blockType);
@@ -1259,7 +1358,7 @@ public class PlacementController : MonoBehaviour
         // Track placed count for shop price scaling (both new and repositioned blocks).
         ResourceManager.Instance?.OnBlockPlaced(ins.data.blockType);
 
-        // Auto-check path after every block placement �?updates live preview line.
+        // Auto-check path after every block placement updates live preview line.
         GameFlowManager.Instance?.EvaluateGrid();
 
         ArpeggiatorManager.Instance?.PlayAmbientNote(
@@ -1321,7 +1420,7 @@ public class PlacementController : MonoBehaviour
         for (int i = 0; i < previewCubes.Count; i++)
             previewCubes[i].SetActive(i < cells.Length);
 
-        // Valid �?green, invalid �?red. Preview always reads as a placement hint;
+        // Valid green, invalid red. Preview always reads as a placement hint;
         // the random per-block color is applied only on successful placement.
         Color tint = valid
             ? new Color(0.25f, 1.00f, 0.35f, 0.55f)
@@ -1350,7 +1449,7 @@ public class PlacementController : MonoBehaviour
     // grow animation. Used by snapshot restore. Caller is responsible for
     // ensuring `worldCells` are unoccupied; this method does not validate.
     //
-    // `synergyColor` defaults to None �?snapshot restore should serialize and
+    // `synergyColor` defaults to None snapshot restore should serialize and
     // pass the original BlockColor so reloaded boards keep their synergies.
     public PlacedBlockInstance PlaceBlockDirect(
         BlockData data, Vector3Int[] worldCells, Quaternion rotation, Color color,
@@ -1408,7 +1507,7 @@ public class PlacementController : MonoBehaviour
 
     bool CanPlace(Vector3Int bp, Vector3Int[] cs) => Validate(bp, cs) == PlaceFailureReason.None;
 
-    // Geometric validation only �?combat/funds checks live in TryPlace so they
+    // Geometric validation only combat/funds checks live in TryPlace so they
     // can be reported in priority order.
     PlaceFailureReason Validate(Vector3Int bp, Vector3Int[] cs)
     {
@@ -1450,7 +1549,7 @@ public class PlacementController : MonoBehaviour
     {
         if (selectedInstance == null) return;
 
-        // Phase gate �?same rule as picking up a block.
+        // Phase gate same rule as picking up a block.
         if (GameFlowManager.Instance?.phase == GamePhase.Running
             && !TurretTypes.Is(selectedInstance.data?.blockType ?? BlockType.Empty))
         {
@@ -1531,14 +1630,14 @@ public class PlacementController : MonoBehaviour
         GameFlowManager.Instance?.EvaluateGrid();
     }
 
-    // ── Undo: new placement �?remove from grid, refund price ─────────────────
+    // ── Undo: new placement remove from grid, refund price ─────────────────
     void UndoNewPlace(UndoRecord rec)
     {
         if (rec.cells == null || rec.cells.Length == 0) return;
         var ins = grid.GetInstanceAt(rec.cells[0]);
         if (ins == null || ins.data != rec.data)
         {
-            Debug.LogWarning("[Undo] NewPlace target no longer matches �?skipping.");
+            Debug.LogWarning("[Undo] NewPlace target no longer matches skipping.");
             return;
         }
 
@@ -1551,14 +1650,14 @@ public class PlacementController : MonoBehaviour
             ResourceManager.Instance?.RefundBlock(rec.pricePaid);
     }
 
-    // ── Undo: reposition �?remove from new cells, restore at old cells ────────
+    // ── Undo: reposition remove from new cells, restore at old cells ────────
     void UndoReposition(UndoRecord rec)
     {
         if (rec.cells == null || rec.cells.Length == 0) return;
         var ins = grid.GetInstanceAt(rec.cells[0]);
         if (ins == null || ins.data != rec.data)
         {
-            Debug.LogWarning("[Undo] Reposition target no longer matches �?skipping.");
+            Debug.LogWarning("[Undo] Reposition target no longer matches skipping.");
             return;
         }
 
@@ -1575,10 +1674,10 @@ public class PlacementController : MonoBehaviour
         if (oldCellsFree)
             PlaceBlockFromRecord(rec.data, rec.color, rec.prevCells, rec.prevCenter, rec.prevRotation);
         else
-            Debug.LogWarning("[Undo] Reposition origin cells now occupied �?block removed without restore.");
+            Debug.LogWarning("[Undo] Reposition origin cells now occupied block removed without restore.");
     }
 
-    // ── Undo: delete �?re-place block at its old cells ────────────────────────
+    // ── Undo: delete re-place block at its old cells ────────────────────────
     void UndoDelete(UndoRecord rec)
     {
         if (rec.cells == null || rec.cells.Length == 0) return;
@@ -1589,7 +1688,7 @@ public class PlacementController : MonoBehaviour
 
         if (!cellsFree)
         {
-            Debug.LogWarning("[Undo] Delete restore cells now occupied �?cannot undo.");
+            Debug.LogWarning("[Undo] Delete restore cells now occupied cannot undo.");
             return;
         }
 
@@ -1630,7 +1729,7 @@ public class PlacementController : MonoBehaviour
     /// <summary>
     /// Called by GameFlowManager when entering the Running phase.
     /// Grows cube-by-cube along the path, each cube extending from its entry
-    /// edge in the direction of travel �?like a branch creeping forward.
+    /// edge in the direction of travel like a branch creeping forward.
     /// Off-path cubes bloom afterwards, rippling out from the nearest path cube.
     /// </summary>
     public void TriggerCombatRipple(List<FaceNode> path)
@@ -1663,7 +1762,7 @@ public class PlacementController : MonoBehaviour
         if (cubes.Count == 0) yield break;
         yield return null;
 
-        // Step 2: cell �?first index along path.
+        // Step 2: cell first index along path.
         var pathIdx = new Dictionary<Vector3Int, int>();
         if (path != null)
             for (int i = 0; i < path.Count; i++)
@@ -1742,14 +1841,14 @@ public class PlacementController : MonoBehaviour
         for (int i = 0; i < offPath.Count; i++)
         {
             float delay = offStart + (offDists[i] / maxOffDist) * offSpread;
-            // No entry direction �?cube does a uniform bloom from its centre.
+            // No entry direction cube does a uniform bloom from its centre.
             StartCoroutine(BranchSproutCube(offPath[i].t, delay, cubeDur, Vector3.zero, offPath[i].origLocalPos));
         }
     }
 
     // ── Per-cube branch growth ──────────────────────────────────────────────
     // Path cubes scale anisotropically along the entry axis, with a position
-    // offset so the back edge stays glued to the previous cube �?visually the
+    // offset so the back edge stays glued to the previous cube visually the
     // cube "extends" outward like a branch tip.
     // Off-path cubes (entryDirWorld = 0) just bloom uniformly from their centre.
     static System.Collections.IEnumerator BranchSproutCube(
@@ -1804,7 +1903,7 @@ public class PlacementController : MonoBehaviour
                 t.localScale = Vector3.one * e;
             }
 
-            // Brief brightness pulse �?wavefront passing through.
+            // Brief brightness pulse wavefront passing through.
             float bright = (1f - p) * (1f - p) * 0.7f;
             for (int i = 0; i < rc; i++)
                 if (rends[i]) MpbColor.Set(rends[i], Color.Lerp(orig[i], Color.white, bright));
@@ -1821,7 +1920,7 @@ public class PlacementController : MonoBehaviour
             if (rends[i]) MpbColor.Set(rends[i], orig[i]);
     }
 
-    // ── Growth animation: 0 �?1.12 �?1.0 with cubic ease-out ────────────────
+    // ── Growth animation: 0 1.12 1.0 with cubic ease-out ────────────────
     // Overshoot to 1.12 gives a satisfying "snap into place" feel.
     static System.Collections.IEnumerator GrowIn(GameObject obj)
     {
@@ -1841,14 +1940,14 @@ public class PlacementController : MonoBehaviour
             float scale;
             if (t < peakAt)
             {
-                // Phase 1: 0 �?peak  (ease-out cubic)
+                // Phase 1: 0 peak  (ease-out cubic)
                 float t1 = t / peakAt;
                 float e  = 1f - (1f - t1) * (1f - t1) * (1f - t1);
                 scale = e * peak;
             }
             else
             {
-                // Phase 2: peak �?1  (ease-in-out)
+                // Phase 2: peak 1  (ease-in-out)
                 float t2 = (t - peakAt) / (1f - peakAt);
                 float e  = t2 * t2 * (3f - 2f * t2);
                 scale = Mathf.Lerp(peak, 1f, e);
@@ -1873,7 +1972,7 @@ public class PlacementController : MonoBehaviour
     {
         if (sb == null || sb.data == null) return;
 
-        // Phase gate �?same rule as tray tokens.
+        // Phase gate same rule as tray tokens.
         if (GameFlowManager.Instance?.phase == GamePhase.Running
             && !TurretTypes.Is(sb.data.blockType))
         {
@@ -1944,7 +2043,7 @@ public class PlacementController : MonoBehaviour
                 ins.data, ins.color, ins.occupiedCells.ToArray());
 
             StartCoroutine(GrowIn(obj));
-            // Restore count �?OnBlockRemoved was called on pickup, balance it back.
+            // Restore count OnBlockRemoved was called on pickup, balance it back.
             ResourceManager.Instance?.OnBlockPlaced(ins.data.blockType);
         }
         else
@@ -2001,7 +2100,7 @@ public class PlacementController : MonoBehaviour
         turret.Configure(ins.data.blockType);
     }
 
-    // Turrets don't render their cube body �?they ARE the diamond beacon.
+    // Turrets don't render their cube body they ARE the diamond beacon.
     // We hide the underlying cube renderers and float a larger diamond at
     // the cell centroid so the silhouette reads as "turret" at a glance.
     void AttachTurretBeacon(PlacedBlockInstance ins)
@@ -2019,7 +2118,7 @@ public class PlacementController : MonoBehaviour
         }
         centroid = (n == 0) ? ins.visualObject.transform.position : centroid / n;
 
-        // Hide the cube meshes �?the beacon is the only visible part.
+        // Hide the cube meshes the beacon is the only visible part.
         foreach (var r in ins.visualObject.GetComponentsInChildren<Renderer>())
             r.enabled = false;
 
@@ -2070,7 +2169,7 @@ public class PlacementController : MonoBehaviour
         _ => 0,
     };
 
-    // Public palette picker �?used by ShopController so block/turret items share
+    // Public palette picker used by ShopController so block/turret items share
     // the same colour vocabulary as placed blocks.
     public Color PickPaletteColor(BlockType type)
     {
@@ -2080,7 +2179,7 @@ public class PlacementController : MonoBehaviour
         return pal[Random.Range(0, pal.Length)];
     }
 
-    // Fallback only �?most code paths read the colour from the shop item the
+    // Fallback only most code paths read the colour from the shop item the
     // player picked up. Kept consistent with the palette so any path produces
     // an in-vocabulary colour.
     Color GetRandomColor() => PickPaletteColor(BlockType.Home);

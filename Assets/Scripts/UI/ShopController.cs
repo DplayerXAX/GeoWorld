@@ -40,7 +40,7 @@ public class ShopController : MonoBehaviour
     [Tooltip("Lighting anchor for the turret half (RIGHT side of the strip).")]
     public Vector3 turretRowOffset = new Vector3( 4f, 2.5f, 0f);
 
-    [Header("Float Animation �?set to 0 for a static clickable shop")]
+    [Header("Float Animation set to 0 for a static clickable shop")]
     [Tooltip("Per-axis drift range in world units. 0 = items sit completely still.")]
     public Vector3 driftAmplitude = Vector3.zero;
     public Vector3 driftSpeed     = new Vector3(0.50f, 0.70f, 0.60f);
@@ -64,7 +64,7 @@ public class ShopController : MonoBehaviour
     public RiftShapePreset shapePreset = RiftShapePreset.Crack;
     [Tooltip("Extra polygon rotation when collapsed. 0 = no spin (recommended for clean rectangle panel).")]
     [Range(0f, 360f)] public float openSpinDegrees = 0f;
-    [Tooltip("Sprite physics outline �?only used when shapePreset = Custom.")]
+    [Tooltip("Sprite physics outline only used when shapePreset = Custom.")]
     public Sprite riftSprite;
     [Tooltip("Rotate the rift opening on-screen. 0 = naturally horizontal for the wide rectangle preset.")]
     [Range(-180f, 180f)] public float riftRotationDeg = 0f;
@@ -113,7 +113,7 @@ public class ShopController : MonoBehaviour
     // Built-in shape presets. Y axis is the long axis; rotation handled separately
     // by riftRotationDeg. All shapes are normalised so the largest |coord| = 1.
 
-    // Normalised square �?on-screen aspect comes from riftWidth × riftHeight.
+    // Normalised square on-screen aspect comes from riftWidth × riftHeight.
     static readonly Vector2[] RiftShape_Rectangle =
     {
         new(-1f,  1f),
@@ -138,7 +138,7 @@ public class ShopController : MonoBehaviour
         new(-0.38f,  0.00f), new(-0.30f,  0.35f), new(-0.15f,  0.70f),
     };
 
-    // Rounded oval �?no sharp tips, friendly silhouette.
+    // Rounded oval no sharp tips, friendly silhouette.
     static readonly Vector2[] RiftShape_Oval =
     {
         new( 0.20f,  1.00f), new( 0.45f,  0.85f), new( 0.62f,  0.60f),
@@ -181,7 +181,7 @@ public class ShopController : MonoBehaviour
     {
         public GameObject      root;
         public SelectableBlock sb;
-        public Vector3         basePos;       // anchor �?drift oscillates around this
+        public Vector3         basePos;       // anchor drift oscillates around this
         public Vector3         driftPhase;    // independent X/Y/Z phase offsets
         public Vector3         tumblePhase;
     }
@@ -195,14 +195,14 @@ public class ShopController : MonoBehaviour
     float   _expandT;           // 0=fully collapsed, 1=fully expanded (lerp'd alongside scale)
     Vector3 _currentOffset;     // animated camera offset
 
-    // Computed each Update �?used by hover/click and GL draw
+    // Computed each Update used by hover/click and GL draw
     Vector2   _riftScreenCenter;
     float     _riftScreenSize;   // legacy: max(_riftSizeX, _riftSizeY)
     float     _riftSizeX;        // half-extent in screen X
     float     _riftSizeY;        // half-extent in screen Y (multiplied by _riftScale at use site)
     Vector2[] _screenVerts;
 
-    // Counts down after a failed purchase attempt �?drives red rift edge flash.
+    // Counts down after a failed purchase attempt drives red rift edge flash.
     float _cantAffordFlash;
 
     // GL rendering
@@ -281,7 +281,7 @@ public class ShopController : MonoBehaviour
         {
             shopCam.targetTexture = _shopRT;
             shopCam.rect          = new Rect(0, 0, 1, 1);
-            // aspect auto-derived from RT dimensions �?do not set manually
+            // aspect auto-derived from RT dimensions do not set manually
         }
         if (_riftMat != null) _riftMat.mainTexture = _shopRT;
     }
@@ -343,7 +343,7 @@ public class ShopController : MonoBehaviour
         if (!Input.GetKeyDown(shopToggleKey)) return;
         var phase = GameFlowManager.Instance?.phase;
         Debug.Log($"[Shop] {shopToggleKey} | phase={phase} | expanded={_expanded}");
-        if (phase == GamePhase.Running) { Debug.Log("[Shop] blocked �?combat."); return; }
+        if (phase == GamePhase.Running) { Debug.Log("[Shop] blocked combat."); return; }
         _expanded = !_expanded;
     }
 
@@ -388,10 +388,10 @@ public class ShopController : MonoBehaviour
 
         // Y offset: collapsed state drops further toward the bottom of the
         // screen, expanded snaps back to riftScreenPos.y. Lerp via _expandT
-        // (0 collapsed �?1 expanded) so the motion mirrors the scale anim.
+        // (0 collapsed 1 expanded) so the motion mirrors the scale anim.
         float yOff = riftCollapsedYOffset * (1f - _expandT);
 
-        // Clamp center keeping the rift on screen �?but use the EFFECTIVE
+        // Clamp center keeping the rift on screen but use the EFFECTIVE
         // half-extent (scaled by _riftScale on Y, since collapse-anim shrinks
         // it). This lets the collapsed hint slide much closer to the bottom
         // edge than the fully-expanded footprint would allow.
@@ -580,7 +580,7 @@ public class ShopController : MonoBehaviour
         TurretBeacon tb=marker.AddComponent<TurretBeacon>();
     }
 
-    /// <summary>Immediate removal �?use for programmatic cleanup (ClearItems, etc.).</summary>
+    /// <summary>Immediate removal use for programmatic cleanup (ClearItems, etc.).</summary>
     public void RemoveItem(GameObject go) =>
         _items.RemoveAll(item => item.root == go);
 
@@ -610,7 +610,7 @@ public class ShopController : MonoBehaviour
             t += Time.deltaTime;
             float frac = Mathf.Clamp01(t / dur);
 
-            // 0�?.2: pop up to 1.25×   |   0.2�?: shrink to 0
+            // 0.2: pop up to 1.25×   |   0.2: shrink to 0
             float scale = frac < 0.20f
                 ? Mathf.Lerp(1f,    1.25f, frac / 0.20f)
                 : Mathf.Lerp(1.25f, 0f,   (frac - 0.20f) / 0.80f);
@@ -634,7 +634,7 @@ public class ShopController : MonoBehaviour
             return true;                // consume click, stay in shop
         }
 
-        // Hide the item while held �?RestoreItem re-shows it on cancel.
+        // Hide the item while held RestoreItem re-shows it on cancel.
         _hovered.root.SetActive(false);
         PlacementController.Instance?.GrabFromShop(_hovered.sb);
         Collapse();
@@ -733,7 +733,7 @@ public class ShopController : MonoBehaviour
         Vector2 local = Rotate2D(new Vector2(rx, ry), -CurrentRotationDeg());
 
         // 3. Map to camera viewport using the same shape bounds as DrawContent.
-        //    ViewportPointToRay uses y=0 at bottom, y=1 at top �?no D3D flip here.
+        //    ViewportPointToRay uses y=0 at bottom, y=1 at top no D3D flip here.
         var   shape = _runtimeRiftShape ?? BuiltinShape();
         float minX  = float.MaxValue, maxX = float.MinValue;
         float minY  = float.MaxValue, maxY = float.MinValue;
@@ -823,11 +823,9 @@ public class ShopController : MonoBehaviour
         if (PlacementController.Instance == null)
             return;
 
-        // 确保裂口顶点数据存在
         if (_screenVerts == null || _screenVerts.Length == 0)
             return;
 
-        // 计算裂口的屏幕包围盒
         float minX = float.MaxValue, maxX = float.MinValue;
         float minY = float.MaxValue, maxY = float.MinValue;
         foreach (var v in _screenVerts)
@@ -1278,7 +1276,7 @@ public class ShopController : MonoBehaviour
         }
     }
 
-    // Forward map: shop camera viewport (0..1) �?screen position inside rift polygon.
+    // Forward map: shop camera viewport (0..1) screen position inside rift polygon.
     // Mirrors the UV mapping used by DrawContent so item positions track the
     // visible RT content.
     Vector2 ShopViewportToScreen(Vector3 shopVp)
@@ -1419,7 +1417,7 @@ public class ShopController : MonoBehaviour
                                                 (pts[i].y - cy) / ext);
 
         Debug.Log($"[ShopController] Rift shape loaded from sprite '{riftSprite.name}' " +
-                  $"�?{pts.Count} vertices.");
+                  $"{pts.Count} vertices.");
     }
 
     // Builds _subdividedShape + stable per-vertex randoms. Call when the base
