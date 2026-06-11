@@ -19,4 +19,4 @@ MonoBehaviour:
   effect: {fileID: 11400000, guid: 770657fb0b7345c40bbcd02a4d8a4eef, type: 2}
   visualizer: {fileID: 11400000, guid: eb10b4cb5b8f4214f8c3869632d89907, type: 2}
   flavorText: 
-  minLength: 3
+  minLength: 7

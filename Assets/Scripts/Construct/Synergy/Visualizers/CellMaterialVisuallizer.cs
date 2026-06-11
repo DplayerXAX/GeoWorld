@@ -65,12 +65,18 @@ public class CellMaterialVisualizer : SynergyVisualizer
 
             if (targetRenderer != null)
             {
-                // Back up the FULL material array (surface + inverse-hull
-                // outline slot) so OnPieceReleased restores every slot exactly.
+                // Back up the FULL material array (surface + inverse-hull outline
+                // slot) AND the renderer's current MaterialPropertyBlock — the
+                // latter carries the block's own _BaseColor. Capturing it BEFORE
+                // we overwrite the colour below is what lets the release path put
+                // the real colour back instead of dropping to a grey default.
+                var originalBlock = new MaterialPropertyBlock();
+                targetRenderer.GetPropertyBlock(originalBlock);
                 backupComp.savedStates.Add(new CellMaterialBackup.RendererState
                 {
                     renderer = targetRenderer,
-                    originalMaterials = targetRenderer.sharedMaterials
+                    originalMaterials = targetRenderer.sharedMaterials,
+                    originalBlock = originalBlock
                 });
 
                 // Core highlight logic.
@@ -97,8 +103,10 @@ public class CellMaterialVisualizer : SynergyVisualizer
                 }
                 else
                 {
-                    // Filtered-out cell: leave it untouched and clear any MPB.
-                    targetRenderer.SetPropertyBlock(null);
+                    // Filtered-out (overhang) cell: restore its ORIGINAL block
+                    // rather than nulling it — SetPropertyBlock(null) would wipe
+                    // the block's _BaseColor and leave a grey cube.
+                    targetRenderer.SetPropertyBlock(originalBlock);
                 }
             }
         }
@@ -119,7 +127,13 @@ public class CellMaterialVisualizer : SynergyVisualizer
                     {
                         if (state.originalMaterials != null)
                             state.renderer.sharedMaterials = state.originalMaterials;
-                        state.renderer.SetPropertyBlock(null);
+                        // Restore the ORIGINAL property block (the block's own
+                        // _BaseColor) instead of clearing to null, which would
+                        // drop the cube to its grey material default.
+                        if (state.originalBlock != null)
+                            state.renderer.SetPropertyBlock(state.originalBlock);
+                        else
+                            state.renderer.SetPropertyBlock(null);
                     }
                 }
             }

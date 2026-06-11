@@ -76,6 +76,18 @@ public class EnlightenmentRule : SynergyRule, ICellHighlightFilter
         return effect;
     }
 
+    // Progress = total usable same-color CELLS toward the smallest cube (minSide³).
+    public override bool TryGetActivationProgress(BoardSnapshot board, PlacedPiece piece,
+                                                  out int current, out int required)
+    {
+        required = Mathf.Max(1, minSide * minSide * minSide);
+        current  = 0;
+        if (board == null) return true;
+        foreach (var p in board.PiecesUsableAs(color))
+            if (p?.cells != null) current += p.cells.Length;
+        return true;
+    }
+
     public override bool TryEvaluate(BoardSnapshot board, HashSet<PlacedPiece> pool,
                                      out HashSet<PlacedPiece> claimed, out int tier)
     {

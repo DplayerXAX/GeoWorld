@@ -58,6 +58,28 @@ public class VineEffect : MonoBehaviour
     [Tooltip("How far a fork veers off its parent's direction (degrees).")]
     public float forkAngleDeg = 40f;
 
+    [Header("Coil / wrap around block")]
+    [Tooltip("Climbing-vine mode: instead of branching outward, spiral the line UP AROUND the host block as a helix. The visualizer sets radius/height from the block footprint.")]
+    public bool coilAround = false;
+
+    [Tooltip("Block footprint half-extent on X (world), set by HarmonyVineVisualizer. The coil traces the block's RECTANGULAR cross-section so it hugs the flat faces and turns at the corners.")]
+    public float coilHalfX = 0.5f;
+
+    [Tooltip("Block footprint half-extent on Z (world), set by HarmonyVineVisualizer.")]
+    public float coilHalfZ = 0.5f;
+
+    [Tooltip("How far OUTSIDE the block faces the coil sits (world). Small = hugs tightly.")]
+    public float coilSurfaceGap = 0.04f;
+
+    [Tooltip("Full turns the coil makes from base to top.")]
+    public float coilTurns = 1.6f;
+
+    [Tooltip("Total climb height in world units (set by HarmonyVineVisualizer).")]
+    public float coilHeight = 1.1f;
+
+    [Tooltip("Coil node count — more = smoother helix.")]
+    public int coilSegments = 26;
+
     [Header("Width")]
     [Tooltip("Width at the root.")]
     public float baseWidth = 0.06f;
@@ -86,6 +108,8 @@ public class VineEffect : MonoBehaviour
     private bool         _retiring;
     private GameObject   _prefab;   // source prefab, propagated to forks (so forks clone the prefab, not a sub-tree)
     private int          _forks;
+    private Vector3      _coilCenter;       // host block world center (coil mode)
+    private float        _coilStartAngle;   // random helix start azimuth
 
     private void Awake()
     {
@@ -99,9 +123,19 @@ public class VineEffect : MonoBehaviour
     //   prefab    = the vine prefab, so forks can spawn clean clones of it.
     public void Grow(Color rootColor, Color tipColor, Vector3 outward, GameObject prefab)
     {
-        _prefab = prefab;
+        Grow(rootColor, tipColor, outward, prefab, transform.position);
+    }
+
+    // Overload with an explicit coil center (the host block's world center). Used
+    // when coilAround is on so the helix wraps the correct block.
+    public void Grow(Color rootColor, Color tipColor, Vector3 outward, GameObject prefab, Vector3 coilCenter)
+    {
+        _prefab     = prefab;
+        _coilCenter = coilCenter;
         if (_line == null) _line = GetComponent<LineRenderer>();
-        Begin(rootColor, tipColor, transform.position, ComputeMainDir(outward), 0);
+
+        if (coilAround) BeginCoil(rootColor, tipColor);
+        else            Begin(rootColor, tipColor, transform.position, ComputeMainDir(outward), 0);
     }
 
     private void Begin(Color rootColor, Color tipColor, Vector3 startPos, Vector3 mainDir, int depth)
@@ -265,6 +299,76 @@ public class VineEffect : MonoBehaviour
         float ca   = Mathf.Cos(az), sa = Mathf.Sin(az);
         Vector3 d  = new Vector3(dir.x * ca - dir.z * sa, dir.y, dir.x * sa + dir.z * ca);
         return (d + Vector3.up * 0.3f).normalized;   // forks lift a little
+    }
+
+    // ── Coil / wrap mode ─────────────────────────────────────────────────────
+    // A climbing-vine variant: instead of the outward branch walk, spiral the
+    // line UP AROUND the host block as a helix. World-space, so the block's
+    // GrowIn scale and rotation don't distort it; parenting only ties its
+    // lifetime to the block. No forks — a clean single coil.
+    private void BeginCoil(Color rootColor, Color tipColor)
+    {
+        if (_line == null) _line = GetComponent<LineRenderer>();
+        _line.useWorldSpace = true;
+        _forks = 0;
+
+        _line.sharedMaterial = lineMaterialOverride != null ? lineMaterialOverride : GetLineMaterial();
+        ApplyColor(rootColor, tipColor);
+        ApplyWidth(1f);
+
+        _coilStartAngle = Random.value * Mathf.PI * 2f;
+
+        _line.positionCount = 1;
+        _line.SetPosition(0, CoilPoint(0f));
+
+        if (_routine != null) StopCoroutine(_routine);
+        _routine = StartCoroutine(CoilRoutine());
+    }
+
+    // f ∈ [0,1] from the base to the top of the helix. Traces the block's
+    // RECTANGULAR cross-section (not a circle) plus a small surface gap, so the
+    // coil stays glued to the flat faces and turns at the corners.
+    private Vector3 CoilPoint(float f)
+    {
+        float ang = _coilStartAngle + f * coilTurns * Mathf.PI * 2f;
+        float ca  = Mathf.Cos(ang), sa = Mathf.Sin(ang);
+
+        // Distance from center to the rectangle border along (ca, sa).
+        float tx = coilHalfX / Mathf.Max(1e-4f, Mathf.Abs(ca));
+        float tz = coilHalfZ / Mathf.Max(1e-4f, Mathf.Abs(sa));
+        float t  = Mathf.Min(tx, tz) + coilSurfaceGap;
+
+        float y = (-0.45f + f) * coilHeight;   // start just below center, climb over the top
+        return _coilCenter + new Vector3(ca * t, 0f, sa * t) + Vector3.up * y;
+    }
+
+    private IEnumerator CoilRoutine()
+    {
+        int segs = Mathf.Max(8, coilSegments);
+        Vector3 prev = CoilPoint(0f);
+
+        for (int i = 1; i < segs; i++)
+        {
+            float f = (float)i / (segs - 1);
+            // Only a little VERTICAL jitter — horizontal stays exactly on the face
+            // so the coil keeps hugging the block instead of drifting off it.
+            Vector3 next = CoilPoint(f) + Vector3.up * (Random.Range(-randomness, randomness) * 0.4f);
+
+            _line.positionCount = i + 1;
+
+            float dur = Mathf.Max(0.0001f, segmentGrowDuration);
+            float t   = 0f;
+            while (t < dur)
+            {
+                t += Time.deltaTime;
+                _line.SetPosition(i, Vector3.Lerp(prev, next, t / dur));
+                yield return null;
+            }
+            _line.SetPosition(i, next);
+            prev = next;
+        }
+
+        _routine = null;
     }
 
     // Graceful teardown: freeze growth, wither the whole bush's width to 0, then

@@ -15,7 +15,8 @@ Shader "GeoWorld/BlockOutline"
 {
     Properties
     {
-        _OutlineColor ("Outline Color", Color)        = (0.04, 0.04, 0.08, 1)
+        _Out
+        ("Outline Color", Color)        = (0.04, 0.04, 0.08, 1)
         _OutlineWidth ("Outline Width", Range(0, 0.3)) = 0.05
     }
     SubShader

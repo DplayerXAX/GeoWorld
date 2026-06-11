@@ -64,4 +64,22 @@ public class OrderRule : SynergyRule
         }
         return false;
     }
+
+    // Progress = size of the connected same-colour component the piece sits in,
+    // toward minConnected (e.g. "2/3").
+    public override bool TryGetActivationProgress(BoardSnapshot board, PlacedPiece piece,
+                                                  out int current, out int required)
+    {
+        current  = 0;
+        required = Mathf.Max(1, minConnected);
+        if (board == null || piece == null) return true;
+
+        var usable = new HashSet<PlacedPiece>(board.PiecesUsableAs(color));
+        if (!usable.Contains(piece)) return true;   // 0 / required
+
+        var comps = board.ConnectedComponents(usable);
+        for (int i = 0; i < comps.Count; i++)
+            if (comps[i].Contains(piece)) { current = comps[i].Count; break; }
+        return true;
+    }
 }

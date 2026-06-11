@@ -47,6 +47,29 @@ public class HarmonyVineVisualizer : SynergyVisualizer
     [Tooltip("Outline rim color used when 'Use Theme Color' is off.")]
     public Color outlineColor = new Color(0.35f, 0.62f, 0.30f, 1f);
 
+    [Header("Length (outward mode)")]
+    [Tooltip("Extra trunk segments added on top of the prefab's, for longer branches. 0 = use the prefab as-is.")]
+    public int extraSegments = 0;
+
+    [Tooltip("Multiplies the prefab's per-segment length (>1 = longer branches). 1 = unchanged.")]
+    public float lengthScale = 1f;
+
+    [Header("Branch style mix")]
+    [Tooltip("Fraction of vines that COIL up around their block (helix) instead of branching outward. 0 = all outward, 1 = all coil, ~0.4 = a mix. Hashed per block so each block keeps its style across reconciles.")]
+    [Range(0f, 1f)] public float coilChance = 0.4f;
+
+    [Tooltip("Full helix turns from base to top when a vine coils.")]
+    public float coilTurns = 1.6f;
+
+    [Tooltip("Scale of the hug box vs the block footprint (1 = exactly on the faces). Keep ~1 so the coil stays glued to the block.")]
+    public float coilRadiusMul = 1f;
+
+    [Tooltip("How far outside the faces the coil sits, in cell-size units. Small = hugs tightly.")]
+    public float coilSurfaceGap = 0.05f;
+
+    [Tooltip("Coil climb height as a multiple of cell size (≥1 climbs over the top).")]
+    public float coilHeightMul = 1.5f;
+
     // What a chosen piece should grow this tick.
     private struct VineTarget
     {
@@ -218,7 +241,69 @@ public class HarmonyVineVisualizer : SynergyVisualizer
         _vines[pieceId] = vine;
 
         if (vine.TryGetComponent<VineEffect>(out var fx))
-            fx.Grow(target.rootColor, target.tipColor, outward, vinePrefab);
+        {
+            // Longer branches (outward mode): optionally extend the prefab's trunk.
+            if (extraSegments != 0)
+                fx.segments = Mathf.Max(2, fx.segments + extraSegments);
+            if (!Mathf.Approximately(lengthScale, 1f))
+                fx.segmentLength *= Mathf.Max(0.05f, lengthScale);
+
+            // Per-block deterministic style: some vines coil up around the block,
+            // the rest branch outward. Hashed by pieceId so a given block keeps
+            // its style across reconciles.
+            bool coil = coilChance > 0f && Hash01(pieceId) < coilChance;
+            if (coil)
+            {
+                ComputeBlockBounds(piece, grid, out Vector3 bCenter, out float hX, out float hZ, out float cell);
+                fx.coilAround     = true;
+                fx.coilHalfX      = hX * Mathf.Max(0.1f, coilRadiusMul);
+                fx.coilHalfZ      = hZ * Mathf.Max(0.1f, coilRadiusMul);
+                fx.coilSurfaceGap = cell * Mathf.Max(0f, coilSurfaceGap);
+                fx.coilTurns      = coilTurns;
+                fx.coilHeight     = cell * Mathf.Max(0.1f, coilHeightMul);
+                fx.Grow(target.rootColor, target.tipColor, outward, vinePrefab, bCenter);
+            }
+            else
+            {
+                fx.coilAround = false;
+                fx.Grow(target.rootColor, target.tipColor, outward, vinePrefab);
+            }
+        }
+    }
+
+    // Deterministic hash → [0,1] for stable per-block style selection.
+    private static float Hash01(int h)
+    {
+        unchecked
+        {
+            h = (h ^ 61) ^ (h >> 16);
+            h += h << 3;
+            h ^= h >> 4;
+            h *= 0x27d4eb2d;
+            h ^= h >> 15;
+        }
+        return (h & 0x7fffffff) / (float)0x7fffffff;
+    }
+
+    // Footprint center + per-axis half-extents (world) of a piece, so the coil
+    // can trace the block's rectangular cross-section instead of a circle.
+    private static void ComputeBlockBounds(PlacedPiece piece, GridSystem grid,
+                                           out Vector3 center, out float halfX, out float halfZ, out float cell)
+    {
+        cell = grid.cellSize;
+        Vector3 sum = Vector3.zero;
+        Vector3 mn  = grid.GridToWorld(piece.cells[0]);
+        Vector3 mx  = mn;
+        for (int i = 0; i < piece.cells.Length; i++)
+        {
+            Vector3 w = grid.GridToWorld(piece.cells[i]);
+            sum += w;
+            mn = Vector3.Min(mn, w);
+            mx = Vector3.Max(mx, w);
+        }
+        center = sum / piece.cells.Length;
+        halfX = (mx.x - mn.x) * 0.5f + cell * 0.5f;   // footprint half-extent + half a cell to the face
+        halfZ = (mx.z - mn.z) * 0.5f + cell * 0.5f;
     }
 
     // Top-center of the piece's footprint, so the branch sprouts from the top

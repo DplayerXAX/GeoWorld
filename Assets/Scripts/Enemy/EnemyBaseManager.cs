@@ -42,6 +42,7 @@ public class EnemyBaseManager : MonoBehaviour
 
     public bool WaveActive => _waveActive;
     public int ActiveEnemyCount => _activeEnemies.Count;
+    public IReadOnlyList<EnemySurfaceUnit> ActiveEnemies => _activeEnemies;
     public int SpawnedCount => _spawnedCount;
     public int TargetSpawnCount => _spawnTotal > 0 ? _spawnTotal : spawnCount;
 

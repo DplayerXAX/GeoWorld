@@ -292,6 +292,7 @@ Transform:
   m_Children:
   - {fileID: 1513795617}
   - {fileID: 764464399}
+  - {fileID: 1188158438}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &164805051
@@ -470,7 +471,7 @@ GameObject:
   - component: {fileID: 328533585}
   - component: {fileID: 328533584}
   m_Layer: 0
-  m_Name: Directional Light (1)
+  m_Name: side light 2
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -1005,6 +1006,8 @@ MonoBehaviour:
   expandScale: 1.8
   duration: 0.5
   riseHeight: 0
+  flashSkybox: 1
+  skyboxFlashStrength: 0.6
 --- !u!1 &410087039
 GameObject:
   m_ObjectHideFlags: 0
@@ -1017,7 +1020,7 @@ GameObject:
   - component: {fileID: 410087040}
   - component: {fileID: 410087042}
   m_Layer: 0
-  m_Name: Directional Light
+  m_Name: side light 1
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -1706,6 +1709,7 @@ GameObject:
   m_Component:
   - component: {fileID: 737134994}
   - component: {fileID: 737134993}
+  - component: {fileID: 737134995}
   m_Layer: 0
   m_Name: DebugUI
   m_TagString: Untagged
@@ -1745,6 +1749,23 @@ Transform:
   m_Children: []
   m_Father: {fileID: 25065609}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &737134995
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 737134992}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3e322ea909086334caf6848331aa1947, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PauseMenu
+  toggleKey: 27
+  overlayColor: {r: 0, g: 0, b: 0, a: 0.6}
+  titleColor: {r: 0.6, g: 0.95, b: 1, a: 1}
+  panelWidth: 260
+  buttonHeight: 42
 --- !u!1 &745744072
 GameObject:
   m_ObjectHideFlags: 0
@@ -2032,6 +2053,7 @@ MonoBehaviour:
   pitchGlowDecay: 3.5
   tensionColorKick: 0.06
   idleIntensity: 0.5
+  themeFlashDecay: 3
   combatTestKey: 48
   combatTransitionSpeed: 2
 --- !u!4 &1188158438
@@ -2042,12 +2064,12 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1188158436}
   serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
   m_LocalPosition: {x: -11.27065, y: -7.10001, z: -6.11918}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
-  m_Father: {fileID: 0}
+  m_Father: {fileID: 154636173}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &1207342288
 GameObject:
@@ -2158,7 +2180,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!4 &1427198834
 Transform:
   m_ObjectHideFlags: 0
@@ -2750,7 +2772,6 @@ SceneRoots:
   - {fileID: 85239782}
   - {fileID: 653921581}
   - {fileID: 270661878}
-  - {fileID: 1188158438}
   - {fileID: 2098137110}
   - {fileID: 351851393}
   - {fileID: 1215187697}
