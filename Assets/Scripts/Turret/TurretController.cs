@@ -15,7 +15,7 @@ public class TurretController : MonoBehaviour
     public Mode mode = Mode.Basic;
 
     [Header("Targeting")]
-    public float attackRange = 5f;
+    public float attackRange = 3.5f;
     public float fireInterval = 1f;
     public float lineOfSightPadding = 0.05f;
 
