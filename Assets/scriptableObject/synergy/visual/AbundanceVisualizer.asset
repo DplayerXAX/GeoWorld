@@ -1,0 +1,32 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f6e73e339521ab3468845950de180742, type: 3}
+  m_Name: AbundanceVisualizer
+  m_EditorClassIdentifier: Assembly-CSharp::AbundanceVisualizer
+  useThemeColor: 1
+  themeWhiten: 0.35
+  bloomColor: {r: 0.95, g: 0.45, b: 0.55, a: 1}
+  accentColor: {r: 0.98, g: 0.8, b: 0.3, a: 1}
+  flowerBrightness: 1.25
+  flowersPerCell: 3
+  maxFlowersPerPatch: 24
+  flowerSize: 0.28
+  scatterRadius: 0.3
+  bloomDuration: 0.45
+  bloomStagger: 0.05
+  witherDuration: 0.35
+  swaySpeed: 1.6
+  swayAngleDeg: 9
+  bobAmplitude: 0.05
+  bobSpeed: 1.2
+  twinkleSpeed: 2.5
+  twinkleDepth: 0.25

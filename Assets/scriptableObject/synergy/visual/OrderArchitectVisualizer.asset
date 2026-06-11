@@ -1,0 +1,31 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c0f4762f7a0ba4148bd57d5177ae91d1, type: 3}
+  m_Name: OrderArchitectVisualizer
+  m_EditorClassIdentifier: Assembly-CSharp::OrderArchitectVisualizer
+  useThemeColor: 1
+  themeWhiten: 0.35
+  lineColor: {r: 0.4, g: 0.9, b: 1, a: 1}
+  gearWhiten: 0.25
+  showBrackets: 1
+  bracketFrac: 0.2
+  showTicks: 1
+  tickCount: 4
+  showGears: 1
+  gearTeeth: 10
+  gearSpeed: 28
+  gearSizeFrac: 0.3
+  maxGearsPerPiece: 6
+  fadeInDuration: 0.5
+  witherDuration: 0.3
+  pulseSpeed: 2
+  pulseDepth: 0.12

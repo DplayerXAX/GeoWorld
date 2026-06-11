@@ -43,4 +43,16 @@ public class HarmonyRule : SynergyRule
         tier    = 1;
         return true;
     }
+
+    // Progress = total usable same-colour pieces toward minPieces (they also have
+    // to form ONE component to fire, but the count is the useful "how many" hint).
+    public override bool TryGetActivationProgress(BoardSnapshot board, PlacedPiece piece,
+                                                  out int current, out int required)
+    {
+        current  = 0;
+        required = Mathf.Max(1, minPieces);
+        if (board == null) return true;
+        foreach (var p in board.PiecesUsableAs(color)) current++;
+        return true;
+    }
 }

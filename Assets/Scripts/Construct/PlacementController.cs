@@ -139,6 +139,8 @@ public class PlacementController : MonoBehaviour
     [Header("Selection info panel")]
     [Tooltip("Color (with alpha) of the semi-transparent attack-range sphere shown when a turret is selected.")]
     public Color rangeSphereColor = new Color(1f, 0.85f, 0.20f, 0.12f);
+    [Tooltip("Color (with alpha) of the red SHADOW VOLUME filling the range a turret can't shoot into (blocks occlude line of sight). Matches TurretController's LOS test. Lowish alpha — the translucent shell overlaps itself.")]
+    public Color rangeBlockedColor = new Color(1f, 0.20f, 0.14f, 0.32f);
     [Tooltip("Fraction of a block's recomputed base price returned when sold.")]
     [Range(0f, 1f)] public float sellRefundFraction = 0.5f;
 
@@ -150,10 +152,20 @@ public class PlacementController : MonoBehaviour
     bool _panelPickUpRequested;
     bool _panelSellRequested;
 
-    // Semi-transparent sphere visualizing a selected turret's spherical range.
-    GameObject _rangeSphere;
+    // Auto-size: the selection panel hugs its measured content height (from the
+    // previous repaint), so it never leaves a long empty gap.
+    float _selPanelHeight;
+    PlacedBlockInstance _selPanelFor;
 
-    GUIStyle _panelBox, _panelTitle, _panelLabel, _panelValue, _panelButton;
+    // Faint range bubble for a selected turret, plus a RED translucent "shadow
+    // volume" filling the parts of the range that blocks occlude (the turret can't
+    // shoot there). The shadow volume is rebuilt per selection.
+    GameObject _rangeSphere;
+    GameObject _rangeShadow;
+    Mesh       _rangeShadowMesh;
+    PlacedBlockInstance _shadowFor;
+
+    GUIStyle _panelBox, _panelTitle, _panelLabel, _panelValue, _panelButton, _panelProgress;
 
     // ── Spawn-point ("起点") selection → wave-intel panel ──────────────────────
     // When the player clicks a start endpoint we show the upcoming wave's
@@ -847,13 +859,19 @@ public class PlacementController : MonoBehaviour
 
         bool  isTurret = TurretTypes.Is(ins.data.blockType);
         float panelW   = 236f;
-        float panelH   = EstimatePanelHeight(ins, isTurret);
         float margin   = 12f;
+        // Hug the content: use last repaint's measured height for THIS selection;
+        // fall back to a (generous) estimate on the first frame of a new selection
+        // so nothing clips before the first measurement lands.
+        float panelH = (_selPanelFor == ins && _selPanelHeight > 1f)
+            ? _selPanelHeight
+            : EstimatePanelHeight(ins, isTurret);
         float x = Screen.width  - panelW - margin;
         float y = (Screen.height - panelH) * 0.5f;
         _panelRect = new Rect(x, y, panelW, panelH);
 
-        GUILayout.BeginArea(_panelRect, GUIContent.none, _panelBox);
+        GUILayout.BeginArea(_panelRect);
+        GUILayout.BeginVertical(_panelBox, GUILayout.Width(panelW));
 
         GUILayout.Label(isTurret
             ? TurretTypes.DisplayName(ins.data.blockType)
@@ -864,10 +882,16 @@ public class PlacementController : MonoBehaviour
         if (isTurret) DrawTurretStats(ins);
         else          DrawBlockStats(ins);
 
-        GUILayout.FlexibleSpace();
         PanelDivider();
         DrawPanelButtons(ins, isTurret);
 
+        GUILayout.EndVertical();
+        // Measure the real content height (repaint only) so next frame hugs it.
+        if (Event.current.type == EventType.Repaint)
+        {
+            _selPanelHeight = GUILayoutUtility.GetLastRect().height;
+            _selPanelFor    = ins;
+        }
         GUILayout.EndArea();
     }
 
@@ -939,7 +963,7 @@ public class PlacementController : MonoBehaviour
     // (no big empty gap) without ever clipping the bottom buttons.
     float EstimatePanelHeight(PlacedBlockInstance ins, bool isTurret)
     {
-        const float row = 22f, title = 30f, divider = 12f, button = 34f, buttonGap = 8f, padding = 28f;
+        const float row = 26f, title = 36f, divider = 12f, button = 34f, buttonGap = 8f, padding = 30f;
         int   rows  = 0;
         float extra = 0f;
 
@@ -949,14 +973,14 @@ public class PlacementController : MonoBehaviour
             if (t == null) rows = 1;
             else
             {
-                rows = 4;   // Damage, Range, Fire rate, DPS
+                rows = 2;   // Damage, Fire rate
                 if      (t.mode == TurretController.Mode.Slow) rows += 2;
                 else if (t.mode == TurretController.Mode.Aoe)  rows += 1;
             }
         }
         else
         {
-            rows = 3;       // Rarity, Cells + synergy row
+            rows = 2;       // Synergy swatch + activation progress
             if (ins.color != BlockColor.None)
             {
                 string d = BlockColorPalette.Description(ins.color);
@@ -974,36 +998,91 @@ public class PlacementController : MonoBehaviour
 
     void DrawBlockStats(PlacedBlockInstance ins)
     {
-        var d = ins.data;
-        //PanelRow("Rarity", d.rarity.ToString());
-        PanelRow("Cells",  ins.occupiedCells.Count.ToString());
-
-        GUILayout.Space(4f);
-        if (ins.color != BlockColor.None)
-        {
-            GUILayout.BeginHorizontal();
-            GUILayout.Label("Synergy", _panelLabel, GUILayout.Width(72f));
-            Rect sw = GUILayoutUtility.GetRect(14f, 14f, GUILayout.Width(14f), GUILayout.Height(14f));
-            var prev = GUI.color;
-            GUI.color = BlockColorPalette.Get(ins.color);
-            GUI.DrawTexture(sw, Texture2D.whiteTexture);
-            GUI.color = prev;
-            GUILayout.Space(6f);
-            GUILayout.Label(ins.color.ToString(), _panelValue);
-            GUILayout.EndHorizontal();
-
-            string desc = BlockColorPalette.Description(ins.color);
-            if (!string.IsNullOrEmpty(desc))
-            {
-                GUILayout.Space(2f);
-                GUILayout.Label(desc, _panelLabel);
-            }
-        }
-        else
+        if (ins.color == BlockColor.None)
         {
             PanelRow("Synergy", "None");
+            return;
+        }
+
+        Color theme = BlockColorPalette.Get(ins.color);
+
+        // ONE line: color swatch + synergy type + activation progress (e.g.
+        // "Order  2/3"). The whole line turns the theme color once active.
+        bool   hasProg = TryGetSynergyProgress(ins, out string ruleName, out int cur, out int req, out bool active);
+        string name    = (hasProg && !string.IsNullOrEmpty(ruleName)) ? ruleName : ins.color.ToString();
+        string txt     = name;
+        if (hasProg) txt += req > 0 ? $"   {cur}/{req}" : "   active";
+
+        GUILayout.BeginHorizontal();
+        Rect sw = GUILayoutUtility.GetRect(16f, 16f, GUILayout.Width(16f), GUILayout.Height(16f));
+        var prev = GUI.color;
+        GUI.color = theme;
+        GUI.DrawTexture(sw, Texture2D.whiteTexture);
+        GUI.color = prev;
+        GUILayout.Space(8f);
+        var prevC = GUI.contentColor;
+        if (active) GUI.contentColor = theme;
+        GUILayout.Label(txt, _panelProgress);
+        GUI.contentColor = prevC;
+        GUILayout.EndHorizontal();
+
+        // Flavor description.
+        string desc = BlockColorPalette.Description(ins.color);
+        if (!string.IsNullOrEmpty(desc))
+        {
+            GUILayout.Space(3f);
+            GUILayout.Label(desc, _panelLabel);
         }
     }
+
+    // Activation progress for the selected block's color. Returns the matching
+    // rule's display name + (current/required), and whether it's already active
+    // (this piece sits in a live claim → caller themes the text).
+    bool TryGetSynergyProgress(PlacedBlockInstance ins, out string ruleName,
+                               out int cur, out int req, out bool active)
+    {
+        ruleName = null; cur = 0; req = 0; active = false;
+
+        var ev    = SynergyEvaluator.Instance;
+        var piece = ins?.placedPiece;
+        if (ev == null || piece == null) return false;
+
+        // Active: this piece is part of a live claim.
+        var actives = ev.Actives;
+        for (int i = 0; i < actives.Count; i++)
+        {
+            var a = actives[i];
+            if (a?.rule == null || a.claimedPieces == null || !a.claimedPieces.Contains(piece)) continue;
+            active   = true;
+            ruleName = SynergyRuleName(a.rule);
+            if (a.rule.TryGetActivationProgress(ev.Board, piece, out int c, out int r) && r > 0) { req = r; cur = r; }
+            else { req = 0; cur = 0; }   // active but no simple count → name only
+            return true;
+        }
+
+        // Not active: best-matching rule for this color (closest to firing).
+        var rules = ev.rules;
+        if (rules == null) return false;
+        float best = -1f;
+        for (int i = 0; i < rules.Count; i++)
+        {
+            var rule = rules[i];
+            if (rule == null || rule.color != ins.color) continue;
+            if (!rule.TryGetActivationProgress(ev.Board, piece, out int c, out int r) || r <= 0) continue;
+            float ratio = (float)c / r;
+            if (ratio > best)
+            {
+                best     = ratio;
+                ruleName = SynergyRuleName(rule);
+                req      = r;
+                cur      = Mathf.Clamp(c, 0, r);
+            }
+        }
+        return best >= 0f;
+    }
+
+    static string SynergyRuleName(SynergyRule rule)
+        => !string.IsNullOrEmpty(rule.displayName) ? rule.displayName : rule.name;
 
     void DrawTurretStats(PlacedBlockInstance ins)
     {
@@ -1015,12 +1094,9 @@ public class PlacementController : MonoBehaviour
         }
 
         float fireRate = turret.fireInterval > 0.0001f ? 1f / turret.fireInterval : 0f;
-        float dps      = turret.fireInterval > 0.0001f ? turret.bulletDamage / turret.fireInterval : 0f;
 
         PanelRow("Damage",    turret.bulletDamage.ToString());
-        PanelRow("Range",     turret.attackRange.ToString("0.#"));
         PanelRow("Fire rate", fireRate.ToString("0.0") + "/s");
-        PanelRow("DPS",       dps.ToString("0.#"));
 
         if (turret.mode == TurretController.Mode.Slow)
         {
@@ -1090,7 +1166,7 @@ public class PlacementController : MonoBehaviour
 
         _panelTitle = new GUIStyle(GUI.skin.label)
         {
-            fontSize  = 18,
+            fontSize  = 22,
             fontStyle = FontStyle.Bold,
             wordWrap  = true,
         };
@@ -1098,22 +1174,30 @@ public class PlacementController : MonoBehaviour
 
         _panelLabel = new GUIStyle(GUI.skin.label)
         {
-            fontSize = 14,
+            fontSize = 16,
             wordWrap = true,
         };
         _panelLabel.normal.textColor = new Color(0.78f, 0.78f, 0.80f);
 
         _panelValue = new GUIStyle(GUI.skin.label)
         {
-            fontSize  = 14,
+            fontSize  = 16,
             fontStyle = FontStyle.Bold,
             wordWrap  = true,
         };
         _panelValue.normal.textColor = Color.white;
 
+        _panelProgress = new GUIStyle(GUI.skin.label)
+        {
+            fontSize  = 21,
+            fontStyle = FontStyle.Bold,
+            wordWrap  = true,
+        };
+        _panelProgress.normal.textColor = Color.white;
+
         _panelButton = new GUIStyle(GUI.skin.button)
         {
-            fontSize  = 15,
+            fontSize  = 16,
             fontStyle = FontStyle.Bold,
         };
     }
@@ -1122,10 +1206,11 @@ public class PlacementController : MonoBehaviour
     // TURRET RANGE SPHERE
     // =========================
 
-    // Driven every frame from Update: shows a semi-transparent sphere centered
-    // on the selected turret's firing origin, sized to its attackRange (the
-    // turret tests range in 3D, so a sphere is the honest shape). Hidden when no
-    // turret is selected.
+    // Driven every frame from Update. Shows a faint translucent range bubble at the
+    // selected turret's MUZZLE (where line-of-sight is cast from) plus a RED
+    // translucent "shadow volume" filling the parts of the range the turret can't
+    // shoot into — blocks occlude the shot, like a light casting shadows. Hidden
+    // when no turret is selected.
     void UpdateRangeIndicator()
     {
         if (mode == PlacementMode.Select
@@ -1137,27 +1222,125 @@ public class PlacementController : MonoBehaviour
             var turret = selectedInstance.visualObject.GetComponentInChildren<TurretController>();
             if (turret != null && turret.attackRange > 0f)
             {
-                ShowRangeSphere(selectedInstance.visualObject.transform.position, turret.attackRange);
+                Vector3 muzzle = turret.MuzzleWorldPosition;
+                ShowRangeSphere(muzzle, turret.attackRange);
+                UpdateShadowVolume(turret, muzzle);
                 return;
             }
         }
         HideRangeIndicator();
     }
 
-    void ShowRangeSphere(Vector3 center, float radius)
+    void ShowRangeSphere(Vector3 muzzle, float range)
     {
         EnsureRangeSphere();
         if (!_rangeSphere.activeSelf) _rangeSphere.SetActive(true);
+        _rangeSphere.transform.position   = muzzle;
+        _rangeSphere.transform.localScale = Vector3.one * (range * 2f);   // primitive sphere ⌀1 → scale 2·r
+    }
 
-        _rangeSphere.transform.position   = center;
-        // Unity's sphere primitive has diameter 1 at scale 1, so scale = 2·radius.
-        _rangeSphere.transform.localScale = Vector3.one * (radius * 2f);
+    // Rebuilt only when the selected turret changes — the board is static while
+    // inspecting in Select mode, so once per selection is exact AND cheap (the
+    // ~2k line-of-sight casts run one frame, not every frame).
+    void UpdateShadowVolume(TurretController turret, Vector3 muzzle)
+    {
+        if (selectedInstance != _shadowFor)
+        {
+            BuildShadowVolume(turret, muzzle);
+            _shadowFor = selectedInstance;
+        }
+        if (_rangeShadow != null && !_rangeShadow.activeSelf) _rangeShadow.SetActive(true);
+    }
+
+    // Casts the turret's OWN line-of-sight query over a grid of directions; where a
+    // block occludes the shot, the span from the block out to the range edge is
+    // unreachable. Builds those spans into a translucent red shell — a far cap at
+    // the range edge plus silhouette walls down to the blocking surface — so the
+    // shadow reads as a VOLUME. Vertices are local to the muzzle.
+    void BuildShadowVolume(TurretController turret, Vector3 muzzle)
+    {
+        EnsureRangeShadow();
+        float range = turret.attackRange;
+        float pad   = turret.lineOfSightPadding;
+
+        const int LON = 64, LAT = 32;
+        int W = LON, H = LAT + 1;
+
+        var dir = new Vector3[W * H];
+        var blk = new bool[W * H];
+        var hit = new float[W * H];
+        for (int j = 0; j < H; j++)
+        {
+            float theta = (float)j / LAT * Mathf.PI;
+            float sinT = Mathf.Sin(theta), cosT = Mathf.Cos(theta);
+            for (int i = 0; i < W; i++)
+            {
+                float phi = (float)i / LON * Mathf.PI * 2f;
+                Vector3 d = new Vector3(Mathf.Cos(phi) * sinT, cosT, Mathf.Sin(phi) * sinT);
+                int k = j * W + i;
+                dir[k] = d;
+                bool b = turret.TryGetBlockingHit(muzzle, d, range, out float dh) && dh < range - pad;
+                blk[k] = b;
+                hit[k] = b ? Mathf.Clamp(dh + pad, 0f, range) : range;
+            }
+        }
+
+        var verts = new List<Vector3>();
+        var cols  = new List<Color>();
+        var tris  = new List<int>();
+        Color red = rangeBlockedColor;
+
+        int  Idx(int i, int j) => j * W + (((i % W) + W) % W);
+        bool Cell(int i, int j) =>
+            blk[Idx(i, j)] && blk[Idx(i + 1, j)] && blk[Idx(i, j + 1)] && blk[Idx(i + 1, j + 1)];
+
+        void Quad(Vector3 a, Vector3 b, Vector3 c, Vector3 e)
+        {
+            int s = verts.Count;
+            verts.Add(a); verts.Add(b); verts.Add(c); verts.Add(e);
+            cols.Add(red); cols.Add(red); cols.Add(red); cols.Add(red);
+            tris.Add(s); tris.Add(s + 1); tris.Add(s + 2);
+            tris.Add(s); tris.Add(s + 2); tris.Add(s + 3);
+        }
+
+        for (int j = 0; j < LAT; j++)
+        for (int i = 0; i < LON; i++)
+        {
+            if (!Cell(i, j)) continue;
+
+            Vector3 d00 = dir[Idx(i, j)],     d10 = dir[Idx(i + 1, j)];
+            Vector3 d01 = dir[Idx(i, j + 1)], d11 = dir[Idx(i + 1, j + 1)];
+            float   h00 = hit[Idx(i, j)],     h10 = hit[Idx(i + 1, j)];
+            float   h01 = hit[Idx(i, j + 1)], h11 = hit[Idx(i + 1, j + 1)];
+
+            Quad(d00 * range, d10 * range, d11 * range, d01 * range);   // far cap (range edge)
+
+            // Silhouette walls — only where the neighbouring cell isn't shadowed.
+            if (!Cell(i - 1, j))                 Quad(d00 * h00, d01 * h01, d01 * range, d00 * range);
+            if (!Cell(i + 1, j))                 Quad(d10 * h10, d10 * range, d11 * range, d11 * h11);
+            if (j == 0       || !Cell(i, j - 1)) Quad(d00 * h00, d00 * range, d10 * range, d10 * h10);
+            if (j == LAT - 1 || !Cell(i, j + 1)) Quad(d01 * h01, d11 * h11, d11 * range, d01 * range);
+        }
+
+        if (_rangeShadowMesh == null) _rangeShadowMesh = new Mesh { name = "TurretRangeShadow" };
+        _rangeShadowMesh.Clear();
+        _rangeShadowMesh.indexFormat = verts.Count > 65535
+            ? UnityEngine.Rendering.IndexFormat.UInt32 : UnityEngine.Rendering.IndexFormat.UInt16;
+        _rangeShadowMesh.SetVertices(verts);
+        _rangeShadowMesh.SetColors(cols);
+        _rangeShadowMesh.SetTriangles(tris, 0);
+        _rangeShadowMesh.bounds = new Bounds(Vector3.zero, Vector3.one * (range * 2.2f));
+
+        _rangeShadow.GetComponent<MeshFilter>().sharedMesh = _rangeShadowMesh;
+        _rangeShadow.transform.SetPositionAndRotation(muzzle, Quaternion.identity);
+        _rangeShadow.transform.localScale = Vector3.one;
     }
 
     void HideRangeIndicator()
     {
-        if (_rangeSphere != null && _rangeSphere.activeSelf)
-            _rangeSphere.SetActive(false);
+        if (_rangeSphere != null && _rangeSphere.activeSelf) _rangeSphere.SetActive(false);
+        if (_rangeShadow != null && _rangeShadow.activeSelf) _rangeShadow.SetActive(false);
+        _shadowFor = null;   // force a rebuild next time (blocks may have changed)
     }
 
     void EnsureRangeSphere()
@@ -1168,14 +1351,33 @@ public class PlacementController : MonoBehaviour
         _rangeSphere.name = "TurretRangeSphere";
         _rangeSphere.transform.SetParent(transform, worldPositionStays: false);
 
-        // No collider — it must not block selection raycasts or turret line-of-sight.
         var col = _rangeSphere.GetComponent<Collider>();
-        if (col != null) Destroy(col);
+        if (col != null) Destroy(col);   // must not block selection / line-of-sight rays
 
         var rend = _rangeSphere.GetComponent<Renderer>();
         rend.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
         rend.receiveShadows    = false;
         rend.sharedMaterial    = BuildTransparentMaterial(rangeSphereColor);
+    }
+
+    void EnsureRangeShadow()
+    {
+        if (_rangeShadow != null) return;
+
+        _rangeShadow = new GameObject("TurretRangeShadow");
+        _rangeShadow.transform.SetParent(transform, worldPositionStays: false);
+        _rangeShadow.AddComponent<MeshFilter>();
+
+        // Sprites/Default: unlit, vertex-color, Cull Off, alpha-blended, ZWrite Off
+        // — a translucent double-sided red volume (red + alpha come from the verts).
+        var rend = _rangeShadow.AddComponent<MeshRenderer>();
+        rend.shadowCastingMode    = UnityEngine.Rendering.ShadowCastingMode.Off;
+        rend.receiveShadows       = false;
+        rend.lightProbeUsage      = UnityEngine.Rendering.LightProbeUsage.Off;
+        rend.reflectionProbeUsage = UnityEngine.Rendering.ReflectionProbeUsage.Off;
+        var sh = Shader.Find("Sprites/Default");
+        if (sh == null) sh = Shader.Find("Universal Render Pipeline/Unlit");
+        rend.sharedMaterial = new Material(sh);
     }
 
     // Builds an unlit, double-sided, alpha-blended material so the range bubble
@@ -1300,10 +1502,6 @@ public class PlacementController : MonoBehaviour
         br.cubePrefab = cubePrefab;
         br.Render(currentGridPos, cells, grid.cellSize, grid);
 
-        // Set scale to zero AFTER rendering so children resolve world positions
-        // correctly before the parent scale collapses them for GrowIn.
-        obj.transform.localScale = Vector3.zero;
-
         foreach (var r in obj.GetComponentsInChildren<Renderer>())
             MpbColor.Set(r, currentColor);
 
@@ -1325,6 +1523,12 @@ public class PlacementController : MonoBehaviour
         ins.placedPiece = SynergyEvaluator.Instance?.OnPiecePlaced(
             ins.data, ins.color, ins.occupiedCells.ToArray());
 
+        // Collapse to zero for the GrowIn pop ONLY AFTER synergy decoration has
+        // run. CellMaterialVisualizer matches cells to child renderers by world
+        // bounds, which all collapse onto the block centre at scale 0 — doing it
+        // here (block still full-size) is what lets the just-placed block, the
+        // one that activates the synergy, light up along with the rest.
+        obj.transform.localScale = Vector3.zero;
         StartCoroutine(GrowIn(obj));
 
         // ── Push undo record ──────────────────────────────────────────────────
@@ -2025,7 +2229,6 @@ public class PlacementController : MonoBehaviour
                 rel[i] = lastObjectCells[i] - origin;
 
             br.Render(origin, rel, grid.cellSize, grid);
-            obj.transform.localScale = Vector3.zero;
 
             PlacedBlockInstance ins = new()
             {
@@ -2042,6 +2245,10 @@ public class PlacementController : MonoBehaviour
             ins.placedPiece = SynergyEvaluator.Instance?.OnPiecePlaced(
                 ins.data, ins.color, ins.occupiedCells.ToArray());
 
+            // Collapse for the GrowIn pop AFTER synergy decoration has run, so
+            // CellMaterialVisualizer sees the block at full size (its cell→renderer
+            // match uses world bounds, which collapse onto the centre at scale 0).
+            obj.transform.localScale = Vector3.zero;
             StartCoroutine(GrowIn(obj));
             // Restore count OnBlockRemoved was called on pickup, balance it back.
             ResourceManager.Instance?.OnBlockPlaced(ins.data.blockType);

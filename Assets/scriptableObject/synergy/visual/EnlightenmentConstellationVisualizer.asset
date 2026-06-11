@@ -1,0 +1,32 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5f96e53950601874a844f4278dafc8d5, type: 3}
+  m_Name: EnlightenmentConstellationVisualizer
+  m_EditorClassIdentifier: Assembly-CSharp::EnlightenmentConstellationVisualizer
+  useThemeColor: 1
+  starColor: {r: 1, g: 1, b: 1, a: 1}
+  lineColor: {r: 0.55, g: 0.7, b: 1, a: 0.69803923}
+  maxStars: 14
+  radiusMul: 1.15
+  centerLift: 0
+  jitterAmount: 0.18
+  starSize: 0.5
+  linksPerStar: 3
+  starBrightness: 2
+  lineBrightness: 1.2
+  twinkleSpeed: 3
+  twinkleDepth: 0.5
+  spinSpeed: 8
+  tiltSpeed: 6
+  bobAmplitude: 0.12
+  bobSpeed: 1
+  fadeInDuration: 0.6

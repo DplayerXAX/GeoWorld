@@ -20,6 +20,10 @@ public class GameFlowManager : MonoBehaviour
     public PlacementController placement;
     public EnemyBaseManager enemyBaseManager;
     public static GameFlowManager Instance;
+
+    // Fired at the start of each Build phase (end of StartTurn). Per-turn synergy
+    // effects (e.g. Abundance harvest income) subscribe to pay out once per turn.
+    public static event System.Action OnTurnStarted;
     [Header("Turn")]
     public int blocksPerTurn  = 8;
     public int turretsPerTurn = 3;
@@ -347,6 +351,10 @@ public class GameFlowManager : MonoBehaviour
         colorDistribution?.BeginRound(EnsureRng());
 
         placement.SpawnRoundBlocks(blocksPerTurn, turretsPerTurn);
+
+        // Per-turn synergy payouts (Abundance harvest, etc.) run after the
+        // standing income + token spawn so they see the live synergy state.
+        OnTurnStarted?.Invoke();
     }
 
     // Called after every block place/remove — rebuilds graph, refreshes live

@@ -34,6 +34,15 @@ public class TurretController : MonoBehaviour
 
     EnemySurfaceUnit _target;
     float _fireTimer;
+    float _synergyFireRateMult = 1f;   // reversible synergy attack-speed buff (1 = none)
+
+    // Reversible fire-rate multiplier from synergies (e.g. Harmony turrets-on-
+    // the-synergy buff). >1 = faster. Set back to 1 to remove. Kept separate from
+    // the PERMANENT AddAttackSpeed path so a synergy can cleanly grant/revoke.
+    public void SetSynergyFireRateMultiplier(float multiplier)
+    {
+        _synergyFireRateMult = Mathf.Max(0.01f, multiplier);
+    }
 
     public void AddAttackSpeed(float percent)
     {
@@ -96,16 +105,30 @@ public class TurretController : MonoBehaviour
         float distance = dir.magnitude;
         if (distance <= 0.001f) return false;
 
-        foreach (var hit in Physics.RaycastAll(from, dir / distance, distance, ~0, QueryTriggerInteraction.Collide))
+        return TryGetBlockingHit(from, dir / distance, distance, out float hd, extraIgnoreRoot)
+            && hd < distance - lineOfSightPadding;
+    }
+
+    // Nearest PLACED-BLOCK hit along a ray, using the SAME filtering as the
+    // line-of-sight check (ignores the turret's own block, enemies, and the
+    // optional extra root). Returns false if nothing blocks within maxDistance.
+    // Shared by IsShotBlocked and the range-shadow indicator so the visual
+    // matches the actual targeting judgment exactly.
+    static readonly RaycastHit[] _losBuffer = new RaycastHit[32];
+    public bool TryGetBlockingHit(Vector3 from, Vector3 dir, float maxDistance,
+                                  out float hitDistance, Transform extraIgnoreRoot = null)
+    {
+        hitDistance = maxDistance;
+        bool found = false;
+        int n = Physics.RaycastNonAlloc(from, dir, _losBuffer, maxDistance, ~0, QueryTriggerInteraction.Collide);
+        for (int i = 0; i < n; i++)
         {
+            var hit = _losBuffer[i];
             if (IsIgnoredHit(hit.collider, extraIgnoreRoot)) continue;
             if (!IsPlacedBlockHit(hit.collider)) continue;
-            if (hit.distance >= distance - lineOfSightPadding) continue;
-
-            return true;
+            if (hit.distance < hitDistance) { hitDistance = hit.distance; found = true; }
         }
-
-        return false;
+        return found;
     }
 
     void Awake()
@@ -127,7 +150,7 @@ public class TurretController : MonoBehaviour
         if (_target == null || _fireTimer > 0f) return;
 
         Fire(_target);
-        _fireTimer = fireInterval;
+        _fireTimer = fireInterval / _synergyFireRateMult;
     }
 
     bool InRange(EnemySurfaceUnit e)
@@ -208,6 +231,10 @@ public class TurretController : MonoBehaviour
 
     Vector3 Origin => transform.parent != null ? transform.parent.position : transform.position;
     Vector3 MuzzlePosition => Origin + muzzleOffset;
+
+    // World position bullets originate from — also the apex of the range / shadow
+    // indicator so the visual lines up with where line-of-sight is actually cast.
+    public Vector3 MuzzleWorldPosition => MuzzlePosition;
 
     bool IsIgnoredHit(Collider col, Transform extraIgnoreRoot)
     {

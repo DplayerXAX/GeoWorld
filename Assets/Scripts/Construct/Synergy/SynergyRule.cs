@@ -75,4 +75,16 @@ public abstract class SynergyRule : ScriptableObject
     {
         effect?.Revoke(game);
     }
+
+    // Count-based progress toward activation, for the selection HUD (e.g. "2/3").
+    // `current`/`required` express how close the piece's colour is to firing this
+    // rule. Return false when the rule has no simple count to show (e.g. the
+    // cycle-based Abundance). Default: none.
+    public virtual bool TryGetActivationProgress(BoardSnapshot board, PlacedPiece piece,
+                                                 out int current, out int required)
+    {
+        current = 0;
+        required = 0;
+        return false;
+    }
 }

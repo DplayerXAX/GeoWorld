@@ -28,6 +28,11 @@ public class EnemySurfaceUnit : MonoBehaviour
     public int CurrentHealth => _health;
     public IReadOnlyList<FaceNode> Path => _path;
 
+    // The grid cell the enemy is currently on (the block under its current
+    // face). Null before the first step. Used by area synergies (e.g. Order
+    // slow) to test whether the enemy is standing on the synergy.
+    public Vector3Int? CurrentCell => _prevNode?.cell;
+
     List<FaceNode> _path;
     int _index;
     int _health;
