@@ -91,6 +91,17 @@ public class ConstellationView : MonoBehaviour
         _built = true;
     }
 
+    // ── Combat-ripple replay: re-fade-in in sync with the block sprout ───────
+    void OnEnable()  { SynergyVisualFX.OnReplayGrowIn += HandleReplay; }
+    void OnDisable() { SynergyVisualFX.OnReplayGrowIn -= HandleReplay; }
+
+    void HandleReplay(System.Func<Vector3, float> delayFor)
+    {
+        if (!_built) return;
+        float d = delayFor != null ? Mathf.Max(0f, delayFor(transform.position)) : 0f;
+        _born = Time.time + d;   // alpha collapses, then fades back in when the ripple arrives
+    }
+
     void Update()
     {
         if (!_built) return;

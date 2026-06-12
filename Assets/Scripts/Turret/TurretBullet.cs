@@ -1,9 +1,13 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 public class TurretBullet : MonoBehaviour
 {
     public float hitRadius = 0.4f;
     public float enemyColliderRadius = 0.45f;
+
+    // Reused across AOE explosions so a blast allocates nothing.
+    static readonly List<EnemySurfaceUnit> _aoeBuffer = new();
 
     EnemySurfaceUnit _target;
     TurretController _turret;
@@ -88,11 +92,27 @@ public class TurretBullet : MonoBehaviour
                 break;
 
             case TurretController.Mode.Aoe:
-                foreach (var e in FindObjectsOfType<EnemySurfaceUnit>())
-                    if (e != null && e.CurrentHealth > 0
-                        && (e.transform.position - transform.position).sqrMagnitude <= _turret.aoeRadius * _turret.aoeRadius)
-                        e.TakeDamage(_damage);
+            {
+                var mgr = EnemyBaseManager.Instance;
+                if (mgr != null)
+                {
+                    // Two-pass: gather in-radius enemies into a reusable buffer,
+                    // THEN damage — TakeDamage can remove from the live list mid-loop.
+                    _aoeBuffer.Clear();
+                    var enemies = mgr.ActiveEnemies;
+                    float r2 = _turret.aoeRadius * _turret.aoeRadius;
+                    for (int i = 0; i < enemies.Count; i++)
+                    {
+                        var e = enemies[i];
+                        if (e != null && e.CurrentHealth > 0
+                            && (e.transform.position - transform.position).sqrMagnitude <= r2)
+                            _aoeBuffer.Add(e);
+                    }
+                    for (int i = 0; i < _aoeBuffer.Count; i++)
+                        if (_aoeBuffer[i] != null) _aoeBuffer[i].TakeDamage(_damage);
+                }
                 break;
+            }
 
             default:
                 enemy.TakeDamage(_damage);

@@ -165,9 +165,9 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::TopLeftHUD
   panelX: 12
   panelY: 12
-  panelW: 220
+  panelW: 190
   rowHeight: 20
-  padding: 8
+  padding: 5
   blockColor: {r: 0.55, g: 0.95, b: 1, a: 1}
   turretColor: {r: 1, g: 0.65, b: 0.3, a: 1}
   labelColor: {r: 0.85, g: 0.85, b: 0.85, a: 1}
@@ -374,7 +374,9 @@ MonoBehaviour:
   refreshBaseCost: 2
   refreshCostStep: 1
   rangeSphereColor: {r: 0.07861614, g: 0.5672784, b: 1, a: 0.12}
+  rangeBlockedColor: {r: 1, g: 0.18, b: 0.12, a: 0.6}
   sellRefundFraction: 0.5
+  selectionPopDuration: 0.16
 --- !u!4 &164805053
 Transform:
   m_ObjectHideFlags: 0

@@ -110,10 +110,43 @@ public class VineEffect : MonoBehaviour
     private int          _forks;
     private Vector3      _coilCenter;       // host block world center (coil mode)
     private float        _coilStartAngle;   // random helix start azimuth
+    private Color        _lastRoot, _lastTip;   // last Grow colors, for combat-ripple replay
+    private Vector3      _mainDir;              // last outward growth dir (kept stable across replays)
+    private Coroutine    _replayRoutine;
 
     private void Awake()
     {
         _line = GetComponent<LineRenderer>();
+    }
+
+    private void OnEnable()  { SynergyVisualFX.OnReplayGrowIn += HandleReplay; }
+    private void OnDisable() { SynergyVisualFX.OnReplayGrowIn -= HandleReplay; }
+
+    // Only the TRUNK replays (it rebuilds its own forks, so forks must not self-replay).
+    private bool IsTrunk => transform.parent == null || transform.parent.GetComponent<VineEffect>() == null;
+
+    private void HandleReplay(System.Func<Vector3, float> delayFor)
+    {
+        if (_retiring || !IsTrunk) return;
+        float d = delayFor != null ? Mathf.Max(0f, delayFor(transform.position)) : 0f;
+
+        // Drop existing forks (so they don't accumulate) and hide the trunk line.
+        var subs = GetComponentsInChildren<VineEffect>(true);
+        for (int i = 0; i < subs.Length; i++)
+            if (subs[i] != null && subs[i] != this) Destroy(subs[i].gameObject);
+        if (_routine != null) { StopCoroutine(_routine); _routine = null; }
+        if (_line != null) _line.positionCount = 0;
+
+        if (_replayRoutine != null) StopCoroutine(_replayRoutine);
+        _replayRoutine = StartCoroutine(ReplayAfter(d));
+    }
+
+    private IEnumerator ReplayAfter(float d)
+    {
+        if (d > 0.001f) yield return new WaitForSeconds(d);
+        if (_retiring) yield break;
+        if (coilAround) BeginCoil(_lastRoot, _lastTip);
+        else            Begin(_lastRoot, _lastTip, transform.position, _mainDir, 0);
     }
 
     // Public entry — trunk (depth 0).
@@ -132,10 +165,19 @@ public class VineEffect : MonoBehaviour
     {
         _prefab     = prefab;
         _coilCenter = coilCenter;
+        _lastRoot   = rootColor;
+        _lastTip    = tipColor;
         if (_line == null) _line = GetComponent<LineRenderer>();
 
-        if (coilAround) BeginCoil(rootColor, tipColor);
-        else            Begin(rootColor, tipColor, transform.position, ComputeMainDir(outward), 0);
+        if (coilAround)
+        {
+            BeginCoil(rootColor, tipColor);
+        }
+        else
+        {
+            _mainDir = ComputeMainDir(outward);   // cache so a replay keeps the same shape
+            Begin(rootColor, tipColor, transform.position, _mainDir, 0);
+        }
     }
 
     private void Begin(Color rootColor, Color tipColor, Vector3 startPos, Vector3 mainDir, int depth)

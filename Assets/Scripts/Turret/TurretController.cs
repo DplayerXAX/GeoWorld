@@ -115,13 +115,43 @@ public class TurretController : MonoBehaviour
     // Shared by IsShotBlocked and the range-shadow indicator so the visual
     // matches the actual targeting judgment exactly.
     static readonly RaycastHit[] _losBuffer = new RaycastHit[32];
+
+    // Cached PlacedBlock layer mask. 0 = layer not set up → use the fallback path.
+    static int _blockMask = int.MinValue;
+    static int BlockMask()
+    {
+        if (_blockMask == int.MinValue)
+        {
+            int layer = GridSystem.BlockLayer;
+            _blockMask = layer >= 0 ? (1 << layer) : 0;
+        }
+        return _blockMask;
+    }
+
     public bool TryGetBlockingHit(Vector3 from, Vector3 dir, float maxDistance,
                                   out float hitDistance, Transform extraIgnoreRoot = null)
     {
         hitDistance = maxDistance;
-        bool found = false;
-        int n = Physics.RaycastNonAlloc(from, dir, _losBuffer, maxDistance, ~0, QueryTriggerInteraction.Collide);
-        for (int i = 0; i < n; i++)
+        bool found  = false;
+        int  mask   = BlockMask();
+
+        if (mask != 0)
+        {
+            // Fast path: raycast ONLY the PlacedBlock layer, so every hit IS a
+            // block — no IsPlacedBlockHit scan. Just skip the firing turret's own.
+            int n = Physics.RaycastNonAlloc(from, dir, _losBuffer, maxDistance, mask, QueryTriggerInteraction.Collide);
+            for (int i = 0; i < n; i++)
+            {
+                var hit = _losBuffer[i];
+                if (IsOwnOrIgnored(hit.collider, extraIgnoreRoot)) continue;
+                if (hit.distance < hitDistance) { hitDistance = hit.distance; found = true; }
+            }
+            return found;
+        }
+
+        // Fallback (PlacedBlock layer not defined): old all-layers + per-hit filter.
+        int m = Physics.RaycastNonAlloc(from, dir, _losBuffer, maxDistance, ~0, QueryTriggerInteraction.Collide);
+        for (int i = 0; i < m; i++)
         {
             var hit = _losBuffer[i];
             if (IsIgnoredHit(hit.collider, extraIgnoreRoot)) continue;
@@ -129,6 +159,18 @@ public class TurretController : MonoBehaviour
             if (hit.distance < hitDistance) { hitDistance = hit.distance; found = true; }
         }
         return found;
+    }
+
+    // Lean filter for the layer-masked fast path: hits are already known to be
+    // blocks, so only exclude the firing turret's own block (and an extra root).
+    bool IsOwnOrIgnored(Collider col, Transform extraIgnoreRoot)
+    {
+        if (col == null) return true;
+        if (extraIgnoreRoot != null
+            && (col.transform == extraIgnoreRoot || col.transform.IsChildOf(extraIgnoreRoot)))
+            return true;
+        Transform root = transform.parent != null ? transform.parent : transform;
+        return col.transform == root || col.transform.IsChildOf(root);
     }
 
     void Awake()
@@ -145,9 +187,10 @@ public class TurretController : MonoBehaviour
         if (flow == null || flow.phase != GamePhase.Running) return;
 
         _fireTimer -= Time.deltaTime;
+        if (_fireTimer > 0f) return;   // not ready — skip the (expensive) target search entirely
 
         _target = FindClosest();
-        if (_target == null || _fireTimer > 0f) return;
+        if (_target == null) return;
 
         Fire(_target);
         _fireTimer = fireInterval / _synergyFireRateMult;
@@ -161,15 +204,22 @@ public class TurretController : MonoBehaviour
 
     EnemySurfaceUnit FindClosest()
     {
+        // Use the wave manager's cached live list instead of scanning the whole
+        // scene with FindObjectsOfType every call.
+        var mgr     = EnemyBaseManager.Instance;
+        var enemies = mgr != null ? mgr.ActiveEnemies : null;
+        if (enemies == null) return null;
+
         EnemySurfaceUnit best = null;
         float bestSqr = attackRange * attackRange;
         int bestPriority = int.MinValue;
 
-        foreach (var e in FindObjectsOfType<EnemySurfaceUnit>())
+        for (int i = 0; i < enemies.Count; i++)
         {
+            var e = enemies[i];
             if (e == null || e.CurrentHealth <= 0) continue;
 
-            if (!CanShoot(e)) continue;
+            if (!CanShoot(e)) continue;   // InRange short-circuits before the LOS raycast
 
             float sqr = (e.transform.position - Origin).sqrMagnitude;
             if (sqr > attackRange * attackRange) continue;
