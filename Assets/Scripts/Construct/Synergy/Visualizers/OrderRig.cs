@@ -116,6 +116,17 @@ public class OrderRig : MonoBehaviour
         if (!_built) Destroy(gameObject);
     }
 
+    // ── Combat-ripple replay: re-assemble in sync with the block sprout ──────
+    void OnEnable()  { SynergyVisualFX.OnReplayGrowIn += HandleReplay; }
+    void OnDisable() { SynergyVisualFX.OnReplayGrowIn -= HandleReplay; }
+
+    void HandleReplay(System.Func<Vector3, float> delayFor)
+    {
+        if (!_built || _retiring) return;
+        float d = delayFor != null ? Mathf.Max(0f, delayFor(transform.position)) : 0f;
+        _born = Time.time + d;   // fade/settle/gears collapse, then re-grow when the ripple arrives
+    }
+
     void Update()
     {
         if (!_built) return;

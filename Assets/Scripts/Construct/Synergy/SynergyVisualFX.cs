@@ -27,6 +27,15 @@ public class SynergyVisualFX : MonoBehaviour
 {
     public static SynergyVisualFX Instance;
 
+    // Fired when the combat ripple replays block growth (Space → Run). Synergy FX
+    // components (OrderRig, BloomPatch, ConstellationView, vines) subscribe and
+    // re-grow so they don't sit static while the blocks sprout back in. The
+    // argument maps a world position → the delay (seconds) before growth should
+    // start there, so each FX grows as the ripple wavefront reaches it.
+    public static event Action<Func<Vector3, float>> OnReplayGrowIn;
+    public static void ReplayGrowIn(Func<Vector3, float> delayForWorldPos)
+        => OnReplayGrowIn?.Invoke(delayForWorldPos);
+
     [Header("Joker tint")]
     [Tooltip("If true, Universal (grey) pieces that get claimed by a synergy are tinted to that synergy's theme color via MaterialPropertyBlock. Original colour is restored on release.")]
     public bool tintJokerPieces = true;

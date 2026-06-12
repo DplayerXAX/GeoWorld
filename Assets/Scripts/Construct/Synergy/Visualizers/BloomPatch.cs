@@ -136,6 +136,17 @@ public class BloomPatch : MonoBehaviour
         if (!_built || _flowers.Count == 0) Destroy(gameObject);
     }
 
+    // ── Combat-ripple replay: re-bloom in sync with the block sprout ─────────
+    void OnEnable()  { SynergyVisualFX.OnReplayGrowIn += HandleReplay; }
+    void OnDisable() { SynergyVisualFX.OnReplayGrowIn -= HandleReplay; }
+
+    void HandleReplay(System.Func<Vector3, float> delayFor)
+    {
+        if (!_built || _retiring) return;
+        float d = delayFor != null ? Mathf.Max(0f, delayFor(transform.position)) : 0f;
+        _born = Time.time + d;   // flowers collapse to 0, then re-bloom when the ripple arrives
+    }
+
     void Update()
     {
         if (!_built) return;

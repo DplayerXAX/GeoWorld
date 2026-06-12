@@ -66,6 +66,49 @@ public class GridSystem : MonoBehaviour
             occupied[pos] = true;
             cellToInstance[pos] = instance;
         }
+
+        // Put the block's colliders on the PlacedBlock layer (if it's defined) so
+        // turret line-of-sight can raycast that layer ONLY — every hit is a block,
+        // no per-hit "is this collider a placed block?" scan over all instances.
+        if (instance.visualObject != null && BlockLayer >= 0)
+        {
+            EnsureCamerasRenderLayer(BlockLayer);   // guarantee the new layer is rendered
+            SetLayerRecursive(instance.visualObject, BlockLayer);
+        }
+    }
+
+    // OR the block layer into every camera's culling mask once, so moving blocks
+    // to a dedicated layer can never make them invisible (a camera whose mask
+    // isn't "Everything" would otherwise stop rendering them).
+    static bool _cameraMaskEnsured;
+    static void EnsureCamerasRenderLayer(int layer)
+    {
+        if (_cameraMaskEnsured) return;
+        _cameraMaskEnsured = true;
+        int bit = 1 << layer;
+        var cams = Camera.allCameras;
+        for (int i = 0; i < cams.Length; i++)
+            if (cams[i] != null) cams[i].cullingMask |= bit;
+    }
+
+    // Resolved once. -2 = unresolved, -1 = layer not set up (LOS falls back to the
+    // old scan), >= 0 = the PlacedBlock layer index.
+    static int _blockLayer = -2;
+    public static int BlockLayer
+    {
+        get
+        {
+            if (_blockLayer == -2) _blockLayer = LayerMask.NameToLayer("PlacedBlock");
+            return _blockLayer;
+        }
+    }
+
+    static void SetLayerRecursive(GameObject go, int layer)
+    {
+        go.layer = layer;
+        var t = go.transform;
+        for (int i = 0; i < t.childCount; i++)
+            SetLayerRecursive(t.GetChild(i).gameObject, layer);
     }
 
     public PlacedBlockInstance GetInstanceAt(Vector3Int pos)

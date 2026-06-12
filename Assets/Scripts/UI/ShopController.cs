@@ -812,10 +812,9 @@ public class ShopController : MonoBehaviour
                 GUI.Label(new Rect(px, py - 16f, 120f, 16f), "RT preview (debug)", _ttSub);
             }
         }
-        if (_expanded)
-        {
-            DrawRefreshButton();
-        }
+        //if(_expanded)
+        DrawRefreshButton();
+        
     }
 
     void DrawRefreshButton()
@@ -823,31 +822,15 @@ public class ShopController : MonoBehaviour
         if (PlacementController.Instance == null)
             return;
 
-        if (_screenVerts == null || _screenVerts.Length == 0)
-            return;
-
-        float minX = float.MaxValue, maxX = float.MinValue;
-        float minY = float.MaxValue, maxY = float.MinValue;
-        foreach (var v in _screenVerts)
-        {
-            if (v.x < minX) minX = v.x;
-            if (v.x > maxX) maxX = v.x;
-            if (v.y < minY) minY = v.y;
-            if (v.y > maxY) maxY = v.y;
-        }
-
-        float w = 140f;
+        float w = 40f;
         float h = 40f;
-        float padding = 12f;
+        float margin = 10f;
 
-        float btnX = (minX + maxX) * 0.5f - w * 0.5f;
-        float btnY = maxY + padding;
-
-        if (btnY + h > Screen.height)
-            btnY = minY - h - padding;
-        btnX = Mathf.Clamp(btnX, 4f, Screen.width - w - 4f);
-
-        Rect r = new Rect(btnX, btnY, w, h);
+        Rect r = new Rect(
+            Screen.width - w - margin,
+            Screen.height - h - margin,
+            w,
+            h);
 
         Color oldColor = GUI.color;
         GUI.color = new Color(0.2f, 0.2f, 0.3f, 0.85f);
@@ -862,7 +845,7 @@ public class ShopController : MonoBehaviour
         btnStyle.normal.textColor = Color.white;
         btnStyle.alignment = TextAnchor.MiddleCenter;
 
-        if (GUI.Button(r, $"Refresh ({PlacementController.Instance.RefreshCost})", btnStyle))
+        if (GUI.Button(r, $"R ({PlacementController.Instance.RefreshCost})", btnStyle))
         {
             PlacementController.Instance.TryRefreshShop();
         }
