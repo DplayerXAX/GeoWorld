@@ -19,7 +19,7 @@ public class ShopController : MonoBehaviour
     [Tooltip("Extra Y offset added to the rift center ONLY when collapsed (small / hint state). Positive = lower on screen, can go past 0.5 to hug the bottom edge. The expanded position stays at riftScreenPos.y.")]
     public float riftCollapsedYOffset = 0.05f;
     [Tooltip("Strip width as a fraction of screen width when fully open.")]
-    [Range(0.1f, 1.0f)] public float riftWidth  = 0.60f;
+    [Range(0.1f, 1.0f)] public float riftWidth  = 0.45f;
     [Tooltip("Strip height as a fraction of screen height when fully open.")]
     [Range(0.05f, 1.0f)] public float riftHeight = 0.12f;
     [Tooltip("Minimum gap between the rift and the screen edges (pixels).")]
@@ -201,6 +201,13 @@ public class ShopController : MonoBehaviour
     float     _riftSizeX;        // half-extent in screen X
     float     _riftSizeY;        // half-extent in screen Y (multiplied by _riftScale at use site)
     Vector2[] _screenVerts;
+
+    // ── Shop screen anchors (GUI coords) for HUD elements that dock to the rift ──
+    public bool    ShopVisible   => _riftScale > 0.1f;
+    public Vector2 ShopTopCenter => new Vector2(_riftScreenCenter.x,
+                                                _riftScreenCenter.y - _riftSizeY * _riftScale);
+    public Vector2 ShopTopRight  => new Vector2(_riftScreenCenter.x + _riftSizeX,
+                                                _riftScreenCenter.y - _riftSizeY * _riftScale);
 
     // Counts down after a failed purchase attempt drives red rift edge flash.
     float _cantAffordFlash;
@@ -819,18 +826,16 @@ public class ShopController : MonoBehaviour
 
     void DrawRefreshButton()
     {
-        if (PlacementController.Instance == null)
+        if (PlacementController.Instance == null || !ShopVisible)
             return;
 
-        float w = 40f;
-        float h = 40f;
-        float margin = 10f;
+        float w = 110f;
+        float h = 34f;
+        float gap = 0f;
 
-        Rect r = new Rect(
-            Screen.width - w - margin,
-            Screen.height - h - margin,
-            w,
-            h);
+        // Dock to the shop rift's top-right corner (button sits just above it).
+        Vector2 tr = ShopTopRight;
+        Rect r = new Rect(tr.x - w, tr.y - h - gap, w, h);
 
         Color oldColor = GUI.color;
         GUI.color = new Color(0.2f, 0.2f, 0.3f, 0.85f);
@@ -840,12 +845,12 @@ public class ShopController : MonoBehaviour
         GUI.color = oldColor;
 
         GUIStyle btnStyle = new GUIStyle(GUI.skin.button);
-        btnStyle.fontSize = 12;
+        btnStyle.fontSize = 14;
         btnStyle.fontStyle = FontStyle.Bold;
         btnStyle.normal.textColor = Color.white;
         btnStyle.alignment = TextAnchor.MiddleCenter;
 
-        if (GUI.Button(r, $"R ({PlacementController.Instance.RefreshCost})", btnStyle))
+        if (GUI.Button(r, $"Refresh ({PlacementController.Instance.RefreshCost})", btnStyle))
         {
             PlacementController.Instance.TryRefreshShop();
         }

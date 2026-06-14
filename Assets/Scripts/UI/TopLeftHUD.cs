@@ -29,6 +29,7 @@ public class TopLeftHUD : MonoBehaviour
     public Color valueColor  = new(1.00f, 1.00f, 1.00f);   // bright white
     public Color hintColor   = new(0.65f, 0.65f, 0.65f);   // dim grey
     public Color bgColor     = new(0f, 0f, 0f, 0.55f);
+    public Color heartColor  = new(1.00f, 0.40f, 0.40f);   // red (lives)
 
     [Header("Mouse coordinates")]
     [Tooltip("Camera used to raycast under the mouse. If null, Camera.main is used.")]
@@ -136,39 +137,41 @@ public class TopLeftHUD : MonoBehaviour
         BuildStyles();
         UpdateMouseCell();
 
-        // 2 currency rows + 1 divider gap + 1 cell row = 4 content rows.
-        int rows = 4;
+        // ── Bottom-left status panel: HP + currencies ──
+        // panelY is now the margin from the BOTTOM edge (was top in the old layout).
+        int rows = 3;                                  // HP, BLOCK, TURRET
         int h    = padding * 2 + rows * rowHeight;
+        int py   = Screen.height - h - panelY;
 
-        // Background
         Color prev = GUI.color;
         GUI.color  = bgColor;
-        GUI.DrawTexture(new Rect(panelX - padding, panelY - padding, panelW + padding * 2, h),
+        GUI.DrawTexture(new Rect(panelX - padding, py - padding, panelW + padding * 2, h),
                         Texture2D.whiteTexture);
         GUI.color  = prev;
 
-        int y = panelY;
+        int y = py;
+
+        // ── HP (read live from PlayerHealth) ──
+        var hp = PlayerHealth.Instance;
+        y = DrawHpRow(y, hp != null ? hp.CurrentLives : 0, hp != null ? hp.maxLives : 0);
 
         // ── Currencies (READ LIVE EVERY FRAME — no cache) ──
         var rm = ResourceManager.Instance;
         int block   = rm != null ? rm.BlockCurrency  : 0;
         int turret  = rm != null ? rm.TurretCurrency : 0;
-        int blockPR = PerRoundBlockIncome();
-        int turrPR  = PerRoundTurretIncome();
 
-        y = DrawCurrencyRow(y, "BLOCK",  block,  blockPR, blockColor);
-        y = DrawCurrencyRow(y, "TURRET", turret, turrPR,  turretColor);
+        y = DrawCurrencyRow(y, "BLOCK",  block,  PerRoundBlockIncome(), blockColor);
+        y = DrawCurrencyRow(y, "TURRET", turret, PerRoundTurretIncome(),  turretColor);
 
-        // ── Divider ──
-        y += 2;
-        prev = GUI.color;
-        GUI.color = new Color(1, 1, 1, 0.18f);
-        GUI.DrawTexture(new Rect(panelX, y, panelW, 1), Texture2D.whiteTexture);
-        GUI.color = prev;
-        y += 6;
+        // ── Mouse cell — its own readout, bottom-centre above the tray ──
+        DrawCellReadout();
+    }
 
-        // ── Mouse cell ──
-        DrawCellRow(y);
+    int DrawHpRow(int y, int lives, int max)
+    {
+        _valueStyle.normal.textColor = heartColor;
+        GUI.Label(new Rect(panelX, y, panelW, rowHeight), $"♥ {lives} / {max}", _valueStyle);
+        return y + rowHeight;
     }
 
     int DrawCurrencyRow(int y, string label, int value, int perRound, Color valColor)
@@ -189,18 +192,40 @@ public class TopLeftHUD : MonoBehaviour
         return y + rowHeight;
     }
 
-    void DrawCellRow(int y)
+    // CELL coordinate — only while placing a block, docked to the shop rift's
+    // top-centre (just above its top edge). Hidden otherwise.
+    void DrawCellReadout()
     {
-        _labelStyle.normal.textColor = labelColor;
-        _valueStyle.normal.textColor = valueColor;
-        _hintStyle.normal.textColor  = hintColor;
+        var pc = PlacementController.Instance;
+        if (pc == null || pc.currentBlock == null) return;        // only when placing
 
-        GUI.Label(new Rect(panelX, y, 70, rowHeight), "CELL", _labelStyle);
+        var shop = ShopController.Instance;
+        if (shop == null || !shop.ShopVisible) return;
+
+        float w = 180f, hgt = 26f;
+        Vector2 tc = shop.ShopTopCenter;
+        float x  = tc.x - w * 0.5f;
+        float yy = tc.y - hgt - 6f;                               // above the shop's top edge
+
+        Color prev = GUI.color;
+        GUI.color  = bgColor;
+        GUI.DrawTexture(new Rect(x, yy, w, hgt), Texture2D.whiteTexture);
+        GUI.color  = prev;
+
+        _labelStyle.normal.textColor = labelColor;
+        GUI.Label(new Rect(x + 10f, yy, 50f, hgt), "CELL", _labelStyle);
+
         if (_mouseHitValid && GridSystem.instance != null)
-            GUI.Label(new Rect(panelX + 70, y, panelW - 70, rowHeight),
+        {
+            _valueStyle.normal.textColor = valueColor;
+            GUI.Label(new Rect(x + 56f, yy, w - 56f, hgt),
                       $"({_mouseCell.x}, {_mouseCell.y}, {_mouseCell.z})", _valueStyle);
+        }
         else
-            GUI.Label(new Rect(panelX + 70, y, panelW - 70, rowHeight), "—", _hintStyle);
+        {
+            _hintStyle.normal.textColor = hintColor;
+            GUI.Label(new Rect(x + 56f, yy, w - 56f, hgt), "—", _hintStyle);
+        }
     }
 
     // ── Per-round income lookup (BalanceTable-aware) ─────────────────────

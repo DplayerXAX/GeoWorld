@@ -1,0 +1,68 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!1 &3824670091386050281
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 5677539948283826822}
+  - component: {fileID: 3286561017205471633}
+  m_Layer: 0
+  m_Name: GameObject (2)
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &5677539948283826822
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3824670091386050281}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 3.56066, y: 0.35, z: 6.61183}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &3286561017205471633
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3824670091386050281}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: dd29de17648d24f4a8f14a0dc6fdd401, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::SurfaceUnitVisual
+  coreColor: {r: 1, g: 0.95, b: 0.65, a: 1}
+  coreRadius: 0.27
+  corePulseHz: 2
+  corePulseDepth: 0.2
+  ringColorA: {r: 0.25, g: 0.85, b: 1, a: 1}
+  ringColorB: {r: 0.8, g: 0.35, b: 1, a: 1}
+  ringColorC: {r: 1, g: 0.65, b: 0.2, a: 1}
+  ringRadius: 0.66
+  ringThickness: 0.048
+  spinSpeedA: 88
+  spinSpeedB: -60
+  spinSpeedC: 42
+  nodeColor: {r: 1, g: 1, b: 1, a: 0.9}
+  nodeSize: 0.12
+  nodeOrbitRadius: 0.465
+  nodeSpeedA: 110
+  nodeSpeedB: -82
+  nodeSpeedC: 67
+  nodeSpeedD: -120
+  bodyRotSpeed: 12
+  glowIntensity: 1.5
+  darkMode: 0

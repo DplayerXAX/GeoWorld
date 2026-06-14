@@ -34,6 +34,9 @@ public class GameFlowManager : MonoBehaviour
     public int runsPerEndpoint = 3;
     [Tooltip("Maximum concurrent ambient loop layers. Oldest retires when exceeded.")]
     public int maxLoopLayers   = 5;
+    [Tooltip("ON: start/end spacing is auto-derived from blocksPerTurn each stage (overrides the generator). " +
+             "OFF: use the LevelEndpointGenerator's own Inspector minDistance / maxDistance and leave them alone.")]
+    public bool autoEndpointBounds = true;
 
     [Header("Waves — Procedural (roguelite)")]
     [Tooltip("If assigned, waves are generated procedurally from the run seed. Authored `waves` list (below) is used only for rounds with an explicit override.")]
@@ -64,6 +67,7 @@ public class GameFlowManager : MonoBehaviour
     readonly List<Vector3Int> allEnds      = new();
     readonly List<SurfaceUnit> loopingUnits = new();
     int roundIndex;   // how many extra endpoints have been added so far
+    int _wavesCompleted;   // waves cleared this run — drives level victory + endless score
 
     // ── Read-only state exposed for UI ────────────────────────────────────────
     public int  ActiveLoopCount         => loopingUnits.Count;
@@ -106,10 +110,60 @@ public class GameFlowManager : MonoBehaviour
         if (enemyBaseManager != null)
             enemyBaseManager.OnWaveCompleted += HandleWaveCompleted;
 
+        ApplyRunConfig();   // Level vs Endless setup (seed, pacing, authored waves)
         CreateFirstStage();
 
         phase = GamePhase.Build;
         StartTurn();
+    }
+
+    // Pull this run's settings from RunConfig (set by Title / LevelSelect before
+    // the scene loaded). In Endless this is mostly a no-op.
+    void ApplyRunConfig()
+    {
+        if (RunConfig.Seed != 0UL) runSeed = RunConfig.Seed;
+
+        if (RunConfig.Mode == GameMode.Level && RunConfig.Level != null)
+        {
+            var lv = RunConfig.Level;
+            if (lv.blocksPerTurn  > 0) blocksPerTurn  = lv.blocksPerTurn;
+            if (lv.turretsPerTurn >= 0) turretsPerTurn = lv.turretsPerTurn;
+            if (lv.waves != null && lv.waves.Count > 0)
+            {
+                waves     = new List<WaveDefinition>(lv.waves);
+                loopWaves = false;
+            }
+        }
+    }
+
+    // Win/score bookkeeping per completed wave. Returns true if the run is over
+    // (level cleared → returned to the map); callers should stop after that.
+    bool HandleWaveProgress()
+    {
+        _wavesCompleted++;
+
+        if (RunConfig.Mode == GameMode.Level && RunConfig.Level != null
+            && RunConfig.Level.wavesToClear > 0
+            && _wavesCompleted >= RunConfig.Level.wavesToClear)
+        {
+            SaveSystem.RecordClear(RunConfig.Level, _wavesCompleted);
+            ReturnToMap();
+            return true;
+        }
+
+        if (RunConfig.Mode == GameMode.Endless)
+            SaveSystem.RecordEndless(_wavesCompleted);
+
+        return false;
+    }
+
+    void ReturnToMap()
+    {
+        const string mapScene = "LevelSelect";
+        if (Application.CanStreamedLevelBeLoaded(mapScene))
+            UnityEngine.SceneManagement.SceneManager.LoadScene(mapScene);
+        else
+            Debug.LogWarning("[GameFlow] LevelSelect scene not in Build Settings — staying in gameplay after clear.");
     }
 
     void OnDestroy()
@@ -148,6 +202,9 @@ public class GameFlowManager : MonoBehaviour
 
     void ConfigureEndpointBounds(float extraRange = 0f)
     {
+        // Respect the generator's Inspector values when auto-bounds is off.
+        if (!autoEndpointBounds) return;
+
         // Min: at least 4 cells, or 60 % of blocksPerTurn — whichever is larger.
         endpoints.minDistance = Mathf.Max(4f, blocksPerTurn * 0.6f);
         // Max: no hard cap — grows naturally with blocks and round index.
@@ -641,6 +698,7 @@ public class GameFlowManager : MonoBehaviour
 
         _runsSinceLastEndpoint = 0;
         roundIndex             = 0;
+        _wavesCompleted        = 0;
         _challengeCell         = Vector3Int.zero;
         _challengeIsStart      = false;
 
@@ -700,6 +758,16 @@ public class GameFlowManager : MonoBehaviour
                 RetireOldestLoop();
         }
 
+        ResourceManager.Instance?.SetCombatActive(false);  // stop turret regen, income in StartTurn
+        enemyBaseManager?.CancelWave();
+        BackgroundReactor.Instance?.SetCombatMode(false);  // restore calm skybox
+        AudioManager.Instance?.ExitBattleBGM();            // BGM → calm track
+        Time.timeScale = 1f;                               // combat over → drop any fast-forward back to 1×
+        phase = GamePhase.Build;
+
+        // Score / victory. If a Level is cleared this returns to the map — stop here.
+        if (HandleWaveProgress()) return;
+
         // Add a new endpoint only every N completed runs.
         _runsSinceLastEndpoint++;
         if (_runsSinceLastEndpoint >= runsPerEndpoint)
@@ -707,13 +775,6 @@ public class GameFlowManager : MonoBehaviour
             _runsSinceLastEndpoint = 0;
             AddNextEndpoint();
         }
-
-        ResourceManager.Instance?.SetCombatActive(false);  // stop turret regen, income in StartTurn
-        enemyBaseManager?.CancelWave();
-        BackgroundReactor.Instance?.SetCombatMode(false);  // restore calm skybox
-        AudioManager.Instance?.ExitBattleBGM();            // BGM → calm track
-        Time.timeScale = 1f;                               // combat over → drop any fast-forward back to 1×
-        phase = GamePhase.Build;
 
         // Roguelite choice. Non-blocking — Build phase starts immediately,
         // the picker UI overlays on top. If you later want it to block input,
