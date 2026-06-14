@@ -1,9 +1,12 @@
 using UnityEngine;
 
+public enum BasicTurretUpgradePath { Power, Burst }
+
 public class TurretController : MonoBehaviour
 {
     const string BulletAssetPath = "Assets/Prefab/Bullet.prefab";
     const float MinFireInterval = 0.05f;
+    const float BasicUpgradePercent = 0.33f;
 
     public enum Mode { Basic, Slow, Aoe }
 
@@ -26,6 +29,7 @@ public class TurretController : MonoBehaviour
     public int bulletDamage = 1;
     public float bulletLifetime = 3f;
     public Vector3 muzzleOffset = new Vector3(0f, 0.6f, 0f);
+    [Min(1)] public int projectilesPerShot = 1;
 
     [Header("Effects")]
     public float slowDuration = 2.5f;
@@ -35,6 +39,12 @@ public class TurretController : MonoBehaviour
     EnemySurfaceUnit _target;
     float _fireTimer;
     float _synergyFireRateMult = 1f;   // reversible synergy attack-speed buff (1 = none)
+
+    [SerializeField, Range(0, 3)] int _powerPathLevel;
+    [SerializeField, Range(0, 3)] int _burstPathLevel;
+
+    public int PowerPathLevel => _powerPathLevel;
+    public int BurstPathLevel => _burstPathLevel;
 
     // Reversible fire-rate multiplier from synergies (e.g. Harmony turrets-on-
     // the-synergy buff). >1 = faster. Set back to 1 to remove. Kept separate from
@@ -50,6 +60,20 @@ public class TurretController : MonoBehaviour
 
         fireInterval = Mathf.Max(MinFireInterval, fireInterval / (1f + percent));
         _fireTimer = Mathf.Min(_fireTimer, fireInterval);
+    }
+
+    public void AddDamagePercent(float percent)
+    {
+        if (percent <= 0f) return;
+
+        bulletDamage = Mathf.Max(bulletDamage + 1, Mathf.CeilToInt(bulletDamage * (1f + percent)));
+    }
+
+    public void AddRangePercent(float percent)
+    {
+        if (percent <= 0f) return;
+
+        attackRange *= 1f + percent;
     }
 
     public void AddDamage(int amount)
@@ -80,6 +104,7 @@ public class TurretController : MonoBehaviour
             attackRange  = s.range;
             fireInterval = s.fireRate > 0f ? Mathf.Max(MinFireInterval, 1f / s.fireRate) : fireInterval;
             bulletDamage = Mathf.Max(1, Mathf.RoundToInt(s.damage));
+            projectilesPerShot = 1;
             if (mode == Mode.Slow)
             {
                 slowDuration   = s.slowDuration;
@@ -92,6 +117,105 @@ public class TurretController : MonoBehaviour
         }
 
         ApplyModeColor();
+    }
+
+    public bool CanUpgradeBasicPath(BasicTurretUpgradePath path, out string reason)
+    {
+        reason = null;
+        if (mode != Mode.Basic)
+        {
+            reason = "Only Basic Turret can use these upgrades.";
+            return false;
+        }
+
+        int level = GetBasicPathLevel(path);
+        if (level >= 3)
+        {
+            reason = "Max level.";
+            return false;
+        }
+
+        int otherLevel = path == BasicTurretUpgradePath.Power ? _burstPathLevel : _powerPathLevel;
+        if (level == 2 && otherLevel >= 3)
+        {
+            reason = "Only one path can reach level 3.";
+            return false;
+        }
+
+        return true;
+    }
+
+    public bool TryUpgradeBasicPath(BasicTurretUpgradePath path)
+    {
+        if (!CanUpgradeBasicPath(path, out _)) return false;
+
+        int nextLevel = GetBasicPathLevel(path) + 1;
+        if (path == BasicTurretUpgradePath.Power) _powerPathLevel = nextLevel;
+        else                                      _burstPathLevel = nextLevel;
+
+        ApplyBasicUpgrade(path, nextLevel);
+        return true;
+    }
+
+    public void SetBasicUpgradeLevels(int powerLevel, int burstLevel)
+    {
+        _powerPathLevel = 0;
+        _burstPathLevel = 0;
+        if (mode != Mode.Basic) return;
+
+        projectilesPerShot = 1;
+
+        powerLevel = Mathf.Clamp(powerLevel, 0, 3);
+        burstLevel = Mathf.Clamp(burstLevel, 0, 3);
+        if (powerLevel == 3 && burstLevel == 3)
+            burstLevel = 2;
+
+        for (int i = 0; i < powerLevel; i++)
+            TryUpgradeBasicPath(BasicTurretUpgradePath.Power);
+        for (int i = 0; i < burstLevel; i++)
+            TryUpgradeBasicPath(BasicTurretUpgradePath.Burst);
+    }
+
+    public int GetBasicPathLevel(BasicTurretUpgradePath path) =>
+        path == BasicTurretUpgradePath.Power ? _powerPathLevel : _burstPathLevel;
+
+    void ApplyBasicUpgrade(BasicTurretUpgradePath path, int level)
+    {
+        if (path == BasicTurretUpgradePath.Power)
+        {
+            if (level == 1 || level == 3) AddDamagePercent(BasicUpgradePercent);
+            else if (level == 2)         AddRangePercent(BasicUpgradePercent);
+            return;
+        }
+
+        if (level == 1)      AddAttackSpeed(BasicUpgradePercent);
+        else if (level == 2) projectilesPerShot = Mathf.Max(projectilesPerShot, 2);
+        else if (level == 3) projectilesPerShot = Mathf.Max(projectilesPerShot, 3);
+    }
+
+    public string NextBasicUpgradeDescription(BasicTurretUpgradePath path)
+    {
+        int next = GetBasicPathLevel(path) + 1;
+        if (next > 3) return "Max level";
+
+        if (path == BasicTurretUpgradePath.Power)
+        {
+            return next switch
+            {
+                1 => "Damage +33%",
+                2 => "Range +33%",
+                3 => "Damage +33%",
+                _ => "Max level",
+            };
+        }
+
+        return next switch
+        {
+            1 => "Speed +33%",
+            2 => "Shoot 2 bullets",
+            3 => "Shoot 3 bullets",
+            _ => "Max level",
+        };
     }
 
     public bool CanShoot(EnemySurfaceUnit target)
@@ -247,6 +371,20 @@ public class TurretController : MonoBehaviour
         Vector3 dir = target.transform.position - spawn;
         Quaternion rot = dir.sqrMagnitude > 0.001f ? Quaternion.LookRotation(dir) : Quaternion.identity;
 
+        int count = Mathf.Max(1, projectilesPerShot);
+        Vector3 right = Vector3.Cross(Vector3.up, dir.normalized);
+        if (right.sqrMagnitude < 0.001f) right = transform.right;
+        right.Normalize();
+
+        for (int i = 0; i < count; i++)
+        {
+            float centered = i - (count - 1) * 0.5f;
+            SpawnBullet(target, spawn + right * centered * 0.18f, rot);
+        }
+    }
+
+    void SpawnBullet(EnemySurfaceUnit target, Vector3 spawn, Quaternion rot)
+    {
         var bullet = Instantiate(bulletPrefab, spawn, rot);
         bullet.SetActive(true);
 
