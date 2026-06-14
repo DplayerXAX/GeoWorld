@@ -3,6 +3,8 @@ using UnityEngine;
 
 public partial class PlacementController
 {
+    float _shadowRange = -1f;
+
     // =========================
     // TURRET RANGE SPHERE
     // =========================
@@ -52,10 +54,11 @@ public partial class PlacementController
     // cube geometry, no raycasts).
     void UpdateShadowVolume(TurretController turret, Vector3 muzzle, float pop)
     {
-        if (selectedInstance != _shadowFor)
+        if (selectedInstance != _shadowFor || !Mathf.Approximately(turret.attackRange, _shadowRange))
         {
             BuildShadowVolume(turret, muzzle);
             _shadowFor = selectedInstance;
+            _shadowRange = turret.attackRange;
         }
         if (_rangeShadow != null)
         {
@@ -196,6 +199,7 @@ public partial class PlacementController
         if (_rangeSphere != null && _rangeSphere.activeSelf) _rangeSphere.SetActive(false);
         if (_rangeShadow != null && _rangeShadow.activeSelf) _rangeShadow.SetActive(false);
         _shadowFor     = null;   // force a rebuild next time (blocks may have changed)
+        _shadowRange   = -1f;
         _rangeShownFor = null;   // re-show pops in again
     }
 

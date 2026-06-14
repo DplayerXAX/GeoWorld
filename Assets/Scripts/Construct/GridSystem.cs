@@ -15,6 +15,11 @@ public class PlacedBlockInstance
     // OnPieceRemoved can hand the exact same instance back. Null until the
     // synergy hook fires (or if no evaluator is in the scene).
     public PlacedPiece placedPiece;
+
+    // Per-turret upgrade state. Currently used by Basic Turret's two upgrade
+    // branches so each placed turret can progress independently.
+    public int basicPowerUpgradeLevel;
+    public int basicBurstUpgradeLevel;
 }
 
 public class GridSystem : MonoBehaviour

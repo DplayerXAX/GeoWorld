@@ -70,8 +70,15 @@ public partial class PlacementController
 
         PanelDivider();
 
-        if (isTurret) DrawTurretStats(ins);
-        else          DrawBlockStats(ins);
+        if (isTurret)
+        {
+            DrawTurretStats(ins);
+            DrawBasicTurretUpgrades(ins);
+        }
+        else
+        {
+            DrawBlockStats(ins);
+        }
 
         PanelDivider();
         DrawPanelButtons(ins, isTurret);
@@ -165,9 +172,14 @@ public partial class PlacementController
             if (t == null) rows = 1;
             else
             {
-                rows = 2;   // Damage, Fire rate
+                rows = 3;   // Damage, Range, Fire rate
                 if      (t.mode == TurretController.Mode.Slow) rows += 2;
                 else if (t.mode == TurretController.Mode.Aoe)  rows += 1;
+                else
+                {
+                    rows += 1;         // Bullets
+                    extra += 148f;     // Basic upgrade branch controls
+                }
             }
         }
         else
@@ -302,7 +314,9 @@ public partial class PlacementController
         float fireRate = turret.fireInterval > 0.0001f ? 1f / turret.fireInterval : 0f;
 
         PanelRow("Damage",    turret.bulletDamage.ToString());
+        PanelRow("Range",     turret.attackRange.ToString("0.#"));
         PanelRow("Fire rate", fireRate.ToString("0.0") + "/s");
+        PanelRow("Bullets",   Mathf.Max(1, turret.projectilesPerShot).ToString());
 
         if (turret.mode == TurretController.Mode.Slow)
         {
@@ -313,6 +327,47 @@ public partial class PlacementController
         {
             PanelRow("AOE radius", turret.aoeRadius.ToString("0.#"));
         }
+    }
+
+    void DrawBasicTurretUpgrades(PlacedBlockInstance ins)
+    {
+        var turret = ins.visualObject.GetComponentInChildren<TurretController>();
+        if (turret == null || turret.mode != TurretController.Mode.Basic) return;
+
+        PanelDivider();
+        GUILayout.Label("Upgrades", _panelValue);
+        DrawBasicUpgradeBranch(turret, BasicTurretUpgradePath.Power);
+        GUILayout.Space(4f);
+        DrawBasicUpgradeBranch(turret, BasicTurretUpgradePath.Burst);
+    }
+
+    void DrawBasicUpgradeBranch(TurretController turret, BasicTurretUpgradePath path)
+    {
+        int level = turret.GetBasicPathLevel(path);
+        string name = path == BasicTurretUpgradePath.Power ? "Power" : "Burst";
+        string next = turret.NextBasicUpgradeDescription(path);
+
+        GUILayout.BeginHorizontal();
+        GUILayout.Label($"{name} {level}/3", _panelValue, GUILayout.Width(92f));
+        GUILayout.Label(next, _panelLabel);
+        GUILayout.EndHorizontal();
+
+        bool canUpgrade = turret.CanUpgradeBasicPath(path, out string reason);
+        bool prevEnabled = GUI.enabled;
+        GUI.enabled = canUpgrade;
+
+        string buttonText = canUpgrade ? $"Upgrade {name}" : (level >= 3 ? "Max" : "Locked");
+        if (GUILayout.Button(buttonText, _panelButton, GUILayout.Height(30f)))
+        {
+            if (path == BasicTurretUpgradePath.Power)
+                _panelPowerUpgradeRequested = true;
+            else
+                _panelBurstUpgradeRequested = true;
+        }
+
+        GUI.enabled = prevEnabled;
+        if (!canUpgrade && level < 3 && !string.IsNullOrEmpty(reason))
+            GUILayout.Label(reason, _panelLabel);
     }
 
     void DrawPanelButtons(PlacedBlockInstance ins, bool isTurret)
