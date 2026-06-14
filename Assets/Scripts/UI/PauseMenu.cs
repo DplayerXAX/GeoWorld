@@ -19,10 +19,21 @@ public class PauseMenu : MonoBehaviour
     public float panelWidth   = 260f;
     public float buttonHeight = 42f;
 
+    [Header("Top-right controls (pause / speed)")]
+    [Tooltip("Show the pause + speed buttons docked to the top-right corner.")]
+    public bool  showControls  = true;
+    [Tooltip("Margins from the right / top screen edges (px). Nudge to sit beside your WAVE counter.")]
+    public float controlsRight = 12f;
+    public float controlsTop   = 12f;
+    public float controlSize   = 40f;
+    public float controlGap    = 8f;
+    public Color controlBg     = new Color(0f, 0f, 0f, 0.55f);
+    public Color controlFg     = new Color(1f, 0.82f, 0.32f);   // gold
+
     bool  _paused;
     float _prevTimeScale = 1f;
 
-    GUIStyle  _title, _btn;
+    GUIStyle  _title, _btn, _iconLabel;
     Texture2D _overlay;
     bool _stylesBuilt;
 
@@ -65,8 +76,10 @@ public class PauseMenu : MonoBehaviour
 
     void OnGUI()
     {
-        if (!_paused) return;
         EnsureStyles();
+        DrawTopRightControls();
+
+        if (!_paused) return;
 
         // Dim the whole screen behind the panel.
         GUI.DrawTexture(new Rect(0, 0, Screen.width, Screen.height),
@@ -100,6 +113,69 @@ public class PauseMenu : MonoBehaviour
         GUILayout.EndArea();
     }
 
+    // ── Top-right pause + speed controls (always visible) ──────────────────────
+    void DrawTopRightControls()
+    {
+        if (!showControls) return;
+
+        float s = controlSize, g = controlGap;
+        float y = controlsTop;
+        float xPause = Screen.width - controlsRight - s;   // rightmost
+        float xSpeed = xPause - g - s;                      // left of pause
+
+        // Shared dark backing.
+        Color prev = GUI.color;
+        GUI.color  = controlBg;
+        GUI.DrawTexture(new Rect(xSpeed - 4f, y - 4f, s * 2f + g + 8f, s + 8f), Texture2D.whiteTexture);
+        GUI.color  = prev;
+
+        // Pause / resume.
+        var pauseRect = new Rect(xPause, y, s, s);
+        if (GUI.Button(pauseRect, GUIContent.none, GUIStyle.none)) SetPaused(!_paused);
+        DrawPauseGlyph(pauseRect, _paused);
+
+        // Speed cycle (1× → 2× → 3×).
+        var speedRect = new Rect(xSpeed, y, s, s);
+        if (GUI.Button(speedRect, GUIContent.none, GUIStyle.none)) CycleSpeed();
+        float shown = _paused ? _prevTimeScale : Time.timeScale;
+        if (shown < 0.01f) shown = 1f;
+        _iconLabel.normal.textColor = controlFg;
+        GUI.Label(speedRect, $"{shown:0.##}×", _iconLabel);
+    }
+
+    void DrawPauseGlyph(Rect r, bool paused)
+    {
+        if (paused)
+        {
+            // Play triangle.
+            _iconLabel.normal.textColor = controlFg;
+            GUI.Label(r, "▶", _iconLabel);
+            return;
+        }
+
+        // Pause: two vertical bars.
+        Color prev = GUI.color;
+        GUI.color  = controlFg;
+        float bw = r.width * 0.13f;
+        float bh = r.height * 0.42f;
+        float cx = r.center.x, cy = r.center.y;
+        GUI.DrawTexture(new Rect(cx - bw - 3f, cy - bh * 0.5f, bw, bh), Texture2D.whiteTexture);
+        GUI.DrawTexture(new Rect(cx + 3f,      cy - bh * 0.5f, bw, bh), Texture2D.whiteTexture);
+        GUI.color  = prev;
+    }
+
+    // Cycle the non-paused play speed: 1× → 2× → 3× → 1×.
+    void CycleSpeed()
+    {
+        float cur  = _paused ? _prevTimeScale : Time.timeScale;
+        float next = cur >= 2.95f ? 1f
+                   : cur >= 1.95f ? 3f
+                   : cur >= 0.95f ? 2f
+                   :                1f;
+        if (_paused) _prevTimeScale = next;   // applied when resumed
+        else         Time.timeScale = next;
+    }
+
     static void QuitGame()
     {
         Time.timeScale = 1f;
@@ -124,6 +200,13 @@ public class PauseMenu : MonoBehaviour
         _title.normal.textColor = titleColor;
 
         _btn = new GUIStyle(GUI.skin.button) { fontSize = 15 };
+
+        _iconLabel = new GUIStyle(GUI.skin.label)
+        {
+            fontSize  = 20,
+            fontStyle = FontStyle.Bold,
+            alignment = TextAnchor.MiddleCenter,
+        };
 
         _overlay = new Texture2D(1, 1);
         _overlay.SetPixel(0, 0, overlayColor);

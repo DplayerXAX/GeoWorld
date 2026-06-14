@@ -1251,6 +1251,52 @@ MonoBehaviour:
   labelBackgroundScale: 1.6
   labelBackgroundForRings: 1
   labelScreenPushPx: 18
+--- !u!1 &604723792
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 604723794}
+  - component: {fileID: 604723793}
+  m_Layer: 0
+  m_Name: GameObject
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &604723793
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 604723792}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 49416d122326d8040946a46d9a3c96ae, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::LevelMapAuthor
+  database: {fileID: 11400000, guid: 5fec9a2db26ea9f4d9c19242de8a9162, type: 2}
+  mapName: Select
+--- !u!4 &604723794
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 604723792}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 1.24776, y: -0, z: 4.20732}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &621363996
 GameObject:
   m_ObjectHideFlags: 0
@@ -1342,7 +1388,7 @@ MonoBehaviour:
   unitPrefab: {fileID: 1207342289}
   gridSystem: {fileID: 164805054}
   placement: {fileID: 164805052}
-  enemyBaseManager: {fileID: 270661877}
+  enemyBaseManager: {fileID: 0}
   blocksPerTurn: 3
   turretsPerTurn: 3
   phase: 0
@@ -2637,8 +2683,8 @@ MonoBehaviour:
   startCell: {x: 0, y: 0, z: 0}
   endCell: {x: 0, y: 0, z: 0}
   allEndpoints: []
-  minDistance: 20
-  maxDistance: 25
+  minDistance: 10
+  maxDistance: 15
   firstStartScatter: 2
   yMax: 4
   shellSampleAttempts: 60
@@ -2705,6 +2751,22 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 0}
     m_Modifications:
+    - target: {fileID: 61225932705266449, guid: 2d67442949634b046a787f5c9948be95, type: 3}
+      propertyPath: m_Mesh
+      value: 
+      objectReference: {fileID: -2432090755550338912, guid: bc85e298661588a4f9b4d004bf4f11c3, type: 3}
+    - target: {fileID: 1023551722679838635, guid: 2d67442949634b046a787f5c9948be95, type: 3}
+      propertyPath: m_Materials.Array.size
+      value: 2
+      objectReference: {fileID: 0}
+    - target: {fileID: 1023551722679838635, guid: 2d67442949634b046a787f5c9948be95, type: 3}
+      propertyPath: 'm_Materials.Array.data[0]'
+      value: 
+      objectReference: {fileID: 2100000, guid: 31321ba15b8f8eb4c954353edc038b1d, type: 2}
+    - target: {fileID: 1023551722679838635, guid: 2d67442949634b046a787f5c9948be95, type: 3}
+      propertyPath: 'm_Materials.Array.data[1]'
+      value: 
+      objectReference: {fileID: 2100000, guid: 9b56fc6c7c372cd4c9eb618970390592, type: 2}
     - target: {fileID: 2132525315679210296, guid: 2d67442949634b046a787f5c9948be95, type: 3}
       propertyPath: m_LocalPosition.x
       value: 0.5
@@ -2775,3 +2837,4 @@ SceneRoots:
   - {fileID: 154636173}
   - {fileID: 1896091937}
   - {fileID: 1079170805139325090}
+  - {fileID: 604723794}

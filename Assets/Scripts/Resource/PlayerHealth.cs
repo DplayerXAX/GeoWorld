@@ -53,14 +53,7 @@ public class PlayerHealth : MonoBehaviour
     {
         if (_hpStyle == null) BuildStyles();
 
-        // HP readout — top-centre.
-        string hpText = "♥ " + _lives + " / " + maxLives;
-        var hpRect = new Rect(Screen.width * 0.5f - 70f, 12f, 140f, 26f);
-        GUI.color = new Color(0f, 0f, 0f, 0.55f);
-        GUI.DrawTexture(hpRect, Texture2D.whiteTexture);
-        GUI.color = Color.white;
-        GUI.Label(hpRect, hpText, _hpStyle);
-
+        // HP readout now lives in TopLeftHUD's bottom-left status panel.
         if (_lives <= 0)
         {
             // Dim overlay
