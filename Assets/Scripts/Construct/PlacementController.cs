@@ -98,6 +98,8 @@ public partial class PlacementController : MonoBehaviour
     private Vector3 lastObjectPos;
     private Quaternion lastObjectRot;
     private Vector3Int[] lastObjectCells;
+    private int lastBasicPowerUpgradeLevel;
+    private int lastBasicBurstUpgradeLevel;
 
     // Tray tracking kept so we can show/hide tokens on edit mode enter/exit.
     private List<GameObject> trayBlocks = new();
@@ -153,6 +155,8 @@ public partial class PlacementController : MonoBehaviour
     // mutations never run mid-IMGUI-layout (which corrupts GUILayout state).
     bool _panelPickUpRequested;
     bool _panelSellRequested;
+    bool _panelPowerUpgradeRequested;
+    bool _panelBurstUpgradeRequested;
 
     // Auto-size: the selection panel hugs its measured content height (from the
     // previous repaint), so it never leaves a long empty gap.
@@ -364,8 +368,10 @@ public partial class PlacementController : MonoBehaviour
         UpdatePreview();
 
         // Process deferred info-panel button clicks (queued during OnGUI).
-        if (_panelPickUpRequested) { _panelPickUpRequested = false; PickUpSelected(); }
-        if (_panelSellRequested)   { _panelSellRequested   = false; SellSelected();   }
+        if (_panelPowerUpgradeRequested) { _panelPowerUpgradeRequested = false; TryUpgradeSelectedBasicTurret(BasicTurretUpgradePath.Power); }
+        if (_panelBurstUpgradeRequested) { _panelBurstUpgradeRequested = false; TryUpgradeSelectedBasicTurret(BasicTurretUpgradePath.Burst); }
+        if (_panelPickUpRequested)       { _panelPickUpRequested       = false; PickUpSelected(); }
+        if (_panelSellRequested)         { _panelSellRequested         = false; SellSelected();   }
 
         if (Input.GetKeyDown(KeyCode.R)) 
         {
@@ -578,6 +584,8 @@ public partial class PlacementController : MonoBehaviour
         lastObjectPos   = selectedInstance.visualObject.transform.position;
         lastObjectRot   = selectedInstance.visualObject.transform.rotation;
         lastObjectCells = selectedInstance.occupiedCells.ToArray();
+        lastBasicPowerUpgradeLevel = selectedInstance.basicPowerUpgradeLevel;
+        lastBasicBurstUpgradeLevel = selectedInstance.basicBurstUpgradeLevel;
 
         // Snap depth so the preview block materialises where the picked-up block was.
         // This also prevents the camera from flying when editFocusAnchor is set below.
@@ -793,6 +801,28 @@ public partial class PlacementController : MonoBehaviour
         return Mathf.Max(1, Mathf.RoundToInt(basePrice * sellRefundFraction));
     }
 
+    void TryUpgradeSelectedBasicTurret(BasicTurretUpgradePath path)
+    {
+        var ins = selectedInstance;
+        var turret = ins?.visualObject != null
+            ? ins.visualObject.GetComponentInChildren<TurretController>()
+            : null;
+        if (ins == null || turret == null) return;
+
+        if (!turret.TryUpgradeBasicPath(path))
+        {
+            if (!turret.CanUpgradeBasicPath(path, out string reason))
+                ShowPlacementPopup(reason);
+            return;
+        }
+
+        ins.basicPowerUpgradeLevel = turret.PowerPathLevel;
+        ins.basicBurstUpgradeLevel = turret.BurstPathLevel;
+
+        string branch = path == BasicTurretUpgradePath.Power ? "Power" : "Burst";
+        ShowPlacementPopup($"{branch} upgraded");
+    }
+
     // Removes the selected block and refunds part of its value to the matching
     // currency pool (turret pool for turrets, block pool otherwise). Selling is
     // final — no undo record is pushed.
@@ -933,6 +963,8 @@ public partial class PlacementController : MonoBehaviour
             data         = currentBlock,
             visualObject = obj,
             color        = currentSynergyColor,
+            basicPowerUpgradeLevel = isPickingUpObject ? lastBasicPowerUpgradeLevel : 0,
+            basicBurstUpgradeLevel = isPickingUpObject ? lastBasicBurstUpgradeLevel : 0,
         };
 
         foreach (var c in cells)
@@ -1418,6 +1450,8 @@ public partial class PlacementController : MonoBehaviour
                 data         = currentBlock,
                 visualObject = obj,
                 color        = currentSynergyColor,
+                basicPowerUpgradeLevel = lastBasicPowerUpgradeLevel,
+                basicBurstUpgradeLevel = lastBasicBurstUpgradeLevel,
             };
 
             foreach (var c in lastObjectCells)
@@ -1488,6 +1522,7 @@ public partial class PlacementController : MonoBehaviour
         if (turret == null)
             turret = target.gameObject.AddComponent<TurretController>();
         turret.Configure(ins.data.blockType);
+        turret.SetBasicUpgradeLevels(ins.basicPowerUpgradeLevel, ins.basicBurstUpgradeLevel);
     }
 
     // Turrets don't render their cube body they ARE the diamond beacon.
