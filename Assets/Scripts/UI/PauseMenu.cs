@@ -41,7 +41,9 @@ public class PauseMenu : MonoBehaviour
 
     void Update()
     {
-        if (Input.GetKeyDown(toggleKey))
+        // While the settings overlay is open, Esc closes it (handled there) —
+        // don't also toggle pause.
+        if (Input.GetKeyDown(toggleKey) && !SettingsScreen.Open)
             SetPaused(!_paused);
     }
 
@@ -79,7 +81,7 @@ public class PauseMenu : MonoBehaviour
         EnsureStyles();
         DrawTopRightControls();
 
-        if (!_paused) return;
+        if (!_paused || SettingsScreen.Open) return;   // settings overlay draws on top
 
         // Dim the whole screen behind the panel.
         GUI.DrawTexture(new Rect(0, 0, Screen.width, Screen.height),
@@ -87,7 +89,7 @@ public class PauseMenu : MonoBehaviour
 
         // Centered panel.
         float w = panelWidth;
-        float h = 250f;
+        float h = 300f;
         var rect = new Rect((Screen.width - w) * 0.5f, (Screen.height - h) * 0.5f, w, h);
         GUILayout.BeginArea(rect, GUI.skin.box);
 
@@ -97,6 +99,10 @@ public class PauseMenu : MonoBehaviour
 
         if (GUILayout.Button("Resume  (Esc)", _btn, GUILayout.Height(buttonHeight)))
             SetPaused(false);
+
+        GUILayout.Space(8);
+        if (GUILayout.Button("Settings", _btn, GUILayout.Height(buttonHeight)))
+            SettingsScreen.Open = true;
 
         GUILayout.Space(8);
         if (GUILayout.Button("Restart", _btn, GUILayout.Height(buttonHeight)))

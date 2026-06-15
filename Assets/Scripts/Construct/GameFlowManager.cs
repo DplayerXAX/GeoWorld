@@ -36,7 +36,7 @@ public class GameFlowManager : MonoBehaviour
     public int maxLoopLayers   = 5;
     [Tooltip("ON: start/end spacing is auto-derived from blocksPerTurn each stage (overrides the generator). " +
              "OFF: use the LevelEndpointGenerator's own Inspector minDistance / maxDistance and leave them alone.")]
-    public bool autoEndpointBounds = true;
+    public bool autoEndpointBounds = false;
 
     [Header("Waves — Procedural (roguelite)")]
     [Tooltip("If assigned, waves are generated procedurally from the run seed. Authored `waves` list (below) is used only for rounds with an explicit override.")]
@@ -112,6 +112,7 @@ public class GameFlowManager : MonoBehaviour
 
         ApplyRunConfig();   // Level vs Endless setup (seed, pacing, authored waves)
         CreateFirstStage();
+        FocusCameraOnFirstStage();   // centre the camera between the first start & end
 
         phase = GamePhase.Build;
         StartTurn();
@@ -217,6 +218,15 @@ public class GameFlowManager : MonoBehaviour
         endpoints.Generate();
         allStarts.Add(endpoints.startCell);
         allEnds.Add(endpoints.endCell);
+    }
+
+    // Centre the orbit camera on the midpoint of the first start & end endpoints.
+    void FocusCameraOnFirstStage()
+    {
+        if (gridSystem == null || allStarts.Count == 0 || allEnds.Count == 0) return;
+        Vector3 mid = (gridSystem.GridToWorld(allStarts[0]) + gridSystem.GridToWorld(allEnds[0])) * 0.5f;
+        var orbit = FindFirstObjectByType<OrbitCamera>();
+        if (orbit != null) orbit.FocusOnPoint(mid);
     }
 
     // Alternates: even roundIndex → +start, odd → +end.

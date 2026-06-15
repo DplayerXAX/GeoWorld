@@ -413,8 +413,10 @@ public class TurretController : MonoBehaviour
         Transform root = transform.parent != null ? transform.parent : transform;
         Color color = TurretTypes.DisplayColor(mode);
 
+        // MaterialPropertyBlock instead of r.material.color — the latter clones a
+        // unique material per turret renderer (extra allocs, no GPU instancing).
         foreach (var r in root.GetComponentsInChildren<Renderer>())
-            r.material.color = color;
+            MpbColor.Set(r, color);
     }
 
     Vector3 Origin => transform.parent != null ? transform.parent.position : transform.position;

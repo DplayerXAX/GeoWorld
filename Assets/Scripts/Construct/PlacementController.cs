@@ -345,6 +345,8 @@ public partial class PlacementController : MonoBehaviour
 
     void Update()
     {
+        if (SettingsScreen.Open) return;   // settings overlay is modal — block placement input
+
         _currentRotation = Quaternion.Slerp(
             _currentRotation,
             _targetRotation,
@@ -380,10 +382,10 @@ public partial class PlacementController : MonoBehaviour
         }
         if (Input.GetMouseButtonDown(0))
         {
-            if (IsPointerOverSelectionPanel())
+            if (IsPointerOverSelectionPanel() || HudSidePanels.PointerOver)
             {
-                // Click landed on the info panel — its IMGUI buttons handle it.
-                // Skip world selection so the panel doesn't deselect itself.
+                // Click landed on an HUD panel (info / synergies / controls) — its
+                // IMGUI handles it. Skip world selection / placement underneath.
             }
             else if (mode == PlacementMode.Edit)
             {

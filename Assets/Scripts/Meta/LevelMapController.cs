@@ -4,14 +4,16 @@ using UnityEngine;
 
 // Drives the level-select map. Either builds the map at runtime from a saved file
 // (authored with the real placement tool — see LevelMapAuthor), or uses LevelNodes
-// already placed in the scene. Then it walks a pawn node→node when you click a
-// reachable block and lets you Enter unlocked levels. Reachability is a BFS over
-// passable nodes, so a locked level blocks the path beyond it until it's cleared.
+// already placed in the scene. Click ANY cell of ANY block and the pawn walks the
+// whole surface to it (cell-level BFS over the combined top faces). Arriving on a
+// level block shows its panel; locked levels can be walked onto but not Entered.
 public class LevelMapController : MonoBehaviour
 {
     [Header("Build from saved map (authored with PlacementController)")]
-    [Tooltip("If on, build the map from the saved JSON at Start. Off = use LevelNodes already in the scene.")]
+    [Tooltip("If on, build the map at Start (from mapAsset if set, else the dev JSON). Off = use LevelNodes already in the scene.")]
     public bool buildFromFile = true;
+    [Tooltip("Baked, ship-in-build map (GeoWorld ▸ Level Map ▸ Bake JSON → Asset). Preferred over the dev JSON when set.")]
+    public LevelMapAsset mapAsset;
     public string mapName = "map";
     public LevelDatabase database;
     [Tooltip("Lightweight grid (for GridToWorld / cellSize) used to position rebuilt blocks.")]
@@ -37,6 +39,13 @@ public class LevelMapController : MonoBehaviour
     Camera    _cam;
     GUIStyle  _title, _label, _btn;
 
+    // Global walkable surface (cell-level): every top-exposed cell of every block,
+    // plus a cell→node lookup so arriving on a level block shows its panel.
+    readonly HashSet<Vector3Int> _allCells = new();
+    readonly HashSet<Vector3Int> _surface  = new();
+    readonly Dictionary<Vector3Int, LevelNode> _cellToNode = new();
+    Vector3Int _currentCell;
+
     void Start()
     {
         _cam = Camera.main;
@@ -50,15 +59,23 @@ public class LevelMapController : MonoBehaviour
         SaveSystem.EnsureDefaultsUnlocked(defs);
         foreach (var n in _nodes) n.Refresh();
 
+        BuildSurface();
+
         _current = _nodes.Find(n => n.isStart) ?? (_nodes.Count > 0 ? _nodes[0] : null);
-        if (_current != null && pawn != null) pawn.position = SurfaceTopOf(_current);
+        if (_current != null)
+        {
+            _currentCell = TopCellOf(_current);
+            if (pawn != null) pawn.position = SurfaceTop(_currentCell);
+        }
     }
 
     // ── Build the map from the saved layout ──────────────────────────────────
     void BuildMap()
     {
-        var data = LevelMapIO.Load(mapName);
-        if (data == null || gridSystem == null || cubePrefab == null)
+        // Prefer the baked asset (ships in build); fall back to the dev JSON.
+        var data = mapAsset != null ? mapAsset.data : LevelMapIO.Load(mapName);
+        if (data == null || data.nodes == null || data.nodes.Count == 0
+            || gridSystem == null || cubePrefab == null)
         {
             Debug.LogWarning("[LevelMap] cannot build — missing map data, GridSystem, or cubePrefab.");
             return;
@@ -106,7 +123,7 @@ public class LevelMapController : MonoBehaviour
 
     void Update()
     {
-        if (_moving) return;
+        if (_moving || SettingsScreen.Open) return;
         if (Input.GetMouseButtonDown(0)) HandleClick();
     }
 
@@ -116,59 +133,60 @@ public class LevelMapController : MonoBehaviour
         if (!Physics.Raycast(_cam.ScreenPointToRay(Input.mousePosition), out var hit)) return;
 
         var node = hit.collider.GetComponentInParent<LevelNode>();
-        if (node == null) return;
+        if (node != null) OpenPanel(node);   // show level info right away
 
-        OpenPanel(node);              // show its info immediately (cleared if it has no level)
-        if (node == _current) return;
+        // Which cell did we click? Map the cube back to grid, climb to the top of
+        // its column, then walk the whole surface to it.
+        if (gridSystem == null || _surface.Count == 0) return;
+        Vector3Int cell = TopOfColumn(gridSystem.WorldToGrid(hit.collider.transform.position));
+        if (!_surface.Contains(cell) || cell == _currentCell) return;
 
-        var path = FindPath(_current, node);
-        if (path != null) StartCoroutine(WalkTo(path, node));
+        var cellPath = SurfaceBfs(_currentCell, new HashSet<Vector3Int> { cell }, _surface);
+        if (cellPath != null) StartCoroutine(WalkCells(cellPath));
     }
 
-    // BFS over passable nodes. The destination may be locked (you can step up to
-    // read it), but you can't route THROUGH a locked node to reach beyond it.
-    List<LevelNode> FindPath(LevelNode from, LevelNode to)
+    // ── Surface (cell-level) ───────────────────────────────────────────────────
+    // Build the global walkable surface: every top-exposed cell of every block,
+    // plus a cell→node lookup so arriving on a level block shows its panel.
+    void BuildSurface()
     {
-        if (from == null || to == null) return null;
+        _allCells.Clear(); _surface.Clear(); _cellToNode.Clear();
 
-        var prev = new Dictionary<LevelNode, LevelNode> { [from] = null };
-        var q    = new Queue<LevelNode>();
-        q.Enqueue(from);
-        while (q.Count > 0)
-        {
-            var cur = q.Dequeue();
-            if (cur == to) break;
-            foreach (var nb in cur.neighbors)
-            {
-                if (nb == null || prev.ContainsKey(nb)) continue;
-                if (nb != to && !nb.Passable) continue;
-                prev[nb] = cur;
-                q.Enqueue(nb);
-            }
-        }
-        if (!prev.ContainsKey(to)) return null;
+        foreach (var n in _nodes)
+            if (n.cells != null)
+                foreach (var c in n.cells) { _allCells.Add(c); _cellToNode[c] = n; }
 
-        var path = new List<LevelNode>();
-        for (var n = to; n != null; n = prev[n]) path.Add(n);
-        path.Reverse();
-        return path;
+        foreach (var c in _allCells)
+            if (!_allCells.Contains(c + Vector3Int.up)) _surface.Add(c);
     }
 
-    IEnumerator WalkTo(List<LevelNode> route, LevelNode dest)
+    // Highest top-exposed cell of a node (where the pawn rests on it).
+    Vector3Int TopCellOf(LevelNode n)
+    {
+        Vector3Int best = (n != null && n.cells != null && n.cells.Length > 0) ? n.cells[0] : default;
+        bool found = false;
+        if (n != null && n.cells != null)
+            foreach (var c in n.cells)
+                if (_surface.Contains(c) && (!found || c.y > best.y)) { best = c; found = true; }
+        return best;
+    }
+
+    // Climb to the top-exposed cell of the clicked cell's column.
+    Vector3Int TopOfColumn(Vector3Int c)
+    {
+        while (_allCells.Contains(c + Vector3Int.up)) c += Vector3Int.up;
+        return c;
+    }
+
+    // Walk the pawn across the given surface cells at constant speed — no easing,
+    // no pause; leftover movement carries across cells so corners don't slow it.
+    IEnumerator WalkCells(List<Vector3Int> cells)
     {
         _moving = true;
 
-        // Prefer a surface-hugging cell path (walk across the block tops). Fall
-        // back to a straight node-centre lerp if cell data isn't available.
-        var pts = BuildSurfaceWaypoints(route);
-        if (pts == null || pts.Count == 0)
-        {
-            pts = new List<Vector3>();
-            foreach (var n in route) pts.Add(n.PawnPoint);
-        }
+        var pts = new List<Vector3>(cells.Count);
+        foreach (var c in cells) pts.Add(SurfaceTop(c));
 
-        // Constant-speed walk over every waypoint — no easing, no pause. Leftover
-        // movement carries across waypoints so corners don't slow the pawn down.
         if (pawn != null)
         {
             int idx = 0;
@@ -186,81 +204,19 @@ public class LevelMapController : MonoBehaviour
             }
         }
 
-        _current = dest;
-        _moving  = false;
-        OpenPanel(dest);
-    }
+        _currentCell = cells[cells.Count - 1];
+        _moving      = false;
 
-    // ── Surface walking ───────────────────────────────────────────────────────
-    // World waypoints that hug the tops of the blocks along `route`, from the
-    // pawn's current spot to the target block's top. Null if it can't be built
-    // (no grid / no cell data) so the caller falls back to a node-centre lerp.
-    List<Vector3> BuildSurfaceWaypoints(List<LevelNode> route)
-    {
-        if (gridSystem == null || route == null || route.Count == 0) return null;
-
-        // Cells we may walk across = every cell of the route's blocks.
-        var allowed = new HashSet<Vector3Int>();
-        foreach (var n in route)
-            if (n.cells != null) foreach (var c in n.cells) allowed.Add(c);
-        if (allowed.Count == 0) return null;
-
-        // Surface = top-exposed cells (nothing directly above).
-        var surface = new HashSet<Vector3Int>();
-        foreach (var c in allowed)
-            if (!allowed.Contains(c + Vector3Int.up)) surface.Add(c);
-        if (surface.Count == 0) return null;
-
-        Vector3Int start = NearestSurfaceCell(route[0], surface);
-
-        var goals = new HashSet<Vector3Int>();
-        var last  = route[route.Count - 1];
-        if (last.cells != null)
-            foreach (var c in last.cells) if (surface.Contains(c)) goals.Add(c);
-        if (goals.Count == 0) return null;
-
-        var cellPath = SurfaceBfs(start, goals, surface);
-        if (cellPath == null) return null;
-
-        var pts = new List<Vector3>(cellPath.Count);
-        foreach (var c in cellPath) pts.Add(SurfaceTop(c));
-        return pts;
-    }
-
-    Vector3Int NearestSurfaceCell(LevelNode n, HashSet<Vector3Int> surface)
-    {
-        Vector3 p = pawn != null ? pawn.position : Vector3.zero;
-        Vector3Int best = (n.cells != null && n.cells.Length > 0) ? n.cells[0] : default;
-        float bestD = float.MaxValue;
-        if (n.cells != null)
-            foreach (var c in n.cells)
-            {
-                if (!surface.Contains(c)) continue;
-                float d = (SurfaceTop(c) - p).sqrMagnitude;
-                if (d < bestD) { bestD = d; best = c; }
-            }
-        return best;
+        // Arrived: if this cell belongs to a level block, surface its panel.
+        if (_cellToNode.TryGetValue(_currentCell, out var n))
+        {
+            _current = n;
+            OpenPanel(n);
+        }
     }
 
     Vector3 SurfaceTop(Vector3Int c)
         => gridSystem.GridToWorld(c) + Vector3.up * (gridSystem.cellSize * 0.5f + pawnSurfaceLift);
-
-    // Resting spot on a node's surface (highest top-exposed cell). Used to seat
-    // the pawn at Start without it floating inside a tall block.
-    Vector3 SurfaceTopOf(LevelNode n)
-    {
-        if (gridSystem != null && n != null && n.cells != null && n.cells.Length > 0)
-        {
-            var set = new HashSet<Vector3Int>(n.cells);
-            Vector3Int best = n.cells[0];
-            bool found = false;
-            foreach (var c in n.cells)
-                if (!set.Contains(c + Vector3Int.up) && (!found || c.y > best.y))
-                { best = c; found = true; }
-            if (found) return SurfaceTop(best);
-        }
-        return n != null ? n.PawnPoint : (pawn != null ? pawn.position : Vector3.zero);
-    }
 
     // BFS across the surface: step to a 4-neighbour column at the same height or
     // one step up/down, staying on top-exposed cells.

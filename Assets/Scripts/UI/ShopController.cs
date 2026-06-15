@@ -34,6 +34,9 @@ public class ShopController : MonoBehaviour
 
     [Header("Shop World Area")]
     public Vector3 shopCenter   = new Vector3(-25f, 4f, 5f);
+    [Tooltip("Dedicated layer the shop blocks/lights live on so ONLY shopCam renders them and the main camera culls it (stops the shop showing in 3D when you orbit). Must exist in Project Settings ▸ Tags and Layers.")]
+    public string shopLayerName = "ShopItem";
+    int _shopLayer = -1;
     public float   blockSpacing = 1.6f;
     [Tooltip("Lighting anchor for the block half (LEFT side of the strip).")]
     public Vector3 blockRowOffset  = new Vector3(-4f, 2.5f, 0f);
@@ -241,6 +244,7 @@ public class ShopController : MonoBehaviour
     {
         Instance       = this;
         _currentOffset = cameraOffsetSmall;
+        _shopLayer     = LayerMask.NameToLayer(shopLayerName);
 
         if (shopCam != null)
         {
@@ -264,7 +268,29 @@ public class ShopController : MonoBehaviour
         l.color     = col;
         l.intensity = shopLightIntensity;
         l.range     = shopLightRange;
+        if (_shopLayer >= 0) { l.cullingMask = 1 << _shopLayer; go.layer = _shopLayer; }
         return l;
+    }
+
+    // Ensure shopCam renders the shop layer and every other camera culls it — so
+    // the shop blocks never appear in the main 3D view when the player orbits.
+    void IsolateShopLayer()
+    {
+        if (_shopLayer < 0)
+        {
+            Debug.LogWarning($"[Shop] layer '{shopLayerName}' not found — shop blocks will show in the main view. Add it in Project Settings ▸ Tags and Layers.");
+            return;
+        }
+        int mask = 1 << _shopLayer;
+        if (shopCam != null) shopCam.cullingMask |= mask;          // shopCam keeps rendering the shop
+        foreach (var cam in Camera.allCameras)
+            if (cam != shopCam) cam.cullingMask &= ~mask;          // everyone else culls it
+    }
+
+    static void SetLayerRecursive(GameObject go, int layer)
+    {
+        go.layer = layer;
+        foreach (Transform t in go.transform) SetLayerRecursive(t.gameObject, layer);
     }
 
     void Start()
@@ -272,6 +298,7 @@ public class ShopController : MonoBehaviour
         BuildShapeFromSprite();
         BuildCrackShape();
         RebuildRT();
+        IsolateShopLayer();
     }
 
     void RebuildRT()
@@ -458,7 +485,7 @@ public class ShopController : MonoBehaviour
         if (totalN == 0) return;
 
         // Small visual gap separating blocks from turrets when both present.
-        float gap        = (blockN > 0 && turretN > 0) ? blockSpacing * 0.6f : 0f;
+        float gap        = (blockN > 0 && turretN > 0) ? blockSpacing * 0.3f : 0f;
         float totalWidth = (totalN - 1) * blockSpacing + gap;
         float xCursor    = shopCenter.x - totalWidth * 0.5f;
         int   idx        = 0;
@@ -522,6 +549,8 @@ public class ShopController : MonoBehaviour
                          ? ResourceManager.Instance.ComputePrice(data, fluc) : 0;
 
         if (isTurret) AttachTurretBeacon(root, grid.cellSize, cubePrefab, data.blockType);
+
+        if (_shopLayer >= 0) SetLayerRecursive(root, _shopLayer);   // keep off the main camera
 
         const float TAU = Mathf.PI * 2f;
         _items.Add(new ShopItem
@@ -702,6 +731,9 @@ public class ShopController : MonoBehaviour
         }
     }
 
+    [Tooltip("SphereCast radius for shop hover — bigger = easier to hover small items. 0 = exact raycast.")]
+    public float hoverRadius = 0.35f;
+
     [Header("Debug")]
     public bool logHover;
 
@@ -712,7 +744,11 @@ public class ShopController : MonoBehaviour
 
         Vector3 vp  = ScreenToShopViewport(Input.mousePosition);
         Ray     ray = shopCam.ViewportPointToRay(vp);
-        if (!Physics.Raycast(ray, out RaycastHit hit)) return;
+        RaycastHit hit;
+        bool got = hoverRadius > 0f
+            ? Physics.SphereCast(ray, hoverRadius, out hit, 1000f)
+            : Physics.Raycast(ray, out hit, 1000f);
+        if (!got) return;
 
         var sb = hit.transform.GetComponentInParent<SelectableBlock>();
         if (sb == null) return;

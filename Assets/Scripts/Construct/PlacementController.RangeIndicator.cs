@@ -69,10 +69,11 @@ public partial class PlacementController
 
     // Builds the shadow from the block CUBE GEOMETRY directly (no ray sampling, so
     // no stair-stepped edges): every occluding block cell within range projects its
-    // silhouette — as seen from the muzzle — out to the range edge, giving a clean
-    // hexagonal shadow frustum (silhouette side walls + a far cap). The union of all
-    // cells' frustums is the unreachable region. Cube cells match the LOS test's
-    // cube colliders, so it still mirrors what the turret can actually hit.
+    // silhouette — as seen from the muzzle — out toward the range, giving a shadow
+    // frustum: straight side walls plus a far cap that's tessellated onto the range
+    // SPHERE so it hugs the bubble surface. The union of all cells' frustums is the
+    // unreachable region. Cube cells match the LOS test's cube colliders, so it
+    // still mirrors what the turret can actually hit.
     // Vertices are local to the muzzle. Pure geometry → cheap, rebuilt per selection.
     static readonly Vector3Int[] _axisStep = { Vector3Int.right, Vector3Int.up, new Vector3Int(0, 0, 1) };
 
@@ -142,7 +143,8 @@ public partial class PlacementController
             return sign * (mAxis - cAxis) > half;   // muzzle beyond this face → it faces M
         }
 
-        Vector3 Cfar = (C - M).normalized * range;
+        float   rr   = range * 0.997f;                 // sit just inside the range bubble
+        Vector3 Cfar = (C - M).normalized * rr;
         int[] sgn = { -1, 1 };
 
         for (int a1 = 0; a1 < 3; a1++)
@@ -166,11 +168,11 @@ public partial class PlacementController
                 o[a3] = -half; Vector3 v0 = (C + o) - M;
                 o[a3] =  half; Vector3 v1 = (C + o) - M;
 
-                Vector3 v0f = v0.normalized * range;
-                Vector3 v1f = v1.normalized * range;
+                Vector3 v0f = v0.normalized * rr;
+                Vector3 v1f = v1.normalized * rr;
 
-                AddQuad(verts, cols, tris, col, v0, v1, v1f, v0f);   // side wall (cube edge → range)
-                AddTri (verts, cols, tris, col, Cfar, v0f, v1f);     // far-cap slice
+                AddQuad(verts, cols, tris, col, v0, v1, v1f, v0f);           // side wall (cube edge → sphere)
+                AddSphereCap(verts, cols, tris, col, Cfar, v0f, v1f, rr, 2); // far cap, curved onto the sphere
             }
         }
     }
@@ -192,6 +194,22 @@ public partial class PlacementController
         v.Add(a); v.Add(b); v.Add(cc);
         c.Add(col); c.Add(col); c.Add(col);
         t.Add(s); t.Add(s + 1); t.Add(s + 2);
+    }
+
+    // Subdivides a far-cap triangle and snaps every vertex to the range sphere, so
+    // the blocked patch curves along the bubble surface instead of cutting a flat
+    // chord through it. a/b/cc are already on the sphere of radius `range`.
+    static void AddSphereCap(List<Vector3> v, List<Color> c, List<int> t, Color col,
+                             Vector3 a, Vector3 b, Vector3 cc, float range, int depth)
+    {
+        if (depth <= 0) { AddTri(v, c, t, col, a, b, cc); return; }
+        Vector3 ab = (a + b ).normalized * range;
+        Vector3 bc = (b + cc).normalized * range;
+        Vector3 ca = (cc + a).normalized * range;
+        AddSphereCap(v, c, t, col, a,  ab, ca, range, depth - 1);
+        AddSphereCap(v, c, t, col, ab, b,  bc, range, depth - 1);
+        AddSphereCap(v, c, t, col, ca, bc, cc, range, depth - 1);
+        AddSphereCap(v, c, t, col, ab, bc, ca, range, depth - 1);
     }
 
     void HideRangeIndicator()
@@ -228,14 +246,16 @@ public partial class PlacementController
         _rangeShadow.transform.SetParent(transform, worldPositionStays: false);
         _rangeShadow.AddComponent<MeshFilter>();
 
-        // Sprites/Default: unlit, vertex-color, Cull Off, alpha-blended, ZWrite Off
-        // — a translucent double-sided red volume (red + alpha come from the verts).
+        // GeoWorld/RangeShadow: unlit, vertex-color, Cull Off, ZWrite Off, and a
+        // stencil that paints each pixel ONCE so overlapping silhouette frustums
+        // don't stack alpha — the whole blocked region reads as one flat red.
         var rend = _rangeShadow.AddComponent<MeshRenderer>();
         rend.shadowCastingMode    = UnityEngine.Rendering.ShadowCastingMode.Off;
         rend.receiveShadows       = false;
         rend.lightProbeUsage      = UnityEngine.Rendering.LightProbeUsage.Off;
         rend.reflectionProbeUsage = UnityEngine.Rendering.ReflectionProbeUsage.Off;
-        var sh = Shader.Find("Sprites/Default");
+        var sh = Shader.Find("GeoWorld/RangeShadow");
+        if (sh == null) sh = Shader.Find("Sprites/Default");
         if (sh == null) sh = Shader.Find("Universal Render Pipeline/Unlit");
         rend.sharedMaterial = new Material(sh);
     }
