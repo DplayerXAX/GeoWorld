@@ -46,7 +46,7 @@ public class TitleScreen : MonoBehaviour
 
     void OnGUI()
     {
-        float s = Mathf.Max(0.5f, Screen.height / 1080f);
+        float s = UiScale.Get();
         BuildStyles(s);
         HandleKeys();
         PointerOverMenu = false;

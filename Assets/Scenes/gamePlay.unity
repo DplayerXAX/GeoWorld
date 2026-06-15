@@ -165,8 +165,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::TopLeftHUD
   panelX: 12
   panelY: 12
-  panelW: 190
-  rowHeight: 20
+  panelW: 160
+  rowHeight: 25
   padding: 5
   blockColor: {r: 0.55, g: 0.95, b: 1, a: 1}
   turretColor: {r: 1, g: 0.65, b: 0.3, a: 1}

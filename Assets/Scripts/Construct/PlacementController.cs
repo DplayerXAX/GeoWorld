@@ -589,8 +589,8 @@ public partial class PlacementController : MonoBehaviour
         lastBasicPowerUpgradeLevel = selectedInstance.basicPowerUpgradeLevel;
         lastBasicBurstUpgradeLevel = selectedInstance.basicBurstUpgradeLevel;
 
-        // Snap depth so the preview block materialises where the picked-up block was.
-        // This also prevents the camera from flying when editFocusAnchor is set below.
+        // Keep the original height plane (and steady the camera focus), but let the
+        // block follow the cursor directly — no offset back to its old cell.
         SnapDepthToWorldPos(lastObjectPos);
 
         // Update count before removing from grid.
@@ -864,14 +864,15 @@ public partial class PlacementController : MonoBehaviour
     // EDIT
     // =========================
 
-    // Adjusts _depth so the mouse ray lands at worldPos, then sets manualOffset
-    // to shift the preview to that exact grid cell.
+    // Keeps the picked-up block's original height plane (via _depth) but leaves NO
+    // manual offset — so the block tracks the cursor directly instead of snapping
+    // back to its old cell with an offset.
     void SnapDepthToWorldPos(Vector3 worldPos)
     {
         Ray r    = cam.myCam.ScreenPointToRay(Input.mousePosition);
         _depth   = Mathf.Clamp(Vector3.Dot(worldPos - r.origin, r.direction), minDepth, maxDepth);
         baseGridPos  = grid.WorldToGrid(r.origin + r.direction * _depth);
-        manualOffset = grid.WorldToGrid(worldPos) - baseGridPos;
+        manualOffset = Vector3Int.zero;
     }
 
     // focusPos: if provided, camera pivots there once. Pass null to leave camera in place.

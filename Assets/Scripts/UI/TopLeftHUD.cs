@@ -134,78 +134,100 @@ public class TopLeftHUD : MonoBehaviour
     void OnGUI()
     {
         if (!_visible) return;
-        BuildStyles();
+        float s = UiScale.Get();
+        BuildStyles(s);
         UpdateMouseCell();
 
-        // ── Bottom-left status panel: HP + currencies ──
-        // panelY is now the margin from the BOTTOM edge (was top in the old layout).
-        int rows = 3;                                  // HP, BLOCK, TURRET
-        int h    = padding * 2 + rows * rowHeight;
-        int py   = Screen.height - h - panelY;
+        // ── Bottom-left status panel: HP + currencies. Auto-fits its content width
+        //    (so it never reaches the shop) and scales with the window. ──
+        float pad    = padding   * s;
+        float rh     = rowHeight * s;
+        float labelW = 54f * s;
+        float px     = panelX * s;
+
+        var hp = PlayerHealth.Instance;
+        int lives = hp != null ? hp.CurrentLives : 0;
+        int maxL  = hp != null ? hp.maxLives     : 0;
+        var rm = ResourceManager.Instance;
+        int block  = rm != null ? rm.BlockCurrency  : 0;
+        int turret = rm != null ? rm.TurretCurrency : 0;
+        int blockPR = PerRoundBlockIncome();
+        int turrPR  = PerRoundTurretIncome();
+
+        float contentW = Mathf.Max(
+            _valueStyle.CalcSize(new GUIContent($"♥ {lives} / {maxL}")).x,
+            CurrencyRowWidth(block,  blockPR, s, labelW),
+            CurrencyRowWidth(turret, turrPR,  s, labelW));
+
+        int   rows = 3;                                 // HP, BLOCK, TURRET
+        float h    = pad * 2f + rows * rh;
+        float py   = Screen.height - h - panelY * s;
 
         Color prev = GUI.color;
         GUI.color  = bgColor;
-        GUI.DrawTexture(new Rect(panelX - padding, py - padding, panelW + padding * 2, h),
-                        Texture2D.whiteTexture);
+        GUI.DrawTexture(new Rect(px - pad, py - pad, contentW + pad * 2f, h), Texture2D.whiteTexture);
         GUI.color  = prev;
 
-        int y = py;
+        float y = py;
+        y = DrawHpRow(y, lives, maxL, px, contentW, rh);
+        y = DrawCurrencyRow(y, "BLOCK",  block,  blockPR, blockColor,  s, px, rh, labelW);
+        y = DrawCurrencyRow(y, "TURRET", turret, turrPR,  turretColor, s, px, rh, labelW);
 
-        // ── HP (read live from PlayerHealth) ──
-        var hp = PlayerHealth.Instance;
-        y = DrawHpRow(y, hp != null ? hp.CurrentLives : 0, hp != null ? hp.maxLives : 0);
-
-        // ── Currencies (READ LIVE EVERY FRAME — no cache) ──
-        var rm = ResourceManager.Instance;
-        int block   = rm != null ? rm.BlockCurrency  : 0;
-        int turret  = rm != null ? rm.TurretCurrency : 0;
-
-        y = DrawCurrencyRow(y, "BLOCK",  block,  PerRoundBlockIncome(), blockColor);
-        y = DrawCurrencyRow(y, "TURRET", turret, PerRoundTurretIncome(),  turretColor);
-
-        // ── Mouse cell — its own readout, bottom-centre above the tray ──
-        DrawCellReadout();
+        DrawCellReadout(s);
     }
 
-    int DrawHpRow(int y, int lives, int max)
+    float CurrencyRowWidth(int value, int perRound, float s, float labelW)
+    {
+        float w = labelW + _valueStyle.CalcSize(new GUIContent(value.ToString())).x;
+        if (perRound > 0)
+            w += 8f * s + _hintStyle.CalcSize(new GUIContent($"+{perRound}/rd")).x;
+        return w;
+    }
+
+    float DrawHpRow(float y, int lives, int max, float px, float w, float rh)
     {
         _valueStyle.normal.textColor = heartColor;
-        GUI.Label(new Rect(panelX, y, panelW, rowHeight), $"♥ {lives} / {max}", _valueStyle);
-        return y + rowHeight;
+        GUI.Label(new Rect(px, y, w, rh), $"♥ {lives} / {max}", _valueStyle);
+        return y + rh;
     }
 
-    int DrawCurrencyRow(int y, string label, int value, int perRound, Color valColor)
+    float DrawCurrencyRow(float y, string label, int value, int perRound, Color valColor,
+                          float s, float px, float rh, float labelW)
     {
         _labelStyle.normal.textColor = labelColor;
-        GUI.Label(new Rect(panelX, y + 2, 70, rowHeight), label, _labelStyle);
+        GUI.Label(new Rect(px, y + 2f * s, labelW, rh), label, _labelStyle);
 
         _valueStyle.normal.textColor = valColor;
-        GUI.Label(new Rect(panelX + 70, y, panelW - 70 - 60, rowHeight),
-                  value.ToString(), _valueStyle);
+        string valStr = value.ToString();
+        float valW = _valueStyle.CalcSize(new GUIContent(valStr)).x;
+        GUI.Label(new Rect(px + labelW, y, valW + 4f, rh), valStr, _valueStyle);
 
         if (perRound > 0)
         {
+            _hintStyle.alignment        = TextAnchor.MiddleLeft;
             _hintStyle.normal.textColor = hintColor;
-            GUI.Label(new Rect(panelX + panelW - 60, y + 3, 60, rowHeight),
+            GUI.Label(new Rect(px + labelW + valW + 8f * s, y + 3f * s, 90f * s, rh),
                       $"+{perRound}/rd", _hintStyle);
         }
-        return y + rowHeight;
+        return y + rh;
     }
 
     // CELL coordinate — only while placing a block, docked to the shop rift's
     // top-centre (just above its top edge). Hidden otherwise.
-    void DrawCellReadout()
+    void DrawCellReadout(float s)
     {
+        if (SettingsScreen.Open || PauseMenu.Paused) return;      // hidden in settings / pause
+
         var pc = PlacementController.Instance;
         if (pc == null || pc.currentBlock == null) return;        // only when placing
 
         var shop = ShopController.Instance;
         if (shop == null || !shop.ShopVisible) return;
 
-        float w = 180f, hgt = 26f;
+        float w = 170f * s, hgt = 26f * s;
         Vector2 tc = shop.ShopTopCenter;
         float x  = tc.x - w * 0.5f;
-        float yy = tc.y - hgt - 6f;                               // above the shop's top edge
+        float yy = tc.y - hgt - 6f * s;                           // above the shop's top edge
 
         Color prev = GUI.color;
         GUI.color  = bgColor;
@@ -213,18 +235,19 @@ public class TopLeftHUD : MonoBehaviour
         GUI.color  = prev;
 
         _labelStyle.normal.textColor = labelColor;
-        GUI.Label(new Rect(x + 10f, yy, 50f, hgt), "CELL", _labelStyle);
+        GUI.Label(new Rect(x + 10f * s, yy, 50f * s, hgt), "CELL", _labelStyle);
 
         if (_mouseHitValid && GridSystem.instance != null)
         {
             _valueStyle.normal.textColor = valueColor;
-            GUI.Label(new Rect(x + 56f, yy, w - 56f, hgt),
+            GUI.Label(new Rect(x + 54f * s, yy, w - 54f * s, hgt),
                       $"({_mouseCell.x}, {_mouseCell.y}, {_mouseCell.z})", _valueStyle);
         }
         else
         {
-            _hintStyle.normal.textColor = hintColor;
-            GUI.Label(new Rect(x + 56f, yy, w - 56f, hgt), "—", _hintStyle);
+            _hintStyle.alignment         = TextAnchor.MiddleLeft;
+            _hintStyle.normal.textColor  = hintColor;
+            GUI.Label(new Rect(x + 54f * s, yy, w - 54f * s, hgt), "—", _hintStyle);
         }
     }
 
@@ -256,28 +279,29 @@ public class TopLeftHUD : MonoBehaviour
 
     // ── Style bootstrap ──────────────────────────────────────────────────
 
-    void BuildStyles()
+    float _builtScale = -1f;
+    void BuildStyles(float s)
     {
-        if (_stylesBuilt) return;
-        _stylesBuilt = true;
+        if (Mathf.Approximately(_builtScale, s) && _labelStyle != null) return;
+        _builtScale = s;
 
         _labelStyle = new GUIStyle(GUI.skin.label)
         {
-            fontSize  = 11,
+            fontSize  = Mathf.Max(8, Mathf.RoundToInt(11f * s)),
             fontStyle = FontStyle.Bold,
             alignment = TextAnchor.MiddleLeft,
         };
         _valueStyle = new GUIStyle(GUI.skin.label)
         {
-            fontSize  = 16,
+            fontSize  = Mathf.Max(9, Mathf.RoundToInt(15f * s)),
             fontStyle = FontStyle.Bold,
             alignment = TextAnchor.MiddleLeft,
         };
         _hintStyle = new GUIStyle(GUI.skin.label)
         {
-            fontSize  = 10,
+            fontSize  = Mathf.Max(8, Mathf.RoundToInt(10f * s)),
             fontStyle = FontStyle.Normal,
-            alignment = TextAnchor.MiddleRight,
+            alignment = TextAnchor.MiddleLeft,
         };
     }
 }

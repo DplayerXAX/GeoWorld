@@ -40,17 +40,21 @@ public partial class PlacementController
             return;
         }
 
-        EnsurePanelStyles();
+        float s = UiScale.Get();
+        EnsurePanelStyles();                       // FIXED reference sizes; scaled below via GUI.matrix
 
         bool  isTurret = TurretTypes.Is(ins.data.blockType);
-        float panelW   = 236f;
-        float margin   = 12f;
-        // Hug the content: use last repaint's measured height for THIS selection;
-        // fall back to a (generous) estimate on the first frame of a new selection
-        // so nothing clips before the first measurement lands.
+        // Everything below is in REFERENCE (unscaled) units. The whole panel is
+        // scaled by `s` with one GUI.matrix transform, so it stays perfectly
+        // proportional at any window size (no per-element font rounding drift).
+        float panelW = 240f;
         float panelH = (_selPanelFor == ins && _selPanelHeight > 1f)
             ? _selPanelHeight
             : EstimatePanelHeight(ins, isTurret);
+
+        float margin  = 12f * s;
+        float screenW = panelW * s;                // on-screen footprint
+        float screenH = panelH * s;
 
         // Anchor the panel to the block's on-screen position so it reads as a
         // spatial label that tracks the block as the camera moves. Falls back to
@@ -62,29 +66,31 @@ public partial class PlacementController
             : new Vector3(-1f, -1f, -1f);
         if (sp.z <= 0f)
         {
-            x = Screen.width - panelW - margin;
-            y = (Screen.height - panelH) * 0.5f;
+            x = Screen.width - screenW - margin;
+            y = (Screen.height - screenH) * 0.5f;
         }
         else
         {
             x = sp.x + 32f;                                  // just right of the block
-            y = (Screen.height - sp.y) - panelH * 0.5f;      // GUI y, centred on block
-            if (x + panelW + margin > Screen.width)
-                x = sp.x - panelW - 32f;                     // flip to the left if it'd clip
-            x = Mathf.Clamp(x, margin, Screen.width  - panelW - margin);
-            y = Mathf.Clamp(y, margin, Screen.height - panelH - margin);
+            y = (Screen.height - sp.y) - screenH * 0.5f;     // GUI y, centred on block
+            if (x + screenW + margin > Screen.width)
+                x = sp.x - screenW - 32f;                    // flip to the left if it'd clip
+            x = Mathf.Clamp(x, margin, Screen.width  - screenW - margin);
+            y = Mathf.Clamp(y, margin, Screen.height - screenH - margin);
         }
-        _panelRect = new Rect(x, y, panelW, panelH);
+        _panelRect = new Rect(x, y, screenW, screenH);       // hit-test in screen px
 
-        // Pop-in: scale the panel up from its center (with a little overshoot) when
-        // a new target is selected. Restart the timer on selection change.
+        // Pop-in bounce on selection change.
         if (_panelAnimFor != ins) { _panelAnimStart = Time.time; _panelAnimFor = ins; }
         float pt  = selectionPopDuration > 1e-4f ? (Time.time - _panelAnimStart) / selectionPopDuration : 1f;
         float pop = Mathf.Lerp(0.6f, 1f, EaseOutBack(Mathf.Clamp01(pt)));
-        Matrix4x4 prevGuiMatrix = GUI.matrix;
-        GUIUtility.ScaleAroundPivot(new Vector2(pop, pop), _panelRect.center);
 
-        GUILayout.BeginArea(_panelRect);
+        // One uniform scale (resolution × pop) around the panel's screen centre.
+        float cx = x + screenW * 0.5f, cy = y + screenH * 0.5f;
+        Matrix4x4 prevGuiMatrix = GUI.matrix;
+        GUIUtility.ScaleAroundPivot(new Vector2(s * pop, s * pop), new Vector2(cx, cy));
+
+        GUILayout.BeginArea(new Rect(cx - panelW * 0.5f, cy - panelH * 0.5f, panelW, panelH));
         GUILayout.BeginVertical(_panelBox, GUILayout.Width(panelW));
 
         GUILayout.Label(isTurret
@@ -122,6 +128,7 @@ public partial class PlacementController
     // editable. Forecast is cached per round (non-destructive to the run RNG).
     void DrawStartPanel()
     {
+        float s = UiScale.Get();
         EnsurePanelStyles();
 
         var gfm   = GameFlowManager.Instance;
@@ -133,14 +140,19 @@ public partial class PlacementController
         }
         var fc = _startForecast;
 
-        float panelW = 236f;
-        float panelH = EstimateStartPanelHeight(fc);
-        float margin = 12f;
-        float x = Screen.width  - panelW - margin;
-        float y = (Screen.height - panelH) * 0.5f;
-        _panelRect = new Rect(x, y, panelW, panelH);
+        // Reference (unscaled) units, scaled uniformly by GUI.matrix below.
+        float panelW  = 236f;
+        float panelH  = EstimateStartPanelHeight(fc);
+        float margin  = 12f * s;
+        float screenW = panelW * s, screenH = panelH * s;
+        float x = Screen.width  - screenW - margin;
+        float y = (Screen.height - screenH) * 0.5f;
+        _panelRect = new Rect(x, y, screenW, screenH);
 
-        GUILayout.BeginArea(_panelRect, GUIContent.none, _panelBox);
+        float cx = x + screenW * 0.5f, cy = y + screenH * 0.5f;
+        Matrix4x4 prevGuiMatrix = GUI.matrix;
+        GUIUtility.ScaleAroundPivot(new Vector2(s, s), new Vector2(cx, cy));
+        GUILayout.BeginArea(new Rect(cx - panelW * 0.5f, cy - panelH * 0.5f, panelW, panelH), GUIContent.none, _panelBox);
 
         GUILayout.Label("Spawn Point", _panelTitle);
         PanelDivider();
@@ -169,6 +181,7 @@ public partial class PlacementController
         }
 
         GUILayout.EndArea();
+        GUI.matrix = prevGuiMatrix;
     }
 
     float EstimateStartPanelHeight(GameFlowManager.WaveForecast fc)
@@ -371,7 +384,7 @@ public partial class PlacementController
         string next = turret.NextBasicUpgradeDescription(path);
 
         GUILayout.BeginHorizontal();
-        GUILayout.Label($"{name} {level}/3", _panelValue, GUILayout.Width(92f));
+        GUILayout.Label($"{name} {level}/3", _panelValue, GUILayout.Width(88f));
         GUILayout.Label(next, _panelLabel);
         GUILayout.EndHorizontal();
 
@@ -380,7 +393,7 @@ public partial class PlacementController
         GUI.enabled = canUpgrade;
 
         string buttonText = canUpgrade ? $"Upgrade {name}" : (level >= 3 ? "Max" : "Locked");
-        if (GUILayout.Button(buttonText, _panelButton, GUILayout.Height(30f)))
+        if (GUILayout.Button(buttonText, _panelButton, GUILayout.Height(28f)))
         {
             if (path == BasicTurretUpgradePath.Power)
                 _panelPowerUpgradeRequested = true;
@@ -405,7 +418,7 @@ public partial class PlacementController
 
         GUILayout.BeginHorizontal();
 
-        if (GUILayout.Button("Pick up", _panelButton,GUILayout.Height(34f),GUILayout.ExpandWidth(true)))
+        if (GUILayout.Button("Pick up", _panelButton,GUILayout.Height(32f),GUILayout.ExpandWidth(true)))
         {
             _panelPickUpRequested = true;
         }
@@ -415,7 +428,7 @@ public partial class PlacementController
         var prevBg = GUI.backgroundColor;
         GUI.backgroundColor = new Color(0.86f, 0.36f, 0.32f);
 
-        if (GUILayout.Button($"Sell +{refund}",_panelButton, GUILayout.Height(34f),GUILayout.ExpandWidth(true)))
+        if (GUILayout.Button($"Sell +{refund}",_panelButton, GUILayout.Height(32f),GUILayout.ExpandWidth(true)))
         {
             _panelSellRequested = true;
         }
@@ -433,7 +446,7 @@ public partial class PlacementController
     void PanelRow(string label, string value)
     {
         GUILayout.BeginHorizontal();
-        GUILayout.Label(label, _panelLabel, GUILayout.Width(72f));
+        GUILayout.Label(label, _panelLabel, GUILayout.Width(58f));
         GUILayout.Label(value, _panelValue);
         GUILayout.EndHorizontal();
     }
@@ -449,52 +462,32 @@ public partial class PlacementController
         GUILayout.Space(4f);
     }
 
+    // FIXED reference sizes — the whole panel is uniformly scaled by GUI.matrix in
+    // Draw*Panel, so styles never need per-element scaling (which caused font-rounding
+    // drift and clipping). Built once.
     void EnsurePanelStyles()
     {
         if (_panelBox != null) return;
 
         _panelBox = new GUIStyle(GUI.skin.box)
         {
-            padding   = new RectOffset(12, 12, 10, 10),
+            padding   = new RectOffset(9, 9, 8, 8),
             alignment = TextAnchor.UpperLeft,
         };
 
-        _panelTitle = new GUIStyle(GUI.skin.label)
-        {
-            fontSize  = 22,
-            fontStyle = FontStyle.Bold,
-            wordWrap  = true,
-        };
+        _panelTitle = new GUIStyle(GUI.skin.label) { fontSize = 18, fontStyle = FontStyle.Bold, wordWrap = true };
         _panelTitle.normal.textColor = Color.white;
 
-        _panelLabel = new GUIStyle(GUI.skin.label)
-        {
-            fontSize = 16,
-            wordWrap = true,
-        };
+        _panelLabel = new GUIStyle(GUI.skin.label) { fontSize = 13, wordWrap = true };
         _panelLabel.normal.textColor = new Color(0.78f, 0.78f, 0.80f);
 
-        _panelValue = new GUIStyle(GUI.skin.label)
-        {
-            fontSize  = 16,
-            fontStyle = FontStyle.Bold,
-            wordWrap  = true,
-        };
+        _panelValue = new GUIStyle(GUI.skin.label) { fontSize = 13, fontStyle = FontStyle.Bold, wordWrap = true };
         _panelValue.normal.textColor = Color.white;
 
-        _panelProgress = new GUIStyle(GUI.skin.label)
-        {
-            fontSize  = 21,
-            fontStyle = FontStyle.Bold,
-            wordWrap  = true,
-        };
+        _panelProgress = new GUIStyle(GUI.skin.label) { fontSize = 15, fontStyle = FontStyle.Bold, wordWrap = true };
         _panelProgress.normal.textColor = Color.white;
 
-        _panelButton = new GUIStyle(GUI.skin.button)
-        {
-            fontSize  = 16,
-            fontStyle = FontStyle.Bold,
-        };
+        _panelButton = new GUIStyle(GUI.skin.button) { fontSize = 14, fontStyle = FontStyle.Bold };
     }
 
 }

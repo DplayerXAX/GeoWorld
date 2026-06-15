@@ -38,6 +38,7 @@ public class PauseMenu : MonoBehaviour
     bool _stylesBuilt;
 
     public bool IsPaused => _paused;
+    public static bool Paused;   // static mirror, so HUD can hide while paused
 
     void Update()
     {
@@ -55,6 +56,7 @@ public class PauseMenu : MonoBehaviour
             Time.timeScale = _prevTimeScale;
             _paused = false;
         }
+        Paused = false;
         if (_overlay != null) { Destroy(_overlay); _overlay = null; _stylesBuilt = false; }
     }
 
@@ -63,6 +65,7 @@ public class PauseMenu : MonoBehaviour
     {
         if (paused == _paused) return;
         _paused = paused;
+        Paused  = paused;
 
         if (_paused)
         {
