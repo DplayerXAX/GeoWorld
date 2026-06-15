@@ -28,6 +28,12 @@ public class AudioManager : MonoBehaviour
     public AK.Wwise.Event fight_start;
     public AK.Wwise.Event fight_end;
 
+    [Header("Volume RTPCs (Wwise global, 0..100)")]
+    [Tooltip("Global Wwise RTPC names bound to your bus volumes. SettingsScreen drives these 0..1 → 0..100. Set them up on the Master / Music / SFX buses in Wwise.")]
+    public string masterVolumeRtpc = "MasterVolume";
+    public string musicVolumeRtpc  = "MusicVolume";
+    public string sfxVolumeRtpc    = "SFXVolume";
+
     [Header("Chord pad (Wwise Switch driving the BGM pad layer)")]
     // The Switch Group name in your Wwise project. Switch values must
     // match BlockType enum names (Home / Lift / Pull / Shadow).
@@ -55,6 +61,8 @@ public class AudioManager : MonoBehaviour
 
         if (BGM != null && BGM.IsValid())
             _currentBgmPlayingId = BGM.Post(this.gameObject);
+
+        GameSettings.ApplyAudio();   // push saved volumes once the engine is up
     }
 
     void SetChordOnObject(BlockType type, GameObject target)
@@ -120,6 +128,17 @@ public class AudioManager : MonoBehaviour
         }
 
         _currentBgmPlayingId = next.Post(host);
+    }
+
+    // ===== VOLUME (Wwise global RTPCs) =====
+    public void SetMasterVolume(float v01) => SetVolRtpc(masterVolumeRtpc, v01);
+    public void SetMusicVolume (float v01) => SetVolRtpc(musicVolumeRtpc,  v01);
+    public void SetSfxVolume   (float v01) => SetVolRtpc(sfxVolumeRtpc,    v01);
+
+    void SetVolRtpc(string rtpc, float v01)
+    {
+        if (string.IsNullOrEmpty(rtpc)) return;
+        AkUnitySoundEngine.SetRTPCValue(rtpc, Mathf.Clamp01(v01) * 100f);
     }
 
     public void PlayRotate()

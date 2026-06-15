@@ -136,6 +136,20 @@ public class OrbitCamera : MonoBehaviour
         _panOffset    = Vector3.zero;
     }
 
+    // Focus on a fixed world point (no scene Transform needed). Uses an internal
+    // anchor and snaps currentFocusPoint so the very first frame is already
+    // centred. Sets `target` too, so it survives whatever Start() order ran.
+    Transform _focusAnchor;
+    public void FocusOnPoint(Vector3 worldPoint)
+    {
+        if (_focusAnchor == null) _focusAnchor = new GameObject("OrbitFocusAnchor").transform;
+        _focusAnchor.position = worldPoint;
+        target            = _focusAnchor;
+        desiredTarget     = _focusAnchor;
+        currentFocusPoint = worldPoint;
+        _panOffset        = Vector3.zero;
+    }
+
     // Called by PlacementController on WASD/QE in Select mode.
     public void Pan(Vector3 worldDelta)
     {

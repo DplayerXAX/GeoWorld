@@ -152,6 +152,8 @@ public class PlacementHintOverlay : MonoBehaviour
 
     // ── Lifecycle ────────────────────────────────────────────────────────
 
+    Camera _cam;
+
     void Update()
     {
         var pc   = PlacementController.Instance;
@@ -193,7 +195,8 @@ public class PlacementHintOverlay : MonoBehaviour
 
         float fadeAlpha = Mathf.Clamp01((Time.time - _buildTime) / Mathf.Max(0.001f, fadeInDuration));
 
-        var mainCam = Camera.main;
+        if (_cam == null) _cam = Camera.main;
+        var mainCam = _cam;
         for (int i = 0; i < _arrows.Length; i++)
         {
             var a = _arrows[i];

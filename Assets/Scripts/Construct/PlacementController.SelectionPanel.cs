@@ -7,6 +7,8 @@ public partial class PlacementController
     // SELECTION INFO PANEL
     // =========================
 
+    Camera _hudCam;   // cached main camera for projecting the selected block to screen
+
     // True when the cursor is over the info panel this frame. Used in Update to
     // swallow the click so the panel's own IMGUI buttons handle it instead of
     // the world-selection raycast (which would deselect). Input.mousePosition is
@@ -49,8 +51,29 @@ public partial class PlacementController
         float panelH = (_selPanelFor == ins && _selPanelHeight > 1f)
             ? _selPanelHeight
             : EstimatePanelHeight(ins, isTurret);
-        float x = Screen.width  - panelW - margin;
-        float y = (Screen.height - panelH) * 0.5f;
+
+        // Anchor the panel to the block's on-screen position so it reads as a
+        // spatial label that tracks the block as the camera moves. Falls back to
+        // the right edge if the block is off / behind the camera.
+        if (_hudCam == null) _hudCam = Camera.main;
+        float x, y;
+        Vector3 sp = _hudCam != null
+            ? _hudCam.WorldToScreenPoint(ins.visualObject.transform.position)
+            : new Vector3(-1f, -1f, -1f);
+        if (sp.z <= 0f)
+        {
+            x = Screen.width - panelW - margin;
+            y = (Screen.height - panelH) * 0.5f;
+        }
+        else
+        {
+            x = sp.x + 32f;                                  // just right of the block
+            y = (Screen.height - sp.y) - panelH * 0.5f;      // GUI y, centred on block
+            if (x + panelW + margin > Screen.width)
+                x = sp.x - panelW - 32f;                     // flip to the left if it'd clip
+            x = Mathf.Clamp(x, margin, Screen.width  - panelW - margin);
+            y = Mathf.Clamp(y, margin, Screen.height - panelH - margin);
+        }
         _panelRect = new Rect(x, y, panelW, panelH);
 
         // Pop-in: scale the panel up from its center (with a little overshoot) when
