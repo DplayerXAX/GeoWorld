@@ -44,6 +44,9 @@ public class LevelMapController : MonoBehaviour
     readonly HashSet<Vector3Int> _allCells = new();
     readonly HashSet<Vector3Int> _surface  = new();
     readonly Dictionary<Vector3Int, LevelNode> _cellToNode = new();
+    // (x,z) column → its top-exposed cell. Lets the pawn step between adjacent
+    // columns at ANY height difference (climbing the shared edge).
+    readonly Dictionary<Vector2Int, Vector3Int> _columnTop = new();
     Vector3Int _currentCell;
 
     void Start()
@@ -150,14 +153,19 @@ public class LevelMapController : MonoBehaviour
     // plus a cell→node lookup so arriving on a level block shows its panel.
     void BuildSurface()
     {
-        _allCells.Clear(); _surface.Clear(); _cellToNode.Clear();
+        _allCells.Clear(); _surface.Clear(); _cellToNode.Clear(); _columnTop.Clear();
 
         foreach (var n in _nodes)
             if (n.cells != null)
                 foreach (var c in n.cells) { _allCells.Add(c); _cellToNode[c] = n; }
 
         foreach (var c in _allCells)
-            if (!_allCells.Contains(c + Vector3Int.up)) _surface.Add(c);
+            if (!_allCells.Contains(c + Vector3Int.up))
+            {
+                _surface.Add(c);
+                var col = new Vector2Int(c.x, c.z);
+                if (!_columnTop.TryGetValue(col, out var ex) || c.y > ex.y) _columnTop[col] = c;
+            }
     }
 
     // Highest top-exposed cell of a node (where the pawn rests on it).
@@ -184,8 +192,23 @@ public class LevelMapController : MonoBehaviour
     {
         _moving = true;
 
-        var pts = new List<Vector3>(cells.Count);
-        foreach (var c in cells) pts.Add(SurfaceTop(c));
+        // Build world waypoints; when two consecutive cells differ in height, hug
+        // the shared edge: go to the boundary, climb up/down the wall, then onto
+        // the next top — so the pawn crawls over edges instead of cutting through air.
+        var pts = new List<Vector3>();
+        pts.Add(SurfaceTop(cells[0]));
+        for (int i = 1; i < cells.Count; i++)
+        {
+            Vector3 prevTop = SurfaceTop(cells[i - 1]);
+            Vector3 curTop  = SurfaceTop(cells[i]);
+            if (cells[i].y != cells[i - 1].y)
+            {
+                Vector3 edge = (gridSystem.GridToWorld(cells[i - 1]) + gridSystem.GridToWorld(cells[i])) * 0.5f;
+                pts.Add(new Vector3(edge.x, prevTop.y, edge.z));   // out to the wall at the current height
+                pts.Add(new Vector3(edge.x, curTop.y,  edge.z));   // climb up / down the wall
+            }
+            pts.Add(curTop);
+        }
 
         if (pawn != null)
         {
@@ -218,8 +241,8 @@ public class LevelMapController : MonoBehaviour
     Vector3 SurfaceTop(Vector3Int c)
         => gridSystem.GridToWorld(c) + Vector3.up * (gridSystem.cellSize * 0.5f + pawnSurfaceLift);
 
-    // BFS across the surface: step to a 4-neighbour column at the same height or
-    // one step up/down, staying on top-exposed cells.
+    // BFS across the surface: from a top cell, step to each 4-neighbour COLUMN's
+    // top-exposed cell at ANY height — the pawn climbs the shared edge to get there.
     List<Vector3Int> SurfaceBfs(Vector3Int start, HashSet<Vector3Int> goals, HashSet<Vector3Int> surface)
     {
         if (!surface.Contains(start)) return null;
@@ -232,26 +255,21 @@ public class LevelMapController : MonoBehaviour
         Vector3Int end = start;
         bool reached = goals.Contains(start);
 
-        Vector3Int[] horiz = { new(1, 0, 0), new(-1, 0, 0), new(0, 0, 1), new(0, 0, -1) };
+        Vector2Int[] horiz = { new(1, 0), new(-1, 0), new(0, 1), new(0, -1) };
 
         while (!reached && q.Count > 0)
         {
             var cur = q.Dequeue();
             foreach (var h in horiz)
             {
-                // First valid surface cell in this direction: same level, then up, then down.
-                Vector3Int[] cand = { cur + h, cur + h + Vector3Int.up, cur + h + Vector3Int.down };
-                foreach (var nc in cand)
+                var col = new Vector2Int(cur.x + h.x, cur.z + h.y);
+                if (!_columnTop.TryGetValue(col, out var nc)) continue;
+                if (!seen.Contains(nc))
                 {
-                    if (!surface.Contains(nc)) continue;
-                    if (!seen.Contains(nc))
-                    {
-                        seen.Add(nc);
-                        prev[nc] = cur;
-                        if (goals.Contains(nc)) { end = nc; reached = true; }
-                        q.Enqueue(nc);
-                    }
-                    break;
+                    seen.Add(nc);
+                    prev[nc] = cur;
+                    if (goals.Contains(nc)) { end = nc; reached = true; }
+                    q.Enqueue(nc);
                 }
                 if (reached) break;
             }
@@ -290,7 +308,7 @@ public class LevelMapController : MonoBehaviour
         var lv  = _selected.level;
         var rec = SaveSystem.Profile.GetRecord(lv.levelId);
 
-        float w = 300f, h = 230f;
+        float w = 150f, h = 130f;
         GUILayout.BeginArea(new Rect(Screen.width - w - 24f, (Screen.height - h) * 0.5f, w, h),
                             GUIContent.none, GUI.skin.box);
         GUILayout.Label(string.IsNullOrEmpty(lv.displayName) ? lv.levelId : lv.displayName, _title);

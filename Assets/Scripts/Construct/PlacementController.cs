@@ -18,6 +18,15 @@ public partial class PlacementController : MonoBehaviour
     public GameObject cubePrefab;
     public Transform previewParent;
     public OrbitCamera cam;
+
+    // Tutorial hook: when set, a placement is only allowed if this returns true for
+    // the would-be block + world cells (after geometry is otherwise valid). Lets the
+    // tutorial force the player onto the highlighted guide.
+    public System.Func<BlockData, Vector3Int[], bool> placementConstraint;
+    // Fired after a block is successfully placed (block + absolute world cells).
+    public static event System.Action<BlockData, Vector3Int[]> BlockPlaced;
+    // Fired when the held block is rotated (tutorial 'rotate' step).
+    public static event System.Action BlockRotated;
     public Vector3Int SnappedGridPos => baseGridPos;
     public Vector3Int CurrentGridPos => currentGridPos;
     [Range(0.5f, 4f)] public float snapGridRadius = 1.5f;
@@ -300,14 +309,16 @@ public partial class PlacementController : MonoBehaviour
             else                                 normalTypes.Add(b);
         }
 
-        var blockRow  = RollRow(normalTypes, blockCount);
-        var turretRow = RollRow(turretTypes, turretCount);
+        // Use the run-scoped seeded RNG so a fixed runSeed gives a deterministic
+        // shop (important for tutorials / reproducible runs).
+        var rng   = GameFlowManager.Instance?.Rng;
+        var blockRow  = RollRow(normalTypes, blockCount, rng);
+        var turretRow = RollRow(turretTypes, turretCount, rng);
 
         // Roll a synergy color for each token. Non-turrets sample from the
         // run's ColorDistribution; turrets stay BlockColor.None (combat
         // pieces don't participate in synergies for now).
         var dist  = GameFlowManager.Instance?.colorDistribution;
-        var rng   = GameFlowManager.Instance?.Rng;
         var blockColors  = RollColors(blockRow.Length,  dist, rng, isTurret: false);
         var turretColors = RollColors(turretRow.Length, dist, rng, isTurret: true);
 
@@ -315,12 +326,12 @@ public partial class PlacementController : MonoBehaviour
             blockRow, turretRow, blockColors, turretColors, cubePrefab, grid);
     }
 
-    static BlockData[] RollRow(List<BlockData> pool, int count)
+    static BlockData[] RollRow(List<BlockData> pool, int count, Xoshiro256StarStar rng)
     {
         if (count <= 0 || pool == null || pool.Count == 0) return System.Array.Empty<BlockData>();
         var row = new BlockData[count];
         for (int i = 0; i < count; i++)
-            row[i] = pool[Random.Range(0, pool.Count)];
+            row[i] = pool[rng != null ? rng.NextInt(pool.Count) : Random.Range(0, pool.Count)];
         return row;
     }
 
@@ -529,23 +540,29 @@ public partial class PlacementController : MonoBehaviour
         // world frame, so 1/2/3 always rotate around world X/Y/Z regardless
         // of how the block has been turned before. Keeps the visual ring
         // overlay axis-aligned and predictable.
+        bool rotated = false;
         if (Input.GetKeyDown(KeyCode.Alpha1))
         {
             AudioManager.Instance.PlayRotate();
             _targetRotation = Quaternion.Euler(90, 0, 0) * _targetRotation;
+            rotated = true;
         }
 
         if (Input.GetKeyDown(KeyCode.Alpha2))
         {
             AudioManager.Instance.PlayRotate();
             _targetRotation = Quaternion.Euler(0, 90, 0) * _targetRotation;
+            rotated = true;
         }
 
         if (Input.GetKeyDown(KeyCode.Alpha3))
         {
             AudioManager.Instance.PlayRotate();
             _targetRotation = Quaternion.Euler(0, 0, 90) * _targetRotation;
+            rotated = true;
         }
+
+        if (rotated) BlockRotated?.Invoke();
     }
 
     void HandleModeSwitch()
@@ -939,6 +956,18 @@ public partial class PlacementController : MonoBehaviour
             return;
         }
 
+        // Tutorial guide: must land exactly on the highlighted ghost.
+        if (placementConstraint != null)
+        {
+            var wc = new Vector3Int[cells.Length];
+            for (int i = 0; i < cells.Length; i++) wc[i] = currentGridPos + cells[i];
+            if (!placementConstraint(currentBlock, wc))
+            {
+                ShowPlacementPopup("Place it on the highlighted guide.", 2f);
+                return;
+            }
+        }
+
         if (isNewBlock && ResourceManager.Instance != null)
         {
             ResourceManager.Instance.TryBuy(_pendingShopPrice, currentBlock.blockType);
@@ -1020,6 +1049,9 @@ public partial class PlacementController : MonoBehaviour
         // Track placed count for shop price scaling (both new and repositioned blocks).
         ResourceManager.Instance?.OnBlockPlaced(ins.data.blockType);
 
+        // Tutorial / listeners: announce the successful placement.
+        BlockPlaced?.Invoke(ins.data, ins.occupiedCells.ToArray());
+
         // Auto-check path after every block placement updates live preview line.
         GameFlowManager.Instance?.EvaluateGrid();
 
@@ -1040,10 +1072,8 @@ public partial class PlacementController : MonoBehaviour
             bool shopHandled = ShopController.Instance?.RemoveItemAnimated(activePhysicsObject) ?? false;
             if (!shopHandled) Destroy(activePhysicsObject);
             activePhysicsObject = null;
-
-            // Testing mode: immediately spawn a replacement so the shop never runs dry.
-            if (shopHandled && (ResourceManager.Instance?.testing ?? false))
-                SpawnRoundBlocks(gfm?.blocksPerTurn ?? 3, gfm?.turretsPerTurn ?? 1);
+            // (Removed: testing-mode refill that re-rolled a FULL round on every
+            //  placement — it flooded the shop. Use the Refresh button instead.)
         }
 
         isPickingUpObject = false;

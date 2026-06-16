@@ -51,6 +51,7 @@ public class ShopBackdrop : MonoBehaviour
 
         _quad = GameObject.CreatePrimitive(PrimitiveType.Quad);
         _quad.name = "ShopBackdrop";
+        _quad.layer = LayerMask.NameToLayer("ShopItem");
         // Quads ship with a collider — strip it so the player can't accidentally click it.
         var col = _quad.GetComponent<Collider>();
         if (col != null) Destroy(col);

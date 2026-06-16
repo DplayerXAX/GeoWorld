@@ -26,7 +26,7 @@ RenderSettings:
   m_AmbientIntensity: 0
   m_AmbientMode: 0
   m_SubtractiveShadowColor: {r: 0.42, g: 0.478, b: 0.627, a: 1}
-  m_SkyboxMaterial: {fileID: 2100000, guid: a664405f7cc0a7a41ac57e76802e22e6, type: 2}
+  m_SkyboxMaterial: {fileID: 0}
   m_HaloStrength: 0.5
   m_FlareStrength: 1
   m_FlareFadeSpeed: 3
@@ -135,7 +135,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!4 &23567971
 Transform:
   m_ObjectHideFlags: 0
@@ -1394,6 +1394,7 @@ MonoBehaviour:
   phase: 0
   runsPerEndpoint: 3
   maxLoopLayers: 5
+  autoEndpointBounds: 0
   waveGenerator: {fileID: 11400000, guid: e3dc511478ca59243959270e939be5ed, type: 2}
   runSeed: 0
   waves: []
@@ -1838,7 +1839,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!114 &745744073
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2428,6 +2429,9 @@ MonoBehaviour:
     idInternal: 0
     valueGuidInternal: 
     WwiseObjectReference: {fileID: 11400000, guid: a769a98ee568cdc45828c71ac6fc2119, type: 2}
+  masterVolumeRtpc: MasterVolume
+  musicVolumeRtpc: MusicVolume
+  sfxVolumeRtpc: SFXVolume
   chordSwitchGroup: BlockChord
 --- !u!114 &1746692275
 MonoBehaviour:
@@ -2555,6 +2559,7 @@ MonoBehaviour:
   expandSpeed: 9
   shopToggleKey: 102
   shopCenter: {x: -99, y: -99, z: -99}
+  shopLayerName: ShopItem
   blockSpacing: 3.7
   blockRowOffset: {x: 0, y: 1.6, z: 0}
   turretRowOffset: {x: 0, y: -1.6, z: 0}
@@ -2595,6 +2600,7 @@ MonoBehaviour:
   tooltipBg: {r: 0.04, g: 0.04, b: 0.08, a: 0.9}
   flipHoverX: 0
   flipHoverY: 1
+  hoverRadius: 0.35
   logHover: 0
   debugShowRTPreview: 0
 --- !u!4 &2001472448

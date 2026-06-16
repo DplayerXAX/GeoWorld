@@ -215,7 +215,14 @@ public class GameFlowManager : MonoBehaviour
     void CreateFirstStage()
     {
         ConfigureEndpointBounds();
-        endpoints.Generate();
+
+        // Tutorials / authored levels can pin the start & end instead of randomising.
+        var lv = RunConfig.Mode == GameMode.Level ? RunConfig.Level : null;
+        if (lv != null && lv.fixedEndpoints)
+            endpoints.GenerateFixed(lv.startCell, lv.endCell);
+        else
+            endpoints.Generate();
+
         allStarts.Add(endpoints.startCell);
         allEnds.Add(endpoints.endCell);
     }

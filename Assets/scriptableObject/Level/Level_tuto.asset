@@ -15,7 +15,7 @@ MonoBehaviour:
   levelId: Tutorial
   displayName: Tutorial
   description: Hello world!
-  runSeed: 0
+  runSeed: 25
   blocksPerTurn: 8
   turretsPerTurn: 3
   waves: []
@@ -23,3 +23,14 @@ MonoBehaviour:
   unlockedByDefault: 1
   unlocks: []
   techReward: 1
+  isTutorial: 1
+  fixedEndpoints: 1
+  startCell: {x: 0, y: 0, z: 0}
+  endCell: {x: 3, y: 0, z: 3}
+  tutorialSteps:
+  - kind: 0
+    block: {fileID: 11400000, guid: eb476e18de9d37e4dbc97c8247017e54, type: 2}
+    origin: {x: 1, y: 0, z: 1}
+    rotation90: {x: 1, y: 0, z: 0}
+    cellsOverride: []
+    hint: Place a block on this area lol
