@@ -43,6 +43,14 @@ public class LevelEndpointGenerator : MonoBehaviour
         SpawnEndpointAt(endCell,   false);
     }
 
+    // Fixed start/end (tutorials / hand-authored stages) — skips random sampling.
+    public void GenerateFixed(Vector3Int start, Vector3Int end)
+    {
+        startCell = start;
+        endCell   = end;
+        SpawnVisual();
+    }
+
     // Public spawn-at-known-cell. Used by snapshot restore.
     public void SpawnEndpointAt(Vector3Int cell, bool isStart)
     {

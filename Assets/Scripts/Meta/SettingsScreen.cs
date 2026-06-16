@@ -34,7 +34,8 @@ public class SettingsScreen : MonoBehaviour
     void OnGUI()
     {
         if (!Open) return;
-        float s = Mathf.Max(0.5f, Screen.height / 1080f);
+        GUI.depth = -1000;            // force on top of every other IMGUI panel
+        float s = UiScale.Get();
         BuildStyles(s);
 
         Fill(new Rect(0, 0, Screen.width, Screen.height), new Color(0.05f, 0.05f, 0.06f, 0.78f));

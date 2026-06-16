@@ -51,20 +51,31 @@ public class LevelMapAuthor : MonoBehaviour
         GUILayout.BeginArea(new Rect(12f, 12f, 250f, Screen.height - 24f), GUIContent.none, GUI.skin.box);
 
         GUILayout.Label("LEVEL MAP AUTHOR", _label);
+
+        // Save / Load kept at the TOP so they're always reachable — even with a
+        // block picked and the (tall) assign-level list open below.
+        if (GUILayout.Button($"SAVE MAP  ({mapName})", _btn, GUILayout.Height(38f)))
+            LevelMapIO.Save(LevelMapIO.CaptureCurrent(mapName), mapName);
+        if (GUILayout.Button("LOAD MAP (edit)", _btn, GUILayout.Height(26f)))
+            LoadForEdit();
+
+        GUILayout.Space(8f);
         GUILayout.Label("Right-click a block to tag it.", _label);
         GUILayout.Label(_picked == null ? "(none picked)" : $"Picked: {DescribeTag()}", _label);
 
         if (_picked != null)
         {
             GUILayout.Space(4f);
-            if (GUILayout.Button("Mark START", _btn))   { var t = Tag(); t.isStart = true;  t.level = null; }
+            bool deselect = GUILayout.Button("Deselect", _btn);   // applied after layout (avoids IMGUI mismatch)
+
+            if (GUILayout.Button("Mark START", _btn))    { var t = Tag(); t.isStart = true;  t.level = null; }
             if (GUILayout.Button("Make Waypoint", _btn)) { var t = Tag(); t.isStart = false; t.level = null; }
             if (GUILayout.Button("Clear tag", _btn))
             { var t = _picked.GetComponent<LevelNodeTag>(); if (t != null) Destroy(t); }
 
             GUILayout.Space(6f);
             GUILayout.Label("Assign level:", _label);
-            _scroll = GUILayout.BeginScrollView(_scroll, GUILayout.Height(220f));
+            _scroll = GUILayout.BeginScrollView(_scroll, GUILayout.Height(200f));
             if (database != null && database.levels != null)
                 foreach (var lv in database.levels)
                 {
@@ -73,13 +84,9 @@ public class LevelMapAuthor : MonoBehaviour
                     if (GUILayout.Button(name, _btn)) { var t = Tag(); t.level = lv; t.isStart = false; }
                 }
             GUILayout.EndScrollView();
-        }
 
-        GUILayout.FlexibleSpace();
-        if (GUILayout.Button($"SAVE MAP  ({mapName})", _btn, GUILayout.Height(40f)))
-            LevelMapIO.Save(LevelMapIO.CaptureCurrent(mapName), mapName);
-        if (GUILayout.Button("LOAD MAP (edit)", _btn, GUILayout.Height(28f)))
-            LoadForEdit();
+            if (deselect) _picked = null;
+        }
 
         GUILayout.EndArea();
     }

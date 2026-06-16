@@ -828,6 +828,7 @@ public class ShopController : MonoBehaviour
 
     void OnGUI()
     {
+        if (SettingsScreen.Open) return;   // GL rift would punch through the settings overlay
         BuildStyles();
         if (_riftScale > 0.005f) DrawRift();
         if (_riftScale > 0.5f)   DrawPriceLabels();
