@@ -160,11 +160,8 @@ public class GameFlowManager : MonoBehaviour
 
     void ReturnToMap()
     {
-        const string mapScene = "LevelSelect";
-        if (Application.CanStreamedLevelBeLoaded(mapScene))
-            UnityEngine.SceneManagement.SceneManager.LoadScene(mapScene);
-        else
-            Debug.LogWarning("[GameFlow] LevelSelect scene not in Build Settings — staying in gameplay after clear.");
+        Time.timeScale = 1f;
+        LoadingScreen.Go("LevelSelect");   // spinning-cube loading page, then async-load
     }
 
     void OnDestroy()
@@ -195,8 +192,8 @@ public class GameFlowManager : MonoBehaviour
     // restart UI; safest way to wipe all combat / music / scene state.
     public void RestartGame()
     {
-        UnityEngine.SceneManagement.SceneManager.LoadScene(
-            UnityEngine.SceneManagement.SceneManager.GetActiveScene().buildIndex);
+        Time.timeScale = 1f;
+        LoadingScreen.Go(UnityEngine.SceneManagement.SceneManager.GetActiveScene().name);
     }
 
     // ── Endpoint helpers ─────────────────────────────────────────────────────

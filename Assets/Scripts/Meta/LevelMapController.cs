@@ -292,7 +292,7 @@ public class LevelMapController : MonoBehaviour
     void LoadScene(string s)
     {
         if (!string.IsNullOrEmpty(s) && Application.CanStreamedLevelBeLoaded(s))
-            UnityEngine.SceneManagement.SceneManager.LoadScene(s);
+            LoadingScreen.Go(s);   // spinning-cube loading page, then async-load
         else
             Debug.LogWarning($"[LevelMap] scene '{s}' not in Build Settings.");
     }
