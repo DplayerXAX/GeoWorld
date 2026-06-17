@@ -1,6 +1,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.EventSystems;
 
 // Builds + drives the title backdrop so an empty Title scene "just works":
 //   • paper camera,
@@ -8,7 +9,7 @@ using UnityEngine;
 //   • constructivist "shards" that ASSEMBLE in on load, lean / parallax toward the
 //     cursor, thump when the menu moves, SHATTER out on Play, and spawn bursts
 //     when you click empty space.
-// Pairs with TitleScreen (menu) + TitleBackdrop (full-screen shader).
+// Pairs with TitleFlow (cube menu) + TitleBackdrop (full-screen shader).
 [DisallowMultipleComponent]
 public class TitleStage : MonoBehaviour
 {
@@ -20,7 +21,7 @@ public class TitleStage : MonoBehaviour
     public TitleCubeShowcase showcase;
     public List<Material> showcaseMaterials = new();
     public Material outlineMaterial;
-    public Vector3 cubePosition = new Vector3(2.4f, 0.2f, 0f);
+    public Vector3 cubePosition = new Vector3(0f, 0.2f, 0f);   // centre; TitleFlow slides it left/right
     public float   cubeSize     = 3.2f;
 
     [Header("Constructivist shards")]
@@ -210,7 +211,9 @@ public class TitleStage : MonoBehaviour
     void HandleBackgroundClick()
     {
         if (cam == null || _mode == Mode.Shatter || SettingsScreen.Open) return;
-        if (!Input.GetMouseButtonDown(0) || TitleScreen.PointerOverMenu) return;
+        // Don't burst when the click is on a UGUI element (menu/buttons).
+        if (!Input.GetMouseButtonDown(0)) return;
+        if (EventSystem.current != null && EventSystem.current.IsPointerOverGameObject()) return;
 
         var ray   = cam.ScreenPointToRay(Input.mousePosition);
         var plane = new Plane(-cam.transform.forward, transform.TransformPoint(cubePosition));
