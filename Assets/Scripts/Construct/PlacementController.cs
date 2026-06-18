@@ -379,6 +379,7 @@ public partial class PlacementController : MonoBehaviour
         }
 
         UpdatePreview();
+        UpdateInfoPanel();   // drive the UGUI selection panel (if wired)
 
         // Process deferred info-panel button clicks (queued during OnGUI).
         if (_panelPowerUpgradeRequested) { _panelPowerUpgradeRequested = false; TryUpgradeSelectedBasicTurret(BasicTurretUpgradePath.Power); }
@@ -393,10 +394,11 @@ public partial class PlacementController : MonoBehaviour
         }
         if (Input.GetMouseButtonDown(0))
         {
-            if (IsPointerOverSelectionPanel() || HudSidePanels.PointerOver)
+            if (IsPointerOverSelectionPanel() || HudSidePanels.PointerOver || PointerOverInfoPanel())
             {
-                // Click landed on an HUD panel (info / synergies / controls) — its
-                // IMGUI handles it. Skip world selection / placement underneath.
+                // Click landed on an HUD panel (info / synergies / controls) or the
+                // UGUI selection panel — it handles the click. Skip world
+                // selection / placement underneath.
             }
             else if (mode == PlacementMode.Edit)
             {

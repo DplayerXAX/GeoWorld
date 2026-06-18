@@ -7,7 +7,118 @@ public partial class PlacementController
     // SELECTION INFO PANEL
     // =========================
 
+    [Tooltip("UGUI selection panel (right side). Wire it and the IMGUI panel below is skipped.")]
+    public BlockInfoPanel infoPanel;
+
     Camera _hudCam;   // cached main camera for projecting the selected block to screen
+
+    bool PointerOverInfoPanel()
+        => infoPanel != null
+        && UnityEngine.EventSystems.EventSystem.current != null
+        && UnityEngine.EventSystems.EventSystem.current.IsPointerOverGameObject();
+
+    // Drives the UGUI panel (call every frame from Update). Mirrors DrawSelectionPanel's
+    // logic but pushes plain strings instead of laying out IMGUI.
+    void UpdateInfoPanel()
+    {
+        if (infoPanel == null) return;
+
+        // Spawn-point forecast (same gate as the IMGUI start panel).
+        if (mode == PlacementMode.Select && _selectedEndpoint != null && _selectedEndpointIsStart
+            && (GameFlowManager.Instance == null || GameFlowManager.Instance.phase != GamePhase.Running))
+        {
+            infoPanel.ShowReadonly("Spawn Point", BuildStartBody());
+            return;
+        }
+
+        var ins = selectedInstance;
+        if (mode != PlacementMode.Select || ins == null || ins.visualObject == null || ins.data == null)
+        {
+            infoPanel.Hide();
+            return;
+        }
+
+        bool   isTurret = TurretTypes.Is(ins.data.blockType);
+        string title    = isTurret ? TurretTypes.DisplayName(ins.data.blockType) : ins.data.DisplayName;
+        string body     = BuildInfoBody(ins, isTurret);
+
+        bool combatLocked = GameFlowManager.Instance != null
+            && GameFlowManager.Instance.phase == GamePhase.Running && !isTurret;
+        int refund = ComputeSellRefund(ins);
+
+        infoPanel.Show(title, body, !combatLocked, $"Sell +{refund}",
+            () => _panelPickUpRequested = true,
+            () => _panelSellRequested   = true);
+    }
+
+    string BuildInfoBody(PlacedBlockInstance ins, bool isTurret)
+    {
+        var sb = new System.Text.StringBuilder();
+
+        if (isTurret)
+        {
+            var t = ins.visualObject.GetComponentInChildren<TurretController>();
+            if (t == null) { sb.Append("(turret stats unavailable)"); return sb.ToString(); }
+
+            float fireRate = t.fireInterval > 0.0001f ? 1f / t.fireInterval : 0f;
+            sb.AppendLine($"Damage     <b>{t.bulletDamage}</b>");
+            sb.AppendLine($"Range      <b>{t.attackRange:0.#}</b>");
+            sb.AppendLine($"Fire rate  <b>{fireRate:0.0}/s</b>");
+            sb.AppendLine($"Bullets    <b>{Mathf.Max(1, t.projectilesPerShot)}</b>");
+
+            if (t.mode == TurretController.Mode.Slow)
+            {
+                sb.AppendLine($"Slow to    <b>{Mathf.RoundToInt(t.slowMultiplier * 100f)}% spd</b>");
+                sb.AppendLine($"Duration   <b>{t.slowDuration:0.#}s</b>");
+            }
+            else if (t.mode == TurretController.Mode.Aoe)
+            {
+                sb.AppendLine($"AOE radius <b>{t.aoeRadius:0.#}</b>");
+            }
+            else if (t.mode == TurretController.Mode.Basic)
+            {
+                sb.AppendLine();
+                sb.AppendLine($"Power <b>{t.GetBasicPathLevel(BasicTurretUpgradePath.Power)}/3</b>" +
+                              $"   Burst <b>{t.GetBasicPathLevel(BasicTurretUpgradePath.Burst)}/3</b>");
+            }
+            return sb.ToString().TrimEnd();
+        }
+
+        // Block: synergy line (themed) + flavour description.
+        if (ins.color == BlockColor.None) return "Synergy  None";
+
+        bool   hasProg = TryGetSynergyProgress(ins, out string ruleName, out int cur, out int req, out bool active);
+        string name    = (hasProg && !string.IsNullOrEmpty(ruleName)) ? ruleName : ins.color.ToString();
+        string prog    = hasProg ? (req > 0 ? $"  {cur}/{req}" : "  active") : "";
+        string hex     = ColorUtility.ToHtmlStringRGB(BlockColorPalette.Get(ins.color));
+        sb.AppendLine($"<color=#{hex}><b>{name}</b>{prog}</color>");
+
+        string desc = BlockColorPalette.Description(ins.color);
+        if (!string.IsNullOrEmpty(desc)) sb.Append(desc);
+        return sb.ToString().TrimEnd();
+    }
+
+    string BuildStartBody()
+    {
+        var gfm   = GameFlowManager.Instance;
+        int round = gfm != null ? gfm.RoundIndex : 0;
+        if (gfm != null && _startForecastRound != round)
+        {
+            _startForecast      = gfm.GetNextWaveForecast();
+            _startForecastRound = round;
+        }
+        var fc = _startForecast;
+
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine($"Wave     <b>{fc.waveNumber}</b>");
+        sb.AppendLine($"Enemies  <b>{(fc.valid ? fc.totalCount.ToString() : "—")}</b>");
+        sb.AppendLine();
+        sb.AppendLine("Incoming");
+        if (fc.valid && fc.groups != null && fc.groups.Count > 0)
+            foreach (var g in fc.groups) sb.AppendLine($"{g.name}  ×{g.count}");
+        else sb.Append("Composition unknown");
+        return sb.ToString().TrimEnd();
+    }
 
     // True when the cursor is over the info panel this frame. Used in Update to
     // swallow the click so the panel's own IMGUI buttons handle it instead of
@@ -22,6 +133,8 @@ public partial class PlacementController
 
     void DrawSelectionPanel()
     {
+        if (infoPanel != null) { _panelRect = default; return; }   // UGUI panel takes over
+
         // Spawn point ("起点") selected → show the upcoming-wave intel panel
         // instead of block/turret stats. Hidden during combat (forecast is for
         // the NEXT wave, which is ambiguous mid-run).

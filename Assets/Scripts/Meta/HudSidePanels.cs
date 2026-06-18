@@ -1,11 +1,19 @@
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.UI;
+using UnityEngine.EventSystems;
+using TMPro;
 
-// Two expandable edge panels for the gameplay HUD (IMGUI, constructivist style):
+// Two expandable edge panels for the gameplay HUD, built at runtime as UGUI:
 //   • LEFT  — active synergies (live from SynergyEvaluator).
 //   • RIGHT — keyboard controls (editable list).
-// Click the edge handle to slide a panel open / shut. Auto-spawns; only draws in
-// gameplay (GameFlowManager present) and hides while the settings overlay is open.
+// Each panel is a FULL-SCREEN (1920×1080-canvas) Image — your texture has the panel
+// art positioned and the rest transparent. Clicking the edge handle slides the whole
+// image in / out by `slideDistance`. Auto-spawns; only shows in gameplay and hides
+// while the settings overlay is open.
+//
+// To restyle: drop a HudSidePanels onto a GameObject in your gameplay scene and set
+// the fields (sprites / font / sizes). The auto-spawn skips itself when one exists.
 [DisallowMultipleComponent]
 public class HudSidePanels : MonoBehaviour
 {
@@ -14,14 +22,41 @@ public class HudSidePanels : MonoBehaviour
 
     public List<Control> controls = new();
 
-    // Set true while the cursor is over an open panel / handle, so world clicks
+    [Header("Font (TextMeshPro — leave null for TMP default)")]
+    public TMP_FontAsset font;
+    public float titleSize  = 24f;
+    public float rowSize    = 17f;
+    public float handleSize = 16f;
+
+    [Header("Panels (full-screen textures)")]
+    [Tooltip("Left (synergies) full-screen panel texture. Art positioned, rest transparent.")]
+    public Sprite  leftSprite;
+    [Tooltip("Right (controls) full-screen panel texture. Falls back to leftSprite if null.")]
+    public Sprite  rightSprite;
+    [Tooltip("Tint applied to the textures. Keep white to show their true colours.")]
+    public Color   panelColor = Color.white;
+    [Tooltip("How far the panel art slides off-screen when closed. Match your art's column width.")]
+    public float   slideDistance = 360f;
+    [Tooltip("Padding (x = left/right, y = top) for the text laid over the art.")]
+    public Vector2 contentInset = new Vector2(40f, 90f);
+
+    [Header("Handle (the click-to-expand tab)")]
+    public Sprite handleSprite;
+    public Color  handleColor  = new Color(0.949f, 0.937f, 0.902f, 0.95f);
+    public float  handleWidth  = 34f;
+    public float  handleHeight = 150f;
+
+    // Set true while the cursor is over an open panel column / handle, so world clicks
     // (placement) don't fire underneath. Read by PlacementController.
     public static bool PointerOver;
 
-    bool  _synOpen, _ctrlOpen;
-    float _synT, _ctrlT;
-    GUIStyle _title, _row, _key, _handle;
-    float _builtScale = -1f;
+    bool _synOpen, _ctrlOpen;
+
+    Canvas        _canvas;
+    RectTransform _leftPanel, _rightPanel, _leftHandle, _rightHandle, _leftContent, _rightContent;
+
+    class Row { public GameObject go; public Image swatch; public TMP_Text label; }
+    readonly List<Row> _synRows = new();
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     static void Spawn()
@@ -32,7 +67,11 @@ public class HudSidePanels : MonoBehaviour
         go.AddComponent<HudSidePanels>();
     }
 
-    void Awake() => EnsureDefaults();
+    void Awake()
+    {
+        EnsureDefaults();
+        BuildUI();
+    }
 
     void EnsureDefaults()
     {
@@ -50,137 +89,279 @@ public class HudSidePanels : MonoBehaviour
 
     void Update()
     {
-        float k = 1f - Mathf.Exp(-12f * Time.deltaTime);
-        _synT  = Mathf.Lerp(_synT,  _synOpen  ? 1f : 0f, k);
-        _ctrlT = Mathf.Lerp(_ctrlT, _ctrlOpen ? 1f : 0f, k);
+        if (_canvas == null) return;
+
+        bool show = GameFlowManager.Instance != null && !SettingsScreen.Open;
+        _canvas.enabled = show;
+        if (!show) { PointerOver = false; return; }
+
+        UpdateSynergies();
+
+        float k = 1f - Mathf.Exp(-12f * Time.unscaledDeltaTime);
+
+        _leftPanel.anchoredPosition = new Vector2(
+            Mathf.Lerp(_leftPanel.anchoredPosition.x, _synOpen ? 0f : -slideDistance, k), 0f);
+        _rightPanel.anchoredPosition = new Vector2(
+            Mathf.Lerp(_rightPanel.anchoredPosition.x, _ctrlOpen ? 0f : slideDistance, k), 0f);
+
+        UpdatePanelAlpha(_leftPanel, _synOpen, k);
+        UpdatePanelAlpha(_rightPanel, _ctrlOpen, k);
+
+        UpdatePointerOver();
     }
 
-    void OnGUI()
+    void UpdatePanelAlpha(RectTransform rt, bool isOpen, float k)
     {
-        if (GameFlowManager.Instance == null || SettingsScreen.Open) return;
-        float s = Mathf.Max(0.5f, Screen.height / 1080f);
-        Build(s);
-        PointerOver = false;
-
-        DrawLeft(s);
-        DrawRight(s);
+        var img = rt.GetComponent<Image>();
+        Color c = img.color;
+        float targetAlpha = isOpen ? 1f : 0f;
+        c.a = Mathf.Lerp(c.a, targetAlpha, k);
+        img.color = c;
     }
 
-    // ── Left: synergies ──────────────────────────────────────────────────────────
-
-    void DrawLeft(float s)
+    void UpdatePointerOver()
     {
-        float pw = 280f * s, ph = 400f * s, hw = 34f * s, hh = 150f * s;
-        float py = (Screen.height - ph) * 0.5f;
-        float px = -pw + pw * _synT;
+        Vector2 mp = Input.mousePosition;
+        bool over = Contains(_leftHandle, mp) || Contains(_rightHandle, mp);
+        if (_synOpen)  over |= Contains(_leftContent,  mp);
+        if (_ctrlOpen) over |= Contains(_rightContent, mp);
+        PointerOver = over;
+    }
 
-        if (_synT > 0.01f) PanelBody(new Rect(px, py, pw, ph), s, true, () =>
+    static bool Contains(RectTransform rt, Vector2 screenPoint)
+        => rt != null && RectTransformUtility.RectangleContainsScreenPoint(rt, screenPoint, null);
+
+    // ── Build ──────────────────────────────────────────────────────────────────
+
+    void BuildUI()
+    {
+        var canvasGO = new GameObject("HudSidePanelsCanvas",
+            typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster));
+        canvasGO.transform.SetParent(transform, false);
+
+        _canvas = canvasGO.GetComponent<Canvas>();
+        _canvas.renderMode   = RenderMode.ScreenSpaceOverlay;
+        _canvas.sortingOrder = 100;
+
+        var scaler = canvasGO.GetComponent<CanvasScaler>();
+        scaler.uiScaleMode         = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+        scaler.referenceResolution = new Vector2(1920f, 1080f);
+        scaler.matchWidthOrHeight  = 1f;
+
+        EnsureEventSystem();
+
+        BuildLeft();
+        BuildRight();
+    }
+
+    static void EnsureEventSystem()
+    {
+        if (FindFirstObjectByType<EventSystem>() != null) return;
+        var es = new GameObject("EventSystem", typeof(EventSystem), typeof(StandaloneInputModule));
+        DontDestroyOnLoad(es);
+    }
+
+    void BuildLeft()
+    {
+        _leftPanel   = NewFullScreenPanel("SynergyPanel", leftSprite);
+        _leftContent = NewColumn(_leftPanel, right: false);
+        AddTitle(_leftContent, "SYNERGIES");
+        _leftHandle  = BuildHandle("SYNERGIES", _leftPanel, right: false);
+    }
+
+    void BuildRight()
+    {
+        _rightPanel   = NewFullScreenPanel("ControlsPanel", rightSprite != null ? rightSprite : leftSprite);
+        _rightContent = NewColumn(_rightPanel, right: true);
+        AddTitle(_rightContent, "CONTROLS");
+
+        foreach (var c in controls)
         {
-            GUI.Label(new Rect(px + 22f * s, py + 16f * s, pw, 34f * s), "SYNERGIES", _title);
-            float y = py + 64f * s;
-            var ev = SynergyEvaluator.Instance;
-            int n = 0;
-            if (ev != null)
-                foreach (var a in ev.Actives)
-                {
-                    if (a?.rule == null) continue;
-                    var c = GeoPalette.Accents[n % GeoPalette.Accents.Length];
-                    Fill(new Rect(px + 22f * s, y + 6f * s, 16f * s, 16f * s), c);
-                    _row.normal.textColor = GeoPalette.Ink;
-                    string nm = string.IsNullOrEmpty(a.rule.displayName) ? a.rule.name : a.rule.displayName;
-                    GUI.Label(new Rect(px + 48f * s, y, pw - 70f * s, 28f * s),
-                              a.tier > 1 ? $"{nm}  ·  T{a.tier}" : nm, _row);
-                    y += 32f * s; n++;
-                }
-            if (n == 0)
-            {
-                _row.normal.textColor = new Color(0.4f, 0.4f, 0.4f);
-                GUI.Label(new Rect(px + 22f * s, y, pw - 40f * s, 28f * s), "No active synergies", _row);
-            }
-        });
+            if (c == null) continue;
+            var row = NewRect("Row", _rightContent);
+            var h = row.gameObject.AddComponent<HorizontalLayoutGroup>();
+            h.childAlignment = TextAnchor.MiddleLeft; h.spacing = 8f;
+            h.childControlWidth = h.childControlHeight = true;
+            h.childForceExpandWidth = false; h.childForceExpandHeight = false;
+            row.gameObject.AddComponent<LayoutElement>().minHeight = rowSize * 1.6f;
 
-        // Handle on the panel's right edge.
-        var handle = new Rect(px + pw, py + (ph - hh) * 0.5f, hw, hh);
-        if (Handle(handle, "SYNERGIES", s, false)) _synOpen = !_synOpen;
-        Hit(new Rect(px, py, pw + hw, ph), _synT);
+            var key = NewText("Key", row, rowSize, GeoPalette.Blue, FontStyles.Bold, TextAlignmentOptions.MidlineLeft);
+            key.text = c.key;
+            var kle = key.gameObject.AddComponent<LayoutElement>();
+            kle.minWidth = kle.preferredWidth = 110f;
+
+            var act = NewText("Action", row, rowSize, GeoPalette.Ink, FontStyles.Bold, TextAlignmentOptions.MidlineLeft);
+            act.text = c.action;
+            act.gameObject.AddComponent<LayoutElement>().flexibleWidth = 1f;
+        }
+
+        _rightHandle = BuildHandle("CONTROLS", _rightPanel, right: true);
     }
 
-    // ── Right: controls ──────────────────────────────────────────────────────────
-
-    void DrawRight(float s)
+    RectTransform NewFullScreenPanel(string name, Sprite sprite)
     {
-        float pw = 300f * s, ph = 440f * s, hw = 34f * s, hh = 150f * s;
-        float py = (Screen.height - ph) * 0.5f;
-        float px = Screen.width - pw * _ctrlT;
+        var rt = NewRect(name, _canvas.transform);
+        rt.anchorMin = Vector2.zero; rt.anchorMax = Vector2.one;
+        rt.pivot = new Vector2(0.5f, 0.5f);
+        rt.offsetMin = rt.offsetMax = Vector2.zero;   // fill the screen
 
-        if (_ctrlT > 0.01f) PanelBody(new Rect(px, py, pw, ph), s, false, () =>
+        var img = rt.gameObject.AddComponent<Image>();
+        Color startColor = panelColor;
+        startColor.a = 0f;
+        img.color = startColor;
+        img.raycastTarget = false;                    // transparent areas must not block clicks
+        ApplySprite(img, sprite);
+        return rt;
+    }
+
+    // A full-height text column hugging the panel's left or right edge, sized to the
+    // slide distance so it overlays the art that slides with it.
+    RectTransform NewColumn(RectTransform panel, bool right)
+    {
+        var col = NewRect("Content", panel);
+        col.anchorMin = new Vector2(right ? 1f : 0f, 0f);
+        col.anchorMax = new Vector2(right ? 1f : 0f, 1f);
+        col.pivot     = new Vector2(right ? 1f : 0f, 0.5f);
+        col.sizeDelta = new Vector2(slideDistance, 0f);
+        col.anchoredPosition = Vector2.zero;
+
+        var vlg = col.gameObject.AddComponent<VerticalLayoutGroup>();
+        vlg.padding = new RectOffset((int)contentInset.x, (int)contentInset.x, (int)contentInset.y+150, 0);
+        vlg.spacing = 8f;
+        vlg.childAlignment = TextAnchor.UpperLeft;
+        vlg.childControlWidth = vlg.childControlHeight = true;
+        vlg.childForceExpandWidth = true; vlg.childForceExpandHeight = false;
+        return col;
+    }
+
+    void AddTitle(RectTransform column, string text)
+    {
+        var t = NewText("Title", column, titleSize, GeoPalette.Ink, FontStyles.Bold, TextAlignmentOptions.TopLeft);
+        t.text = text;
+        t.gameObject.AddComponent<LayoutElement>().minHeight = titleSize * 1.6f;
+    }
+
+    RectTransform BuildHandle(string label, RectTransform panel, bool right)
+    {
+        var h = NewRect("Handle", panel);
+        // Rides at the inner edge of the art column, so when closed it pokes out at the screen edge.
+        h.anchorMin = h.anchorMax = new Vector2(right ? 1f : 0f, 0.5f);
+        h.pivot = new Vector2(right ? 1f : 0f, 0.5f);
+        h.anchoredPosition = new Vector2(right ? -slideDistance : slideDistance, 0f);
+        h.sizeDelta = new Vector2(handleWidth, handleHeight);
+
+        var img = h.gameObject.AddComponent<Image>();
+        img.color = handleColor;
+        ApplySprite(img, handleSprite);   // null → plain handleColor tab
+
+        Color labelCol = handleColor.grayscale > 0.5f ? GeoPalette.Ink : GeoPalette.Paper;
+        var lbl = NewText("Label", h, handleSize, labelCol, FontStyles.Bold, TextAlignmentOptions.Center);
+        lbl.text = label;
+        var lrt = lbl.rectTransform;
+        lrt.anchorMin = lrt.anchorMax = new Vector2(0.5f, 0.5f);
+        lrt.pivot = new Vector2(0.5f, 0.5f);
+        lrt.sizeDelta = new Vector2(handleHeight, handleWidth);   // swapped because rotated
+        lrt.anchoredPosition = Vector2.zero;
+        lrt.localRotation = Quaternion.Euler(0f, 0f, right ? 90f : -90f);
+
+        var btn = h.gameObject.AddComponent<Button>();
+        btn.targetGraphic = img;
+        btn.onClick.AddListener(() => { if (right) _ctrlOpen = !_ctrlOpen; else _synOpen = !_synOpen; });
+        return h;
+    }
+
+    // ── Synergy rows (live) ──────────────────────────────────────────────────────
+
+    void UpdateSynergies()
+    {
+        var ev = SynergyEvaluator.Instance;
+        int n = 0;
+
+        if (ev != null)
+            foreach (var a in ev.Actives)
+            {
+                if (a?.rule == null) continue;
+                var row = (n < _synRows.Count) ? _synRows[n] : MakeSynRow();
+                row.go.SetActive(true);
+                row.swatch.enabled = true;
+                row.swatch.color   = GeoPalette.Accents[n % GeoPalette.Accents.Length];
+                string nm = string.IsNullOrEmpty(a.rule.displayName) ? a.rule.name : a.rule.displayName;
+                row.label.color = GeoPalette.Ink;
+                row.label.text  = a.tier > 1 ? $"{nm}  ·  T{a.tier}" : nm;
+                n++;
+            }
+
+        if (n == 0)
         {
-            GUI.Label(new Rect(px + 26f * s, py + 16f * s, pw, 34f * s), "CONTROLS", _title);
-            float y = py + 64f * s;
-            foreach (var c in controls)
-            {
-                if (c == null) continue;
-                _key.normal.textColor = GeoPalette.Signal;
-                GUI.Label(new Rect(px + 22f * s, y, 110f * s, 28f * s), c.key, _key);
-                _row.normal.textColor = GeoPalette.Ink;
-                GUI.Label(new Rect(px + 140f * s, y, pw - 160f * s, 28f * s), c.action, _row);
-                y += 32f * s;
-            }
-        });
+            var row = (_synRows.Count > 0) ? _synRows[0] : MakeSynRow();
+            row.go.SetActive(true);
+            row.swatch.enabled = false;
+            row.label.color    = new Color(0.4f, 0.4f, 0.4f);
+            row.label.text     = "No active synergies";
+            n = 1;
+        }
 
-        var handle = new Rect(px - hw, py + (ph - hh) * 0.5f, hw, hh);
-        if (Handle(handle, "CONTROLS", s, true)) _ctrlOpen = !_ctrlOpen;
-        Hit(new Rect(px - hw, py, pw + hw, ph), _ctrlT);
+        for (int i = n; i < _synRows.Count; i++) _synRows[i].go.SetActive(false);
     }
 
-    // ── Primitives ───────────────────────────────────────────────────────────────
-
-    void PanelBody(Rect r, float s, bool leftSpine, System.Action content)
+    Row MakeSynRow()
     {
-        Fill(r, GeoPalette.Paper);
-        Fill(new Rect(r.x, r.y, r.width, 5f * s), GeoPalette.Ink);
-        float spineX = leftSpine ? r.xMax - 6f * s : r.x;
-        Fill(new Rect(spineX, r.y, 6f * s, r.height), GeoPalette.Signal);
-        content?.Invoke();
+        var rt = NewRect("Row", _leftContent);
+        var h = rt.gameObject.AddComponent<HorizontalLayoutGroup>();
+        h.childAlignment = TextAnchor.MiddleLeft; h.spacing = 8f;
+        h.childControlWidth = h.childControlHeight = true;
+        h.childForceExpandWidth = false; h.childForceExpandHeight = false;
+        rt.gameObject.AddComponent<LayoutElement>().minHeight = rowSize * 1.6f;
+
+        var sw = NewImage("Swatch", rt, Color.white, false);
+        var swle = sw.gameObject.AddComponent<LayoutElement>();
+        swle.minWidth = swle.preferredWidth = swle.minHeight = swle.preferredHeight = 16f;
+
+        var lbl = NewText("Label", rt, rowSize, GeoPalette.Ink, FontStyles.Bold, TextAlignmentOptions.MidlineLeft);
+        lbl.gameObject.AddComponent<LayoutElement>().flexibleWidth = 1f;
+
+        var row = new Row { go = rt.gameObject, swatch = sw, label = lbl };
+        _synRows.Add(row);
+        return row;
     }
 
-    bool Handle(Rect r, string label, float s, bool rightSide)
+    // ── UI primitives ────────────────────────────────────────────────────────────
+
+    static void ApplySprite(Image img, Sprite sprite)
     {
-        if (r.Contains(Event.current.mousePosition)) PointerOver = true;
-        Fill(r, GeoPalette.Ink);
-        Fill(rightSide ? new Rect(r.x, r.y, 5f * s, r.height) : new Rect(r.xMax - 5f * s, r.y, 5f * s, r.height),
-             GeoPalette.Signal);
-
-        var m = GUI.matrix;
-        Vector2 pivot = r.center;
-        GUIUtility.RotateAroundPivot(rightSide ? 90f : -90f, pivot);
-        _handle.normal.textColor = GeoPalette.Paper;
-        GUI.Label(new Rect(pivot.x - r.height * 0.5f, pivot.y - r.width * 0.5f, r.height, r.width), label, _handle);
-        GUI.matrix = m;
-
-        return GUI.Button(r, GUIContent.none, GUIStyle.none);
+        if (sprite == null) return;
+        img.sprite = sprite;
+        img.type = sprite.border != Vector4.zero ? Image.Type.Sliced : Image.Type.Simple;
     }
 
-    // Mark PointerOver when the cursor sits on an open panel region.
-    void Hit(Rect r, float openT)
+    RectTransform NewRect(string name, Transform parent)
     {
-        if (openT > 0.05f && r.Contains(Event.current.mousePosition)) PointerOver = true;
+        var go = new GameObject(name, typeof(RectTransform));
+        go.transform.SetParent(parent, false);
+        return (RectTransform)go.transform;
     }
 
-    static void Fill(Rect r, Color c)
+    Image NewImage(string name, Transform parent, Color color, bool raycast)
     {
-        Color p = GUI.color; GUI.color = c;
-        GUI.DrawTexture(r, Texture2D.whiteTexture);
-        GUI.color = p;
+        var rt = NewRect(name, parent);
+        var img = rt.gameObject.AddComponent<Image>();
+        img.color = color;
+        img.raycastTarget = raycast;
+        return img;
     }
 
-    void Build(float s)
+    TMP_Text NewText(string name, Transform parent, float size, Color color,
+                     FontStyles style, TextAlignmentOptions align)
     {
-        if (_builtScale == s && _title != null) return;
-        _builtScale = s;
-        _title  = new GUIStyle { fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleLeft,   fontSize = Mathf.RoundToInt(22f * s) };
-        _row    = new GUIStyle { fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleLeft,   fontSize = Mathf.RoundToInt(16f * s) };
-        _key    = new GUIStyle { fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleLeft,   fontSize = Mathf.RoundToInt(15f * s) };
-        _handle = new GUIStyle { fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter, fontSize = Mathf.RoundToInt(16f * s) };
+        var rt = NewRect(name, parent);
+        var t = rt.gameObject.AddComponent<TextMeshProUGUI>();
+        if (font != null) t.font = font;
+        t.fontSize      = size;
+        t.color         = color;
+        t.fontStyle     = style;
+        t.alignment     = align;
+        t.raycastTarget = false;
+        t.enableWordWrapping = false;
+        return t;
     }
 }
