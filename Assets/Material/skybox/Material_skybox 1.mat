@@ -20,7 +20,7 @@ Material:
   stringTagMap: {}
   disabledShaderPasses:
   - MOTIONVECTORS
-  m_LockedProperties: _MusicIntensity
+  m_LockedProperties: _BeatPulse _MusicIntensity
   m_SavedProperties:
     serializedVersion: 3
     m_TexEnvs:
@@ -136,7 +136,7 @@ Material:
     - _ZWrite: 1
     m_Colors:
     - _BaseColor: {r: 1, g: 1, b: 1, a: 1}
-    - _CodeColor: {r: 0, g: 1, b: 0.32999998, a: 1}
+    - _CodeColor: {r: 0, g: 1, b: 0.20000005, a: 1}
     - _Color: {r: 1, g: 1, b: 1, a: 1}
     - _EmissionColor: {r: 0, g: 0, b: 0, a: 1}
     - _FlashColor: {r: 1, g: 1, b: 1, a: 1}

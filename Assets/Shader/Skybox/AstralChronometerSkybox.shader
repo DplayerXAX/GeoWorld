@@ -48,7 +48,7 @@ Shader "Custom/NeuromancerProtocolSkybox"
                 return OUT;
             }
 
-            // ³ÌĞò»¯Î±Ëæ»ú¹şÏ£
+            // ç¨‹åºåŒ–ä¼ªéšæœºå“ˆå¸Œ
             float Hash3D(float3 p)
             {
                 p = frac(p * 0.1031);
@@ -56,23 +56,23 @@ Shader "Custom/NeuromancerProtocolSkybox"
                 return frac((p.x + p.y) * p.z);
             }
 
-            // ¼ÆËãµ¥Í¨µÀ¶ş½øÖÆÁ÷
+            // è®¡ç®—å•é€šé“äºŒè¿›åˆ¶æµ
             float SampleDataStream(float3 sampleDir, float speedOffset)
             {
-                // Á¿»¯ÇòÃæ×ø±ê£¬ĞÎ³É·½¿é¾ØÕóµãÕó
+                // é‡åŒ–çƒé¢åæ ‡ï¼Œå½¢æˆæ–¹å—çŸ©é˜µç‚¹é˜µ
                 float3 gridId = floor(sampleDir * _GridDensity);
                 
-                // »ùÓÚÃ¿¸ö´¹Ö±ÁĞµÄËæ»ú¹şÏ£¼ÆËãÁ÷¶¯Æ«ÒÆ
+                // åŸºäºæ¯ä¸ªå‚ç›´åˆ—çš„éšæœºå“ˆå¸Œè®¡ç®—æµåŠ¨åç§»
                 float rawHash = Hash3D(float3(gridId.x, 0.0, gridId.z));
                 
-                // ²úÉú¶ÏĞø¹ö¶¯µÄÆÙ²¼Á÷
+                // äº§ç”Ÿæ–­ç»­æ»šåŠ¨çš„ç€‘å¸ƒæµ
                 float cascade = frac(gridId.y * 0.04 - _Time.y * _StreamSpeed * (0.4 + rawHash * 0.6) + speedOffset);
                 
-                // ¹ıÂË³öÁÁµãµÄÍ·²¿ĞÅÏ¢ºÍÎ¢ÈõµÄÍÏÎ²
+                // è¿‡æ»¤å‡ºäº®ç‚¹çš„å¤´éƒ¨ä¿¡æ¯å’Œå¾®å¼±çš„æ‹–å°¾
                 float leadPoint = step(0.94, cascade) * 2.0;
                 float tailTrail = pow(cascade, 6.0) * 0.75;
                 
-                // ÌŞ³ı²¿·ÖÁĞ£¬Ê¹ÆäÊèÃÜÓĞÖÂ
+                // å‰”é™¤éƒ¨åˆ†åˆ—ï¼Œä½¿å…¶ç–å¯†æœ‰è‡´
                 float columnMask = step(0.45, rawHash);
                 
                 return (leadPoint + tailTrail) * columnMask;
@@ -82,49 +82,49 @@ Shader "Custom/NeuromancerProtocolSkybox"
             {
                 float3 dir = normalize(IN.dir);
                 
-                // ©¤©¤ Õ½¶·Áª¶¯£º»­Ãæ¸ßÆµÇĞÆ¬¶ÏÁÑ¹ÊÕÏ (Glitch Slicing) ©¤©¤
+                // â”€â”€ æˆ˜æ–—è”åŠ¨ï¼šç”»é¢é«˜é¢‘åˆ‡ç‰‡æ–­è£‚æ•…éšœ (Glitch Slicing) â”€â”€
                 if (_CombatMode > 0.01)
                 {
-                    float glitchTime = floor(_Time.y * 24.0); // ½×ÌİÊ½¸ßÆµÊ±¼ä
+                    float glitchTime = floor(_Time.y * 24.0); // é˜¶æ¢¯å¼é«˜é¢‘æ—¶é—´
                     float sliceNoise = Hash3D(float3(0.0, floor(dir.y * 15.0), glitchTime));
                     
-                    // ½ö¶ÔÌØ¶¨Ë®Æ½ÇĞÆ¬²ã½øĞĞÍ»·¢ĞÔºáÏòËºÁÑ
+                    // ä»…å¯¹ç‰¹å®šæ°´å¹³åˆ‡ç‰‡å±‚è¿›è¡Œçªå‘æ€§æ¨ªå‘æ’•è£‚
                     float sliceMask = step(1.0 - _CombatMode * 0.45, sliceNoise);
                     dir.x += sin(dir.y * 100.0 + _Time.y) * 0.15 * sliceMask * _CombatMode;
                     dir = normalize(dir);
                 }
 
-                // ©¤©¤ Èü²©Åó¿ËÉ«É¢·ÖÀë²ÉÑù (Chromatic Aberration) ©¤©¤
-                // Í¨¹ıÈÃRGB²ÉÑùÍ¨µÀ²úÉú×ø±êÆ«ÖÃ£¬Ä£ÄâÓ²¼şÏµÍ³±ÀÀ£
+                // â”€â”€ èµ›åšæœ‹å…‹è‰²æ•£åˆ†ç¦»é‡‡æ · (Chromatic Aberration) â”€â”€
+                // é€šè¿‡è®©RGBé‡‡æ ·é€šé“äº§ç”Ÿåæ ‡åç½®ï¼Œæ¨¡æ‹Ÿç¡¬ä»¶ç³»ç»Ÿå´©æºƒ
                 float aberration = _CombatMode * 0.05 + _BeatPulse * _MusicIntensity * 0.01;
                 
                 float streamR = SampleDataStream(normalize(dir + float3(aberration, 0, 0)), 0.0);
                 float streamG = SampleDataStream(dir, 0.0);
                 float streamB = SampleDataStream(normalize(dir - float3(aberration, 0, 0)), 0.03);
 
-                // ©¤©¤ Æ´×°¶àÍ¨µÀÑÕÉ« ©¤©¤
+                // â”€â”€ æ‹¼è£…å¤šé€šé“é¢œè‰² â”€â”€
                 half3 baseMatrixCol = _CodeColor.rgb * streamG;
                 
-                // ¹ÊÕÏÉ«É¢»ìÉ«£ºRºÍBÍ¨µÀÆ«ÏòÈü²©ÄŞºç·Û/À¶
+                // æ•…éšœè‰²æ•£æ··è‰²ï¼šRå’ŒBé€šé“åå‘èµ›åšéœ“è™¹ç²‰/è“
                 half3 glitchComponent = _GlitchColor.rgb * streamR + half3(0.0, 0.3, 1.0) * streamB;
                 half3 finalCodeNet = lerp(baseMatrixCol, glitchComponent, saturate(_CombatMode * 1.2));
 
-                // ©¤©¤ Êı×Ö»¯Í¸ÊÓÉ¨ÃèÍø¸ñ (Neuromancer Lattice) ©¤©¤
+                // â”€â”€ æ•°å­—åŒ–é€è§†æ‰«æç½‘æ ¼ (Neuromancer Lattice) â”€â”€
                 float3 gridLines = abs(frac(dir * _GridDensity * 0.5) - 0.5) / fwidth(dir * _GridDensity * 0.5);
                 float lattice = 1.0 - min(min(gridLines.x, gridLines.y), gridLines.z);
-                lattice = saturate(lattice * 0.08) * (1.0 - _CombatMode * 0.4); // Õ½¶·Ê±Ïß¿òÆÆËé
+                lattice = saturate(lattice * 0.08) * (1.0 - _CombatMode * 0.4); // æˆ˜æ–—æ—¶çº¿æ¡†ç ´ç¢
 
-                // ©¤©¤ ÒôÀÖ³¬ÔØÂö³å (Core Overload) ©¤©¤
+                // â”€â”€ éŸ³ä¹è¶…è½½è„‰å†² (Core Overload) â”€â”€
                 float intensity = 0.5 + _MusicIntensity * 0.5;
                 half3 bgCol = _MatrixBgColor.rgb * (1.0 + _BeatPulse * 2.0 * intensity);
                 
-                // ¼¤ÁÒÕ½¶·Ê±±³¾°·´×ªÎª´ÌÑÛµÄËÀ»ú»Ò°×£¬Ëæºó±»Êı¾İÍÌÊÉ
+                // æ¿€çƒˆæˆ˜æ–—æ—¶èƒŒæ™¯åè½¬ä¸ºåˆºçœ¼çš„æ­»æœºç°ç™½ï¼Œéšåè¢«æ•°æ®åå™¬
                 bgCol = lerp(bgCol, half3(0.08, 0.1, 0.15), _CombatMode);
 
                 half3 result = bgCol + finalCodeNet * (1.0 + _BeatPulse * 1.2) + _CodeColor.rgb * lattice;
 
-                // ©¤©¤ È«¾ÖÏµÍ³Ëğ»µÂË¾µ (System Corrupted/Damage Pass) ©¤©¤
-                // Çø±ğÓÚ´«Í³µÄÑªºì£¬ÕâÀï½«»­Ãæ×ªÎª¼«¾ßÊıÂë¸ĞµÄ¡°Ó²¼ş¹ıÔØÖÂÃüºì¡±
+                // â”€â”€ å…¨å±€ç³»ç»ŸæŸåæ»¤é•œ (System Corrupted/Damage Pass) â”€â”€
+                // åŒºåˆ«äºä¼ ç»Ÿçš„è¡€çº¢ï¼Œè¿™é‡Œå°†ç”»é¢è½¬ä¸ºæå…·æ•°ç æ„Ÿçš„â€œç¡¬ä»¶è¿‡è½½è‡´å‘½çº¢â€
                 float finalLuma = dot(result, float3(0.299, 0.587, 0.114));
                 half3 corruptedPalette = half3(finalLuma * 1.8, result.g * 0.02, result.b * 0.05);
                 result = lerp(result, corruptedPalette, _DamageTint);

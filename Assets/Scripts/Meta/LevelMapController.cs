@@ -23,6 +23,8 @@ public class LevelMapController : MonoBehaviour
 
     [Header("Refs")]
     public Transform pawn;
+    [Tooltip("UGUI level-info panel (right side). Wire it and the old IMGUI box is skipped.")]
+    public LevelInfoPanel infoPanel;
 
     [Header("Scenes (must be in Build Settings)")]
     public string gameplayScene = "gamePlay";
@@ -32,6 +34,11 @@ public class LevelMapController : MonoBehaviour
     public float pawnSpeed = 6f;
     [Tooltip("How high the pawn floats above the block TOP FACE while surface-walking.")]
     public float pawnSurfaceLift = 0.5f;
+
+    [Header("Camera focus")]
+    [Tooltip("On click, smoothly slide the camera to keep the target cell centred (keeps its current offset/angle).")]
+    public bool  cameraFocus = true;
+    public float cameraLerp  = 4f;
 
     readonly List<LevelNode> _nodes = new();
     LevelNode _current, _selected;
@@ -48,6 +55,9 @@ public class LevelMapController : MonoBehaviour
     // columns at ANY height difference (climbing the shared edge).
     readonly Dictionary<Vector2Int, Vector3Int> _columnTop = new();
     Vector3Int _currentCell;
+    Vector3    _camOffset;     // camera position relative to the cell it's looking at
+    Vector3    _camFocus;      // world point the camera is sliding to keep centred
+    bool       _camReady;
 
     void Start()
     {
@@ -70,6 +80,24 @@ public class LevelMapController : MonoBehaviour
             _currentCell = TopCellOf(_current);
             if (pawn != null) pawn.position = SurfaceTop(_currentCell);
         }
+
+        // Capture the camera's offset from its starting focus so we can keep that
+        // exact framing/angle while sliding to focus future cells.
+        if (_cam != null)
+        {
+            _camFocus  = (_current != null) ? SurfaceTop(_currentCell)
+                       : (pawn != null ? pawn.position : _cam.transform.position);
+            _camOffset = _cam.transform.position - _camFocus;
+            _camReady  = true;
+        }
+    }
+
+    void LateUpdate()
+    {
+        if (!cameraFocus || !_camReady || _cam == null) return;
+        Vector3 want = _camFocus + _camOffset;
+        _cam.transform.position = Vector3.Lerp(_cam.transform.position, want,
+                                               1f - Mathf.Exp(-cameraLerp * Time.deltaTime));
     }
 
     // ── Build the map from the saved layout ──────────────────────────────────
@@ -145,7 +173,11 @@ public class LevelMapController : MonoBehaviour
         if (!_surface.Contains(cell) || cell == _currentCell) return;
 
         var cellPath = SurfaceBfs(_currentCell, new HashSet<Vector3Int> { cell }, _surface);
-        if (cellPath != null) StartCoroutine(WalkCells(cellPath));
+        if (cellPath != null)
+        {
+            if (cameraFocus) _camFocus = SurfaceTop(cell);   // slide camera to the destination cell
+            StartCoroutine(WalkCells(cellPath));
+        }
     }
 
     // ── Surface (cell-level) ───────────────────────────────────────────────────
@@ -285,7 +317,29 @@ public class LevelMapController : MonoBehaviour
         return path;
     }
 
-    void OpenPanel(LevelNode node) => _selected = (node != null && node.level != null) ? node : null;
+    void OpenPanel(LevelNode node)
+    {
+        _selected = (node != null && node.level != null) ? node : null;
+        if (infoPanel == null) return;
+
+        if (_selected == null) { infoPanel.Hide(); return; }
+
+        var lv  = _selected.level;
+        var rec = SaveSystem.Profile.GetRecord(lv.levelId);
+        string title  = string.IsNullOrEmpty(lv.displayName) ? lv.levelId : lv.displayName;
+        string status = _selected.NodeState switch
+        {
+            LevelNode.State.Locked  => "Locked",
+            LevelNode.State.Cleared => "Cleared",
+            _                       => "Unlocked",
+        };
+        string best   = (rec != null && rec.bestWave > 0) ? $"Best wave: {rec.bestWave}" : null;
+        bool   canEnter = _selected.NodeState != LevelNode.State.Locked;
+        infoPanel.Show(title, lv.description, status, best, canEnter, () => EnterLevel(lv));
+    }
+
+    // Wire a UGUI "← Title" button to this.
+    public void GoToTitle() => LoadScene(titleScene);
 
     void EnterLevel(LevelDefinition lv) { RunConfig.SetLevel(lv); LoadScene(gameplayScene); }
 
@@ -297,9 +351,11 @@ public class LevelMapController : MonoBehaviour
             Debug.LogWarning($"[LevelMap] scene '{s}' not in Build Settings.");
     }
 
-    // ── Minimal IMGUI (placeholder until the Persona UGUI pass) ────────────────
+    // ── Minimal IMGUI fallback (used only until the UGUI infoPanel is wired) ────
     void OnGUI()
     {
+        if (infoPanel != null) return;   // UGUI panel takes over
+
         EnsureStyles();
         if (GUI.Button(new Rect(16f, 16f, 130f, 38f), "← Title", _btn))
             LoadScene(titleScene);
