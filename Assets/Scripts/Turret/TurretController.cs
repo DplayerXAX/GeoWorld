@@ -1,6 +1,7 @@
 using UnityEngine;
 
 public enum BasicTurretUpgradePath { Power, Burst }
+public enum AoeTurretUpgradePath { Fire, Gravity }
 
 public class TurretController : MonoBehaviour
 {
@@ -42,9 +43,24 @@ public class TurretController : MonoBehaviour
 
     [SerializeField, Range(0, 3)] int _powerPathLevel;
     [SerializeField, Range(0, 3)] int _burstPathLevel;
+    [SerializeField, Range(0, 3)] int _aoeFirePathLevel;
+    [SerializeField, Range(0, 3)] int _aoeGravityPathLevel;
 
     public int PowerPathLevel => _powerPathLevel;
     public int BurstPathLevel => _burstPathLevel;
+    public int AoeFirePathLevel => _aoeFirePathLevel;
+    public int AoeGravityPathLevel => _aoeGravityPathLevel;
+
+    public bool AoeBurnGroundEnabled => mode == Mode.Aoe && _aoeFirePathLevel >= 1;
+    public float AoeBurnGroundDuration => _aoeFirePathLevel >= 2 ? 3f : 2f;
+    public float AoeBurnTickInterval => 0.75f;
+    public int AoeBurnDamagePerTick => Mathf.Max(1, Mathf.CeilToInt(bulletDamage * (_aoeFirePathLevel >= 3 ? 0.67f : 0.34f)));
+
+    public bool AoeGravityWellEnabled => mode == Mode.Aoe && _aoeGravityPathLevel >= 1;
+    public float AoeGravityRadius => aoeRadius * (_aoeGravityPathLevel >= 2 ? 1.33f : 1f);
+    public float AoeGravityDuration => _aoeGravityPathLevel >= 3 ? 0.8f : 0.45f;
+    public float AoeGravityPullSpeed => _aoeGravityPathLevel >= 3 ? 1.35f : 0.85f;
+    public int AoeGravityFinalDamage => _aoeGravityPathLevel >= 3 ? Mathf.Max(1, Mathf.CeilToInt(bulletDamage * 0.5f)) : 0;
 
     // Reversible fire-rate multiplier from synergies (e.g. Harmony turrets-on-
     // the-synergy buff). >1 = faster. Set back to 1 to remove. Kept separate from
@@ -214,6 +230,101 @@ public class TurretController : MonoBehaviour
             1 => "Speed +33%",
             2 => "Shoot 2 bullets",
             3 => "Shoot 3 bullets",
+            _ => "Max level",
+        };
+    }
+
+    public bool CanUpgradeAoePath(AoeTurretUpgradePath path, out string reason)
+    {
+        reason = null;
+        if (mode != Mode.Aoe)
+        {
+            reason = "Only AOE Turret can use these upgrades.";
+            return false;
+        }
+
+        int level = GetAoePathLevel(path);
+        if (level >= 3)
+        {
+            reason = "Max level.";
+            return false;
+        }
+
+        int otherLevel = path == AoeTurretUpgradePath.Fire ? _aoeGravityPathLevel : _aoeFirePathLevel;
+        if (level == 2 && otherLevel >= 3)
+        {
+            reason = "Only one path can reach level 3.";
+            return false;
+        }
+
+        return true;
+    }
+
+    public bool TryUpgradeAoePath(AoeTurretUpgradePath path)
+    {
+        if (!CanUpgradeAoePath(path, out _)) return false;
+
+        int nextLevel = GetAoePathLevel(path) + 1;
+        if (path == AoeTurretUpgradePath.Fire) _aoeFirePathLevel = nextLevel;
+        else                                   _aoeGravityPathLevel = nextLevel;
+
+        ApplyAoeUpgrade(path, nextLevel);
+        return true;
+    }
+
+    public void SetAoeUpgradeLevels(int fireLevel, int gravityLevel)
+    {
+        _aoeFirePathLevel = 0;
+        _aoeGravityPathLevel = 0;
+        if (mode != Mode.Aoe) return;
+
+        fireLevel = Mathf.Clamp(fireLevel, 0, 3);
+        gravityLevel = Mathf.Clamp(gravityLevel, 0, 3);
+        if (fireLevel == 3 && gravityLevel == 3)
+            gravityLevel = 2;
+
+        for (int i = 0; i < fireLevel; i++)
+            TryUpgradeAoePath(AoeTurretUpgradePath.Fire);
+        for (int i = 0; i < gravityLevel; i++)
+            TryUpgradeAoePath(AoeTurretUpgradePath.Gravity);
+    }
+
+    public int GetAoePathLevel(AoeTurretUpgradePath path) =>
+        path == AoeTurretUpgradePath.Fire ? _aoeFirePathLevel : _aoeGravityPathLevel;
+
+    void ApplyAoeUpgrade(AoeTurretUpgradePath path, int level)
+    {
+        if (path == AoeTurretUpgradePath.Fire)
+        {
+            // Lv1 enables burning ground, Lv2 extends duration, Lv3 increases burn damage.
+            return;
+        }
+
+        // Lv1 enables gravity well, Lv2 increases pull radius, Lv3 adds final crush damage.
+        // Pull radius is derived from AoeGravityRadius so the base blast radius stays stable.
+    }
+
+    public string NextAoeUpgradeDescription(AoeTurretUpgradePath path)
+    {
+        int next = GetAoePathLevel(path) + 1;
+        if (next > 3) return "Max level";
+
+        if (path == AoeTurretUpgradePath.Fire)
+        {
+            return next switch
+            {
+                1 => "Burning ground",
+                2 => "Burn lasts longer",
+                3 => "Burn damage up",
+                _ => "Max level",
+            };
+        }
+
+        return next switch
+        {
+            1 => "Gravity pull",
+            2 => "Pull radius +33%",
+            3 => "Final crush blast",
             _ => "Max level",
         };
     }

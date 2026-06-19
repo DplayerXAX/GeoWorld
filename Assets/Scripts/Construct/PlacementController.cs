@@ -109,6 +109,8 @@ public partial class PlacementController : MonoBehaviour
     private Vector3Int[] lastObjectCells;
     private int lastBasicPowerUpgradeLevel;
     private int lastBasicBurstUpgradeLevel;
+    private int lastAoeFireUpgradeLevel;
+    private int lastAoeGravityUpgradeLevel;
 
     // Tray tracking kept so we can show/hide tokens on edit mode enter/exit.
     private List<GameObject> trayBlocks = new();
@@ -133,10 +135,18 @@ public partial class PlacementController : MonoBehaviour
         public Vector3Int[] cells;      // world-grid cells after the action
         public Vector3      worldCenter;
         public int          pricePaid;  // > 0 only for NewPlace refunded on undo
+        public int          basicPowerUpgradeLevel;
+        public int          basicBurstUpgradeLevel;
+        public int          aoeFireUpgradeLevel;
+        public int          aoeGravityUpgradeLevel;
         // Reposition only: state before the move
         public Vector3Int[] prevCells;
         public Vector3      prevCenter;
         public Quaternion   prevRotation;
+        public int          prevBasicPowerUpgradeLevel;
+        public int          prevBasicBurstUpgradeLevel;
+        public int          prevAoeFireUpgradeLevel;
+        public int          prevAoeGravityUpgradeLevel;
     }
 
     public static PlacementController Instance;
@@ -166,6 +176,8 @@ public partial class PlacementController : MonoBehaviour
     bool _panelSellRequested;
     bool _panelPowerUpgradeRequested;
     bool _panelBurstUpgradeRequested;
+    bool _panelAoeFireUpgradeRequested;
+    bool _panelAoeGravityUpgradeRequested;
 
     // Auto-size: the selection panel hugs its measured content height (from the
     // previous repaint), so it never leaves a long empty gap.
@@ -382,10 +394,12 @@ public partial class PlacementController : MonoBehaviour
         UpdateInfoPanel();   // drive the UGUI selection panel (if wired)
 
         // Process deferred info-panel button clicks (queued during OnGUI).
-        if (_panelPowerUpgradeRequested) { _panelPowerUpgradeRequested = false; TryUpgradeSelectedBasicTurret(BasicTurretUpgradePath.Power); }
-        if (_panelBurstUpgradeRequested) { _panelBurstUpgradeRequested = false; TryUpgradeSelectedBasicTurret(BasicTurretUpgradePath.Burst); }
-        if (_panelPickUpRequested)       { _panelPickUpRequested       = false; PickUpSelected(); }
-        if (_panelSellRequested)         { _panelSellRequested         = false; SellSelected();   }
+        if (_panelPowerUpgradeRequested)      { _panelPowerUpgradeRequested      = false; TryUpgradeSelectedBasicTurret(BasicTurretUpgradePath.Power); }
+        if (_panelBurstUpgradeRequested)      { _panelBurstUpgradeRequested      = false; TryUpgradeSelectedBasicTurret(BasicTurretUpgradePath.Burst); }
+        if (_panelAoeFireUpgradeRequested)    { _panelAoeFireUpgradeRequested    = false; TryUpgradeSelectedAoeTurret(AoeTurretUpgradePath.Fire); }
+        if (_panelAoeGravityUpgradeRequested) { _panelAoeGravityUpgradeRequested = false; TryUpgradeSelectedAoeTurret(AoeTurretUpgradePath.Gravity); }
+        if (_panelPickUpRequested)            { _panelPickUpRequested            = false; PickUpSelected(); }
+        if (_panelSellRequested)              { _panelSellRequested              = false; SellSelected();   }
 
         if (Input.GetKeyDown(KeyCode.R)) 
         {
@@ -607,6 +621,8 @@ public partial class PlacementController : MonoBehaviour
         lastObjectCells = selectedInstance.occupiedCells.ToArray();
         lastBasicPowerUpgradeLevel = selectedInstance.basicPowerUpgradeLevel;
         lastBasicBurstUpgradeLevel = selectedInstance.basicBurstUpgradeLevel;
+        lastAoeFireUpgradeLevel = selectedInstance.aoeFireUpgradeLevel;
+        lastAoeGravityUpgradeLevel = selectedInstance.aoeGravityUpgradeLevel;
 
         // Keep the original height plane (and steady the camera focus), but let the
         // block follow the cursor directly — no offset back to its old cell.
@@ -844,6 +860,28 @@ public partial class PlacementController : MonoBehaviour
         ShowPlacementPopup($"{branch} upgraded");
     }
 
+    void TryUpgradeSelectedAoeTurret(AoeTurretUpgradePath path)
+    {
+        var ins = selectedInstance;
+        var turret = ins?.visualObject != null
+            ? ins.visualObject.GetComponentInChildren<TurretController>()
+            : null;
+        if (ins == null || turret == null) return;
+
+        if (!turret.TryUpgradeAoePath(path))
+        {
+            if (!turret.CanUpgradeAoePath(path, out string reason))
+                ShowPlacementPopup(reason);
+            return;
+        }
+
+        ins.aoeFireUpgradeLevel = turret.AoeFirePathLevel;
+        ins.aoeGravityUpgradeLevel = turret.AoeGravityPathLevel;
+
+        string branch = path == AoeTurretUpgradePath.Fire ? "Fire" : "Gravity";
+        ShowPlacementPopup($"{branch} upgraded");
+    }
+
     // Removes the selected block and refunds part of its value to the matching
     // currency pool (turret pool for turrets, block pool otherwise). Selling is
     // final — no undo record is pushed.
@@ -999,6 +1037,8 @@ public partial class PlacementController : MonoBehaviour
             color        = currentSynergyColor,
             basicPowerUpgradeLevel = isPickingUpObject ? lastBasicPowerUpgradeLevel : 0,
             basicBurstUpgradeLevel = isPickingUpObject ? lastBasicBurstUpgradeLevel : 0,
+            aoeFireUpgradeLevel = isPickingUpObject ? lastAoeFireUpgradeLevel : 0,
+            aoeGravityUpgradeLevel = isPickingUpObject ? lastAoeGravityUpgradeLevel : 0,
         };
 
         foreach (var c in cells)
@@ -1030,9 +1070,17 @@ public partial class PlacementController : MonoBehaviour
                 rotation    = _currentRotation,
                 cells       = ins.occupiedCells.ToArray(),
                 worldCenter = obj.transform.position,
+                basicPowerUpgradeLevel = ins.basicPowerUpgradeLevel,
+                basicBurstUpgradeLevel = ins.basicBurstUpgradeLevel,
+                aoeFireUpgradeLevel = ins.aoeFireUpgradeLevel,
+                aoeGravityUpgradeLevel = ins.aoeGravityUpgradeLevel,
                 prevCells   = lastObjectCells,
                 prevCenter  = lastObjectPos,
                 prevRotation= lastObjectRot,
+                prevBasicPowerUpgradeLevel = lastBasicPowerUpgradeLevel,
+                prevBasicBurstUpgradeLevel = lastBasicBurstUpgradeLevel,
+                prevAoeFireUpgradeLevel = lastAoeFireUpgradeLevel,
+                prevAoeGravityUpgradeLevel = lastAoeGravityUpgradeLevel,
             });
         }
         else                     // new purchase from shop or tray
@@ -1044,6 +1092,10 @@ public partial class PlacementController : MonoBehaviour
                 rotation    = _currentRotation,
                 cells       = ins.occupiedCells.ToArray(),
                 worldCenter = obj.transform.position,
+                basicPowerUpgradeLevel = ins.basicPowerUpgradeLevel,
+                basicBurstUpgradeLevel = ins.basicBurstUpgradeLevel,
+                aoeFireUpgradeLevel = ins.aoeFireUpgradeLevel,
+                aoeGravityUpgradeLevel = ins.aoeGravityUpgradeLevel,
                 pricePaid   = priceForUndo,
             });
         }
@@ -1261,6 +1313,10 @@ public partial class PlacementController : MonoBehaviour
             rotation    = selectedInstance.visualObject?.transform.rotation ?? Quaternion.identity,
             cells       = selectedInstance.occupiedCells.ToArray(),
             worldCenter = selectedInstance.visualObject?.transform.position ?? Vector3.zero,
+            basicPowerUpgradeLevel = selectedInstance.basicPowerUpgradeLevel,
+            basicBurstUpgradeLevel = selectedInstance.basicBurstUpgradeLevel,
+            aoeFireUpgradeLevel = selectedInstance.aoeFireUpgradeLevel,
+            aoeGravityUpgradeLevel = selectedInstance.aoeGravityUpgradeLevel,
         });
 
         ResourceManager.Instance?.OnBlockRemoved(selectedInstance.data.blockType);
@@ -1366,7 +1422,10 @@ public partial class PlacementController : MonoBehaviour
             if (grid.IsOccupied(c)) { oldCellsFree = false; break; }
 
         if (oldCellsFree)
-            PlaceBlockFromRecord(rec.data, rec.color, rec.prevCells, rec.prevCenter, rec.prevRotation);
+            PlaceBlockFromRecord(
+                rec.data, rec.color, rec.prevCells, rec.prevCenter, rec.prevRotation,
+                rec.prevBasicPowerUpgradeLevel, rec.prevBasicBurstUpgradeLevel,
+                rec.prevAoeFireUpgradeLevel, rec.prevAoeGravityUpgradeLevel);
         else
             Debug.LogWarning("[Undo] Reposition origin cells now occupied block removed without restore.");
     }
@@ -1386,12 +1445,19 @@ public partial class PlacementController : MonoBehaviour
             return;
         }
 
-        PlaceBlockFromRecord(rec.data, rec.color, rec.cells, rec.worldCenter, rec.rotation);
+        PlaceBlockFromRecord(
+            rec.data, rec.color, rec.cells, rec.worldCenter, rec.rotation,
+            rec.basicPowerUpgradeLevel, rec.basicBurstUpgradeLevel,
+            rec.aoeFireUpgradeLevel, rec.aoeGravityUpgradeLevel);
     }
 
     // ── Shared: instantiate a placed block from saved state ───────────────────
     void PlaceBlockFromRecord(BlockData data, Color color, Vector3Int[] cells,
-                              Vector3 center, Quaternion rotation)
+                              Vector3 center, Quaternion rotation,
+                              int basicPowerUpgradeLevel = 0,
+                              int basicBurstUpgradeLevel = 0,
+                              int aoeFireUpgradeLevel = 0,
+                              int aoeGravityUpgradeLevel = 0)
     {
         var obj = new GameObject("PlacedBlock");
         obj.transform.position = center;
@@ -1409,7 +1475,15 @@ public partial class PlacementController : MonoBehaviour
         foreach (var r in obj.GetComponentsInChildren<Renderer>())
             MpbColor.Set(r, color);
 
-        var ins = new PlacedBlockInstance { data = data, visualObject = obj };
+        var ins = new PlacedBlockInstance
+        {
+            data = data,
+            visualObject = obj,
+            basicPowerUpgradeLevel = basicPowerUpgradeLevel,
+            basicBurstUpgradeLevel = basicBurstUpgradeLevel,
+            aoeFireUpgradeLevel = aoeFireUpgradeLevel,
+            aoeGravityUpgradeLevel = aoeGravityUpgradeLevel,
+        };
         foreach (var c in cells) ins.occupiedCells.Add(c);
         RegisterPlacedBlock(ins);
         StartCoroutine(GrowIn(obj));
@@ -1487,6 +1561,8 @@ public partial class PlacementController : MonoBehaviour
                 color        = currentSynergyColor,
                 basicPowerUpgradeLevel = lastBasicPowerUpgradeLevel,
                 basicBurstUpgradeLevel = lastBasicBurstUpgradeLevel,
+                aoeFireUpgradeLevel = lastAoeFireUpgradeLevel,
+                aoeGravityUpgradeLevel = lastAoeGravityUpgradeLevel,
             };
 
             foreach (var c in lastObjectCells)
@@ -1558,6 +1634,7 @@ public partial class PlacementController : MonoBehaviour
             turret = target.gameObject.AddComponent<TurretController>();
         turret.Configure(ins.data.blockType);
         turret.SetBasicUpgradeLevels(ins.basicPowerUpgradeLevel, ins.basicBurstUpgradeLevel);
+        turret.SetAoeUpgradeLevels(ins.aoeFireUpgradeLevel, ins.aoeGravityUpgradeLevel);
     }
 
     // Turrets don't render their cube body they ARE the diamond beacon.
