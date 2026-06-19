@@ -208,9 +208,12 @@ MonoBehaviour:
   buttonTextColor: {r: 0.949, g: 0.937, b: 0.902, a: 1}
   sellColor: {r: 0.886, g: 0.141, b: 0.106, a: 1}
   worldWidth: 3.2
-  heightOffset: 1.6
+  heightOffset: 1.4
+  lateralOffset: -3
+  cameraPull: 2.5
   faceCamera: 1
   fadeSpeed: 14
+  renderOnTop: 1
 --- !u!1 &25065608
 GameObject:
   m_ObjectHideFlags: 0
@@ -245,6 +248,7 @@ Transform:
   - {fileID: 737134994}
   - {fileID: 23567971}
   - {fileID: 1569894633}
+  - {fileID: 322883951}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &85239780
@@ -410,6 +414,7 @@ MonoBehaviour:
   sellRefundFraction: 0.5
   selectionPopDuration: 0.16
   infoPanel: {fileID: 23567973}
+  upgradePanel: {fileID: 322883952}
 --- !u!4 &164805053
 Transform:
   m_ObjectHideFlags: 0
@@ -570,6 +575,64 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 273693464}
   m_CullTransparentMesh: 1
+--- !u!1 &322883950
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 322883951}
+  - component: {fileID: 322883952}
+  m_Layer: 0
+  m_Name: Upgrade
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &322883951
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 322883950}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 25065609}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &322883952
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 322883950}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: af4761e5571d6e9408ac92866ae696c3, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::UpgradePanel
+  font: {fileID: 0}
+  titleSize: 20
+  buttonSize: 16
+  panelColor: {r: 0.949, g: 0.937, b: 0.902, a: 0.92}
+  titleColor: {r: 0.086, g: 0.086, b: 0.086, a: 1}
+  buttonColor: {r: 0.169, g: 0.424, b: 0.69, a: 1}
+  buttonTextColor: {r: 0.949, g: 0.937, b: 0.902, a: 1}
+  worldWidth: 3.4
+  heightOffset: 1.4
+  lateralOffset: 3
+  cameraPull: 2.5
+  faceCamera: 1
+  fadeSpeed: 14
+  renderOnTop: 1
 --- !u!1 &328533583
 GameObject:
   m_ObjectHideFlags: 0
@@ -3013,7 +3076,7 @@ MonoBehaviour:
   shopToggleKey: 102
   shopCenter: {x: -99, y: -99, z: -99}
   shopLayerName: ShopItem
-  blockSpacing: 3.7
+  blockSpacing: 3.59
   blockRowOffset: {x: 0, y: 1.6, z: 0}
   turretRowOffset: {x: 0, y: -1.6, z: 0}
   driftAmplitude: {x: 0.18, y: 0.2, z: 0.15}
@@ -3051,6 +3114,7 @@ MonoBehaviour:
   hoverScale: 1.5
   hoverLerpSpeed: 8
   tooltipBg: {r: 0.04, g: 0.04, b: 0.08, a: 0.9}
+  tooltipScale: 2
   flipHoverX: 0
   flipHoverY: 1
   hoverRadius: 0.5

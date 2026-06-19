@@ -3,34 +3,17 @@ using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
 
-// World-space (3D) selection panel for placed blocks / turrets / the spawn point.
+// World-space (3D) SELECTION panel for placed blocks / turrets / the spawn point.
 // Built entirely at runtime as UGUI: a World-Space Canvas that floats above the
 // selected block and billboards toward the camera. PlacementController drives it via
 // Show / ShowReadonly / Hide (each call carries the block's world position).
 //
-// Just put this component on an empty GameObject and assign it to
-// PlacementController.infoPanel. Font / sizes / colours are fields below.
+// Upgrades live in a SEPARATE panel (UpgradePanel) — this one is title + stats +
+// Pick up / Sell only. Put this component on an empty GameObject and assign it to
+// PlacementController.infoPanel.
 public class BlockInfoPanel : MonoBehaviour
 {
-<<<<<<< Updated upstream
-    [Header("Texts (TextMeshPro)")]
-    public TMP_Text titleText;
-    public TMP_Text bodyText;     // multiline stats; rich-text enabled
-    public TMP_Text lockedNote;   // optional: "Locked during combat"
-
-    [Header("Buttons")]
-    public Button   pickUpButton;
-    public Button   sellButton;
-    public Button   upgradeAButton;
-    public Button   upgradeBButton;
-    public TMP_Text sellLabel;    // the Sell button's label (shows "Sell +N")
-    public TMP_Text upgradeALabel;
-    public TMP_Text upgradeBLabel;
-
-    [Header("Font (optional — applied to every text above at Awake)")]
-=======
     [Header("Font (TextMeshPro — leave null for TMP default)")]
->>>>>>> Stashed changes
     public TMP_FontAsset font;
     public float titleSize  = 26f;
     public float bodySize   = 18f;
@@ -47,18 +30,18 @@ public class BlockInfoPanel : MonoBehaviour
     [Header("World placement")]
     [Tooltip("How wide the panel is in WORLD units.")]
     public float worldWidth = 3.2f;
-    [Tooltip("Metres above the block's pivot to float the panel.")]
-    public float heightOffset = 1.6f;
+    [Tooltip("World units above the block.")]
+    public float heightOffset = 1.4f;
+    [Tooltip("Sideways offset along the camera's right (negative = left of the block). Selection = left, upgrade = right.")]
+    public float lateralOffset = -1.8f;
+    [Tooltip("Pull toward the camera (world units). Higher = floats more in front of the blocks (more 'depth') and reads bigger.")]
+    public float cameraPull = 2.5f;
     public bool  faceCamera = true;
     public float fadeSpeed = 14f;
+    [Tooltip("Also force-draw over geometry (belt-and-suspenders with cameraPull).")]
+    public bool  renderOnTop = true;
 
-<<<<<<< Updated upstream
-    CanvasGroup _cg;
-    Action      _onPickUp, _onSell, _onUpgradeA, _onUpgradeB;
-    float       _target;
-=======
     const float DesignWidth = 320f;   // internal px width before world scaling
->>>>>>> Stashed changes
 
     Camera        _cam;
     Canvas        _canvas;
@@ -69,6 +52,7 @@ public class BlockInfoPanel : MonoBehaviour
     Action        _onPickUp, _onSell;
     Vector3       _anchor;
     float         _target;
+    bool          _justShown;
 
     void Awake() => BuildUI();
 
@@ -77,88 +61,32 @@ public class BlockInfoPanel : MonoBehaviour
         if (_canvas == null) return;
         if (_cam == null) { _cam = Camera.main; if (_canvas) _canvas.worldCamera = _cam; }
 
-<<<<<<< Updated upstream
-        EnsureUpgradeButtons();
-
-        if (font != null)
-            foreach (var t in new[] { titleText, bodyText, lockedNote, sellLabel, upgradeALabel, upgradeBLabel })
-                if (t != null) t.font = font;
-
-        if (pickUpButton != null) pickUpButton.onClick.AddListener(() => _onPickUp?.Invoke());
-        if (sellButton   != null) sellButton.onClick.AddListener(() => _onSell?.Invoke());
-        if (upgradeAButton != null) upgradeAButton.onClick.AddListener(() => _onUpgradeA?.Invoke());
-        if (upgradeBButton != null) upgradeBButton.onClick.AddListener(() => _onUpgradeB?.Invoke());
-
-        _cg.alpha = 0f;
-        _cg.interactable = _cg.blocksRaycasts = false;
-    }
-
-    void EnsureUpgradeButtons()
-    {
-        if (pickUpButton == null) return;
-
-        if (upgradeAButton == null)
-            upgradeAButton = CreateRuntimeUpgradeButton("Upgrade A Button", pickUpButton.transform.GetSiblingIndex() + 1);
-        if (upgradeBButton == null)
-            upgradeBButton = CreateRuntimeUpgradeButton("Upgrade B Button", pickUpButton.transform.GetSiblingIndex() + 2);
-
-        if (upgradeALabel == null && upgradeAButton != null)
-            upgradeALabel = upgradeAButton.GetComponentInChildren<TMP_Text>(true);
-        if (upgradeBLabel == null && upgradeBButton != null)
-            upgradeBLabel = upgradeBButton.GetComponentInChildren<TMP_Text>(true);
-    }
-
-    Button CreateRuntimeUpgradeButton(string objectName, int siblingIndex)
-    {
-        var button = Instantiate(pickUpButton, pickUpButton.transform.parent);
-        button.name = objectName;
-        button.transform.SetSiblingIndex(siblingIndex);
-        button.onClick.RemoveAllListeners();
-        button.gameObject.SetActive(false);
-        return button;
-    }
-
-    void Update()
-    {
-=======
->>>>>>> Stashed changes
         _cg.alpha = Mathf.Lerp(_cg.alpha, _target, 1f - Mathf.Exp(-fadeSpeed * Time.unscaledDeltaTime));
         bool on = _target > 0.5f && _cg.alpha > 0.5f;
         _cg.interactable = _cg.blocksRaycasts = on;
         _canvas.enabled = _cg.alpha > 0.01f;
-        if (!_canvas.enabled) return;
+        if (!_canvas.enabled || _cam == null) return;
 
-        transform.position = _anchor + Vector3.up * heightOffset;
-        if (faceCamera && _cam != null)
+        transform.position = StableSpot(_cam, _anchor, heightOffset, lateralOffset, cameraPull,
+                                        transform.position, _justShown);
+        _justShown = false;
+        if (faceCamera)
             transform.rotation = Quaternion.LookRotation(transform.position - _cam.transform.position, Vector3.up);
     }
 
-<<<<<<< Updated upstream
-    // Editable block / turret: title + stats + Pick up / Sell.
-    public void Show(
-        string title,
-        string body,
-        bool canEdit,
-        string sellText,
-        Action onPickUp,
-        Action onSell,
-        string upgradeAText = null,
-        bool canUpgradeA = false,
-        Action onUpgradeA = null,
-        string upgradeBText = null,
-        bool canUpgradeB = false,
-        Action onUpgradeB = null)
+    // Stable world spot: fixed offset above + beside the block, then pulled toward the
+    // camera so it floats clearly in front (the "depth"). Smoothed so orbiting the
+    // camera glides instead of jumping. Snaps on the first frame after a new selection.
+    internal static Vector3 StableSpot(Camera cam, Vector3 anchor, float up, float lateral,
+                                       float pull, Vector3 current, bool snap)
     {
-        if (titleText) titleText.text = title;
-        if (bodyText)  bodyText.text  = body;
-        if (sellLabel) sellLabel.text = sellText;
+        Vector3 camPos = cam.transform.position;
+        Vector3 target = anchor + Vector3.up * up + cam.transform.right * lateral;
+        target += (camPos - target).normalized * pull;     // bring toward the camera
+        return snap ? target
+                    : Vector3.Lerp(current, target, 1f - Mathf.Exp(-12f * Time.unscaledDeltaTime));
+    }
 
-        if (pickUpButton) { pickUpButton.gameObject.SetActive(true); pickUpButton.interactable = canEdit; }
-        if (sellButton)   { sellButton.gameObject.SetActive(true);   sellButton.interactable   = canEdit; }
-        SetupUpgradeButton(upgradeAButton, upgradeALabel, upgradeAText, canUpgradeA);
-        SetupUpgradeButton(upgradeBButton, upgradeBLabel, upgradeBText, canUpgradeB);
-        if (lockedNote)   lockedNote.gameObject.SetActive(!canEdit);
-=======
     // ── Public API (called by PlacementController) ───────────────────────────────
 
     public void Show(Vector3 worldPos, string title, string body, bool canEdit,
@@ -174,51 +102,27 @@ public class BlockInfoPanel : MonoBehaviour
         _pickUpButton.interactable = canEdit;
         _sellButton.interactable   = canEdit;
         _lockedNote.gameObject.SetActive(!canEdit);
->>>>>>> Stashed changes
 
+        if (_target < 0.5f) _justShown = true;   // snap into place on a fresh selection
         _onPickUp = onPickUp;
         _onSell   = onSell;
-        _onUpgradeA = onUpgradeA;
-        _onUpgradeB = onUpgradeB;
         _target   = 1f;
     }
 
     public void ShowReadonly(Vector3 worldPos, string title, string body)
     {
-<<<<<<< Updated upstream
-        if (titleText) titleText.text = title;
-        if (bodyText)  bodyText.text  = body;
-        if (pickUpButton) pickUpButton.gameObject.SetActive(false);
-        if (sellButton)   sellButton.gameObject.SetActive(false);
-        if (upgradeAButton) upgradeAButton.gameObject.SetActive(false);
-        if (upgradeBButton) upgradeBButton.gameObject.SetActive(false);
-        if (lockedNote)   lockedNote.gameObject.SetActive(false);
-=======
+        if (_target < 0.5f) _justShown = true;
         _anchor = worldPos;
         _titleText.text = title;
         _bodyText.text  = body;
         _pickUpButton.gameObject.SetActive(false);
         _sellButton.gameObject.SetActive(false);
         _lockedNote.gameObject.SetActive(false);
->>>>>>> Stashed changes
 
-        _onPickUp = _onSell = _onUpgradeA = _onUpgradeB = null;
+        _onPickUp = _onSell = null;
         _target   = 1f;
     }
 
-<<<<<<< Updated upstream
-    void SetupUpgradeButton(Button button, TMP_Text label, string text, bool canUpgrade)
-    {
-        if (button == null) return;
-
-        bool show = !string.IsNullOrEmpty(text);
-        button.gameObject.SetActive(show);
-        button.interactable = show && canUpgrade;
-        if (label != null) label.text = text;
-    }
-
-    public void Hide() { _target = 0f; _onPickUp = _onSell = _onUpgradeA = _onUpgradeB = null; }
-=======
     public void Hide() { _target = 0f; _onPickUp = _onSell = null; }
 
     // ── Build (runtime) ──────────────────────────────────────────────────────────
@@ -233,7 +137,7 @@ public class BlockInfoPanel : MonoBehaviour
         _canvas = canvasGO.GetComponent<Canvas>();
         _canvas.renderMode  = RenderMode.WorldSpace;
         _canvas.worldCamera = _cam;
-        _canvas.sortingOrder = 50;
+        _canvas.sortingOrder = 100;
 
         var crt = (RectTransform)canvasGO.transform;
         crt.sizeDelta = new Vector2(DesignWidth, 600f);
@@ -243,7 +147,6 @@ public class BlockInfoPanel : MonoBehaviour
 
         EnsureEventSystem();
 
-        // Panel (auto-sizes to content, centred on the canvas).
         _panel = NewRect("Panel", crt);
         _panel.anchorMin = _panel.anchorMax = _panel.pivot = new Vector2(0.5f, 0.5f);
         _panel.sizeDelta = new Vector2(DesignWidth, 100f);
@@ -271,7 +174,6 @@ public class BlockInfoPanel : MonoBehaviour
         _lockedNote.text = "Locked during combat";
         _lockedNote.gameObject.SetActive(false);
 
-        // Buttons row.
         var row = NewRect("Buttons", _panel);
         var hlg = row.gameObject.AddComponent<HorizontalLayoutGroup>();
         hlg.spacing = 10f; hlg.childAlignment = TextAnchor.MiddleCenter;
@@ -283,9 +185,25 @@ public class BlockInfoPanel : MonoBehaviour
         _pickUpButton.onClick.AddListener(() => _onPickUp?.Invoke());
         _sellButton   = NewButton(row, "Sell",    sellColor,   buttonTextColor, out _sellLabel);
         _sellButton.onClick.AddListener(() => _onSell?.Invoke());
+
+        if (renderOnTop) ApplyRenderOnTop(gameObject);
     }
 
-    static void EnsureEventSystem()
+    // Force every UGUI graphic under `root` to draw over 3D geometry (ZTest Always),
+    // so world-space panels aren't occluded by the blocks they float above.
+    internal static void ApplyRenderOnTop(GameObject root)
+    {
+        int always = (int)UnityEngine.Rendering.CompareFunction.Always;
+        foreach (var g in root.GetComponentsInChildren<Graphic>(true))
+        {
+            var m = new Material(g.materialForRendering);
+            if (m.HasProperty("unity_GUIZTestMode")) m.SetInt("unity_GUIZTestMode", always);
+            if (m.HasProperty("_ZTestMode"))         m.SetInt("_ZTestMode", always);
+            g.material = m;
+        }
+    }
+
+    internal static void EnsureEventSystem()
     {
         if (UnityEngine.EventSystems.EventSystem.current != null) return;
         new GameObject("EventSystem",
@@ -330,5 +248,4 @@ public class BlockInfoPanel : MonoBehaviour
         t.textWrappingMode = TextWrappingModes.NoWrap;
         return t;
     }
->>>>>>> Stashed changes
 }
