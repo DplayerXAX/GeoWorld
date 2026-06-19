@@ -39,7 +39,7 @@ MonoBehaviour:
     targetPriority: 0
     spawnCost: 1
     minRound: 0
-    spawnWeight: 0
+    spawnWeight: 2
     groupSize: {x: 3, y: 6}
     spawnInterval: 0.5
   - name: Taunt
@@ -50,7 +50,7 @@ MonoBehaviour:
     targetPriority: 100
     spawnCost: 1
     minRound: 1
-    spawnWeight: 0
+    spawnWeight: 1.5
     groupSize: {x: 6, y: 10}
     spawnInterval: 0.25
   - name: Splitter
@@ -60,8 +60,8 @@ MonoBehaviour:
     rewardOnKill: 0
     targetPriority: 20
     spawnCost: 4
-    minRound: 0
-    spawnWeight: 1
+    minRound: 2
+    spawnWeight: 0.75
     groupSize: {x: 1, y: 2}
     spawnInterval: 0.85
   waveBaseBudget: 10

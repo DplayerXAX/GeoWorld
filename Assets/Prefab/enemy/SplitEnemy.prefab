@@ -66,10 +66,11 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 34d546bcd47b3aa498f246710b875008, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::EnemySplitOnAlive
-  splitInterval: 5
+  blocksBeforeSplit: 3
   childCount: 2
   unlimitedGenerations: 1
   maxGeneration: 1
+  maxActiveSplitEnemies: 30
   childPrefab: {fileID: 3000000000000000004}
   childHealthMultiplier: 0.45
   childSpeedMultiplier: 1.12

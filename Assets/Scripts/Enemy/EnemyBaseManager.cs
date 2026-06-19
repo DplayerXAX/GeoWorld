@@ -46,6 +46,19 @@ public class EnemyBaseManager : MonoBehaviour
     public int SpawnedCount => _spawnedCount;
     public int TargetSpawnCount => _spawnTotal > 0 ? _spawnTotal : spawnCount;
 
+    public int CountActiveSplitEnemies()
+    {
+        int count = 0;
+        for (int i = 0; i < _activeEnemies.Count; i++)
+        {
+            var enemy = _activeEnemies[i];
+            if (enemy != null && enemy.CurrentHealth > 0
+                && enemy.GetComponent<EnemySplitOnAlive>() != null)
+                count++;
+        }
+        return count;
+    }
+
     readonly List<EnemySurfaceUnit> _activeEnemies = new();
     Coroutine _spawnRoutine;
     bool _waveActive;
