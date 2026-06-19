@@ -107,7 +107,9 @@ public class ShopController : MonoBehaviour
     [Range(1f, 20f)]  public float hoverLerpSpeed = 12f;
 
     [Header("Tooltip")]
-    public Color tooltipBg = new Color(0.04f, 0.04f, 0.08f, 0.90f);
+    public Color tooltipBg = new Color(0.949f, 0.937f, 0.902f, 0.94f);   // paper
+    [Tooltip("Overall hover-tooltip size multiplier.")]
+    public float tooltipScale = 2f;
 
     [Header("Hover correction")]
     public bool flipHoverX;
@@ -1182,12 +1184,13 @@ public class ShopController : MonoBehaviour
         // Pin to the side of the rift's screen-space bounds so the tooltip
         // never covers items. Prefer right; fall back to left if right is
         // off-screen; finally try below / above as last resorts.
-        const float bw = 170f;
+        float       ts = Mathf.Max(0.5f, tooltipScale);
+        float       bw = 170f * ts;
         bool        hasTheme = item.sb.color != BlockColor.None;
         // Tooltip rows: title (shape + colored tag) + price
         //             + 2-line synergy description if themed.
-        float       bh       = hasTheme ? 82f : 44f;
-        const float pad      = 12f;
+        float       bh       = (hasTheme ? 82f : 44f) * ts;
+        float       pad      = 12f * ts;
 
         float minX = float.MaxValue, maxX = float.MinValue;
         float minY = float.MaxValue, maxY = float.MinValue;
@@ -1217,11 +1220,13 @@ public class ShopController : MonoBehaviour
         tx = Mathf.Clamp(tx, 4f, Screen.width  - bw - 4f);
         ty = Mathf.Clamp(ty, 4f, Screen.height - bh - 4f);
 
+        float inset = 8f * ts;
         GUI.color = tooltipBg;
-        GUI.DrawTexture(new Rect(tx - 8f, ty - 8f, bw, bh), Texture2D.whiteTexture);
-        GUI.color = afford ? new Color(0.35f, 1.00f, 0.50f, 0.85f)
-                           : new Color(1.00f, 0.30f, 0.30f, 0.85f);
-        GUI.DrawTexture(new Rect(tx - 8f, ty - 8f, bw, 2f), Texture2D.whiteTexture);
+        GUI.DrawTexture(new Rect(tx - inset, ty - inset, bw, bh), Texture2D.whiteTexture);
+        GUI.color = GeoPalette.Ink;                                       // ink top rule
+        GUI.DrawTexture(new Rect(tx - inset, ty - inset, bw, 5f * ts), Texture2D.whiteTexture);
+        GUI.color = afford ? GeoPalette.Blue : GeoPalette.Signal;         // accent spine on the left
+        GUI.DrawTexture(new Rect(tx - inset, ty - inset, 4f * ts, bh), Texture2D.whiteTexture);
         GUI.color = Color.white;
 
         string shape = TurretTypes.Is(type) ? TurretTypes.DisplayName(type) : item.sb.data.ShapeName;
@@ -1239,25 +1244,28 @@ public class ShopController : MonoBehaviour
             title = shape;
         }
 
-        _ttTitle.richText = true;
-        GUI.Label(new Rect(tx, ty, bw - 16f, 16f), title, _ttTitle);
+        _ttTitle.fontSize = Mathf.RoundToInt(10f * ts);
+        _ttPrice.fontSize = Mathf.RoundToInt(10f * ts);
+        _ttSub.fontSize   = Mathf.RoundToInt(9f  * ts);
 
-        float yCursor = ty + 18f;
-        _ttPrice.normal.textColor = afford ? new Color(0.45f, 1f, 0.55f)
-                                           : new Color(1f, 0.38f, 0.38f);
+        _ttTitle.richText = true;
+        GUI.Label(new Rect(tx, ty, bw - 16f * ts, 16f * ts), title, _ttTitle);
+
+        float yCursor = ty + 18f * ts;
+        _ttPrice.normal.textColor = afford ? GeoPalette.Blue : GeoPalette.Signal;
         string sfx       = TurretTypes.Is(type) ? " T" : " B";
         string priceText = afford ? $"{price}{sfx}" : $"{price}{sfx}  (-{deficit})";
-        GUI.Label(new Rect(tx, yCursor, bw - 16f, 14f), priceText, _ttPrice);
-        yCursor += 18f;
+        GUI.Label(new Rect(tx, yCursor, bw - 16f * ts, 14f * ts), priceText, _ttPrice);
+        yCursor += 18f * ts;
 
         if (hasTheme)
         {
             string desc = BlockColorPalette.Description(item.sb.color);
             if (!string.IsNullOrEmpty(desc))
             {
-                _ttSub.normal.textColor = new Color(0.78f, 0.78f, 0.78f);
+                _ttSub.normal.textColor = new Color(0.30f, 0.30f, 0.30f);   // soft ink on paper
                 _ttSub.wordWrap         = true;
-                GUI.Label(new Rect(tx, yCursor, bw - 16f, 36f), desc, _ttSub);
+                GUI.Label(new Rect(tx, yCursor, bw - 16f * ts, 36f * ts), desc, _ttSub);
             }
         }
     }
@@ -1334,7 +1342,7 @@ public class ShopController : MonoBehaviour
         _stylesBuilt = true;
 
         _ttTitle = new GUIStyle(GUI.skin.label) { fontSize = 10, fontStyle = FontStyle.Bold };
-        _ttTitle.normal.textColor = Color.white;
+        _ttTitle.normal.textColor = GeoPalette.Ink;
 
         _ttPrice = new GUIStyle(GUI.skin.label) { fontSize = 10, fontStyle = FontStyle.Bold };
         _ttPrice.normal.textColor = Color.green;

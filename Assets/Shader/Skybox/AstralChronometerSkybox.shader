@@ -1,23 +1,24 @@
-Shader "Custom/NeuromancerProtocolSkybox"
+Shader "Custom/DeconstructiveGeometrySkybox"
 {
     Properties
     {
-        _MatrixBgColor ("Matrix Void Color", Color) = (0.0, 0.02, 0.01, 1)
-        _CodeColor     ("Base Code Line Color", Color) = (0.0, 1.0, 0.33, 1)
-        _GlitchColor   ("Glitch Shift Color", Color) = (1.0, 0.0, 0.4, 1)
+        [Header(Void Canvas)]
+        _SpaceColor    ("Deep Space Void", Color) = (0.03, 0.03, 0.06, 1)
+        _AmbientGlow   ("Deconstructive Haze", Color) = (0.08, 0.05, 0.12, 1)
         
-        _GridDensity   ("Matrix Resolution", Float) = 32.0
-        _StreamSpeed   ("Data Cascade Speed", Float) = 2.5
+        [Header(Geometric Splinters)]
+        _FacetColorA   ("Primary Fragment (Cold)", Color) = (0.2, 0.35, 0.6, 0.3)
+        _FacetColorB   ("Secondary Fragment (Warm)", Color) = (0.5, 0.25, 0.4, 0.2)
+        _LineColor     ("Structural Fracture Line", Color) = (0.7, 0.8, 1.0, 0.4)
         
-        // Dynamic Controls
-        _BeatPulse     ("Beat Pulse", Range(0,1)) = 0
-        _MusicIntensity("Music Intensity", Range(0,1)) = 0.5
-        _CombatMode    ("Glitch Intensity", Range(0,1)) = 0
-        _DamageTint    ("System Corrupted", Range(0,1)) = 0
+        [Header(Control Parameters)]
+        _Complexity    ("Deconstruction Scale", Float) = 3.0
+        _FlowSpeed     ("Fluidic Speed", Float) = 0.15
+        _FractureSharp ("Line Sharpness", Range(0.01, 0.1)) = 0.03
     }
-
     SubShader
     {
+        // 确保是背景队列，不写入深度
         Tags { "Queue"="Background" "RenderType"="Background" "PreviewType"="Skybox" }
         Cull Off ZWrite Off
 
@@ -27,20 +28,31 @@ Shader "Custom/NeuromancerProtocolSkybox"
             #pragma vertex vert
             #pragma fragment frag
             #pragma target 3.0
+            
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
 
-            half4 _MatrixBgColor, _CodeColor, _GlitchColor;
-            float _GridDensity, _StreamSpeed;
-            float _BeatPulse, _MusicIntensity, _CombatMode, _DamageTint;
+            half4 _SpaceColor, _AmbientGlow, _FacetColorA, _FacetColorB, _LineColor;
+            float _Complexity, _FlowSpeed, _FractureSharp;
 
-            struct Attributes { float4 positionOS : POSITION; };
-            struct Varyings
-            {
-                float4 positionCS : SV_POSITION;
-                float3 dir        : TEXCOORD0;
+            struct Attributes 
+            { 
+                float4 positionOS : POSITION; 
             };
 
-            Varyings vert(Attributes IN)
+            struct Varyings 
+            { 
+                float4 positionCS : SV_POSITION; 
+                float3 dir        : TEXCOORD0; 
+            };
+
+            // 矩阵旋转函数：用于制造多维度的错位剪切
+            float2 Rotate2D(float2 p, float angle)
+            {
+                float s = sin(angle), c = cos(angle);
+                return float2(c * p.x - s * p.y, s * p.x + c * p.y);
+            }
+
+            Varyings vert(Attributes IN) 
             {
                 Varyings OUT;
                 OUT.positionCS = TransformObjectToHClip(IN.positionOS.xyz);
@@ -48,88 +60,59 @@ Shader "Custom/NeuromancerProtocolSkybox"
                 return OUT;
             }
 
-            // 程序化伪随机哈希
-            float Hash3D(float3 p)
+            // 解构主义核心算法：非线性空间撕裂与伪随机断层
+            float3 DeconstructSpace(float3 p, float time)
             {
-                p = frac(p * 0.1031);
-                p += dot(p, p.zyx + 31.32);
-                return frac((p.x + p.y) * p.z);
-            }
+                // 层级一：基础流动扭曲
+                p.xy = Rotate2D(p.xy, time * 0.2);
+                p.xz += sin(p.zy * 2.0 + time) * 0.3; // 空间剪切流
 
-            // 计算单通道二进制流
-            float SampleDataStream(float3 sampleDir, float speedOffset)
-            {
-                // 量化球面坐标，形成方块矩阵点阵
-                float3 gridId = floor(sampleDir * _GridDensity);
-                
-                // 基于每个垂直列的随机哈希计算流动偏移
-                float rawHash = Hash3D(float3(gridId.x, 0.0, gridId.z));
-                
-                // 产生断续滚动的瀑布流
-                float cascade = frac(gridId.y * 0.04 - _Time.y * _StreamSpeed * (0.4 + rawHash * 0.6) + speedOffset);
-                
-                // 过滤出亮点的头部信息和微弱的拖尾
-                float leadPoint = step(0.94, cascade) * 2.0;
-                float tailTrail = pow(cascade, 6.0) * 0.75;
-                
-                // 剔除部分列，使其疏密有致
-                float columnMask = step(0.45, rawHash);
-                
-                return (leadPoint + tailTrail) * columnMask;
+                // 层级二：绝对值折叠（IFS），制造解构主义的锐利碎片与非对称折痕
+                for(int i = 0; i < 3; i++)
+                {
+                    p = abs(p) - float3(0.4, 0.2, 0.5);
+                    p.yz = Rotate2D(p.yz, time * 0.1 + float(i) * 0.5);
+                    p.xy += cos(p.zx * 1.5) * 0.2;
+                }
+                return p;
             }
 
             half4 frag(Varyings IN) : SV_Target
             {
                 float3 dir = normalize(IN.dir);
-                
-                // ── 战斗联动：画面高频切片断裂故障 (Glitch Slicing) ──
-                if (_CombatMode > 0.01)
-                {
-                    float glitchTime = floor(_Time.y * 24.0); // 阶梯式高频时间
-                    float sliceNoise = Hash3D(float3(0.0, floor(dir.y * 15.0), glitchTime));
-                    
-                    // 仅对特定水平切片层进行突发性横向撕裂
-                    float sliceMask = step(1.0 - _CombatMode * 0.45, sliceNoise);
-                    dir.x += sin(dir.y * 100.0 + _Time.y) * 0.15 * sliceMask * _CombatMode;
-                    dir = normalize(dir);
-                }
+                float t = _Time.y * _FlowSpeed;
 
-                // ── 赛博朋克色散分离采样 (Chromatic Aberration) ──
-                // 通过让RGB采样通道产生坐标偏置，模拟硬件系统崩溃
-                float aberration = _CombatMode * 0.05 + _BeatPulse * _MusicIntensity * 0.01;
-                
-                float streamR = SampleDataStream(normalize(dir + float3(aberration, 0, 0)), 0.0);
-                float streamG = SampleDataStream(dir, 0.0);
-                float streamB = SampleDataStream(normalize(dir - float3(aberration, 0, 0)), 0.03);
+                // 1. 基础舞台氛围
+                float horizon = saturate(1.0 - abs(dir.y));
+                half3 finalColor = lerp(_SpaceColor.rgb, _AmbientGlow.rgb, pow(horizon, 3.0));
 
-                // ── 拼装多通道颜色 ──
-                half3 baseMatrixCol = _CodeColor.rgb * streamG;
-                
-                // 故障色散混色：R和B通道偏向赛博霓虹粉/蓝
-                half3 glitchComponent = _GlitchColor.rgb * streamR + half3(0.0, 0.3, 1.0) * streamB;
-                half3 finalCodeNet = lerp(baseMatrixCol, glitchComponent, saturate(_CombatMode * 1.2));
+                // 2. 空间重构与撕裂
+                float3 warpedSpace = DeconstructSpace(dir * _Complexity, t);
 
-                // ── 数字化透视扫描网格 (Neuromancer Lattice) ──
-                float3 gridLines = abs(frac(dir * _GridDensity * 0.5) - 0.5) / fwidth(dir * _GridDensity * 0.5);
-                float lattice = 1.0 - min(min(gridLines.x, gridLines.y), gridLines.z);
-                lattice = saturate(lattice * 0.08) * (1.0 - _CombatMode * 0.4); // 战斗时线框破碎
+                // 3. 提取解构碎片的面（Facets）
+                // 利用多维坐标的差值形成不规则的几何体色块
+                float facetMaskA = saturate(sin(warpedSpace.x * 2.0) * cos(warpedSpace.y * 2.0));
+                float facetMaskB = saturate(cos(warpedSpace.z * 1.5) * sin(warpedSpace.x * 1.5));
 
-                // ── 音乐超载脉冲 (Core Overload) ──
-                float intensity = 0.5 + _MusicIntensity * 0.5;
-                half3 bgCol = _MatrixBgColor.rgb * (1.0 + _BeatPulse * 2.0 * intensity);
-                
-                // 激烈战斗时背景反转为刺眼的死机灰白，随后被数据吞噬
-                bgCol = lerp(bgCol, half3(0.08, 0.1, 0.15), _CombatMode);
+                // 混合解构块面，带来冷暖交织的半透明叠影
+                finalColor += _FacetColorA.rgb * facetMaskA * _FacetColorA.a;
+                finalColor += _FacetColorB.rgb * facetMaskB * _FacetColorB.a;
 
-                half3 result = bgCol + finalCodeNet * (1.0 + _BeatPulse * 1.2) + _CodeColor.rgb * lattice;
+                // 4. 提取解构断层线（Fracture Lines）
+                // 使用 fwidth(warpedSpace) 确保几何线条在任何视角、分辨率下都绝对精致、不发糊
+                float3 fW = fwidth(warpedSpace);
+                float3 edge = abs(frac(warpedSpace - 0.5) - 0.5) / (fW + 0.001);
+                float lineVal = 1.0 - min(min(edge.x, edge.y), edge.z);
+                float fractureLines = smoothstep(1.0 - _FractureSharp * 10.0, 1.0, lineVal);
 
-                // ── 全局系统损坏滤镜 (System Corrupted/Damage Pass) ──
-                // 区别于传统的血红，这里将画面转为极具数码感的“硬件过载致命红”
-                float finalLuma = dot(result, float3(0.299, 0.587, 0.114));
-                half3 corruptedPalette = half3(finalLuma * 1.8, result.g * 0.02, result.b * 0.05);
-                result = lerp(result, corruptedPalette, _DamageTint);
+                // 让断层线产生若隐若现的能量流动感
+                float linePulse = sin(warpedSpace.x + warpedSpace.y + t * 2.0) * 0.3 + 0.7;
+                finalColor = lerp(finalColor, finalColor + _LineColor.rgb * 2.0, fractureLines * _LineColor.a * linePulse);
 
-                return half4(result, 1.0);
+                // 5. 边缘消融（边缘向深空平滑淡出，不显得杂乱）
+                finalColor += _AmbientGlow.rgb * (fractureLines * 0.2);
+
+                return half4(finalColor, 1.0);
             }
             ENDHLSL
         }
