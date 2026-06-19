@@ -23,6 +23,7 @@ public class PauseMenu : MonoBehaviour
 
     GUIStyle _title, _btn, _iconLabel, _diamondStyle, _fastForwardStyle;
     Texture2D _overlay;
+    Material _glMat;
     bool _stylesBuilt;
 
     public bool IsPaused => _paused;
@@ -43,6 +44,7 @@ public class PauseMenu : MonoBehaviour
         }
         Paused = false;
         if (_overlay != null) { Destroy(_overlay); _overlay = null; _stylesBuilt = false; }
+        if (_glMat != null)   { Destroy(_glMat);   _glMat = null; }
     }
 
     public void SetPaused(bool paused)
@@ -102,7 +104,7 @@ public class PauseMenu : MonoBehaviour
         float ui = Screen.height / 1080f;
         float scale = ui * 2f;
         float s = controlSize * scale;
-        float gap = 2f * scale;
+        float gap = 1f * scale;
 
         float xPause = Screen.width - (controlsRight * ui) - s;
         float xSpeed = xPause - gap - s;
@@ -112,7 +114,7 @@ public class PauseMenu : MonoBehaviour
         if (GUI.Button(pauseRect, GUIContent.none, GUIStyle.none)) SetPaused(!_paused);
         DrawPauseGlyph(pauseRect, _paused);
 
-        var speedRect = new Rect(xSpeed, y+3f, s, s);
+        var speedRect = new Rect(xSpeed, y+4f, s, s);
         if (GUI.Button(speedRect, GUIContent.none, GUIStyle.none)) CycleSpeed();
 
         _fastForwardStyle.normal.textColor = controlFg;
@@ -125,10 +127,10 @@ public class PauseMenu : MonoBehaviour
         float dFont = s * 0.45f;
         _diamondStyle.fontSize = Mathf.Max(8, Mathf.RoundToInt(dFont));
         _diamondStyle.normal.textColor = Color.black;
-        float cell    = dFont * 0.8f;     // tight columns
+        float cell    = dFont * 0.7f;     // tight columns
         float spacing = dFont * 0f;
         float dRowH   = dFont * 1.25f;
-        float diamondY = y + s - dRowH+12f;    // just inside the bottom edge
+        float diamondY = y + s - dRowH+18f;    // just inside the bottom edge
 
         float totalW = (cell * 3f) + (spacing * 2f);
         float startX = xSpeed + (s - totalW) * 0.5f;
@@ -153,11 +155,15 @@ public class PauseMenu : MonoBehaviour
     }
     void DrawFastForwardGlyph(Rect r)
     {
+        if (Event.current.type != EventType.Repaint) return;   // GL only valid on Repaint
+
+        EnsureGlMaterial();
         Color prev = GUI.color;
         GUI.color = controlFg;
 
         GL.PushMatrix();
         GL.LoadPixelMatrix();
+        _glMat.SetPass(0);   // required before GL.Begin/End
 
         float w = r.width;
         float h = r.height;
@@ -237,5 +243,16 @@ public class PauseMenu : MonoBehaviour
         _overlay = new Texture2D(1, 1);
         _overlay.SetPixel(0, 0, overlayColor);
         _overlay.Apply();
+    }
+
+    void EnsureGlMaterial()
+    {
+        if (_glMat != null) return;
+        var sh = Shader.Find("Hidden/Internal-Colored");
+        _glMat = new Material(sh) { hideFlags = HideFlags.HideAndDontSave };
+        _glMat.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
+        _glMat.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+        _glMat.SetInt("_Cull",     (int)UnityEngine.Rendering.CullMode.Off);
+        _glMat.SetInt("_ZWrite",   0);
     }
 }

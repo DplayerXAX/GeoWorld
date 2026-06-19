@@ -27,7 +27,7 @@ public partial class PlacementController
         if (mode == PlacementMode.Select && _selectedEndpoint != null && _selectedEndpointIsStart
             && (GameFlowManager.Instance == null || GameFlowManager.Instance.phase != GamePhase.Running))
         {
-            infoPanel.ShowReadonly("Spawn Point", BuildStartBody());
+            infoPanel.ShowReadonly(_selectedEndpoint.transform.position, "Spawn Point", BuildStartBody());
             return;
         }
 
@@ -46,11 +46,15 @@ public partial class PlacementController
             && GameFlowManager.Instance.phase == GamePhase.Running && !isTurret;
         int refund = ComputeSellRefund(ins);
 
+<<<<<<< Updated upstream
         BuildUpgradeButtons(ins,
             out string upgradeAText, out bool canUpgradeA, out System.Action onUpgradeA,
             out string upgradeBText, out bool canUpgradeB, out System.Action onUpgradeB);
 
         infoPanel.Show(title, body, !combatLocked, $"Sell +{refund}",
+=======
+        infoPanel.Show(ins.visualObject.transform.position, title, body, !combatLocked, $"Sell +{refund}",
+>>>>>>> Stashed changes
             () => _panelPickUpRequested = true,
             () => _panelSellRequested   = true,
             upgradeAText, canUpgradeA, onUpgradeA,

@@ -58,17 +58,33 @@ public class HudSidePanels : MonoBehaviour
     class Row { public GameObject go; public Image swatch; public TMP_Text label; }
     readonly List<Row> _synRows = new();
 
+    bool _autoSpawned;
+
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     static void Spawn()
     {
         if (FindFirstObjectByType<HudSidePanels>() != null) return;
         var go = new GameObject("HudSidePanels");
         DontDestroyOnLoad(go);
-        go.AddComponent<HudSidePanels>();
+        go.AddComponent<HudSidePanels>()._autoSpawned = true;
     }
 
     void Awake()
     {
+        // A scene-placed (sprite-configured) instance wins over the auto-spawned
+        // default that persists from the Title scene — kill the default so we don't
+        // end up with two side-panel sets (one unconfigured).
+        var all = FindObjectsByType<HudSidePanels>(FindObjectsSortMode.None);
+        foreach (var o in all)
+            if (o != this && o._autoSpawned) Destroy(o.gameObject);
+
+        // If this very object is a leftover duplicate auto-spawn, bail.
+        if (_autoSpawned && all.Length > 1 && System.Array.Exists(all, o => o != this && !o._autoSpawned))
+        {
+            Destroy(gameObject);
+            return;
+        }
+
         EnsureDefaults();
         BuildUI();
     }
@@ -97,6 +113,15 @@ public class HudSidePanels : MonoBehaviour
 
         UpdateSynergies();
 
+        // Click anywhere while a panel is open → collapse it (and swallow that click
+        // so it doesn't also place / select in the world).
+        bool closedThisClick = false;
+        if (Input.GetMouseButtonDown(0) && (_synOpen || _ctrlOpen))
+        {
+            _synOpen = _ctrlOpen = false;
+            closedThisClick = true;
+        }
+
         float k = 1f - Mathf.Exp(-12f * Time.unscaledDeltaTime);
 
         _leftPanel.anchoredPosition = new Vector2(
@@ -107,7 +132,12 @@ public class HudSidePanels : MonoBehaviour
         UpdatePanelAlpha(_leftPanel, _synOpen, k);
         UpdatePanelAlpha(_rightPanel, _ctrlOpen, k);
 
+        // Handle hides while its panel is open; reappears once closed.
+        _leftHandle.gameObject.SetActive(!_synOpen);
+        _rightHandle.gameObject.SetActive(!_ctrlOpen);
+
         UpdatePointerOver();
+        if (closedThisClick) PointerOver = true;
     }
 
     void UpdatePanelAlpha(RectTransform rt, bool isOpen, float k)

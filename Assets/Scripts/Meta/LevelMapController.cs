@@ -36,9 +36,12 @@ public class LevelMapController : MonoBehaviour
     public float pawnSurfaceLift = 0.5f;
 
     [Header("Camera focus")]
-    [Tooltip("On click, smoothly slide the camera to keep the target cell centred (keeps its current offset/angle).")]
+    [Tooltip("On click, smoothly slide the camera to frame the target cell (keeps its current offset/angle).")]
     public bool  cameraFocus = true;
     public float cameraLerp  = 4f;
+    [Tooltip("Where the focused cell sits horizontally on screen. 0.5 = centre, ~0.3 = left-centre (leaves room for the right info panel).")]
+    [Range(0f, 1f)] public float focusViewportX = 0.3f;
+    [Range(0f, 1f)] public float focusViewportY = 0.5f;
 
     readonly List<LevelNode> _nodes = new();
     LevelNode _current, _selected;
@@ -55,8 +58,10 @@ public class LevelMapController : MonoBehaviour
     // columns at ANY height difference (climbing the shared edge).
     readonly Dictionary<Vector2Int, Vector3Int> _columnTop = new();
     Vector3Int _currentCell;
-    Vector3    _camOffset;     // camera position relative to the cell it's looking at
-    Vector3    _camFocus;      // world point the camera is sliding to keep centred
+    OrbitCamera _orbit;        // if the main camera has one, it owns the transform — we drive it
+    Quaternion _camRot;        // camera orientation, captured at Start (we only translate it)
+    float      _camDepth;      // forward distance from camera to its focus point
+    Vector3    _camFocus;      // world point the camera frames
     bool       _camReady;
 
     void Start()
@@ -81,23 +86,73 @@ public class LevelMapController : MonoBehaviour
             if (pawn != null) pawn.position = SurfaceTop(_currentCell);
         }
 
-        // Capture the camera's offset from its starting focus so we can keep that
-        // exact framing/angle while sliding to focus future cells.
-        if (_cam != null)
+        // Decide who frames the camera. If the main camera has an OrbitCamera, it
+        // owns the transform — we just feed it the focus point + the left bias.
+        // Otherwise we translate the camera ourselves (LateUpdate).
+        _orbit = _cam != null ? _cam.GetComponent<OrbitCamera>() : null;
+
+        _camFocus = (_current != null) ? SurfaceTop(_currentCell)
+                  : (pawn != null ? pawn.position : (_cam != null ? _cam.transform.position : Vector3.zero));
+
+        if (_orbit != null)
         {
-            _camFocus  = (_current != null) ? SurfaceTop(_currentCell)
-                       : (pawn != null ? pawn.position : _cam.transform.position);
-            _camOffset = _cam.transform.position - _camFocus;
-            _camReady  = true;
+            _orbit.focusViewport = new Vector2(focusViewportX, focusViewportY);
+            _orbit.FocusOnPoint(_camFocus);
+        }
+        else if (_cam != null)
+        {
+            _camRot   = _cam.transform.rotation;
+            Vector3 local = Quaternion.Inverse(_camRot) * (_camFocus - _cam.transform.position);
+            _camDepth = Mathf.Max(0.1f, local.z);
+            _camReady = true;
         }
     }
 
     void LateUpdate()
     {
-        if (!cameraFocus || !_camReady || _cam == null) return;
-        Vector3 want = _camFocus + _camOffset;
-        _cam.transform.position = Vector3.Lerp(_cam.transform.position, want,
-                                               1f - Mathf.Exp(-cameraLerp * Time.deltaTime));
+        // OrbitCamera (if present) owns the transform — we drove it via FocusOnPoint.
+        if (!cameraFocus || _orbit != null || !_camReady || _cam == null) return;
+        _cam.transform.position = Vector3.Lerp(
+            _cam.transform.position,
+            DesiredCamPos(),
+            1f - Mathf.Exp(-cameraLerp * Time.deltaTime));
+    }
+
+    // Route a focus request to the OrbitCamera if present, else our own framer.
+    void FocusCameraOn(Vector3 worldPoint)
+    {
+        _camFocus = worldPoint;
+        if (_orbit != null)
+        {
+            _orbit.focusViewport = new Vector2(focusViewportX, focusViewportY);
+            _orbit.FocusOnPoint(worldPoint);
+        }
+    }
+
+    // Exact: place _camFocus at viewport (focusViewportX, focusViewportY) keeping the
+    // captured rotation and depth — works at any camera angle (no centring drift).
+    Vector3 DesiredCamPos()
+    {
+        float zc = _camDepth;
+        float halfW, halfH;
+        if (_cam.orthographic)
+        {
+            halfH = _cam.orthographicSize;
+            halfW = halfH * _cam.aspect;
+        }
+        else
+        {
+            halfH = zc * Mathf.Tan(_cam.fieldOfView * 0.5f * Mathf.Deg2Rad);
+            halfW = halfH * _cam.aspect;
+        }
+
+        // Focus position in camera space for the desired viewport point.
+        Vector3 local = new Vector3(
+            (focusViewportX - 0.5f) * 2f * halfW,
+            (focusViewportY - 0.5f) * 2f * halfH,
+            zc);
+
+        return _camFocus - _camRot * local;
     }
 
     // ── Build the map from the saved layout ──────────────────────────────────
@@ -175,7 +230,7 @@ public class LevelMapController : MonoBehaviour
         var cellPath = SurfaceBfs(_currentCell, new HashSet<Vector3Int> { cell }, _surface);
         if (cellPath != null)
         {
-            if (cameraFocus) _camFocus = SurfaceTop(cell);   // slide camera to the destination cell
+            if (cameraFocus) FocusCameraOn(SurfaceTop(cell));   // frame the destination cell
             StartCoroutine(WalkCells(cellPath));
         }
     }

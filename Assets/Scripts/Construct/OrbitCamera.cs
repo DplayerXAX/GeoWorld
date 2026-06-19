@@ -16,6 +16,10 @@ public class OrbitCamera : MonoBehaviour
 
     public Vector3 orthoAngle = new Vector3(35f, 45f, 0f);
 
+    [Header("Focus framing")]
+    [Tooltip("Where the focus point sits on screen (0.5,0.5 = centre). e.g. LevelMapController sets x≈0.3 to bias the selected cell to the left.")]
+    public Vector2 focusViewport = new Vector2(0.5f, 0.5f);
+
     [Header("Projection toggle")]
     public KeyCode projectionToggleKey = KeyCode.F8;
     [Tooltip("Perspective FOV applied when switching out of ortho.")]
@@ -218,8 +222,9 @@ public class OrbitCamera : MonoBehaviour
             rot = Quaternion.Euler(pitch, yaw, 0);
         }
 
+        Vector3 shift  = ViewportBiasShift(rot);
         Vector3 offset = rot * new Vector3(0, 0, -distance);
-        Vector3 desiredPos = currentFocusPoint + offset;
+        Vector3 desiredPos = currentFocusPoint + offset + shift;
 
         transform.position = Vector3.Lerp(
             transform.position,
@@ -227,6 +232,25 @@ public class OrbitCamera : MonoBehaviour
             1f - Mathf.Exp(-transitionSpeed * Time.deltaTime)
         );
 
-        transform.LookAt(currentFocusPoint);
+        // Smooth aim (eased rotation, not a per-frame snap). Looking at the SHIFTED
+        // target keeps the focus point biased to `focusViewport` while staying smooth.
+        transform.LookAt(currentFocusPoint + shift);
+    }
+
+    // World shift so the focus point lands at `focusViewport` instead of dead centre.
+    Vector3 ViewportBiasShift(Quaternion rot)
+    {
+        if (myCam == null) return Vector3.zero;
+        if (Mathf.Approximately(focusViewport.x, 0.5f) && Mathf.Approximately(focusViewport.y, 0.5f))
+            return Vector3.zero;
+
+        float halfH = myCam.orthographic
+            ? orthoSize
+            : distance * Mathf.Tan(myCam.fieldOfView * 0.5f * Mathf.Deg2Rad);
+        float halfW = halfH * myCam.aspect;
+
+        // Moving the camera right pushes the focus left, so use (0.5 - viewport).
+        return rot * Vector3.right * ((0.5f - focusViewport.x) * 2f * halfW)
+             + rot * Vector3.up    * ((0.5f - focusViewport.y) * 2f * halfH);
     }
 }

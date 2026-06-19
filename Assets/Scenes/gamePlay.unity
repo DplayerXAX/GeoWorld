@@ -129,8 +129,9 @@ GameObject:
   m_Component:
   - component: {fileID: 23567971}
   - component: {fileID: 23567972}
+  - component: {fileID: 23567973}
   m_Layer: 0
-  m_Name: TopLeftPanel
+  m_Name: info
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -184,6 +185,32 @@ MonoBehaviour:
   groundPlaneY: 0
   cellHysteresis: 0.07
   toggleKey: 0
+--- !u!114 &23567973
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 23567970}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5e65914dbce831744ad4cf6fd7d80eed, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::BlockInfoPanel
+  font: {fileID: 0}
+  titleSize: 26
+  bodySize: 18
+  buttonSize: 18
+  panelColor: {r: 0.949, g: 0.937, b: 0.902, a: 0.92}
+  titleColor: {r: 0.086, g: 0.086, b: 0.086, a: 1}
+  bodyColor: {r: 0.086, g: 0.086, b: 0.086, a: 1}
+  buttonColor: {r: 0.086, g: 0.086, b: 0.086, a: 1}
+  buttonTextColor: {r: 0.949, g: 0.937, b: 0.902, a: 1}
+  sellColor: {r: 0.886, g: 0.141, b: 0.106, a: 1}
+  worldWidth: 3.2
+  heightOffset: 1.6
+  faceCamera: 1
+  fadeSpeed: 14
 --- !u!1 &25065608
 GameObject:
   m_ObjectHideFlags: 0
@@ -382,7 +409,7 @@ MonoBehaviour:
   rangeBlockedColor: {r: 1, g: 0.18, b: 0.12, a: 0.6}
   sellRefundFraction: 0.5
   selectionPopDuration: 0.16
-  infoPanel: {fileID: 0}
+  infoPanel: {fileID: 23567973}
 --- !u!4 &164805053
 Transform:
   m_ObjectHideFlags: 0
@@ -823,6 +850,7 @@ MonoBehaviour:
   orthoSize: 5
   orthoZoomSpeed: 2
   orthoAngle: {x: 35, y: 45, z: 0}
+  focusViewport: {x: 0.5, y: 0.5}
   projectionToggleKey: 289
   perspectiveFov: 50
   transitionSpeed: 15
