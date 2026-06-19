@@ -1,0 +1,127 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!1 &3000000000000000001
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 3000000000000000002}
+  - component: {fileID: 3000000000000000004}
+  - component: {fileID: 3000000000000000005}
+  - component: {fileID: 3000000000000000006}
+  - component: {fileID: 3000000000000000007}
+  m_Layer: 0
+  m_Name: SplitEnemy
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &3000000000000000002
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3000000000000000001}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 0.65, y: 0.65, z: 0.65}
+  m_ConstrainProportionsScale: 1
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &3000000000000000004
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3000000000000000001}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 35184de46b48402aa20433b916bb4fe2, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::EnemySurfaceUnit
+  bpm: 120
+  moveRatio: 0.8
+  baseSpeedMultiplier: 1
+  maxHealth: 8
+  rewardOnKill: 0
+  faceClearance: 0.15
+  targetPriority: 20
+--- !u!114 &3000000000000000005
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3000000000000000001}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 34d546bcd47b3aa498f246710b875008, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::EnemySplitOnAlive
+  splitInterval: 5
+  childCount: 2
+  unlimitedGenerations: 1
+  maxGeneration: 1
+  childPrefab: {fileID: 3000000000000000004}
+  childHealthMultiplier: 0.45
+  childSpeedMultiplier: 1.12
+  childScaleMultiplier: 0.72
+  childRewardMultiplier: 0
+  scatterRadius: 0.35
+--- !u!114 &3000000000000000006
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3000000000000000001}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 735b9c52af41b9b4da09c5bc959f2508, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::EnemyChaoticVisual
+  shardCount: 5
+  accentCount: 2
+  shardMaterial: {fileID: 0}
+  accentMaterial: {fileID: 0}
+  forceUnlit: 1
+  layoutRadius: 0.3
+  shardSizeRange: {x: 0.18, y: 0.28}
+  accentSizeRange: {x: 0.05, y: 0.1}
+  shardPalette:
+  - {r: 0.18, g: 0.78, b: 0.95, a: 1}
+  - {r: 0.42, g: 0.35, b: 1, a: 1}
+  - {r: 0.88, g: 0.42, b: 1, a: 1}
+  accentPalette:
+  - {r: 0.75, g: 1, b: 0.65, a: 1}
+  - {r: 1, g: 0.9, b: 0.45, a: 1}
+  bodyRotSpeed: 12
+  shardSpinSpeed: 26
+  bobAmplitude: 0.055
+  bobSpeed: 0.8
+  orbitDriftSpeed: 6
+  randomizeRootTilt: 1
+--- !u!114 &3000000000000000007
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3000000000000000001}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ee9f4cc053aa0bf48aad60ea85ba3e3f, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::BlockOutlineApplier
+  outlineMaterial: {fileID: 0}
+  applyOnAwake: 0
+  includeChildren: 1
+  skipIfAlreadyPresent: 1

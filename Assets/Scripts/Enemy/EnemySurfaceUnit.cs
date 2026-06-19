@@ -88,6 +88,17 @@ public class EnemySurfaceUnit : MonoBehaviour
         _index = 1;
     }
 
+    public List<FaceNode> GetRemainingPathSnapshot()
+    {
+        if (_path == null || _path.Count == 0) return null;
+
+        int start = Mathf.Clamp(_index - 1, 0, _path.Count - 1);
+        var remaining = new List<FaceNode>(_path.Count - start);
+        for (int i = start; i < _path.Count; i++)
+            remaining.Add(_path[i]);
+        return remaining;
+    }
+
     public void TakeDamage(int amount)
     {
         if (amount <= 0 || _health <= 0) return;
