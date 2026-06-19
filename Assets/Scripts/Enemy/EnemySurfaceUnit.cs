@@ -102,6 +102,16 @@ public class EnemySurfaceUnit : MonoBehaviour
         _temporarySpeedMultiplier = Mathf.Max(0.01f, multiplier);
     }
 
+    public void AddExternalDisplacement(Vector3 delta)
+    {
+        if (_health <= 0 || delta.sqrMagnitude <= 0.000001f) return;
+
+        transform.position += delta;
+        _moveFrom += delta;
+        _moveTo += delta;
+        _controlPoint += delta;
+    }
+
     void Update()
     {
         if (_path == null || _health <= 0) return;

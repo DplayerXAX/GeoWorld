@@ -16,10 +16,11 @@ public class PlacedBlockInstance
     // synergy hook fires (or if no evaluator is in the scene).
     public PlacedPiece placedPiece;
 
-    // Per-turret upgrade state. Currently used by Basic Turret's two upgrade
-    // branches so each placed turret can progress independently.
+    // Per-turret upgrade state so each placed turret can progress independently.
     public int basicPowerUpgradeLevel;
     public int basicBurstUpgradeLevel;
+    public int aoeFireUpgradeLevel;
+    public int aoeGravityUpgradeLevel;
 }
 
 public class GridSystem : MonoBehaviour

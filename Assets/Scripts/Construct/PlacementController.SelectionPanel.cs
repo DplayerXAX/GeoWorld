@@ -46,9 +46,15 @@ public partial class PlacementController
             && GameFlowManager.Instance.phase == GamePhase.Running && !isTurret;
         int refund = ComputeSellRefund(ins);
 
+        BuildUpgradeButtons(ins,
+            out string upgradeAText, out bool canUpgradeA, out System.Action onUpgradeA,
+            out string upgradeBText, out bool canUpgradeB, out System.Action onUpgradeB);
+
         infoPanel.Show(title, body, !combatLocked, $"Sell +{refund}",
             () => _panelPickUpRequested = true,
-            () => _panelSellRequested   = true);
+            () => _panelSellRequested   = true,
+            upgradeAText, canUpgradeA, onUpgradeA,
+            upgradeBText, canUpgradeB, onUpgradeB);
     }
 
     string BuildInfoBody(PlacedBlockInstance ins, bool isTurret)
@@ -74,6 +80,9 @@ public partial class PlacementController
             else if (t.mode == TurretController.Mode.Aoe)
             {
                 sb.AppendLine($"AOE radius <b>{t.aoeRadius:0.#}</b>");
+                sb.AppendLine();
+                sb.AppendLine($"Fire <b>{t.GetAoePathLevel(AoeTurretUpgradePath.Fire)}/3</b>" +
+                              $"   Gravity <b>{t.GetAoePathLevel(AoeTurretUpgradePath.Gravity)}/3</b>");
             }
             else if (t.mode == TurretController.Mode.Basic)
             {
@@ -96,6 +105,46 @@ public partial class PlacementController
         string desc = BlockColorPalette.Description(ins.color);
         if (!string.IsNullOrEmpty(desc)) sb.Append(desc);
         return sb.ToString().TrimEnd();
+    }
+
+    void BuildUpgradeButtons(
+        PlacedBlockInstance ins,
+        out string upgradeAText,
+        out bool canUpgradeA,
+        out System.Action onUpgradeA,
+        out string upgradeBText,
+        out bool canUpgradeB,
+        out System.Action onUpgradeB)
+    {
+        upgradeAText = upgradeBText = null;
+        canUpgradeA = canUpgradeB = false;
+        onUpgradeA = onUpgradeB = null;
+
+        var turret = ins?.visualObject != null
+            ? ins.visualObject.GetComponentInChildren<TurretController>()
+            : null;
+        if (turret == null) return;
+
+        if (turret.mode == TurretController.Mode.Basic)
+        {
+            canUpgradeA = turret.CanUpgradeBasicPath(BasicTurretUpgradePath.Power, out _);
+            canUpgradeB = turret.CanUpgradeBasicPath(BasicTurretUpgradePath.Burst, out _);
+            upgradeAText = $"Power: {turret.NextBasicUpgradeDescription(BasicTurretUpgradePath.Power)}";
+            upgradeBText = $"Burst: {turret.NextBasicUpgradeDescription(BasicTurretUpgradePath.Burst)}";
+            onUpgradeA = () => _panelPowerUpgradeRequested = true;
+            onUpgradeB = () => _panelBurstUpgradeRequested = true;
+            return;
+        }
+
+        if (turret.mode == TurretController.Mode.Aoe)
+        {
+            canUpgradeA = turret.CanUpgradeAoePath(AoeTurretUpgradePath.Fire, out _);
+            canUpgradeB = turret.CanUpgradeAoePath(AoeTurretUpgradePath.Gravity, out _);
+            upgradeAText = $"Fire: {turret.NextAoeUpgradeDescription(AoeTurretUpgradePath.Fire)}";
+            upgradeBText = $"Gravity: {turret.NextAoeUpgradeDescription(AoeTurretUpgradePath.Gravity)}";
+            onUpgradeA = () => _panelAoeFireUpgradeRequested = true;
+            onUpgradeB = () => _panelAoeGravityUpgradeRequested = true;
+        }
     }
 
     string BuildStartBody()
@@ -216,6 +265,7 @@ public partial class PlacementController
         {
             DrawTurretStats(ins);
             DrawBasicTurretUpgrades(ins);
+            DrawAoeTurretUpgrades(ins);
         }
         else
         {
@@ -323,7 +373,11 @@ public partial class PlacementController
             {
                 rows = 3;   // Damage, Range, Fire rate
                 if      (t.mode == TurretController.Mode.Slow) rows += 2;
-                else if (t.mode == TurretController.Mode.Aoe)  rows += 1;
+                else if (t.mode == TurretController.Mode.Aoe)
+                {
+                    rows += 1;
+                    extra += 148f;
+                }
                 else
                 {
                     rows += 1;         // Bullets
@@ -512,6 +566,47 @@ public partial class PlacementController
                 _panelPowerUpgradeRequested = true;
             else
                 _panelBurstUpgradeRequested = true;
+        }
+
+        GUI.enabled = prevEnabled;
+        if (!canUpgrade && level < 3 && !string.IsNullOrEmpty(reason))
+            GUILayout.Label(reason, _panelLabel);
+    }
+
+    void DrawAoeTurretUpgrades(PlacedBlockInstance ins)
+    {
+        var turret = ins.visualObject.GetComponentInChildren<TurretController>();
+        if (turret == null || turret.mode != TurretController.Mode.Aoe) return;
+
+        PanelDivider();
+        GUILayout.Label("Upgrades", _panelValue);
+        DrawAoeUpgradeBranch(turret, AoeTurretUpgradePath.Fire);
+        GUILayout.Space(4f);
+        DrawAoeUpgradeBranch(turret, AoeTurretUpgradePath.Gravity);
+    }
+
+    void DrawAoeUpgradeBranch(TurretController turret, AoeTurretUpgradePath path)
+    {
+        int level = turret.GetAoePathLevel(path);
+        string name = path == AoeTurretUpgradePath.Fire ? "Fire" : "Gravity";
+        string next = turret.NextAoeUpgradeDescription(path);
+
+        GUILayout.BeginHorizontal();
+        GUILayout.Label($"{name} {level}/3", _panelValue, GUILayout.Width(88f));
+        GUILayout.Label(next, _panelLabel);
+        GUILayout.EndHorizontal();
+
+        bool canUpgrade = turret.CanUpgradeAoePath(path, out string reason);
+        bool prevEnabled = GUI.enabled;
+        GUI.enabled = canUpgrade;
+
+        string buttonText = canUpgrade ? $"Upgrade {name}" : (level >= 3 ? "Max" : "Locked");
+        if (GUILayout.Button(buttonText, _panelButton, GUILayout.Height(28f)))
+        {
+            if (path == AoeTurretUpgradePath.Fire)
+                _panelAoeFireUpgradeRequested = true;
+            else
+                _panelAoeGravityUpgradeRequested = true;
         }
 
         GUI.enabled = prevEnabled;

@@ -93,6 +93,7 @@ public class TurretBullet : MonoBehaviour
 
             case TurretController.Mode.Aoe:
             {
+                Vector3 blastCenter = transform.position;
                 var mgr = EnemyBaseManager.Instance;
                 if (mgr != null)
                 {
@@ -105,11 +106,31 @@ public class TurretBullet : MonoBehaviour
                     {
                         var e = enemies[i];
                         if (e != null && e.CurrentHealth > 0
-                            && (e.transform.position - transform.position).sqrMagnitude <= r2)
+                            && (e.transform.position - blastCenter).sqrMagnitude <= r2)
                             _aoeBuffer.Add(e);
                     }
                     for (int i = 0; i < _aoeBuffer.Count; i++)
                         if (_aoeBuffer[i] != null) _aoeBuffer[i].TakeDamage(_damage);
+                }
+
+                if (_turret.AoeBurnGroundEnabled)
+                {
+                    AoeBurnZoneEffect.Spawn(
+                        blastCenter,
+                        _turret.aoeRadius,
+                        _turret.AoeBurnGroundDuration,
+                        _turret.AoeBurnDamagePerTick,
+                        _turret.AoeBurnTickInterval);
+                }
+
+                if (_turret.AoeGravityWellEnabled)
+                {
+                    AoeGravityWellEffect.Spawn(
+                        blastCenter,
+                        _turret.AoeGravityRadius,
+                        _turret.AoeGravityDuration,
+                        _turret.AoeGravityPullSpeed,
+                        _turret.AoeGravityFinalDamage);
                 }
                 break;
             }
