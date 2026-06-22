@@ -5,6 +5,9 @@ public class PauseMenu : MonoBehaviour
     [Header("Hotkey")]
     public KeyCode toggleKey = KeyCode.Escape;
 
+    [Tooltip("Scene loaded by the 'Back to Title' button (must be in Build Settings).")]
+    public string titleScene = "Title";
+
     [Header("Look")]
     public Color overlayColor = new Color(0f, 0f, 0f, 0.6f);
     public Color titleColor = new Color(0.6f, 0.95f, 1f);
@@ -66,6 +69,7 @@ public class PauseMenu : MonoBehaviour
 
     void OnGUI()
     {
+        if (IntroDirector.Playing) return;   // hidden behind the intro overlay
         EnsureStyles();
         DrawTopRightControls();
 
@@ -74,27 +78,54 @@ public class PauseMenu : MonoBehaviour
         GUI.DrawTexture(new Rect(0, 0, Screen.width, Screen.height), _overlay, ScaleMode.StretchToFill);
 
         float w = panelWidth;
-        float h = 300f;
+        float h = 44f + 5 * (buttonHeight + 8f) + 28f;
         var rect = new Rect((Screen.width - w) * 0.5f, (Screen.height - h) * 0.5f, w, h);
 
-        GUILayout.BeginArea(rect, GUI.skin.box);
-        GUILayout.Space(12);
-        GUILayout.Label("PAUSED", _title, GUILayout.ExpandWidth(true));
-        GUILayout.Space(18);
+        // Paper panel — ink top rule + signal spine (constructivist).
+        Fill(rect, GeoPalette.Paper);
+        Fill(new Rect(rect.x, rect.y, rect.width, 5f), GeoPalette.Ink);
+        Fill(new Rect(rect.x, rect.y, 6f, rect.height), GeoPalette.Signal);
 
-        if (GUILayout.Button("Resume", _btn, GUILayout.Height(buttonHeight))) SetPaused(false);
+        GUILayout.BeginArea(new Rect(rect.x + 20f, rect.y + 14f, rect.width - 40f, rect.height - 26f));
+        GUILayout.Label("PAUSED", _title, GUILayout.ExpandWidth(true));
+        GUILayout.Space(16);
+
+        var prevBg = GUI.backgroundColor;
+        GUI.backgroundColor = new Color(0.86f, 0.85f, 0.81f);   // paper-tinted buttons
+
+        if (GUILayout.Button("Resume",   _btn, GUILayout.Height(buttonHeight))) SetPaused(false);
         GUILayout.Space(8);
         if (GUILayout.Button("Settings", _btn, GUILayout.Height(buttonHeight))) SettingsScreen.Open = true;
         GUILayout.Space(8);
-        if (GUILayout.Button("Restart", _btn, GUILayout.Height(buttonHeight)))
+        if (GUILayout.Button("Restart",  _btn, GUILayout.Height(buttonHeight)))
         {
             Time.timeScale = 1f;
             _paused = false;
             GameFlowManager.Instance?.RestartGame();
         }
         GUILayout.Space(8);
+        if (GUILayout.Button("Back to Title", _btn, GUILayout.Height(buttonHeight))) GoToTitle();
+        GUILayout.Space(8);
+
+        GUI.backgroundColor = new Color(0.86f, 0.36f, 0.32f);   // red-tinted quit
         if (GUILayout.Button("Quit", _btn, GUILayout.Height(buttonHeight))) QuitGame();
+        GUI.backgroundColor = prevBg;
+
         GUILayout.EndArea();
+    }
+
+    static void Fill(Rect r, Color c)
+    {
+        var p = GUI.color; GUI.color = c;
+        GUI.DrawTexture(r, Texture2D.whiteTexture);
+        GUI.color = p;
+    }
+
+    void GoToTitle()
+    {
+        Time.timeScale = 1f;
+        _paused = false; Paused = false;
+        LoadingScreen.Go(titleScene);
     }
 
     void DrawTopRightControls()
@@ -233,9 +264,10 @@ public class PauseMenu : MonoBehaviour
         if (_stylesBuilt) return;
         _stylesBuilt = true;
 
-        _title = new GUIStyle(GUI.skin.label) { fontSize = 22, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter };
-        _title.normal.textColor = titleColor;
-        _btn = new GUIStyle(GUI.skin.button) { fontSize = 15 };
+        _title = new GUIStyle(GUI.skin.label) { fontSize = 26, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter };
+        _title.normal.textColor = GeoPalette.Ink;
+        _btn = new GUIStyle(GUI.skin.button) { fontSize = 16, fontStyle = FontStyle.Bold };
+        _btn.normal.textColor = _btn.hover.textColor = _btn.active.textColor = GeoPalette.Ink;
         _iconLabel = new GUIStyle(GUI.skin.label) { fontSize = 28, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter };
         _fastForwardStyle = new GUIStyle(GUI.skin.label) { fontSize = 22, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter };
         _diamondStyle = new GUIStyle(GUI.skin.label) { fontSize = 16, alignment = TextAnchor.MiddleCenter };

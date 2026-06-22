@@ -25,6 +25,10 @@ public class EnemySurfaceUnit : MonoBehaviour
     public event Action<EnemySurfaceUnit> OnReachedEnd;
     public event Action<EnemySurfaceUnit> OnDied;
 
+    // Global hooks (for objectives / score / stats) — fire for ANY enemy.
+    public static event Action<EnemySurfaceUnit> AnyDied;
+    public static event Action<EnemySurfaceUnit> AnyReachedEnd;
+
     public int CurrentHealth => _health;
     public IReadOnlyList<FaceNode> Path => _path;
 
@@ -207,12 +211,14 @@ public class EnemySurfaceUnit : MonoBehaviour
     {
         _path = null;
         OnReachedEnd?.Invoke(this);
+        AnyReachedEnd?.Invoke(this);
     }
 
     void Die()
     {
         _path = null;
         OnDied?.Invoke(this);
+        AnyDied?.Invoke(this);
     }
 
     float EffectiveSpeedMultiplier => Mathf.Max(0.01f, baseSpeedMultiplier * _temporarySpeedMultiplier);

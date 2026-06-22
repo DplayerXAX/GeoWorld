@@ -16,6 +16,8 @@ public class TutorialDirector : MonoBehaviour
 
     LevelDefinition _lv;
     int        _step;
+    float      _stepTimer;     // for Wait steps
+    int        _freePlaced;    // for FreePlace steps
     GameObject _ghost;
     Material   _ghostMat;
     GUIStyle   _hintStyle;
@@ -77,6 +79,22 @@ public class TutorialDirector : MonoBehaviour
             && GameFlowManager.Instance.phase == GamePhase.Running)
             Advance();
 
+        // Wait step: auto-advance after waitSeconds, or on a click if waitSeconds <= 0.
+        if (step != null && step.kind == TutorialStepKind.Wait)
+        {
+            _stepTimer += Time.deltaTime;
+            bool timed   = step.waitSeconds > 0f && _stepTimer >= step.waitSeconds;
+            bool clicked = step.waitSeconds <= 0f && Input.GetMouseButtonDown(0);
+            if (timed || clicked) { Advance(); return; }
+        }
+
+        // Input step: advance when the required key is pressed.
+        if (step != null && step.kind == TutorialStepKind.Input && Input.GetKeyDown(step.inputKey))
+        {
+            Advance();
+            return;
+        }
+
         // (Re)build the ghost if it's missing for a Place step, then pulse it so
         // the guide is easy to spot.
         if (step != null && step.kind == TutorialStepKind.Place && _ghost == null && GridSystem.instance != null)
@@ -108,9 +126,15 @@ public class TutorialDirector : MonoBehaviour
     void OnBlockPlaced(BlockData block, Vector3Int[] worldCells)
     {
         var step = Cur;
-        if (step != null && step.kind == TutorialStepKind.Place
-            && SameSet(step.TargetCells(), worldCells))
+        if (step == null) return;
+
+        if (step.kind == TutorialStepKind.Place && SameSet(step.TargetCells(), worldCells))
             Advance();
+        else if (step.kind == TutorialStepKind.FreePlace)
+        {
+            _freePlaced++;
+            if (_freePlaced >= Mathf.Max(1, step.count)) Advance();
+        }
     }
 
     static string Fmt(Vector3Int[] cells)
@@ -132,6 +156,8 @@ public class TutorialDirector : MonoBehaviour
     void ShowStep()
     {
         if (_ghost != null) { Destroy(_ghost); _ghost = null; _ghostRends.Clear(); }
+        _stepTimer = 0f;
+        _freePlaced = 0;
 
         var step = Cur;
         var pc   = PlacementController.Instance;
@@ -203,7 +229,7 @@ public class TutorialDirector : MonoBehaviour
     {
         var step = Cur;
         string msg = step != null ? step.hint : null;
-        if (string.IsNullOrEmpty(msg) || SettingsScreen.Open || PauseMenu.Paused) return;
+        if (string.IsNullOrEmpty(msg) || SettingsScreen.Open || PauseMenu.Paused || IntroDirector.Playing) return;
 
         float s = UiScale.Get();
         if (_hintStyle == null)

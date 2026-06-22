@@ -20,6 +20,20 @@ MonoBehaviour:
   turretsPerTurn: 3
   waves: []
   wavesToClear: 5
+  objectives:
+  - type: 1
+    target: 3
+    description: 
+    optional: 0
+  - type: 3
+    target: 10
+    description: 
+    optional: 0
+  - type: 6
+    target: 1
+    description: 
+    optional: 0
+  requireAllObjectives: 1
   unlockedByDefault: 1
   unlocks: []
   techReward: 1
@@ -28,9 +42,21 @@ MonoBehaviour:
   startCell: {x: 0, y: 0, z: 0}
   endCell: {x: 3, y: 0, z: 3}
   tutorialSteps:
+  - kind: 5
+    block: {fileID: 0}
+    origin: {x: 1, y: 0, z: 1}
+    rotation90: {x: 1, y: 0, z: 0}
+    cellsOverride: []
+    waitSeconds: 0
+    count: 1
+    inputKey: 32
+    hint: Place a block on this area lol
   - kind: 0
     block: {fileID: 11400000, guid: eb476e18de9d37e4dbc97c8247017e54, type: 2}
     origin: {x: 1, y: 0, z: 1}
     rotation90: {x: 1, y: 0, z: 0}
     cellsOverride: []
+    waitSeconds: 0
+    count: 1
+    inputKey: 32
     hint: Place a block on this area lol

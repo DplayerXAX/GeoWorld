@@ -368,7 +368,7 @@ public partial class PlacementController : MonoBehaviour
 
     void Update()
     {
-        if (SettingsScreen.Open) return;   // settings overlay is modal — block placement input
+        if (SettingsScreen.Open || IntroDirector.Playing) return;   // modal overlay / intro — block placement input
 
         _currentRotation = Quaternion.Slerp(
             _currentRotation,
@@ -813,7 +813,7 @@ public partial class PlacementController : MonoBehaviour
                     break;
                 }
             }
-            if (outlineMat == null) continue;
+            if (outlineMat == null || !outlineMat.HasProperty(_OutlineColorID)) continue;
 
             r.GetPropertyBlock(_highlightMpb);
             var color = restoreDefault

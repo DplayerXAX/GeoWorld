@@ -104,6 +104,8 @@ public class AkInitializer : UnityEngine.MonoBehaviour
 	#endif
 #endif
 
+		// DontDestroyOnLoad only works on root GameObjects — detach if nested.
+		if (transform.parent != null) transform.SetParent(null);
 		DontDestroyOnLoad(this);
 	}
 

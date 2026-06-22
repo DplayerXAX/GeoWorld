@@ -391,7 +391,7 @@ public class HudSidePanels : MonoBehaviour
         t.fontStyle     = style;
         t.alignment     = align;
         t.raycastTarget = false;
-        t.enableWordWrapping = false;
+        t.textWrappingMode = TextWrappingModes.NoWrap;
         return t;
     }
 }
