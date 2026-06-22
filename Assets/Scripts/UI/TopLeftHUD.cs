@@ -19,6 +19,7 @@ public class TopLeftHUD : MonoBehaviour
     public TMP_FontAsset font;
     public float valueSize  = 18f;
     public float incomeSize = 13f;
+    public float waveSize   = 18f;   // next-wave text size
 
     [Header("Colors")]
     public Color panelColor  = new Color(0f, 0f, 0f, 0.42f);
@@ -27,10 +28,19 @@ public class TopLeftHUD : MonoBehaviour
     public Color turretColor = new Color(1.00f, 0.65f, 0.30f);
     public Color valueColor  = Color.white;
     public Color incomeColor = new Color(0.65f, 0.65f, 0.65f);
+    public Color waveColor      = new Color(0f, 0f, 0f);            // next-wave number
+    public Color waveLabelColor = new Color(0.6f, 0.6f, 0.6f);      // the "WAVE" label
 
     [Header("Layout")]
     public Vector2 panelMargin = new Vector2(16f, 16f);   // from the bottom-left corner
     public float   cellGap     = 8f;                       // readout gap above the shop top
+    public int     cornerRadius = 24;                      // rounded-corner radius (px)
+    public float   topMargin  = 14f;                       // top-centre panel gap from the top edge
+    public float   topInset   = 28f;                       // padding for lives/wave inside the panel
+
+    [Header("Top panel (one integrated sprite behind lives + wave)")]
+    public Sprite  topPanelSprite;
+    public Vector2 topPanelSize = new Vector2(380f, 36f);
 
     [Header("Mouse / cell readout")]
     public Camera worldCamera;
@@ -46,7 +56,8 @@ public class TopLeftHUD : MonoBehaviour
     bool _hasCommittedCell;
 
     Canvas        _canvas;
-    TMP_Text      _livesVal, _blockVal, _blockInc, _turretVal, _turretInc, _cellVal;
+    Image         _panelBg;
+    TMP_Text      _livesVal, _waveVal, _blockVal, _blockInc, _turretVal, _turretInc, _cellVal;
     GameObject    _panel, _cellReadout;
     RectTransform _cellRect;
 
@@ -57,8 +68,8 @@ public class TopLeftHUD : MonoBehaviour
         if (toggleKey != KeyCode.None && Input.GetKeyDown(toggleKey)) _visible = !_visible;
         if (_canvas == null) return;
 
-        _canvas.enabled = _visible;
-        if (!_visible) return;
+        _canvas.enabled = _visible && !IntroDirector.Playing;   // hold until the intro finishes
+        if (!_canvas.enabled) return;
 
         UpdateMouseCell();
         RefreshValues();
@@ -67,13 +78,25 @@ public class TopLeftHUD : MonoBehaviour
 
     void RefreshValues()
     {
-        var rm = ResourceManager.Instance;
-        var hp = PlayerHealth.Instance;
+        var rm  = ResourceManager.Instance;
+        var hp  = PlayerHealth.Instance;
+        var gfm = GameFlowManager.Instance;
         _livesVal.text  = hp != null ? $"{hp.CurrentLives} / {hp.maxLives}" : "0 / 0";
+        int wave = gfm != null ? gfm.UpcomingWaveNumber : 1;
+        string lblHex = ColorUtility.ToHtmlStringRGB(waveLabelColor);
+        _waveVal.text   = $"<size=62%><color=#{lblHex}>WAVE</color></size>  <b>{wave}</b>";
         _blockVal.text  = (rm != null ? rm.BlockCurrency  : 0).ToString();
         _turretVal.text = (rm != null ? rm.TurretCurrency : 0).ToString();
         _blockInc.text  = $"+{PerRoundBlockIncome()}";
         _turretInc.text = $"+{PerRoundTurretIncome()}";
+
+        // When the shop (black bar) is open: drop the panel background and show the
+        // per-turn income in white so it reads on the black bar.
+        bool shopOpen = ShopController.Instance != null && ShopController.Instance.IsExpanded;
+        if (_panelBg != null) _panelBg.enabled = !shopOpen;
+        Color incCol = shopOpen ? Color.white : incomeColor;
+        _blockInc.color = incCol;
+        _turretInc.color = incCol;
     }
 
     void PositionCellReadout()
@@ -112,7 +135,68 @@ public class TopLeftHUD : MonoBehaviour
         scaler.matchWidthOrHeight  = 1f;
 
         BuildPanel();
+        BuildTopCenter();
         BuildCellReadout();
+    }
+
+    // Lives + next-wave on ONE integrated panel (top-centre). Lives sits at the left,
+    // wave at the right; the background is a single sprite (topPanelSprite).
+    void BuildTopCenter()
+    {
+        var panel = NewRect("TopPanel", _canvas.transform);
+        panel.anchorMin = panel.anchorMax = new Vector2(0.5f, 1f);
+        panel.pivot = new Vector2(0.5f, 1f);
+        panel.sizeDelta = topPanelSize;
+        panel.anchoredPosition = new Vector2(0f, -topMargin);
+
+        var bg = panel.gameObject.AddComponent<Image>();
+        bg.raycastTarget = false;
+        if (topPanelSprite != null)
+        {
+            bg.sprite = topPanelSprite;
+            bg.type   = topPanelSprite.border != Vector4.zero ? Image.Type.Sliced : Image.Type.Simple;
+            bg.color  = Color.white;
+        }
+        else   // fallback so it's visible before you assign the sprite
+        {
+            bg.sprite = UIRoundedRect.Get(cornerRadius);
+            bg.type   = Image.Type.Sliced;
+            bg.color  = panelColor;
+        }
+
+        _livesVal = BuildTopGroup(panel, heartIcon, heartColor, leftSide: true);
+        _waveVal  = BuildTopGroup(panel, null,      waveColor,  leftSide: false);
+        _waveVal.fontSize = waveSize;   // wave has its own size (lives uses valueSize)
+    }
+
+    // Icon + value group anchored to the left or right edge inside the top panel (no own bg).
+    TMP_Text BuildTopGroup(RectTransform parent, Sprite icon, Color valCol, bool leftSide)
+    {
+        float ax = leftSide ? 0f : 1f;
+        var g = NewRect("Group", parent);
+        g.anchorMin = g.anchorMax = new Vector2(ax, 0.5f);
+        g.pivot = new Vector2(ax, 0.5f);
+        g.anchoredPosition = new Vector2(leftSide ? topInset : -topInset, 0f);
+
+        var h = g.gameObject.AddComponent<HorizontalLayoutGroup>();
+        h.spacing = 8f; h.childAlignment = leftSide ? TextAnchor.MiddleLeft : TextAnchor.MiddleRight;
+        h.childControlWidth = h.childControlHeight = true;
+        h.childForceExpandWidth = false; h.childForceExpandHeight = false;
+        var fit = g.gameObject.AddComponent<ContentSizeFitter>();
+        fit.horizontalFit = fit.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+
+        if (icon != null)
+        {
+            var img = NewImage("Icon", g, valCol, false);
+            img.sprite = icon;
+            var ile = img.gameObject.AddComponent<LayoutElement>();
+            ile.minWidth = ile.preferredWidth = ile.minHeight = ile.preferredHeight = iconSize;
+        }
+
+        var val = NewText("Value", g, valueSize, valCol, FontStyles.Bold,
+                          leftSide ? TextAlignmentOptions.MidlineLeft : TextAlignmentOptions.MidlineRight);
+        val.text = "0";
+        return val;
     }
 
     void BuildPanel()
@@ -125,6 +209,9 @@ public class TopLeftHUD : MonoBehaviour
         var bg = panel.gameObject.AddComponent<Image>();
         bg.color = panelColor;
         bg.raycastTarget = false;
+        bg.sprite = UIRoundedRect.Get(cornerRadius);
+        bg.type   = Image.Type.Sliced;
+        _panelBg  = bg;
 
         var vlg = panel.gameObject.AddComponent<VerticalLayoutGroup>();
         vlg.padding = new RectOffset(10, 12, 8, 8);
@@ -136,7 +223,6 @@ public class TopLeftHUD : MonoBehaviour
         var fitter = panel.gameObject.AddComponent<ContentSizeFitter>();
         fitter.horizontalFit = fitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
 
-        _livesVal  = BuildRow(panel, heartIcon,  heartColor,  out _);
         _blockVal  = BuildRow(panel, blockIcon,  blockColor,  out _blockInc);
         _turretVal = BuildRow(panel, turretIcon, turretColor, out _turretInc);
     }
@@ -180,6 +266,8 @@ public class TopLeftHUD : MonoBehaviour
         var bg = rt.gameObject.AddComponent<Image>();
         bg.color = panelColor;
         bg.raycastTarget = false;
+        bg.sprite = UIRoundedRect.Get(Mathf.Min(cornerRadius, 14));   // smaller radius for the short readout
+        bg.type   = Image.Type.Sliced;
 
         var h = rt.gameObject.AddComponent<HorizontalLayoutGroup>();
         h.padding = new RectOffset(8, 8, 4, 4);
@@ -274,7 +362,7 @@ public class TopLeftHUD : MonoBehaviour
         t.fontStyle     = style;
         t.alignment     = align;
         t.raycastTarget = false;
-        t.enableWordWrapping = false;
+        t.textWrappingMode = TextWrappingModes.NoWrap;
         return t;
     }
 }

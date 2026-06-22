@@ -30,6 +30,10 @@ Shader "Custom/ManifoldSkybox"
         _PitchGlow     ("Pitch Glow",     Range(0,1)) = 0
         // Combat mode (0=calm build, 1=intense battle) — driven by BackgroundReactor
         _CombatMode    ("Combat Mode",    Range(0,1)) = 0
+
+        // Intro reveal: 0 = flat _IntroColor, 1 = full sky. Driven by IntroDirector.
+        _IntroBlend    ("Intro Blend",    Range(0,1)) = 1
+        _IntroColor    ("Intro Color (single hue)", Color) = (0.12, 0.14, 0.26, 1)
     }
 
     SubShader
@@ -53,6 +57,8 @@ Shader "Custom/ManifoldSkybox"
             float _DamageTint;
             half4 _FlashColor;
             float _FlashAmount;
+            float _IntroBlend;
+            half4 _IntroColor;
 
             struct Attributes { float4 positionOS : POSITION; };
             struct Varyings
@@ -422,6 +428,14 @@ half3 combatHorizon =
                 float flashLuma    = dot(result, float3(0.299, 0.587, 0.114));
                 half3 flashPalette = _FlashColor.rgb * (0.35 + flashLuma * 1.1);
                 result = lerp(result, flashPalette, _FlashAmount);
+
+                // ── Intro reveal: single-hue monochrome → full-colour sky ──────
+                // At blend 0 the sky keeps its light/dark STRUCTURE but rendered in
+                // one palette hue (_IntroColor); as blend → 1 the real colours bloom
+                // back in. Reads as a natural desaturate → saturate reveal.
+                float introLuma = dot(result, float3(0.299, 0.587, 0.114));
+                half3 introMono = _IntroColor.rgb * (0.25 + introLuma * 1.7);
+                result = lerp(introMono, result, saturate(_IntroBlend));
 
                 return half4(result, 1.0);
             }

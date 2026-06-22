@@ -16,6 +16,8 @@ public class TutorialDirector : MonoBehaviour
 
     LevelDefinition _lv;
     int        _step;
+    float      _stepTimer;     // for Wait steps
+    int        _freePlaced;    // for FreePlace steps
     GameObject _ghost;
     Material   _ghostMat;
     GUIStyle   _hintStyle;
@@ -49,16 +51,26 @@ public class TutorialDirector : MonoBehaviour
 
         var pc = PlacementController.Instance;
         if (pc != null) pc.placementConstraint = MatchesStep;
-        PlacementController.BlockPlaced  += OnBlockPlaced;
-        PlacementController.BlockRotated += OnBlockRotated;
+        PlacementController.BlockPlaced    += OnBlockPlaced;
+        PlacementController.BlockRotated   += OnBlockRotated;
+        PlacementController.BlockPurchased += OnPurchased;
+        PlacementController.BlockSelected  += OnSelected;
+        PlacementController.BlockSold      += OnSold;
+        PlacementController.ShopRefreshed  += OnRefreshed;
+        PlacementController.TurretUpgraded += OnUpgraded;
         Debug.Log($"[Tutorial] active — {(_lv.tutorialSteps != null ? _lv.tutorialSteps.Count : 0)} step(s).");
         ShowStep();
     }
 
     void OnDestroy()
     {
-        PlacementController.BlockPlaced  -= OnBlockPlaced;
-        PlacementController.BlockRotated -= OnBlockRotated;
+        PlacementController.BlockPlaced    -= OnBlockPlaced;
+        PlacementController.BlockRotated   -= OnBlockRotated;
+        PlacementController.BlockPurchased -= OnPurchased;
+        PlacementController.BlockSelected  -= OnSelected;
+        PlacementController.BlockSold      -= OnSold;
+        PlacementController.ShopRefreshed  -= OnRefreshed;
+        PlacementController.TurretUpgraded -= OnUpgraded;
         var pc = PlacementController.Instance;
         if (pc != null && pc.placementConstraint == (System.Func<BlockData, Vector3Int[], bool>)MatchesStep)
             pc.placementConstraint = null;
@@ -71,11 +83,29 @@ public class TutorialDirector : MonoBehaviour
 
     void Update()
     {
+        if (IntroDirector.Playing) return;   // wait for the entrance animation before running steps
+
         var step = Cur;
         if (step != null && step.kind == TutorialStepKind.Run
             && GameFlowManager.Instance != null
             && GameFlowManager.Instance.phase == GamePhase.Running)
             Advance();
+
+        // Wait step: auto-advance after waitSeconds, or on a click if waitSeconds <= 0.
+        if (step != null && step.kind == TutorialStepKind.Wait)
+        {
+            _stepTimer += Time.deltaTime;
+            bool timed   = step.waitSeconds > 0f && _stepTimer >= step.waitSeconds;
+            bool clicked = step.waitSeconds <= 0f && Input.GetMouseButtonDown(0);
+            if (timed || clicked) { Advance(); return; }
+        }
+
+        // Input step: advance when the required key is pressed.
+        if (step != null && step.kind == TutorialStepKind.Input && Input.GetKeyDown(step.inputKey))
+        {
+            Advance();
+            return;
+        }
 
         // (Re)build the ghost if it's missing for a Place step, then pulse it so
         // the guide is easy to spot.
@@ -108,9 +138,15 @@ public class TutorialDirector : MonoBehaviour
     void OnBlockPlaced(BlockData block, Vector3Int[] worldCells)
     {
         var step = Cur;
-        if (step != null && step.kind == TutorialStepKind.Place
-            && SameSet(step.TargetCells(), worldCells))
+        if (step == null) return;
+
+        if (step.kind == TutorialStepKind.Place && SameSet(step.TargetCells(), worldCells))
             Advance();
+        else if (step.kind == TutorialStepKind.FreePlace)
+        {
+            _freePlaced++;
+            if (_freePlaced >= Mathf.Max(1, step.count)) Advance();
+        }
     }
 
     static string Fmt(Vector3Int[] cells)
@@ -127,11 +163,58 @@ public class TutorialDirector : MonoBehaviour
         if (step != null && step.kind == TutorialStepKind.Rotate) Advance();
     }
 
+    void OnPurchased(BlockData d)
+    {
+        var step = Cur;
+        if (step != null && step.kind == TutorialStepKind.Purchase && SameBlock(step.block, d)) Advance();
+    }
+
+    void OnSelected(BlockData d)
+    {
+        var step = Cur;
+        if (step != null && step.kind == TutorialStepKind.Select && SameBlock(step.block, d)) Advance();
+    }
+
+    void OnSold(BlockData d)
+    {
+        var step = Cur;
+        if (step != null && step.kind == TutorialStepKind.Sell && SameBlock(step.block, d)) Advance();
+    }
+
+    // Tutorial block match: null = any; same asset always matches. Otherwise:
+    //   • turret  → match by blockType (e.g. any AOE turret),
+    //   • block   → match by blockShape (e.g. any L block).
+    static bool SameBlock(BlockData want, BlockData got)
+    {
+        if (want == null) return true;
+        if (got == null)  return false;
+        if (want == got)  return true;
+
+        if (TurretTypes.Is(want.blockType))
+            return TurretTypes.Is(got.blockType) && want.blockType == got.blockType;
+
+        return !TurretTypes.Is(got.blockType) && want.blockShape == got.blockShape;
+    }
+
+    void OnRefreshed()
+    {
+        var step = Cur;
+        if (step != null && step.kind == TutorialStepKind.Refresh) Advance();
+    }
+
+    void OnUpgraded()
+    {
+        var step = Cur;
+        if (step != null && step.kind == TutorialStepKind.Upgrade) Advance();
+    }
+
     void Advance() { _step++; ShowStep(); }
 
     void ShowStep()
     {
         if (_ghost != null) { Destroy(_ghost); _ghost = null; _ghostRends.Clear(); }
+        _stepTimer = 0f;
+        _freePlaced = 0;
 
         var step = Cur;
         var pc   = PlacementController.Instance;
@@ -203,7 +286,7 @@ public class TutorialDirector : MonoBehaviour
     {
         var step = Cur;
         string msg = step != null ? step.hint : null;
-        if (string.IsNullOrEmpty(msg) || SettingsScreen.Open || PauseMenu.Paused) return;
+        if (string.IsNullOrEmpty(msg) || SettingsScreen.Open || PauseMenu.Paused || IntroDirector.Playing) return;
 
         float s = UiScale.Get();
         if (_hintStyle == null)

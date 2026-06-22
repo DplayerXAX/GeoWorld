@@ -166,20 +166,28 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::TopLeftHUD
   heartIcon: {fileID: 21300000, guid: 979f4de47b7f349488490f1c11ad6980, type: 3}
   blockIcon: {fileID: 21300000, guid: c2580f4507815514d89d2150ccda6476, type: 3}
-  turretIcon: {fileID: 21300000, guid: 6f7382dbaf49b294eb5180ceaafa9d1e, type: 3}
-  gridIcon: {fileID: 10905, guid: 0000000000000000f000000000000000, type: 0}
+  turretIcon: {fileID: 21300000, guid: bcd7eb48f0ad10e468d4749463c1cc2f, type: 3}
+  gridIcon: {fileID: 21300000, guid: a5b9704a02a62da4d9acfd97b4e7e246, type: 3}
   iconSize: 35
   font: {fileID: 11400000, guid: 656fc90eefbca1448b0b452bc9a3178c, type: 2}
-  valueSize: 20
+  valueSize: 30
   incomeSize: 20
-  panelColor: {r: 0, g: 0, b: 0, a: 0}
+  waveSize: 35
+  panelColor: {r: 0.9748427, g: 0.95215774, b: 0.8614176, a: 1}
   heartColor: {r: 1, g: 0.4, b: 0.4, a: 1}
   blockColor: {r: 0.54901963, g: 0.7413912, b: 1, a: 1}
   turretColor: {r: 1, g: 0.65, b: 0.3, a: 1}
   valueColor: {r: 0, g: 0, b: 0, a: 1}
   incomeColor: {r: 0.34591186, g: 0.34047297, b: 0.34047297, a: 1}
-  panelMargin: {x: 16, y: 16}
+  waveColor: {r: 0, g: 0, b: 0, a: 1}
+  waveLabelColor: {r: 0, g: 0, b: 0, a: 1}
+  panelMargin: {x: 32, y: 16}
   cellGap: 8
+  cornerRadius: 24
+  topMargin: 100
+  topInset: 300
+  topPanelSprite: {fileID: 21300000, guid: 21e5c717a24876440b8fcb93ca5c9f8f, type: 3}
+  topPanelSize: {x: 900, y: 46}
   worldCamera: {fileID: 330585545}
   rayMaxDistance: 200
   groundPlaneY: 0
@@ -197,7 +205,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 5e65914dbce831744ad4cf6fd7d80eed, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::BlockInfoPanel
-  font: {fileID: 0}
+  font: {fileID: 11400000, guid: 656fc90eefbca1448b0b452bc9a3178c, type: 2}
   titleSize: 26
   bodySize: 18
   buttonSize: 18
@@ -329,6 +337,7 @@ Transform:
   - {fileID: 1513795617}
   - {fileID: 764464399}
   - {fileID: 1188158438}
+  - {fileID: 784282230}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &164805051
@@ -619,7 +628,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: af4761e5571d6e9408ac92866ae696c3, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::UpgradePanel
-  font: {fileID: 0}
+  font: {fileID: 11400000, guid: 656fc90eefbca1448b0b452bc9a3178c, type: 2}
   titleSize: 20
   buttonSize: 16
   panelColor: {r: 0.949, g: 0.937, b: 0.902, a: 0.92}
@@ -1052,7 +1061,7 @@ Camera:
   m_Enabled: 0
   serializedVersion: 2
   m_ClearFlags: 2
-  m_BackGroundColor: {r: 0.28, g: 0.14, b: 0.01, a: 1}
+  m_BackGroundColor: {r: 0, g: 0, b: 0, a: 1}
   m_projectionMatrixMode: 1
   m_GateFitMode: 2
   m_FOVAxisMode: 0
@@ -1938,6 +1947,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PauseMenu
   toggleKey: 27
+  titleScene: Title
   overlayColor: {r: 0, g: 0, b: 0, a: 0.6}
   titleColor: {r: 0.6, g: 0.95, b: 1, a: 1}
   panelWidth: 260
@@ -1976,8 +1986,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 9eb7f8e5d2224fb4292250c2d0b74163, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::CurrencyPopup
-  blockAnchorNorm: {x: 0.06, y: 0.06}
-  turretAnchorNorm: {x: 0.06, y: 0.12}
+  blockAnchorNorm: {x: 0.1, y: 0.94}
+  turretAnchorNorm: {x: 0.1, y: 0.88}
   riseSpeed: 55
   lifetime: 1.6
   fontSize: 16
@@ -2044,6 +2054,61 @@ Transform:
   m_Children: []
   m_Father: {fileID: 154636173}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &784282229
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 784282230}
+  - component: {fileID: 784282231}
+  m_Layer: 0
+  m_Name: introdirector
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &784282230
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 784282229}
+  serializedVersion: 2
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 154636173}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &784282231
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 784282229}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 30ff958214e301b42a3574fb59e732db, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::IntroDirector
+  fadeIn: 0.5
+  hold: 1
+  fadeOut: 0.8
+  revealTime: 2.2
+  popTime: 0.5
+  whiteColor: {r: 1, g: 1, b: 1, a: 1}
+  nameColor: {r: 0.086, g: 0.086, b: 0.086, a: 1}
+  nameSize: 72
+  descColor: {r: 0.3, g: 0.3, b: 0.3, a: 1}
+  descSize: 30
+  font: {fileID: 11400000, guid: 656fc90eefbca1448b0b452bc9a3178c, type: 2}
 --- !u!1 &832575517
 GameObject:
   m_ObjectHideFlags: 0
@@ -2195,6 +2260,51 @@ MonoBehaviour:
   scalingFactor: 1
   m_posOffsetData: {fileID: 0}
   listenerMask: 1
+--- !u!1 &1066240904
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1066240906}
+  - component: {fileID: 1066240905}
+  m_Layer: 0
+  m_Name: GameObject
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &1066240905
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1066240904}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 001d4fd186d222c47b39e3b0820822c8, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::LevelObjectivesTracker
+  font: {fileID: 11400000, guid: 656fc90eefbca1448b0b452bc9a3178c, type: 2}
+--- !u!4 &1066240906
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1066240904}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 655.79486, y: 0.00001, z: 232.55214}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &1188158436
 GameObject:
   m_ObjectHideFlags: 0
@@ -2726,7 +2836,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::HudSidePanels
   controls:
   - key: W A S D
-    action: Move block
+    action: Move / Adjust
   - key: Q / E
     action: Raise / lower
   - key: 1 / 2 / 3
@@ -2750,8 +2860,8 @@ MonoBehaviour:
   panelColor: {r: 0.949, g: 0.937, b: 0.902, a: 0.86}
   slideDistance: 360
   contentInset: {x: 40, y: 90}
-  handleSprite: {fileID: 0}
-  handleColor: {r: 0.949, g: 0.937, b: 0.902, a: 0.95}
+  handleSprite: {fileID: 21300000, guid: 21e5c717a24876440b8fcb93ca5c9f8f, type: 3}
+  handleColor: {r: 0.949, g: 0.937, b: 0.902, a: 1}
   handleWidth: 34
   handleHeight: 150
 --- !u!4 &1569894633
@@ -3074,6 +3184,9 @@ MonoBehaviour:
   riftHintScale: 0.22
   expandSpeed: 9
   shopToggleKey: 102
+  letterbox: 1
+  barHeight: 0.16
+  barColor: {r: 0, g: 0, b: 0, a: 1}
   shopCenter: {x: -99, y: -99, z: -99}
   shopLayerName: ShopItem
   blockSpacing: 3.59
@@ -3083,20 +3196,20 @@ MonoBehaviour:
   driftSpeed: {x: 0.5, y: 0.7, z: 0.6}
   tumbleAmplitude: 14
   tumbleSpeed: 0.45
-  shopBackground: {r: 0.28, g: 0.14, b: 0.01, a: 1}
+  shopBackground: {r: 0, g: 0, b: 0, a: 1}
   blockLightColor: {r: 1, g: 0.82, b: 0.25, a: 1}
   turretLightColor: {r: 0.3, g: 0.8, b: 1, a: 1}
   shopLightIntensity: 3.5
   shopLightRange: 18
-  innerVignetteStrength: 0.378
+  innerVignetteStrength: 0
   shapePreset: 0
   openSpinDegrees: 0
   riftSprite: {fileID: 0}
   riftRotationDeg: 0
-  rtWidth: 2048
+  rtWidth: 4096
   rtHeight: 1024
-  riftEdgeColor: {r: 1, g: 0.8, b: 0.18, a: 1}
-  riftGlowColor: {r: 1, g: 0.55, b: 0.05, a: 0.1}
+  riftEdgeColor: {r: 1, g: 1, b: 1, a: 0}
+  riftGlowColor: {r: 0.6901961, g: 0.4745098, b: 0, a: 0.1}
   riftGlowLayers: 4
   edgePulseSpeed: 1.6
   energyRayColor: {r: 0.7, g: 0.9, b: 1, a: 0.7}
@@ -3108,13 +3221,16 @@ MonoBehaviour:
   sparkleCount: 32
   sparkleRadius: 1.35
   sparkleTwinkleSpeed: 1.3
-  crackJaggedness: 0
-  crackWobbleSpeed: 0
-  crackSubdivision: 0
   hoverScale: 1.5
   hoverLerpSpeed: 8
-  tooltipBg: {r: 0.04, g: 0.04, b: 0.08, a: 0.9}
-  tooltipScale: 2
+  tooltipBg: {r: 1, g: 1, b: 1, a: 0.9}
+  tooltipScale: 1.5
+  refreshIcon: {fileID: 21300000, guid: 6a5205c300285b64f9bcef6df00685e6, type: 3}
+  shopButtonIcon: {fileID: 21300000, guid: ea6e68ddce5467b48a65511f054b10c3, type: 3}
+  refreshButtonSize: 50
+  refreshButtonOffset: {x: 25, y: 25}
+  flatBlocks: 1
+  flatMaterial: {fileID: 0}
   flipHoverX: 0
   flipHoverY: 1
   hoverRadius: 0.5
@@ -3142,7 +3258,7 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 2001472446}
-  m_Enabled: 1
+  m_Enabled: 0
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 9adabea468bfc8b44a6adea1699b493e, type: 3}
   m_Name: 
@@ -3243,7 +3359,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ResourceManager
   balance: {fileID: 11400000, guid: 5d6ea2d422ee8524d9d9f084e3920c53, type: 2}
-  testing: 1
+  testing: 0
   startingBlockCurrency: 120
   blockCurrencyPerRound: 22
   cellBasePrice: 10
@@ -3346,3 +3462,4 @@ SceneRoots:
   - {fileID: 1079170805139325090}
   - {fileID: 1307567336}
   - {fileID: 1964110098}
+  - {fileID: 1066240906}

@@ -13,11 +13,13 @@ MonoBehaviour:
   m_Name: piece_L
   m_EditorClassIdentifier: Assembly-CSharp::BlockData
   blockType: 1
+  rarity: 0
+  blockShape: 6
   cells:
-  - {x: -1, y: 0, z: 0}
   - {x: 0, y: 0, z: 0}
-  - {x: 1, y: 1, z: 0}
   - {x: 1, y: 0, z: 0}
+  - {x: 2, y: 0, z: 0}
+  - {x: 2, y: 0, z: 1}
   onStepEvent:
     idInternal: 0
     valueGuidInternal: 

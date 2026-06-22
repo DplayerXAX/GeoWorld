@@ -48,6 +48,20 @@ public class AudioManager : MonoBehaviour
         Instance = this;
     }
 
+    void OnDestroy()
+    {
+        // Stop our BGM when this AudioManager goes away (e.g. scene reload on Restart),
+        // so the reloaded scene's AudioManager doesn't stack a second BGM on top.
+        if (_currentBgmPlayingId != 0)
+        {
+            AkUnitySoundEngine.StopPlayingID(
+                _currentBgmPlayingId, bgmFadeOutMs,
+                AkCurveInterpolation.AkCurveInterpolation_Linear);
+            _currentBgmPlayingId = 0;
+        }
+        if (Instance == this) Instance = null;
+    }
+
     private void Start()
     {
         SetChordOnObject(BlockType.Home, this.gameObject);
