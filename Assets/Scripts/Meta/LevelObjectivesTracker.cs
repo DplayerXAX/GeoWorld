@@ -28,6 +28,9 @@ public class LevelObjectivesTracker : MonoBehaviour
         }
     }
 
+    [Tooltip("Optional TMP font for the objectives text (leave null for TMP default).")]
+    public TMP_FontAsset font;
+
     LevelDefinition _lv;
     int _kills, _leaks, _placed, _maxSynergies;
 
@@ -91,7 +94,7 @@ public class LevelObjectivesTracker : MonoBehaviour
             Color c = st == State.Done   ? GeoPalette.Gold
                     : st == State.Failed ? GeoPalette.Signal
                     : GeoPalette.Ink;
-            string mark = st == State.Done ? "✓" : st == State.Failed ? "✗" : "▢";
+            string mark = st == State.Done ? "■" : st == State.Failed ? "×" : "□";
             string bonus = o.optional ? "  <size=70%>(bonus)</size>" : "";
             _rows[i].color = c;
             _rows[i].text  = $"{mark}  {o.Label}   <b>{cur}/{tgt}</b>{bonus}";
@@ -177,6 +180,7 @@ public class LevelObjectivesTracker : MonoBehaviour
     {
         var rt = NewRect(name, parent);
         var t = rt.gameObject.AddComponent<TextMeshProUGUI>();
+        if (font != null) t.font = font;
         t.fontSize = size; t.color = color; t.fontStyle = style;
         t.alignment = TextAlignmentOptions.MidlineLeft;
         t.raycastTarget = false;

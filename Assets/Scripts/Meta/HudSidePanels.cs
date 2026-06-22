@@ -96,6 +96,8 @@ public class HudSidePanels : MonoBehaviour
         A("W A S D", "Move block");
         A("Q / E",   "Raise / lower");
         A("1 / 2 / 3", "Rotate block");
+        A("Tab", "Switch mode");
+        A("F", "Open / Close shop");
         A("LMB",     "Select / place");
         A("Space",   "Start wave");
         A("RMB drag","Rotate camera");

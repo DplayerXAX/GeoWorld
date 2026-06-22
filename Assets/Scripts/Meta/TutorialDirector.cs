@@ -51,16 +51,26 @@ public class TutorialDirector : MonoBehaviour
 
         var pc = PlacementController.Instance;
         if (pc != null) pc.placementConstraint = MatchesStep;
-        PlacementController.BlockPlaced  += OnBlockPlaced;
-        PlacementController.BlockRotated += OnBlockRotated;
+        PlacementController.BlockPlaced    += OnBlockPlaced;
+        PlacementController.BlockRotated   += OnBlockRotated;
+        PlacementController.BlockPurchased += OnPurchased;
+        PlacementController.BlockSelected  += OnSelected;
+        PlacementController.BlockSold      += OnSold;
+        PlacementController.ShopRefreshed  += OnRefreshed;
+        PlacementController.TurretUpgraded += OnUpgraded;
         Debug.Log($"[Tutorial] active — {(_lv.tutorialSteps != null ? _lv.tutorialSteps.Count : 0)} step(s).");
         ShowStep();
     }
 
     void OnDestroy()
     {
-        PlacementController.BlockPlaced  -= OnBlockPlaced;
-        PlacementController.BlockRotated -= OnBlockRotated;
+        PlacementController.BlockPlaced    -= OnBlockPlaced;
+        PlacementController.BlockRotated   -= OnBlockRotated;
+        PlacementController.BlockPurchased -= OnPurchased;
+        PlacementController.BlockSelected  -= OnSelected;
+        PlacementController.BlockSold      -= OnSold;
+        PlacementController.ShopRefreshed  -= OnRefreshed;
+        PlacementController.TurretUpgraded -= OnUpgraded;
         var pc = PlacementController.Instance;
         if (pc != null && pc.placementConstraint == (System.Func<BlockData, Vector3Int[], bool>)MatchesStep)
             pc.placementConstraint = null;
@@ -73,6 +83,8 @@ public class TutorialDirector : MonoBehaviour
 
     void Update()
     {
+        if (IntroDirector.Playing) return;   // wait for the entrance animation before running steps
+
         var step = Cur;
         if (step != null && step.kind == TutorialStepKind.Run
             && GameFlowManager.Instance != null
@@ -149,6 +161,51 @@ public class TutorialDirector : MonoBehaviour
     {
         var step = Cur;
         if (step != null && step.kind == TutorialStepKind.Rotate) Advance();
+    }
+
+    void OnPurchased(BlockData d)
+    {
+        var step = Cur;
+        if (step != null && step.kind == TutorialStepKind.Purchase && SameBlock(step.block, d)) Advance();
+    }
+
+    void OnSelected(BlockData d)
+    {
+        var step = Cur;
+        if (step != null && step.kind == TutorialStepKind.Select && SameBlock(step.block, d)) Advance();
+    }
+
+    void OnSold(BlockData d)
+    {
+        var step = Cur;
+        if (step != null && step.kind == TutorialStepKind.Sell && SameBlock(step.block, d)) Advance();
+    }
+
+    // Tutorial block match: null = any; same asset always matches. Otherwise:
+    //   • turret  → match by blockType (e.g. any AOE turret),
+    //   • block   → match by blockShape (e.g. any L block).
+    static bool SameBlock(BlockData want, BlockData got)
+    {
+        if (want == null) return true;
+        if (got == null)  return false;
+        if (want == got)  return true;
+
+        if (TurretTypes.Is(want.blockType))
+            return TurretTypes.Is(got.blockType) && want.blockType == got.blockType;
+
+        return !TurretTypes.Is(got.blockType) && want.blockShape == got.blockShape;
+    }
+
+    void OnRefreshed()
+    {
+        var step = Cur;
+        if (step != null && step.kind == TutorialStepKind.Refresh) Advance();
+    }
+
+    void OnUpgraded()
+    {
+        var step = Cur;
+        if (step != null && step.kind == TutorialStepKind.Upgrade) Advance();
     }
 
     void Advance() { _step++; ShowStep(); }

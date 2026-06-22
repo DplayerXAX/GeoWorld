@@ -99,6 +99,11 @@ public enum TutorialStepKind
     Wait,       // show the hint; auto-advance after waitSeconds (0 = wait for a click)
     FreePlace,  // free placement (no ghost); advance after `count` blocks placed anywhere
     Input,      // wait for the player to press `inputKey` (e.g. W / Q / 1 / Space / Mouse0)
+    Purchase,   // wait for the player to buy a block from the shop (optionally a specific `block`)
+    Select,     // wait for the player to click/select a placed block (optionally a specific `block`)
+    Sell,       // wait for the player to sell a block
+    Refresh,    // wait for the player to refresh the shop
+    Upgrade,    // wait for the player to upgrade a turret
 }
 
 // One tutorial step. For Place: the player must place `block` at `origin` — the

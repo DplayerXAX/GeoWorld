@@ -16,7 +16,7 @@ MonoBehaviour:
   displayName: Tutorial
   description: Hello world!
   runSeed: 25
-  blocksPerTurn: 8
+  blocksPerTurn: 5
   turretsPerTurn: 3
   waves: []
   wavesToClear: 5
@@ -42,21 +42,66 @@ MonoBehaviour:
   startCell: {x: 0, y: 0, z: 0}
   endCell: {x: 3, y: 0, z: 3}
   tutorialSteps:
-  - kind: 5
-    block: {fileID: 0}
-    origin: {x: 1, y: 0, z: 1}
-    rotation90: {x: 1, y: 0, z: 0}
-    cellsOverride: []
-    waitSeconds: 0
-    count: 1
-    inputKey: 32
-    hint: Place a block on this area lol
-  - kind: 0
+  - kind: 3
     block: {fileID: 11400000, guid: eb476e18de9d37e4dbc97c8247017e54, type: 2}
     origin: {x: 1, y: 0, z: 1}
     rotation90: {x: 1, y: 0, z: 0}
     cellsOverride: []
+    waitSeconds: 1
+    count: 1
+    inputKey: 32
+    hint: Welcome fellas
+  - kind: 6
+    block: {fileID: 11400000, guid: eb476e18de9d37e4dbc97c8247017e54, type: 2}
+    origin: {x: 1, y: 0, z: 1}
+    rotation90: {x: 0, y: 1, z: 0}
+    cellsOverride: []
     waitSeconds: 0
     count: 1
     inputKey: 32
-    hint: Place a block on this area lol
+    hint: Retrieve a L-shape block from the panel
+  - kind: 0
+    block: {fileID: 11400000, guid: eb476e18de9d37e4dbc97c8247017e54, type: 2}
+    origin: {x: 1, y: 0, z: 1}
+    rotation90: {x: 0, y: 0, z: 0}
+    cellsOverride: []
+    waitSeconds: 0
+    count: 1
+    inputKey: 32
+    hint: Place the block on the white area
+  - kind: 3
+    block: {fileID: 11400000, guid: eb476e18de9d37e4dbc97c8247017e54, type: 2}
+    origin: {x: 1, y: 0, z: 1}
+    rotation90: {x: 1, y: 0, z: 0}
+    cellsOverride: []
+    waitSeconds: 2
+    count: 1
+    inputKey: 32
+    hint: Connect start point and end point generate path for enemy
+  - kind: 0
+    block: {fileID: 11400000, guid: 3bcfeb02226d44d49a6df82d6c36a1a7, type: 2}
+    origin: {x: 1, y: 1, z: 1}
+    rotation90: {x: 1, y: 0, z: 0}
+    cellsOverride: []
+    waitSeconds: 2
+    count: 1
+    inputKey: 32
+    hint: 'Place an turret to defense your endpoint '
+  - kind: 7
+    block: {fileID: 11400000, guid: 3bcfeb02226d44d49a6df82d6c36a1a7, type: 2}
+    origin: {x: 1, y: 1, z: 1}
+    rotation90: {x: 1, y: 0, z: 0}
+    cellsOverride: []
+    waitSeconds: 2
+    count: 1
+    inputKey: 32
+    hint: Click any placed items for detail
+  - kind: 2
+    block: {fileID: 11400000, guid: 3bcfeb02226d44d49a6df82d6c36a1a7, type: 2}
+    origin: {x: 1, y: 1, z: 1}
+    rotation90: {x: 1, y: 0, z: 0}
+    cellsOverride: []
+    waitSeconds: 2
+    count: 1
+    inputKey: 32
+    hint: Press space to start a wave

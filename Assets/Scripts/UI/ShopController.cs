@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.UI;
 public enum RiftShapePreset { Rectangle, Triangle, Lens, Oval, Slash, Crack, Diamond, Custom }
 
 public class ShopController : MonoBehaviour
@@ -31,6 +32,13 @@ public class ShopController : MonoBehaviour
 
     [Header("Toggle Key")]
     public KeyCode shopToggleKey = KeyCode.F;
+
+    [Header("Letterbox (cinematic bars)")]
+    [Tooltip("ON: shop is shown as a bottom black bar with a matching top bar (movie letterbox). Collapsed = bars fully hidden. F expands.")]
+    public bool  letterbox = true;
+    [Tooltip("Height of EACH bar as a fraction of screen height when fully open.")]
+    [Range(0.05f, 0.35f)] public float barHeight = 0.16f;
+    public Color barColor = new Color(0f, 0f, 0f, 1f);
 
     [Header("Shop World Area")]
     public Vector3 shopCenter   = new Vector3(-25f, 4f, 5f);
@@ -104,6 +112,8 @@ public class ShopController : MonoBehaviour
     public float tooltipScale = 2f;
     [Tooltip("Refresh button icon. If set, replaces the 'Refresh' text (cost still shown).")]
     public Sprite refreshIcon;
+    [Tooltip("Shop-open icon. When the shop is collapsed, this button (same spot as Refresh) opens the shop.")]
+    public Sprite shopButtonIcon;
     [Tooltip("Refresh button diameter (px).")]
     public float refreshButtonSize = 54f;
     [Tooltip("Refresh button offset from the rift's top-right corner (x = left, y = up).")]
@@ -231,6 +241,7 @@ public class ShopController : MonoBehaviour
 
     // ── Shop screen anchors (GUI coords) for HUD elements that dock to the rift ──
     public bool    ShopVisible   => _riftScale > 0.1f;
+    public bool    IsExpanded    => _expanded;
     public Vector2 ShopTopCenter => new Vector2(_riftScreenCenter.x,
                                                 _riftScreenCenter.y - _riftSizeY * _riftScale);
     public Vector2 ShopTopRight  => new Vector2(_riftScreenCenter.x + _riftSizeX,
@@ -390,6 +401,7 @@ public class ShopController : MonoBehaviour
         UpdateScreenVerts();   // must run before UpdateHover / IsMouseInShopView
         AnimateItems();
         UpdateHover();
+        UpdateLetterboxBars();
         if (_cantAffordFlash > 0f) _cantAffordFlash -= Time.deltaTime;
     }
 
@@ -407,12 +419,78 @@ public class ShopController : MonoBehaviour
     public void Collapse()      => _expanded = false;
     public void OnCombatStart() => _expanded = false;
 
+    // ── Letterbox bars + content (UGUI, behind the HUD so currency draws over them) ──
+    Canvas        _lbCanvas;
+    RectTransform _lbTop, _lbBottom, _lbContent;
+    RawImage      _lbContentImg;
+
+    void UpdateLetterboxBars()
+    {
+        if (!letterbox)
+        {
+            if (_lbCanvas != null) _lbCanvas.enabled = false;
+            return;
+        }
+        if (_lbCanvas == null) BuildLetterboxBars();
+
+        // Transparent shop-camera clear so only the blocks show on the black bar.
+        if (shopCam != null) shopCam.backgroundColor = new Color(0f, 0f, 0f, 0f);
+
+        float H    = Screen.height * barHeight * _riftScale;
+        bool  show = H > 0.5f;
+        _lbCanvas.enabled = show;
+        if (!show) return;
+
+        _lbTop.GetComponent<Image>().color    = barColor;
+        _lbBottom.GetComponent<Image>().color = barColor;
+        _lbTop.sizeDelta    = new Vector2(0f, H);
+        _lbBottom.sizeDelta = new Vector2(0f, H);
+
+        _lbContent.sizeDelta = new Vector2(0f, H);     // bottom bar, full width
+        if (_lbContentImg.texture != _shopRT) _lbContentImg.texture = _shopRT;
+    }
+
+    void BuildLetterboxBars()
+    {
+        var go = new GameObject("ShopLetterbox", typeof(Canvas), typeof(GraphicRaycaster));
+        go.transform.SetParent(transform, false);
+        _lbCanvas = go.GetComponent<Canvas>();
+        _lbCanvas.renderMode  = RenderMode.ScreenSpaceOverlay;
+        _lbCanvas.sortingOrder = 55;   // below the HUD (currency 90, objectives 92, …)
+
+        _lbTop    = MakeBar("TopBar",    new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0.5f, 1f));
+        _lbBottom = MakeBar("BottomBar", new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(0.5f, 0f));
+
+        // Shop content (RT) — above the bars, still under the HUD canvases.
+        _lbContent = new GameObject("Content", typeof(RectTransform), typeof(RawImage)).GetComponent<RectTransform>();
+        _lbContent.SetParent(_lbCanvas.transform, false);
+        _lbContent.anchorMin = new Vector2(0f, 0f); _lbContent.anchorMax = new Vector2(1f, 0f);
+        _lbContent.pivot = new Vector2(0.5f, 0f); _lbContent.anchoredPosition = Vector2.zero;
+        _lbContentImg = _lbContent.GetComponent<RawImage>();
+        _lbContentImg.raycastTarget = false;
+        _lbContentImg.texture = _shopRT;
+    }
+
+    RectTransform MakeBar(string name, Vector2 aMin, Vector2 aMax, Vector2 pivot)
+    {
+        var rt = new GameObject(name, typeof(RectTransform), typeof(Image)).GetComponent<RectTransform>();
+        rt.SetParent(_lbCanvas.transform, false);
+        rt.anchorMin = aMin; rt.anchorMax = aMax; rt.pivot = pivot;
+        rt.anchoredPosition = Vector2.zero;
+        rt.sizeDelta = new Vector2(0f, 0f);
+        var img = rt.GetComponent<Image>();
+        img.color = barColor; img.raycastTarget = false;
+        return rt;
+    }
+
     // ── Rift animation ────────────────────────────────────────────────────────
 
     void AnimateRift()
     {
         bool combat = GameFlowManager.Instance?.phase == GamePhase.Running;
-        _riftTarget = combat ? 0f : (_expanded ? 0.6f : riftHintScale);
+        _riftTarget = combat ? 0f
+                    : letterbox ? (_expanded ? 1f : 0f)        // bars: fully out / fully hidden
+                                : (_expanded ? 0.6f : riftHintScale);
 
         float t    = 1f - Mathf.Exp(-expandSpeed * Time.deltaTime);
         _riftScale     = Mathf.Lerp(_riftScale, _riftTarget, t);
@@ -439,6 +517,25 @@ public class ShopController : MonoBehaviour
     // Recomputes _riftScreenCenter, _riftScreenSize, _screenVerts every frame.
     void UpdateScreenVerts()
     {
+        // ── Letterbox: the shop is the bottom bar (full width, animated height). ──
+        if (letterbox)
+        {
+            _riftSizeX      = Screen.width * 0.5f;
+            _riftSizeY      = Screen.height * barHeight * 0.5f;   // half a full bar
+            _riftScreenSize = Mathf.Max(_riftSizeX, _riftSizeY);
+
+            float H   = _riftSizeY * 2f * _riftScale;             // current animated bar height
+            float top = Screen.height - H;
+            _riftScreenCenter = new Vector2(Screen.width * 0.5f, Screen.height - H * 0.5f);
+
+            if (_screenVerts == null || _screenVerts.Length != 4) _screenVerts = new Vector2[4];
+            _screenVerts[0] = new Vector2(0f,            top);    // bottom-bar rect (GUI coords)
+            _screenVerts[1] = new Vector2(Screen.width,  top);
+            _screenVerts[2] = new Vector2(Screen.width,  Screen.height);
+            _screenVerts[3] = new Vector2(0f,            Screen.height);
+            return;
+        }
+
         _riftSizeX        = Screen.width  * riftWidth  * 0.5f;
         _riftSizeY        = Screen.height * riftHeight * 0.5f;
         _riftScreenSize   = Mathf.Max(_riftSizeX, _riftSizeY);   // legacy fields rely on this
@@ -896,16 +993,19 @@ public class ShopController : MonoBehaviour
 
     void DrawRefreshButton()
     {
-        if (PlacementController.Instance == null || !ShopVisible)
-            return;
+        if (PlacementController.Instance == null) return;
+
+        // Collapsed → a shop-open button in the same spot; click expands the shop.
+        if (!ShopVisible) { DrawShopOpenButton(); return; }
 
         int   cost = PlacementController.Instance.RefreshCost;
-        float d    = refreshButtonSize;   // circle diameter
+        float s    = Mathf.Max(0.5f, Screen.height / 1080f);   // scale with screen
+        float d    = refreshButtonSize * s;                    // circle diameter
 
         // Dock to the shop rift's bottom-right corner, inset by refreshButtonOffset.
         Vector2 br = ShopBottomRight;
-        Rect r = new Rect(br.x - d - refreshButtonOffset.x,
-                          br.y - d - refreshButtonOffset.y, d, d);
+        Rect r = new Rect(br.x - d - refreshButtonOffset.x * s,
+                          br.y - d - refreshButtonOffset.y * s, d, d);
 
         bool      hover  = r.Contains(Event.current.mousePosition);
         Texture2D circle = UIRoundedRect.CircleTex();
@@ -919,14 +1019,14 @@ public class ShopController : MonoBehaviour
         // Icon (tinted ink so it reads on paper); fallback glyph if none.
         if (refreshIcon != null && refreshIcon.texture != null)
         {
-            float pad = 3f;
+            float pad = 3f * s;
             GUI.color = GeoPalette.Ink;
             GUI.DrawTexture(new Rect(r.x + pad, r.y + pad, d - pad * 2f, d - pad * 2f),
                             refreshIcon.texture, ScaleMode.ScaleToFit, true);
         }
         else
         {
-            var gs = new GUIStyle(GUI.skin.label) { fontSize = 26, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter };
+            var gs = new GUIStyle(GUI.skin.label) { fontSize = Mathf.RoundToInt(26f * s), fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter };
             gs.normal.textColor = GeoPalette.Ink;
             GUI.color = Color.white;
             GUI.Label(r, "⟳", gs);
@@ -935,14 +1035,14 @@ public class ShopController : MonoBehaviour
         // Hover → reveal the cost in a small paper tag (shop tooltip style) to the right.
         if (hover)
         {
-            float pw = 32f, ph = 32f;
-            Rect tag = new Rect(r.x + pw + 8f, r.center.y - ph * 0.5f, pw, ph);
+            float pw = 36f * s, ph = 32f * s;
+            Rect tag = new Rect(r.xMax - 8f * s, r.center.y - ph * 0.5f, pw, ph);
             GUI.color = tooltipBg;
             GUI.DrawTexture(tag, Texture2D.whiteTexture);
             GUI.color = GeoPalette.Signal;                                   // accent spine
-            GUI.DrawTexture(new Rect(tag.x, tag.y, 4f, tag.height), Texture2D.whiteTexture);
+            GUI.DrawTexture(new Rect(tag.x, tag.y, 4f * s, tag.height), Texture2D.whiteTexture);
             GUI.color = Color.white;
-            var cs = new GUIStyle(GUI.skin.label) { fontSize = 17, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter };
+            var cs = new GUIStyle(GUI.skin.label) { fontSize = Mathf.RoundToInt(17f * s), fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter };
             cs.normal.textColor = GeoPalette.Ink;
             GUI.Label(tag, cost.ToString(), cs);
         }
@@ -952,6 +1052,46 @@ public class ShopController : MonoBehaviour
         if (GUI.Button(r, GUIContent.none, GUIStyle.none))
             PlacementController.Instance.TryRefreshShop();
     }
+
+    // Shown when the shop is collapsed: a round paper button (shop sprite) at the
+    // bottom-right corner. Clicking it opens the shop. Hidden during combat.
+    void DrawShopOpenButton()
+    {
+        if (GameFlowManager.Instance != null && GameFlowManager.Instance.phase == GamePhase.Running) return;
+
+        float s = Mathf.Max(0.5f, Screen.height / 1080f);
+        float d = refreshButtonSize * s;
+        Vector2 br = ShopBottomRight;   // bottom-right corner (Screen.width, Screen.height) when collapsed
+        Rect r = new Rect(br.x - d - refreshButtonOffset.x * s,
+                          br.y - d - refreshButtonOffset.y * s, d, d);
+
+        bool  hover  = r.Contains(Event.current.mousePosition);
+        Color prev   = GUI.color;
+        var   circle = UIRoundedRect.CircleTex();
+
+        GUI.color = hover ? Color.Lerp(tooltipBg, GeoPalette.Gold, 0.28f) : tooltipBg;
+        GUI.DrawTexture(r, circle, ScaleMode.StretchToFill, true);
+
+        if (shopButtonIcon != null && shopButtonIcon.texture != null)
+        {
+            float pad = 3f * s;
+            GUI.color = Color.black;
+            GUI.DrawTexture(new Rect(r.x + pad, r.y + pad, d - pad * 2f, d - pad * 2f),
+                            shopButtonIcon.texture, ScaleMode.ScaleToFit, true);
+        }
+        else
+        {
+            var gs = new GUIStyle(GUI.skin.label) { fontSize = Mathf.RoundToInt(22f * s), fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter };
+            gs.normal.textColor = GeoPalette.Ink;
+            GUI.color = Color.white;
+            GUI.Label(r, "S", gs);
+        }
+        GUI.color = prev;
+
+        if (GUI.Button(r, GUIContent.none, GUIStyle.none))
+            _expanded = true;   // open the shop
+    }
+
     // ── GL rift rendering ─────────────────────────────────────────────────────
 
     void DrawRift()
@@ -960,6 +1100,11 @@ public class ShopController : MonoBehaviour
         if (Event.current.type != EventType.Repaint) return;
 
         EnsureMaterials();
+
+        // ── Letterbox: bars AND content are drawn as UGUI (UpdateLetterboxBars),
+        //    so they sit under the HUD. Nothing to draw here in IMGUI. ──
+        if (letterbox) return;
+
         GL.PushMatrix();
         GL.LoadPixelMatrix();
 

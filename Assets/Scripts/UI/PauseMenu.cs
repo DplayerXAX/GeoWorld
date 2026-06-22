@@ -132,6 +132,10 @@ public class PauseMenu : MonoBehaviour
     {
         if (!showControls) return;
 
+        // White icons while the shop (black letterbox bar) is open, black otherwise.
+        bool shopOpen = ShopController.Instance != null && ShopController.Instance.IsExpanded;
+        controlFg = shopOpen ? Color.white : Color.black;
+
         float ui = Screen.height / 1080f;
         float scale = ui * 2f;
         float s = controlSize * scale;
@@ -157,7 +161,7 @@ public class PauseMenu : MonoBehaviour
         // Diamonds scale with the icon (font was fixed → looked tiny + far apart).
         float dFont = s * 0.45f;
         _diamondStyle.fontSize = Mathf.Max(8, Mathf.RoundToInt(dFont));
-        _diamondStyle.normal.textColor = Color.black;
+        _diamondStyle.normal.textColor = controlFg;   // white when shop open, black otherwise
         float cell    = dFont * 0.7f;     // tight columns
         float spacing = dFont * 0f;
         float dRowH   = dFont * 1.25f;

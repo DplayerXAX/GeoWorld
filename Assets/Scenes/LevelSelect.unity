@@ -137,7 +137,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!224 &277464937
 RectTransform:
   m_ObjectHideFlags: 0
@@ -147,7 +147,7 @@ RectTransform:
   m_GameObject: {fileID: 277464936}
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 1.0930884, y: 1.0930884, z: 1.0930884}
+  m_LocalScale: {x: 0.48775363, y: 0.48775363, z: 0.48775363}
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 1149114044}
@@ -155,7 +155,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: 395, y: -163}
+  m_AnchoredPosition: {x: 195.16, y: -69.672}
   m_SizeDelta: {x: 160, y: 30}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &277464938
@@ -295,13 +295,19 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: c0234eab605b45b498c51571abb54d24, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::LevelInfoPanel
-  titleText: {fileID: 1291685609}
-  descText: {fileID: 2021819524}
-  statusText: {fileID: 0}
-  bestText: {fileID: 2060175659}
-  enterButton: {fileID: 277464938}
-  enterLabel: {fileID: 0}
   font: {fileID: 11400000, guid: 656fc90eefbca1448b0b452bc9a3178c, type: 2}
+  titleSize: 34
+  bodySize: 20
+  buttonSize: 22
+  panelColor: {r: 0.949, g: 0.937, b: 0.902, a: 0.96}
+  titleColor: {r: 0.086, g: 0.086, b: 0.086, a: 1}
+  bodyColor: {r: 0.3, g: 0.3, b: 0.3, a: 1}
+  accentColor: {r: 0.886, g: 0.141, b: 0.106, a: 1}
+  buttonColor: {r: 0.086, g: 0.086, b: 0.086, a: 1}
+  buttonTextColor: {r: 0.949, g: 0.937, b: 0.902, a: 1}
+  width: 460
+  rightMargin: 60
+  cornerRadius: 26
   fadeSpeed: 12
 --- !u!225 &303145626
 CanvasGroup:
@@ -1051,7 +1057,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!224 &1291685608
 RectTransform:
   m_ObjectHideFlags: 0
@@ -1061,14 +1067,14 @@ RectTransform:
   m_GameObject: {fileID: 1291685607}
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 1.8276439, y: 1.8276439, z: 1.8276439}
+  m_LocalScale: {x: 0.81552404, y: 0.81552404, z: 0.81552404}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 303145624}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: 514, y: 189}
+  m_AnchoredPosition: {x: 248.72, y: 87.393}
   m_SizeDelta: {x: 200, y: 50}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &1291685609
@@ -1475,6 +1481,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PauseMenu
   toggleKey: 27
+  titleScene: Title
   overlayColor: {r: 1, g: 1, b: 1, a: 0.6}
   titleColor: {r: 0.6, g: 0.95, b: 1, a: 1}
   panelWidth: 260
@@ -1516,7 +1523,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!224 &2021819523
 RectTransform:
   m_ObjectHideFlags: 0
@@ -1526,14 +1533,14 @@ RectTransform:
   m_GameObject: {fileID: 2021819522}
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 1.8276439, y: 1.8276439, z: 1.8276439}
+  m_LocalScale: {x: 0.81552404, y: 0.81552404, z: 0.81552404}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 303145624}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: 514.00006, y: 61.447}
+  m_AnchoredPosition: {x: 248.72, y: 30.479}
   m_SizeDelta: {x: 200, y: 50}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &2021819524
@@ -1655,7 +1662,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!224 &2060175658
 RectTransform:
   m_ObjectHideFlags: 0
@@ -1665,14 +1672,14 @@ RectTransform:
   m_GameObject: {fileID: 2060175657}
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 1.8276439, y: 1.8276439, z: 1.8276439}
+  m_LocalScale: {x: 0.81552404, y: 0.81552404, z: 0.81552404}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 303145624}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: 514.00006, y: -46}
+  m_AnchoredPosition: {x: 248.72, y: -17.466}
   m_SizeDelta: {x: 200, y: 50}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &2060175659

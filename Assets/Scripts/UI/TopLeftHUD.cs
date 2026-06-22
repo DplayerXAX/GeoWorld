@@ -56,6 +56,7 @@ public class TopLeftHUD : MonoBehaviour
     bool _hasCommittedCell;
 
     Canvas        _canvas;
+    Image         _panelBg;
     TMP_Text      _livesVal, _waveVal, _blockVal, _blockInc, _turretVal, _turretInc, _cellVal;
     GameObject    _panel, _cellReadout;
     RectTransform _cellRect;
@@ -88,6 +89,14 @@ public class TopLeftHUD : MonoBehaviour
         _turretVal.text = (rm != null ? rm.TurretCurrency : 0).ToString();
         _blockInc.text  = $"+{PerRoundBlockIncome()}";
         _turretInc.text = $"+{PerRoundTurretIncome()}";
+
+        // When the shop (black bar) is open: drop the panel background and show the
+        // per-turn income in white so it reads on the black bar.
+        bool shopOpen = ShopController.Instance != null && ShopController.Instance.IsExpanded;
+        if (_panelBg != null) _panelBg.enabled = !shopOpen;
+        Color incCol = shopOpen ? Color.white : incomeColor;
+        _blockInc.color = incCol;
+        _turretInc.color = incCol;
     }
 
     void PositionCellReadout()
@@ -202,6 +211,7 @@ public class TopLeftHUD : MonoBehaviour
         bg.raycastTarget = false;
         bg.sprite = UIRoundedRect.Get(cornerRadius);
         bg.type   = Image.Type.Sliced;
+        _panelBg  = bg;
 
         var vlg = panel.gameObject.AddComponent<VerticalLayoutGroup>();
         vlg.padding = new RectOffset(10, 12, 8, 8);
