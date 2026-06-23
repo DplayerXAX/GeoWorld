@@ -58,8 +58,8 @@ public class LoadingScreen : MonoBehaviour
         GUI.color = GeoPalette.Paper;
         GUI.DrawTexture(new Rect(0, 0, Screen.width, Screen.height), Texture2D.whiteTexture);
         GUI.color = p;
-        Fill(new Rect(0, 0, Screen.width, 8f * s), GeoPalette.Ink);            // top rule
-        Fill(new Rect(0, 0, 14f * s, Screen.height), GeoPalette.Signal);       // left spine
+        Fill(new Rect(0, 0, Screen.width, 5f * s), GeoPalette.Ink);            // top rule (thinner, like the panels)
+        Fill(new Rect(0, 0, 6f * s, Screen.height), GeoPalette.Signal);        // left spine
 
         // Spinning cube, bottom-right.
         float cz = 52f * s;
@@ -72,17 +72,22 @@ public class LoadingScreen : MonoBehaviour
         GUI.Label(new Rect(Screen.width - 380f * s, cube.y, 240f * s, cz), "LOADING…", _label);
     }
 
+    // Muted toward paper so the cube reads like a printed mark, not four hard primaries.
+    static Color Soft(Color c) => Color.Lerp(c, GeoPalette.Paper, 0.22f);
+
     static void DrawSpinningCube(Rect r, float angle)
     {
         Matrix4x4 m = GUI.matrix;
         GUIUtility.RotateAroundPivot(angle, r.center);
-        // Four-tone square reads as a tumbling cube; ink seams suggest faces.
-        Fill(new Rect(r.x,              r.y,               r.width * 0.5f, r.height * 0.5f), GeoPalette.Gold);
-        Fill(new Rect(r.center.x,       r.y,               r.width * 0.5f, r.height * 0.5f), GeoPalette.Signal);
-        Fill(new Rect(r.x,              r.center.y,        r.width * 0.5f, r.height * 0.5f), GeoPalette.Blue);
-        Fill(new Rect(r.center.x,       r.center.y,        r.width * 0.5f, r.height * 0.5f), GeoPalette.Ink);
-        Fill(new Rect(r.x, r.center.y - 1.5f, r.width, 3f), GeoPalette.Ink);   // horizontal seam
-        Fill(new Rect(r.center.x - 1.5f, r.y, 3f, r.height), GeoPalette.Ink);  // vertical seam
+        // Four-tone square reads as a tumbling cube; paper gaps + ink seams suggest faces.
+        Fill(new Rect(r.x,        r.y,        r.width * 0.5f, r.height * 0.5f), Soft(GeoPalette.Gold));
+        Fill(new Rect(r.center.x, r.y,        r.width * 0.5f, r.height * 0.5f), Soft(GeoPalette.Signal));
+        Fill(new Rect(r.x,        r.center.y, r.width * 0.5f, r.height * 0.5f), Soft(GeoPalette.Blue));
+        Fill(new Rect(r.center.x, r.center.y, r.width * 0.5f, r.height * 0.5f), GeoPalette.Ink);
+        Fill(new Rect(r.x, r.center.y - 2f, r.width, 4f), GeoPalette.Paper);   // horizontal gap (silkscreen)
+        Fill(new Rect(r.center.x - 2f, r.y, 4f, r.height), GeoPalette.Paper);  // vertical gap
+        Fill(new Rect(r.x, r.center.y - 1f, r.width, 2f), GeoPalette.Ink);     // thin ink seam
+        Fill(new Rect(r.center.x - 1f, r.y, 2f, r.height), GeoPalette.Ink);
         GUI.matrix = m;
     }
 

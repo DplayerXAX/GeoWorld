@@ -137,7 +137,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!224 &277464937
 RectTransform:
   m_ObjectHideFlags: 0
@@ -147,7 +147,7 @@ RectTransform:
   m_GameObject: {fileID: 277464936}
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_LocalScale: {x: 0.48775363, y: 0.48775363, z: 0.48775363}
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 1149114044}
@@ -155,7 +155,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: 667, y: -302}
+  m_AnchoredPosition: {x: 195.16, y: -69.672}
   m_SizeDelta: {x: 160, y: 30}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &277464938
@@ -295,13 +295,19 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: c0234eab605b45b498c51571abb54d24, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::LevelInfoPanel
-  titleText: {fileID: 1291685609}
-  descText: {fileID: 2021819524}
-  statusText: {fileID: 0}
-  bestText: {fileID: 2060175659}
-  enterButton: {fileID: 277464938}
-  enterLabel: {fileID: 0}
   font: {fileID: 11400000, guid: 656fc90eefbca1448b0b452bc9a3178c, type: 2}
+  titleSize: 34
+  bodySize: 20
+  buttonSize: 22
+  panelColor: {r: 0.949, g: 0.937, b: 0.902, a: 0.96}
+  titleColor: {r: 0.086, g: 0.086, b: 0.086, a: 1}
+  bodyColor: {r: 0.3, g: 0.3, b: 0.3, a: 1}
+  accentColor: {r: 0.886, g: 0.141, b: 0.106, a: 1}
+  buttonColor: {r: 0.086, g: 0.086, b: 0.086, a: 1}
+  buttonTextColor: {r: 0.949, g: 0.937, b: 0.902, a: 1}
+  width: 460
+  rightMargin: 60
+  cornerRadius: 26
   fadeSpeed: 12
 --- !u!225 &303145626
 CanvasGroup:
@@ -328,7 +334,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Image
   m_Material: {fileID: 0}
-  m_Color: {r: 1, g: 1, b: 1, a: 0.8352941}
+  m_Color: {r: 0, g: 0, b: 0, a: 0.9490196}
   m_RaycastTarget: 1
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1
@@ -1051,7 +1057,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!224 &1291685608
 RectTransform:
   m_ObjectHideFlags: 0
@@ -1061,14 +1067,14 @@ RectTransform:
   m_GameObject: {fileID: 1291685607}
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 1.672, y: 1.672, z: 1.672}
+  m_LocalScale: {x: 0.81552404, y: 0.81552404, z: 0.81552404}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 303145624}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: 788, y: 297}
+  m_AnchoredPosition: {x: 248.72, y: 87.393}
   m_SizeDelta: {x: 200, y: 50}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &1291685609
@@ -1102,8 +1108,8 @@ MonoBehaviour:
   m_fontMaterials: []
   m_fontColor32:
     serializedVersion: 2
-    rgba: 4278190085
-  m_fontColor: {r: 0.01886791, g: 0, b: 0, a: 1}
+    rgba: 4294967295
+  m_fontColor: {r: 1, g: 1, b: 1, a: 1}
   m_enableVertexGradient: 0
   m_colorMode: 3
   m_fontColorGradient:
@@ -1215,6 +1221,10 @@ MonoBehaviour:
   titleScene: Title
   pawnSpeed: 6
   pawnSurfaceLift: 0.5
+  cameraFocus: 1
+  cameraLerp: 4
+  focusViewportX: 0.4
+  focusViewportY: 0.5
 --- !u!114 &1293787489
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1298,7 +1308,7 @@ Camera:
     height: 1
   near clip plane: 0.3
   far clip plane: 1000
-  field of view: 60
+  field of view: 45
   orthographic: 0
   orthographic size: 5
   m_Depth: -1
@@ -1436,10 +1446,66 @@ MonoBehaviour:
   orthoSize: 5
   orthoZoomSpeed: 2
   orthoAngle: {x: 35, y: 45, z: 0}
+  focusViewport: {x: 0.5, y: 0.5}
   projectionToggleKey: 289
   perspectiveFov: 50
   transitionSpeed: 6
   myCam: {fileID: 1386953392}
+--- !u!1 &1911354781
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1911354783}
+  - component: {fileID: 1911354782}
+  m_Layer: 0
+  m_Name: GameObject
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &1911354782
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1911354781}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3e322ea909086334caf6848331aa1947, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PauseMenu
+  toggleKey: 27
+  titleScene: Title
+  overlayColor: {r: 1, g: 1, b: 1, a: 0.6}
+  titleColor: {r: 0.6, g: 0.95, b: 1, a: 1}
+  panelWidth: 260
+  buttonHeight: 42
+  showControls: 1
+  controlsRight: 12
+  controlsTop: 12
+  controlSize: 50
+  controlFg: {r: 1, g: 1, b: 1, a: 1}
+--- !u!4 &1911354783
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1911354781}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 1.87837, y: 0, z: -0.211}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &2021819522
 GameObject:
   m_ObjectHideFlags: 0
@@ -1457,7 +1523,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!224 &2021819523
 RectTransform:
   m_ObjectHideFlags: 0
@@ -1467,14 +1533,14 @@ RectTransform:
   m_GameObject: {fileID: 2021819522}
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 1.672, y: 1.672, z: 1.672}
+  m_LocalScale: {x: 0.81552404, y: 0.81552404, z: 0.81552404}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 303145624}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: 788, y: 68}
+  m_AnchoredPosition: {x: 248.72, y: 30.479}
   m_SizeDelta: {x: 200, y: 50}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &2021819524
@@ -1508,8 +1574,8 @@ MonoBehaviour:
   m_fontMaterials: []
   m_fontColor32:
     serializedVersion: 2
-    rgba: 4278190085
-  m_fontColor: {r: 0.01886791, g: 0, b: 0, a: 1}
+    rgba: 4294967295
+  m_fontColor: {r: 1, g: 1, b: 1, a: 1}
   m_enableVertexGradient: 0
   m_colorMode: 3
   m_fontColorGradient:
@@ -1526,8 +1592,8 @@ MonoBehaviour:
   m_faceColor:
     serializedVersion: 2
     rgba: 4294967295
-  m_fontSize: 36
-  m_fontSizeBase: 36
+  m_fontSize: 25
+  m_fontSizeBase: 25
   m_fontWeight: 400
   m_enableAutoSizing: 0
   m_fontSizeMin: 18
@@ -1565,7 +1631,7 @@ MonoBehaviour:
   m_VertexBufferAutoSizeReduction: 0
   m_useMaxVisibleDescender: 1
   m_pageToDisplay: 1
-  m_margin: {x: 0, y: 0, z: 0, w: 0}
+  m_margin: {x: 0, y: 0, z: 78.38507, w: 0}
   m_isUsingLegacyAnimationComponent: 0
   m_isVolumetricText: 0
   m_hasFontAssetChanged: 0
@@ -1596,7 +1662,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!224 &2060175658
 RectTransform:
   m_ObjectHideFlags: 0
@@ -1606,14 +1672,14 @@ RectTransform:
   m_GameObject: {fileID: 2060175657}
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 1.672, y: 1.672, z: 1.672}
+  m_LocalScale: {x: 0.81552404, y: 0.81552404, z: 0.81552404}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 303145624}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: 788, y: -91}
+  m_AnchoredPosition: {x: 248.72, y: -17.466}
   m_SizeDelta: {x: 200, y: 50}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &2060175659
@@ -1645,8 +1711,8 @@ MonoBehaviour:
   m_fontMaterials: []
   m_fontColor32:
     serializedVersion: 2
-    rgba: 4278190085
-  m_fontColor: {r: 0.01886791, g: 0, b: 0, a: 1}
+    rgba: 4294967295
+  m_fontColor: {r: 1, g: 1, b: 1, a: 1}
   m_enableVertexGradient: 0
   m_colorMode: 3
   m_fontColorGradient:
@@ -1663,8 +1729,8 @@ MonoBehaviour:
   m_faceColor:
     serializedVersion: 2
     rgba: 4294967295
-  m_fontSize: 36
-  m_fontSizeBase: 36
+  m_fontSize: 25
+  m_fontSizeBase: 25
   m_fontWeight: 400
   m_enableAutoSizing: 0
   m_fontSizeMin: 18
@@ -1702,7 +1768,7 @@ MonoBehaviour:
   m_VertexBufferAutoSizeReduction: 0
   m_useMaxVisibleDescender: 1
   m_pageToDisplay: 1
-  m_margin: {x: 0, y: 0, z: 0, w: 0}
+  m_margin: {x: 0, y: 0, z: 77.93959, w: 0}
   m_isUsingLegacyAnimationComponent: 0
   m_isVolumetricText: 0
   m_hasFontAssetChanged: 0
@@ -1729,3 +1795,4 @@ SceneRoots:
   - {fileID: 1132883677}
   - {fileID: 616878591}
   - {fileID: 906724471}
+  - {fileID: 1911354783}

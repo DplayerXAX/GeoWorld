@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.UI;
 public enum RiftShapePreset { Rectangle, Triangle, Lens, Oval, Slash, Crack, Diamond, Custom }
 
 public class ShopController : MonoBehaviour
@@ -31,6 +32,13 @@ public class ShopController : MonoBehaviour
 
     [Header("Toggle Key")]
     public KeyCode shopToggleKey = KeyCode.F;
+
+    [Header("Letterbox (cinematic bars)")]
+    [Tooltip("ON: shop is shown as a bottom black bar with a matching top bar (movie letterbox). Collapsed = bars fully hidden. F expands.")]
+    public bool  letterbox = true;
+    [Tooltip("Height of EACH bar as a fraction of screen height when fully open.")]
+    [Range(0.05f, 0.35f)] public float barHeight = 0.16f;
+    public Color barColor = new Color(0f, 0f, 0f, 1f);
 
     [Header("Shop World Area")]
     public Vector3 shopCenter   = new Vector3(-25f, 4f, 5f);
@@ -94,20 +102,28 @@ public class ShopController : MonoBehaviour
     [Range(0.5f, 2.5f)] public float sparkleRadius = 1.15f;
     [Range(0.2f, 4f)] public float sparkleTwinkleSpeed = 1.1f;
 
-    [Header("Outline Distortion (set 0 for clean geometric lens)")]
-    [Tooltip("Higher = jaggier outline. 0 = clean lens (recommended for geometric art).")]
-    [Range(0f, 0.4f)] public float crackJaggedness = 0f;
-    [Tooltip("Speed of slow crack breathing. 0 = static.")]
-    [Range(0f, 2f)] public float crackWobbleSpeed = 0.30f;
-    [Tooltip("Insert N midpoints between every pair of base vertices. Higher = finer crack detail.")]
-    [Range(0, 5)] public int crackSubdivision = 0;
-
     [Header("Item Hover")]
     [Range(1f, 1.5f)] public float hoverScale     = 1.08f;
     [Range(1f, 20f)]  public float hoverLerpSpeed = 12f;
 
     [Header("Tooltip")]
-    public Color tooltipBg = new Color(0.04f, 0.04f, 0.08f, 0.90f);
+    public Color tooltipBg = new Color(0.949f, 0.937f, 0.902f, 0.94f);   // paper
+    [Tooltip("Overall hover-tooltip size multiplier.")]
+    public float tooltipScale = 2f;
+    [Tooltip("Refresh button icon. If set, replaces the 'Refresh' text (cost still shown).")]
+    public Sprite refreshIcon;
+    [Tooltip("Shop-open icon. When the shop is collapsed, this button (same spot as Refresh) opens the shop.")]
+    public Sprite shopButtonIcon;
+    [Tooltip("Refresh button diameter (px).")]
+    public float refreshButtonSize = 54f;
+    [Tooltip("Refresh button offset from the rift's top-right corner (x = left, y = up).")]
+    public Vector2 refreshButtonOffset = new Vector2(0f, 6f);
+
+    [Header("Block style")]
+    [Tooltip("Render shop blocks flat / unlit (2D look — no scene light or shadow).")]
+    public bool flatBlocks = true;
+    [Tooltip("Optional unlit material (needs a _BaseColor property). Null = auto URP Unlit.")]
+    public Material flatMaterial;
 
     [Header("Hover correction")]
     public bool flipHoverX;
@@ -117,13 +133,31 @@ public class ShopController : MonoBehaviour
     // by riftRotationDeg. All shapes are normalised so the largest |coord| = 1.
 
     // Normalised square on-screen aspect comes from riftWidth × riftHeight.
-    static readonly Vector2[] RiftShape_Rectangle =
+    // Rounded rectangle (normalized). Corner radii differ on x/y so they read roughly
+    // round once the wide/short rift footprint stretches them. seg = arc smoothness.
+    static readonly Vector2[] RiftShape_Rectangle = MakeRoundedRect(0.06f, 0.5f, 6);
+
+    static Vector2[] MakeRoundedRect(float rx, float ry, int seg)
     {
-        new(-1f,  1f),
-        new( 1f,  1f),
-        new( 1f, -1f),
-        new(-1f, -1f),
-    };
+        var pts = new Vector2[(seg + 1) * 4];
+        int idx = 0;
+        idx = RoundedArc(pts, idx, -1f + rx,  1f - ry, rx, ry,  180f,   90f, seg);   // top-left
+        idx = RoundedArc(pts, idx,  1f - rx,  1f - ry, rx, ry,   90f,    0f, seg);   // top-right
+        idx = RoundedArc(pts, idx,  1f - rx, -1f + ry, rx, ry,    0f,  -90f, seg);   // bottom-right
+        idx = RoundedArc(pts, idx, -1f + rx, -1f + ry, rx, ry,  -90f, -180f, seg);   // bottom-left
+        return pts;
+    }
+
+    static int RoundedArc(Vector2[] a, int idx, float cx, float cy, float rx, float ry,
+                          float a0, float a1, int seg)
+    {
+        for (int i = 0; i <= seg; i++)
+        {
+            float ang = Mathf.Deg2Rad * Mathf.Lerp(a0, a1, (float)i / seg);
+            a[idx++] = new Vector2(cx + Mathf.Cos(ang) * rx, cy + Mathf.Sin(ang) * ry);
+        }
+        return idx;
+    }
 
     // Equilateral triangle, pointing up. 3-fold symmetric.
     static readonly Vector2[] RiftShape_Triangle =
@@ -207,10 +241,15 @@ public class ShopController : MonoBehaviour
 
     // ── Shop screen anchors (GUI coords) for HUD elements that dock to the rift ──
     public bool    ShopVisible   => _riftScale > 0.1f;
+    public bool    IsExpanded    => _expanded;
     public Vector2 ShopTopCenter => new Vector2(_riftScreenCenter.x,
                                                 _riftScreenCenter.y - _riftSizeY * _riftScale);
     public Vector2 ShopTopRight  => new Vector2(_riftScreenCenter.x + _riftSizeX,
                                                 _riftScreenCenter.y - _riftSizeY * _riftScale);
+    public Vector2 ShopTopLeft    => new Vector2(_riftScreenCenter.x - _riftSizeX,
+                                                 _riftScreenCenter.y - _riftSizeY * _riftScale);
+    public Vector2 ShopBottomRight => new Vector2(_riftScreenCenter.x + _riftSizeX,
+                                                  _riftScreenCenter.y + _riftSizeY * _riftScale);
 
     // Counts down after a failed purchase attempt drives red rift edge flash.
     float _cantAffordFlash;
@@ -227,13 +266,6 @@ public class ShopController : MonoBehaviour
     // Built from the active preset (or riftSprite if shapePreset = Custom).
     // riftRotationDeg is applied on-the-fly in UpdateScreenVerts.
     Vector2[] _runtimeRiftShape;
-
-    // Subdivided base shape (no noise) + stable per-vertex noise personality.
-    // Built whenever the base shape or subdivision count changes.
-    Vector2[] _subdividedShape;
-    float[]   _vertexStaticOffset;
-    float[]   _vertexWobblePhase;
-    int       _builtSubdivision = -1;
 
     GUIStyle _ttTitle, _ttPrice, _ttSub, _hintStyle;
     bool     _stylesBuilt;
@@ -296,7 +328,6 @@ public class ShopController : MonoBehaviour
     void Start()
     {
         BuildShapeFromSprite();
-        BuildCrackShape();
         RebuildRT();
         IsolateShopLayer();
     }
@@ -306,8 +337,11 @@ public class ShopController : MonoBehaviour
         if (shopCam != null) shopCam.targetTexture = null;
         if (_shopRT != null) { _shopRT.Release(); Destroy(_shopRT); }
 
+        // sRGB read/write so the snapshot matches the main camera's colours. A default
+        // (linear) RT in a Linear-colour-space project makes the shop read darker.
         _shopRT              = new RenderTexture(Mathf.Max(32, rtWidth), Mathf.Max(32, rtHeight),
-                                                 16, RenderTextureFormat.ARGB32);
+                                                 16, RenderTextureFormat.ARGB32,
+                                                 RenderTextureReadWrite.sRGB);
         _shopRT.antiAliasing = 2;
         _shopRT.filterMode   = FilterMode.Bilinear;
 
@@ -346,7 +380,6 @@ public class ShopController : MonoBehaviour
         if (Application.isPlaying)
         {
             BuildShapeFromSprite();
-            BuildCrackShape();
             RebuildRT();
         }
     }
@@ -357,6 +390,7 @@ public class ShopController : MonoBehaviour
         if (_shopRT   != null) { _shopRT.Release(); Destroy(_shopRT); }
         if (_riftMat  != null) Destroy(_riftMat);
         if (_colorMat != null) Destroy(_colorMat);
+        if (_flatMat  != null) Destroy(_flatMat);
     }
 
     void Update()
@@ -367,6 +401,7 @@ public class ShopController : MonoBehaviour
         UpdateScreenVerts();   // must run before UpdateHover / IsMouseInShopView
         AnimateItems();
         UpdateHover();
+        UpdateLetterboxBars();
         if (_cantAffordFlash > 0f) _cantAffordFlash -= Time.deltaTime;
     }
 
@@ -384,12 +419,78 @@ public class ShopController : MonoBehaviour
     public void Collapse()      => _expanded = false;
     public void OnCombatStart() => _expanded = false;
 
+    // ── Letterbox bars + content (UGUI, behind the HUD so currency draws over them) ──
+    Canvas        _lbCanvas;
+    RectTransform _lbTop, _lbBottom, _lbContent;
+    RawImage      _lbContentImg;
+
+    void UpdateLetterboxBars()
+    {
+        if (!letterbox)
+        {
+            if (_lbCanvas != null) _lbCanvas.enabled = false;
+            return;
+        }
+        if (_lbCanvas == null) BuildLetterboxBars();
+
+        // Transparent shop-camera clear so only the blocks show on the black bar.
+        if (shopCam != null) shopCam.backgroundColor = new Color(0f, 0f, 0f, 0f);
+
+        float H    = Screen.height * barHeight * _riftScale;
+        bool  show = H > 0.5f;
+        _lbCanvas.enabled = show;
+        if (!show) return;
+
+        _lbTop.GetComponent<Image>().color    = barColor;
+        _lbBottom.GetComponent<Image>().color = barColor;
+        _lbTop.sizeDelta    = new Vector2(0f, H);
+        _lbBottom.sizeDelta = new Vector2(0f, H);
+
+        _lbContent.sizeDelta = new Vector2(0f, H);     // bottom bar, full width
+        if (_lbContentImg.texture != _shopRT) _lbContentImg.texture = _shopRT;
+    }
+
+    void BuildLetterboxBars()
+    {
+        var go = new GameObject("ShopLetterbox", typeof(Canvas), typeof(GraphicRaycaster));
+        go.transform.SetParent(transform, false);
+        _lbCanvas = go.GetComponent<Canvas>();
+        _lbCanvas.renderMode  = RenderMode.ScreenSpaceOverlay;
+        _lbCanvas.sortingOrder = 55;   // below the HUD (currency 90, objectives 92, …)
+
+        _lbTop    = MakeBar("TopBar",    new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0.5f, 1f));
+        _lbBottom = MakeBar("BottomBar", new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(0.5f, 0f));
+
+        // Shop content (RT) — above the bars, still under the HUD canvases.
+        _lbContent = new GameObject("Content", typeof(RectTransform), typeof(RawImage)).GetComponent<RectTransform>();
+        _lbContent.SetParent(_lbCanvas.transform, false);
+        _lbContent.anchorMin = new Vector2(0f, 0f); _lbContent.anchorMax = new Vector2(1f, 0f);
+        _lbContent.pivot = new Vector2(0.5f, 0f); _lbContent.anchoredPosition = Vector2.zero;
+        _lbContentImg = _lbContent.GetComponent<RawImage>();
+        _lbContentImg.raycastTarget = false;
+        _lbContentImg.texture = _shopRT;
+    }
+
+    RectTransform MakeBar(string name, Vector2 aMin, Vector2 aMax, Vector2 pivot)
+    {
+        var rt = new GameObject(name, typeof(RectTransform), typeof(Image)).GetComponent<RectTransform>();
+        rt.SetParent(_lbCanvas.transform, false);
+        rt.anchorMin = aMin; rt.anchorMax = aMax; rt.pivot = pivot;
+        rt.anchoredPosition = Vector2.zero;
+        rt.sizeDelta = new Vector2(0f, 0f);
+        var img = rt.GetComponent<Image>();
+        img.color = barColor; img.raycastTarget = false;
+        return rt;
+    }
+
     // ── Rift animation ────────────────────────────────────────────────────────
 
     void AnimateRift()
     {
         bool combat = GameFlowManager.Instance?.phase == GamePhase.Running;
-        _riftTarget = combat ? 0f : (_expanded ? 0.6f : riftHintScale);
+        _riftTarget = combat ? 0f
+                    : letterbox ? (_expanded ? 1f : 0f)        // bars: fully out / fully hidden
+                                : (_expanded ? 0.6f : riftHintScale);
 
         float t    = 1f - Mathf.Exp(-expandSpeed * Time.deltaTime);
         _riftScale     = Mathf.Lerp(_riftScale, _riftTarget, t);
@@ -416,6 +517,25 @@ public class ShopController : MonoBehaviour
     // Recomputes _riftScreenCenter, _riftScreenSize, _screenVerts every frame.
     void UpdateScreenVerts()
     {
+        // ── Letterbox: the shop is the bottom bar (full width, animated height). ──
+        if (letterbox)
+        {
+            _riftSizeX      = Screen.width * 0.5f;
+            _riftSizeY      = Screen.height * barHeight * 0.5f;   // half a full bar
+            _riftScreenSize = Mathf.Max(_riftSizeX, _riftSizeY);
+
+            float H   = _riftSizeY * 2f * _riftScale;             // current animated bar height
+            float top = Screen.height - H;
+            _riftScreenCenter = new Vector2(Screen.width * 0.5f, Screen.height - H * 0.5f);
+
+            if (_screenVerts == null || _screenVerts.Length != 4) _screenVerts = new Vector2[4];
+            _screenVerts[0] = new Vector2(0f,            top);    // bottom-bar rect (GUI coords)
+            _screenVerts[1] = new Vector2(Screen.width,  top);
+            _screenVerts[2] = new Vector2(Screen.width,  Screen.height);
+            _screenVerts[3] = new Vector2(0f,            Screen.height);
+            return;
+        }
+
         _riftSizeX        = Screen.width  * riftWidth  * 0.5f;
         _riftSizeY        = Screen.height * riftHeight * 0.5f;
         _riftScreenSize   = Mathf.Max(_riftSizeX, _riftSizeY);   // legacy fields rely on this
@@ -439,32 +559,14 @@ public class ShopController : MonoBehaviour
                                Screen.height - effectiveSizeY - screenEdgeMargin);
         _riftScreenCenter = new Vector2(cx, cy);
 
-        // Rebuild crack shape if the subdivision setting changed at runtime.
-        if (_subdividedShape == null || _builtSubdivision != crackSubdivision)
-            BuildCrackShape();
-
-        var shape = _subdividedShape;
+        var shape = _runtimeRiftShape ?? BuiltinShape();
         int n     = shape.Length;
         if (_screenVerts == null || _screenVerts.Length != n)
             _screenVerts = new Vector2[n];
 
-        float t = Time.time;
         for (int i = 0; i < n; i++)
         {
-            Vector2 v = shape[i];
-
-            // Radial noise: half from a stable per-vertex offset (gives the crack
-            // its permanent silhouette), half from a slow wobble (alive feel).
-            float r = v.magnitude;
-            if (r > 0.001f && _vertexStaticOffset != null && i < _vertexStaticOffset.Length)
-            {
-                float staticO = _vertexStaticOffset[i];
-                float wobble  = Mathf.Sin(t * crackWobbleSpeed + _vertexWobblePhase[i]);
-                float radial  = (staticO * 0.5f + wobble * 0.5f) * crackJaggedness * r;
-                v += (v / r) * radial;
-            }
-
-            Vector2 rv = Rotate2D(v, CurrentRotationDeg());
+            Vector2 rv = Rotate2D(shape[i], CurrentRotationDeg());
             _screenVerts[i] = new Vector2(_riftScreenCenter.x + rv.x * _riftSizeX,
                                           _riftScreenCenter.y - rv.y * _riftSizeY * _riftScale);
         }
@@ -507,6 +609,19 @@ public class ShopController : MonoBehaviour
         }
     }
 
+    Material _flatMat;
+    // Shared unlit material for the 2D/flat block style (color comes per-cube via MpbColor's _BaseColor).
+    Material FlatMat()
+    {
+        if (flatMaterial != null) return flatMaterial;
+        if (_flatMat == null)
+        {
+            var sh = Shader.Find("Universal Render Pipeline/Unlit") ?? Shader.Find("Sprites/Default");
+            _flatMat = new Material(sh) { hideFlags = HideFlags.HideAndDontSave };
+        }
+        return _flatMat;
+    }
+
     void SpawnOne(BlockData data, BlockColor synergyColor, Vector3 pos,
                   GameObject cubePrefab, GridSystem grid, bool isTurret, int globalIndex)
     {
@@ -537,7 +652,13 @@ public class ShopController : MonoBehaviour
         {
             var c = Instantiate(cubePrefab, root.transform);
             c.transform.localPosition = (Vector3)cell * grid.cellSize;
-            MpbColor.Set(c.GetComponent<Renderer>(), col);
+            var rend = c.GetComponent<Renderer>();
+            if (flatBlocks && rend != null)
+            {
+                rend.sharedMaterial   = FlatMat();
+                rend.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            }
+            MpbColor.Set(rend, col);
         }
 
         var sb = root.AddComponent<SelectableBlock>();
@@ -548,7 +669,8 @@ public class ShopController : MonoBehaviour
         sb.cachedPrice = ResourceManager.Instance != null
                          ? ResourceManager.Instance.ComputePrice(data, fluc) : 0;
 
-        if (isTurret) AttachTurretBeacon(root, grid.cellSize, cubePrefab, data.blockType);
+        if (isTurret) AttachTurretBeacon(root, grid.cellSize, cubePrefab, data.blockType,
+                                         flatBlocks ? FlatMat() : null);
 
         if (_shopLayer >= 0) SetLayerRecursive(root, _shopLayer);   // keep off the main camera
 
@@ -572,7 +694,8 @@ public class ShopController : MonoBehaviour
 
     // Same visual rule as placed turrets: hide the cube body, show a single
     // floating diamond. Keeps shop preview consistent with what gets placed.
-    static void AttachTurretBeacon(GameObject root, float cs, GameObject cubePrefab, BlockType turretType)
+    static void AttachTurretBeacon(GameObject root, float cs, GameObject cubePrefab, BlockType turretType,
+                                   Material flatOverride = null)
     {
         if (root == null) return;
 
@@ -602,10 +725,17 @@ public class ShopController : MonoBehaviour
         var rend = marker.GetComponent<Renderer>();
         if (rend != null)
         {
-            // Match cubePrefab's material so shop beacons share the silkscreen shader.
-            var prefabRend = cubePrefab != null ? cubePrefab.GetComponentInChildren<Renderer>() : null;
-            if (prefabRend != null && prefabRend.sharedMaterial != null)
-                rend.sharedMaterial = prefabRend.sharedMaterial;
+            // Flat/unlit override (2D style) when requested, else match cubePrefab's material.
+            if (flatOverride != null)
+            {
+                rend.sharedMaterial = flatOverride;
+            }
+            else
+            {
+                var prefabRend = cubePrefab != null ? cubePrefab.GetComponentInChildren<Renderer>() : null;
+                if (prefabRend != null && prefabRend.sharedMaterial != null)
+                    rend.sharedMaterial = prefabRend.sharedMaterial;
+            }
 
             // Per-subtype color: Basic = cyan, Slow = blue-violet, AOE = orange.
             // Same palette as placed beacons via TurretTypes.DisplayColor.
@@ -828,7 +958,7 @@ public class ShopController : MonoBehaviour
 
     void OnGUI()
     {
-        if (SettingsScreen.Open) return;   // GL rift would punch through the settings overlay
+        if (SettingsScreen.Open || IntroDirector.Playing) return;   // hidden behind settings / intro overlay
         BuildStyles();
         if (_riftScale > 0.005f) DrawRift();
         if (_riftScale > 0.5f)   DrawPriceLabels();
@@ -863,35 +993,105 @@ public class ShopController : MonoBehaviour
 
     void DrawRefreshButton()
     {
-        if (PlacementController.Instance == null || !ShopVisible)
-            return;
+        if (PlacementController.Instance == null) return;
 
-        float w = 110f;
-        float h = 34f;
-        float gap = 0f;
+        // Collapsed → a shop-open button in the same spot; click expands the shop.
+        if (!ShopVisible) { DrawShopOpenButton(); return; }
 
-        // Dock to the shop rift's top-right corner (button sits just above it).
-        Vector2 tr = ShopTopRight;
-        Rect r = new Rect(tr.x - w, tr.y - h - gap, w, h);
+        int   cost = PlacementController.Instance.RefreshCost;
+        float s    = Mathf.Max(0.5f, Screen.height / 1080f);   // scale with screen
+        float d    = refreshButtonSize * s;                    // circle diameter
 
-        Color oldColor = GUI.color;
-        GUI.color = new Color(0.2f, 0.2f, 0.3f, 0.85f);
-        GUI.DrawTexture(r, Texture2D.whiteTexture);
-        GUI.color = new Color(0.9f, 0.9f, 1f, 1f);
-        GUI.DrawTexture(new Rect(r.x, r.y, r.width, 2f), Texture2D.whiteTexture);
-        GUI.color = oldColor;
+        // Dock to the shop rift's bottom-right corner, inset by refreshButtonOffset.
+        Vector2 br = ShopBottomRight;
+        Rect r = new Rect(br.x - d - refreshButtonOffset.x * s,
+                          br.y - d - refreshButtonOffset.y * s, d, d);
 
-        GUIStyle btnStyle = new GUIStyle(GUI.skin.button);
-        btnStyle.fontSize = 14;
-        btnStyle.fontStyle = FontStyle.Bold;
-        btnStyle.normal.textColor = Color.white;
-        btnStyle.alignment = TextAnchor.MiddleCenter;
+        bool      hover  = r.Contains(Event.current.mousePosition);
+        Texture2D circle = UIRoundedRect.CircleTex();
+        Color     prev   = GUI.color;
 
-        if (GUI.Button(r, $"Refresh ({PlacementController.Instance.RefreshCost})", btnStyle))
+        // Round paper button (no border; gold-tinted on hover).
+        Color fill = hover ? Color.Lerp(tooltipBg, GeoPalette.Gold, 0.28f) : tooltipBg;
+        GUI.color = fill;
+        GUI.DrawTexture(r, circle, ScaleMode.StretchToFill, true);
+
+        // Icon (tinted ink so it reads on paper); fallback glyph if none.
+        if (refreshIcon != null && refreshIcon.texture != null)
         {
-            PlacementController.Instance.TryRefreshShop();
+            float pad = 3f * s;
+            GUI.color = GeoPalette.Ink;
+            GUI.DrawTexture(new Rect(r.x + pad, r.y + pad, d - pad * 2f, d - pad * 2f),
+                            refreshIcon.texture, ScaleMode.ScaleToFit, true);
         }
+        else
+        {
+            var gs = new GUIStyle(GUI.skin.label) { fontSize = Mathf.RoundToInt(26f * s), fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter };
+            gs.normal.textColor = GeoPalette.Ink;
+            GUI.color = Color.white;
+            GUI.Label(r, "⟳", gs);
+        }
+
+        // Hover → reveal the cost in a small paper tag (shop tooltip style) to the right.
+        if (hover)
+        {
+            float pw = 36f * s, ph = 32f * s;
+            Rect tag = new Rect(r.xMax - 8f * s, r.center.y - ph * 0.5f, pw, ph);
+            GUI.color = tooltipBg;
+            GUI.DrawTexture(tag, Texture2D.whiteTexture);
+            GUI.color = GeoPalette.Signal;                                   // accent spine
+            GUI.DrawTexture(new Rect(tag.x, tag.y, 4f * s, tag.height), Texture2D.whiteTexture);
+            GUI.color = Color.white;
+            var cs = new GUIStyle(GUI.skin.label) { fontSize = Mathf.RoundToInt(17f * s), fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter };
+            cs.normal.textColor = GeoPalette.Ink;
+            GUI.Label(tag, cost.ToString(), cs);
+        }
+
+        GUI.color = prev;
+
+        if (GUI.Button(r, GUIContent.none, GUIStyle.none))
+            PlacementController.Instance.TryRefreshShop();
     }
+
+    // Shown when the shop is collapsed: a round paper button (shop sprite) at the
+    // bottom-right corner. Clicking it opens the shop. Hidden during combat.
+    void DrawShopOpenButton()
+    {
+        if (GameFlowManager.Instance != null && GameFlowManager.Instance.phase == GamePhase.Running) return;
+
+        float s = Mathf.Max(0.5f, Screen.height / 1080f);
+        float d = refreshButtonSize * s;
+        Vector2 br = ShopBottomRight;   // bottom-right corner (Screen.width, Screen.height) when collapsed
+        Rect r = new Rect(br.x - d - refreshButtonOffset.x * s,
+                          br.y - d - refreshButtonOffset.y * s, d, d);
+
+        bool  hover  = r.Contains(Event.current.mousePosition);
+        Color prev   = GUI.color;
+        var   circle = UIRoundedRect.CircleTex();
+
+        GUI.color = hover ? Color.Lerp(tooltipBg, GeoPalette.Gold, 0.28f) : tooltipBg;
+        GUI.DrawTexture(r, circle, ScaleMode.StretchToFill, true);
+
+        if (shopButtonIcon != null && shopButtonIcon.texture != null)
+        {
+            float pad = 3f * s;
+            GUI.color = Color.black;
+            GUI.DrawTexture(new Rect(r.x + pad, r.y + pad, d - pad * 2f, d - pad * 2f),
+                            shopButtonIcon.texture, ScaleMode.ScaleToFit, true);
+        }
+        else
+        {
+            var gs = new GUIStyle(GUI.skin.label) { fontSize = Mathf.RoundToInt(22f * s), fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter };
+            gs.normal.textColor = GeoPalette.Ink;
+            GUI.color = Color.white;
+            GUI.Label(r, "S", gs);
+        }
+        GUI.color = prev;
+
+        if (GUI.Button(r, GUIContent.none, GUIStyle.none))
+            _expanded = true;   // open the shop
+    }
+
     // ── GL rift rendering ─────────────────────────────────────────────────────
 
     void DrawRift()
@@ -900,6 +1100,11 @@ public class ShopController : MonoBehaviour
         if (Event.current.type != EventType.Repaint) return;
 
         EnsureMaterials();
+
+        // ── Letterbox: bars AND content are drawn as UGUI (UpdateLetterboxBars),
+        //    so they sit under the HUD. Nothing to draw here in IMGUI. ──
+        if (letterbox) return;
+
         GL.PushMatrix();
         GL.LoadPixelMatrix();
 
@@ -979,8 +1184,8 @@ public class ShopController : MonoBehaviour
         // Iterate the subdivided shape so the triangle fan follows the noisy
         // crack outline. UV bounds stay from the base shape so the RT content
         // doesn't stretch as vertices wobble.
-        var shape     = _subdividedShape ?? _runtimeRiftShape ?? BuiltinShape();
-        var baseShape = _runtimeRiftShape ?? BuiltinShape();
+        var shape     = _runtimeRiftShape ?? BuiltinShape();
+        var baseShape = shape;
         int n         = shape.Length;
 
         float minX = float.MaxValue, maxX = float.MinValue;
@@ -1182,12 +1387,13 @@ public class ShopController : MonoBehaviour
         // Pin to the side of the rift's screen-space bounds so the tooltip
         // never covers items. Prefer right; fall back to left if right is
         // off-screen; finally try below / above as last resorts.
-        const float bw = 170f;
+        float       ts = Mathf.Max(0.5f, tooltipScale);
+        float       bw = 170f * ts;
         bool        hasTheme = item.sb.color != BlockColor.None;
         // Tooltip rows: title (shape + colored tag) + price
         //             + 2-line synergy description if themed.
-        float       bh       = hasTheme ? 82f : 44f;
-        const float pad      = 12f;
+        float       bh       = (hasTheme ? 82f : 44f) * ts;
+        float       pad      = 12f * ts;
 
         float minX = float.MaxValue, maxX = float.MinValue;
         float minY = float.MaxValue, maxY = float.MinValue;
@@ -1217,11 +1423,13 @@ public class ShopController : MonoBehaviour
         tx = Mathf.Clamp(tx, 4f, Screen.width  - bw - 4f);
         ty = Mathf.Clamp(ty, 4f, Screen.height - bh - 4f);
 
+        float inset = 8f * ts;
         GUI.color = tooltipBg;
-        GUI.DrawTexture(new Rect(tx - 8f, ty - 8f, bw, bh), Texture2D.whiteTexture);
-        GUI.color = afford ? new Color(0.35f, 1.00f, 0.50f, 0.85f)
-                           : new Color(1.00f, 0.30f, 0.30f, 0.85f);
-        GUI.DrawTexture(new Rect(tx - 8f, ty - 8f, bw, 2f), Texture2D.whiteTexture);
+        GUI.DrawTexture(new Rect(tx - inset, ty - inset, bw, bh), Texture2D.whiteTexture);
+        GUI.color = GeoPalette.Ink;                                       // ink top rule
+        GUI.DrawTexture(new Rect(tx - inset, ty - inset, bw, 5f * ts), Texture2D.whiteTexture);
+        GUI.color = afford ? GeoPalette.Blue : GeoPalette.Signal;         // accent spine on the left
+        GUI.DrawTexture(new Rect(tx - inset, ty - inset, 4f * ts, bh), Texture2D.whiteTexture);
         GUI.color = Color.white;
 
         string shape = TurretTypes.Is(type) ? TurretTypes.DisplayName(type) : item.sb.data.ShapeName;
@@ -1239,25 +1447,28 @@ public class ShopController : MonoBehaviour
             title = shape;
         }
 
-        _ttTitle.richText = true;
-        GUI.Label(new Rect(tx, ty, bw - 16f, 16f), title, _ttTitle);
+        _ttTitle.fontSize = Mathf.RoundToInt(10f * ts);
+        _ttPrice.fontSize = Mathf.RoundToInt(10f * ts);
+        _ttSub.fontSize   = Mathf.RoundToInt(9f  * ts);
 
-        float yCursor = ty + 18f;
-        _ttPrice.normal.textColor = afford ? new Color(0.45f, 1f, 0.55f)
-                                           : new Color(1f, 0.38f, 0.38f);
+        _ttTitle.richText = true;
+        GUI.Label(new Rect(tx, ty, bw - 16f * ts, 16f * ts), title, _ttTitle);
+
+        float yCursor = ty + 18f * ts;
+        _ttPrice.normal.textColor = afford ? GeoPalette.Blue : GeoPalette.Signal;
         string sfx       = TurretTypes.Is(type) ? " T" : " B";
         string priceText = afford ? $"{price}{sfx}" : $"{price}{sfx}  (-{deficit})";
-        GUI.Label(new Rect(tx, yCursor, bw - 16f, 14f), priceText, _ttPrice);
-        yCursor += 18f;
+        GUI.Label(new Rect(tx, yCursor, bw - 16f * ts, 14f * ts), priceText, _ttPrice);
+        yCursor += 18f * ts;
 
         if (hasTheme)
         {
             string desc = BlockColorPalette.Description(item.sb.color);
             if (!string.IsNullOrEmpty(desc))
             {
-                _ttSub.normal.textColor = new Color(0.78f, 0.78f, 0.78f);
+                _ttSub.normal.textColor = new Color(0.30f, 0.30f, 0.30f);   // soft ink on paper
                 _ttSub.wordWrap         = true;
-                GUI.Label(new Rect(tx, yCursor, bw - 16f, 36f), desc, _ttSub);
+                GUI.Label(new Rect(tx, yCursor, bw - 16f * ts, 36f * ts), desc, _ttSub);
             }
         }
     }
@@ -1334,7 +1545,7 @@ public class ShopController : MonoBehaviour
         _stylesBuilt = true;
 
         _ttTitle = new GUIStyle(GUI.skin.label) { fontSize = 10, fontStyle = FontStyle.Bold };
-        _ttTitle.normal.textColor = Color.white;
+        _ttTitle.normal.textColor = GeoPalette.Ink;
 
         _ttPrice = new GUIStyle(GUI.skin.label) { fontSize = 10, fontStyle = FontStyle.Bold };
         _ttPrice.normal.textColor = Color.green;
@@ -1443,44 +1654,6 @@ public class ShopController : MonoBehaviour
 
         Debug.Log($"[ShopController] Rift shape loaded from sprite '{riftSprite.name}' " +
                   $"{pts.Count} vertices.");
-    }
-
-    // Builds _subdividedShape + stable per-vertex randoms. Call when the base
-    // shape or subdivision count changes. Personality is reseeded so the crack
-    // gets a new "look" each rebuild.
-    void BuildCrackShape()
-    {
-        var baseShape = _runtimeRiftShape ?? BuiltinShape();
-        _subdividedShape = SubdivideShape(baseShape, crackSubdivision);
-        _builtSubdivision = crackSubdivision;
-
-        int n = _subdividedShape.Length;
-        _vertexStaticOffset = new float[n];
-        _vertexWobblePhase  = new float[n];
-        for (int i = 0; i < n; i++)
-        {
-            _vertexStaticOffset[i] = Random.Range(-1f, 1f);
-            _vertexWobblePhase[i]  = Random.Range(0f, Mathf.PI * 2f);
-        }
-    }
-
-    static Vector2[] SubdivideShape(Vector2[] src, int subN)
-    {
-        if (src == null || subN <= 0) return src;
-        var result = new List<Vector2>(src.Length * (subN + 1));
-        int count = src.Length;
-        for (int i = 0; i < count; i++)
-        {
-            Vector2 a = src[i];
-            Vector2 b = src[(i + 1) % count];
-            result.Add(a);
-            for (int k = 1; k <= subN; k++)
-            {
-                float t = k / (float)(subN + 1);
-                result.Add(Vector2.Lerp(a, b, t));
-            }
-        }
-        return result.ToArray();
     }
 
     // Rotate a 2D vector by degrees (counter-clockwise).

@@ -7,8 +7,10 @@ public partial class PlacementController
     // SELECTION INFO PANEL
     // =========================
 
-    [Tooltip("UGUI selection panel (right side). Wire it and the IMGUI panel below is skipped.")]
+    [Tooltip("World-space UGUI selection panel (title / stats / pick-up / sell). Wire it and the IMGUI panel below is skipped.")]
     public BlockInfoPanel infoPanel;
+    [Tooltip("Separate world-space UGUI upgrade panel (turret upgrade paths).")]
+    public UpgradePanel upgradePanel;
 
     Camera _hudCam;   // cached main camera for projecting the selected block to screen
 
@@ -27,7 +29,8 @@ public partial class PlacementController
         if (mode == PlacementMode.Select && _selectedEndpoint != null && _selectedEndpointIsStart
             && (GameFlowManager.Instance == null || GameFlowManager.Instance.phase != GamePhase.Running))
         {
-            infoPanel.ShowReadonly("Spawn Point", BuildStartBody());
+            infoPanel.ShowReadonly(_selectedEndpoint.transform.position, "Spawn Point", BuildStartBody());
+            upgradePanel?.Hide();
             return;
         }
 
@@ -35,6 +38,7 @@ public partial class PlacementController
         if (mode != PlacementMode.Select || ins == null || ins.visualObject == null || ins.data == null)
         {
             infoPanel.Hide();
+            upgradePanel?.Hide();
             return;
         }
 
@@ -46,15 +50,27 @@ public partial class PlacementController
             && GameFlowManager.Instance.phase == GamePhase.Running && !isTurret;
         int refund = ComputeSellRefund(ins);
 
-        BuildUpgradeButtons(ins,
-            out string upgradeAText, out bool canUpgradeA, out System.Action onUpgradeA,
-            out string upgradeBText, out bool canUpgradeB, out System.Action onUpgradeB);
+        Vector3 worldPos = ins.visualObject.transform.position;
 
-        infoPanel.Show(title, body, !combatLocked, $"Sell +{refund}",
+        // Selection panel: title / stats / pick-up / sell.
+        infoPanel.Show(worldPos, title, body, !combatLocked, $"Sell +{refund}",
             () => _panelPickUpRequested = true,
-            () => _panelSellRequested   = true,
-            upgradeAText, canUpgradeA, onUpgradeA,
-            upgradeBText, canUpgradeB, onUpgradeB);
+            () => _panelSellRequested   = true);
+
+        // Separate upgrade panel.
+        if (upgradePanel != null)
+        {
+            BuildUpgradeButtons(ins,
+                out string upgradeAText, out bool canUpgradeA, out System.Action onUpgradeA,
+                out string upgradeBText, out bool canUpgradeB, out System.Action onUpgradeB);
+
+            bool hasUpgrades = !string.IsNullOrEmpty(upgradeAText) || !string.IsNullOrEmpty(upgradeBText);
+            if (hasUpgrades && !combatLocked)
+                upgradePanel.Show(worldPos, upgradeAText, canUpgradeA, onUpgradeA,
+                                            upgradeBText, canUpgradeB, onUpgradeB);
+            else
+                upgradePanel.Hide();
+        }
     }
 
     string BuildInfoBody(PlacedBlockInstance ins, bool isTurret)

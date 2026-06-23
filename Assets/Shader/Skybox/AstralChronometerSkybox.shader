@@ -1,19 +1,28 @@
-Shader "Custom/NeuromancerProtocolSkybox"
+Shader "Custom/LevelSelectSky"
 {
+    // Painterly level-select sky in the same spirit as the abyss / manifold skyboxes:
+    // a slowly drifting "astral aurora" built from domain-warped fbm (flowing colour
+    // ribbons), soft glowing concentric arcs for the constructivist signature, a sparse
+    // star field, and gentle HSV breathing. Calm — but with real depth, not a flat poster.
     Properties
     {
-        _MatrixBgColor ("Matrix Void Color", Color) = (0.0, 0.02, 0.01, 1)
-        _CodeColor     ("Base Code Line Color", Color) = (0.0, 1.0, 0.33, 1)
-        _GlitchColor   ("Glitch Shift Color", Color) = (1.0, 0.0, 0.4, 1)
-        
-        _GridDensity   ("Matrix Resolution", Float) = 32.0
-        _StreamSpeed   ("Data Cascade Speed", Float) = 2.5
-        
-        // Dynamic Controls
-        _BeatPulse     ("Beat Pulse", Range(0,1)) = 0
-        _MusicIntensity("Music Intensity", Range(0,1)) = 0.5
-        _CombatMode    ("Glitch Intensity", Range(0,1)) = 0
-        _DamageTint    ("System Corrupted", Range(0,1)) = 0
+        [Header(Backdrop)]
+        _SkyTop       ("Zenith",  Color) = (0.02, 0.02, 0.06, 1)
+        _SkyBottom    ("Horizon", Color) = (0.05, 0.06, 0.14, 1)
+        _HorizonSharp ("Gradient Curve", Range(1, 8)) = 3.0
+
+        [Header(Astral Aurora)]
+        _NebulaA   ("Aurora Cool", Color) = (0.169, 0.424, 0.690, 1)  // blue
+        _NebulaB   ("Aurora Warm", Color) = (0.910, 0.698, 0.227, 1)  // gold
+        _NebulaC   ("Aurora Flare", Color) = (0.886, 0.141, 0.106, 1) // signal
+        _Scale     ("Aurora Scale", Float) = 3.0
+        _Intensity ("Aurora Intensity", Range(0, 3)) = 1.2
+        _FlowSpeed ("Flow Speed", Float) = 0.12
+        _HueDrift  ("Hue Drift", Range(0, 0.5)) = 0.10
+
+        [Header(Stars)]
+        _StarColor ("Star Color", Color) = (1.0, 0.97, 0.9, 1)
+        _StarDensity ("Star Density", Range(0, 1)) = 0.5
     }
 
     SubShader
@@ -24,14 +33,14 @@ Shader "Custom/NeuromancerProtocolSkybox"
         Pass
         {
             HLSLPROGRAM
-            #pragma vertex vert
+            #pragma vertex   vert
             #pragma fragment frag
             #pragma target 3.0
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
 
-            half4 _MatrixBgColor, _CodeColor, _GlitchColor;
-            float _GridDensity, _StreamSpeed;
-            float _BeatPulse, _MusicIntensity, _CombatMode, _DamageTint;
+            half4 _SkyTop, _SkyBottom, _NebulaA, _NebulaB, _NebulaC, _StarColor;
+            float _HorizonSharp, _Scale, _Intensity, _FlowSpeed, _HueDrift;
+            float _StarDensity;
 
             struct Attributes { float4 positionOS : POSITION; };
             struct Varyings
@@ -44,92 +53,91 @@ Shader "Custom/NeuromancerProtocolSkybox"
             {
                 Varyings OUT;
                 OUT.positionCS = TransformObjectToHClip(IN.positionOS.xyz);
-                OUT.dir = IN.positionOS.xyz;
+                OUT.dir        = IN.positionOS.xyz;
                 return OUT;
             }
 
-            // 程序化伪随机哈希
-            float Hash3D(float3 p)
+            float Hash3(float3 p)
             {
-                p = frac(p * 0.1031);
-                p += dot(p, p.zyx + 31.32);
-                return frac((p.x + p.y) * p.z);
+                p = frac(p * 0.3183099 + 0.1);
+                p *= 17.0;
+                return frac(p.x * p.y * p.z * (p.x + p.y + p.z));
             }
 
-            // 计算单通道二进制流
-            float SampleDataStream(float3 sampleDir, float speedOffset)
+            float Noise(float3 p)
             {
-                // 量化球面坐标，形成方块矩阵点阵
-                float3 gridId = floor(sampleDir * _GridDensity);
-                
-                // 基于每个垂直列的随机哈希计算流动偏移
-                float rawHash = Hash3D(float3(gridId.x, 0.0, gridId.z));
-                
-                // 产生断续滚动的瀑布流
-                float cascade = frac(gridId.y * 0.04 - _Time.y * _StreamSpeed * (0.4 + rawHash * 0.6) + speedOffset);
-                
-                // 过滤出亮点的头部信息和微弱的拖尾
-                float leadPoint = step(0.94, cascade) * 2.0;
-                float tailTrail = pow(cascade, 6.0) * 0.75;
-                
-                // 剔除部分列，使其疏密有致
-                float columnMask = step(0.45, rawHash);
-                
-                return (leadPoint + tailTrail) * columnMask;
+                float3 i = floor(p), f = frac(p);
+                float n000 = Hash3(i + float3(0,0,0)); float n100 = Hash3(i + float3(1,0,0));
+                float n010 = Hash3(i + float3(0,1,0)); float n110 = Hash3(i + float3(1,1,0));
+                float n001 = Hash3(i + float3(0,0,1)); float n101 = Hash3(i + float3(1,0,1));
+                float n011 = Hash3(i + float3(0,1,1)); float n111 = Hash3(i + float3(1,1,1));
+                float3 u = f * f * (3.0 - 2.0 * f);
+                return lerp(lerp(lerp(n000,n100,u.x), lerp(n010,n110,u.x), u.y),
+                            lerp(lerp(n001,n101,u.x), lerp(n011,n111,u.x), u.y), u.z);
+            }
+
+            float Fbm(float3 p)
+            {
+                float s = 0.0, a = 0.5;
+                [unroll] for (int i = 0; i < 5; i++) { s += a * Noise(p); p *= 2.02; a *= 0.5; }
+                return s;
+            }
+
+            // Domain-warped fbm: layered self-advection → flowing, painterly ribbons.
+            float DomainWarp(float3 p, float time, out float3 warpQ)
+            {
+                float3 q = float3(Fbm(p), Fbm(p + 5.2), Fbm(p + 9.1));
+                warpQ = q;
+                float3 r = float3(Fbm(p + 4.0 * q + float3(1.7, 9.2, time)),
+                                  Fbm(p + 4.0 * q + float3(8.3, 2.8, time * 0.8)),
+                                  Fbm(p + 4.0 * q + float3(4.5, 1.3, time * 1.2)));
+                return Fbm(p + 4.0 * r);
+            }
+
+            half3 HsvShift(half3 rgb, float shift)
+            {
+                float c = cos(shift * 6.2832), s = sin(shift * 6.2832);
+                float3x3 m = float3x3(
+                    0.299 + 0.701*c + 0.168*s,  0.587 - 0.587*c + 0.330*s,  0.114 - 0.114*c - 0.497*s,
+                    0.299 - 0.299*c - 0.328*s,  0.587 + 0.413*c + 0.035*s,  0.114 - 0.114*c + 0.292*s,
+                    0.299 - 0.300*c + 1.250*s,  0.587 - 0.588*c - 1.050*s,  0.114 + 0.886*c - 0.203*s);
+                return saturate(mul(m, rgb));
             }
 
             half4 frag(Varyings IN) : SV_Target
             {
                 float3 dir = normalize(IN.dir);
-                
-                // ── 战斗联动：画面高频切片断裂故障 (Glitch Slicing) ──
-                if (_CombatMode > 0.01)
-                {
-                    float glitchTime = floor(_Time.y * 24.0); // 阶梯式高频时间
-                    float sliceNoise = Hash3D(float3(0.0, floor(dir.y * 15.0), glitchTime));
-                    
-                    // 仅对特定水平切片层进行突发性横向撕裂
-                    float sliceMask = step(1.0 - _CombatMode * 0.45, sliceNoise);
-                    dir.x += sin(dir.y * 100.0 + _Time.y) * 0.15 * sliceMask * _CombatMode;
-                    dir = normalize(dir);
-                }
+                float  t   = _Time.y * _FlowSpeed;
 
-                // ── 赛博朋克色散分离采样 (Chromatic Aberration) ──
-                // 通过让RGB采样通道产生坐标偏置，模拟硬件系统崩溃
-                float aberration = _CombatMode * 0.05 + _BeatPulse * _MusicIntensity * 0.01;
-                
-                float streamR = SampleDataStream(normalize(dir + float3(aberration, 0, 0)), 0.0);
-                float streamG = SampleDataStream(dir, 0.0);
-                float streamB = SampleDataStream(normalize(dir - float3(aberration, 0, 0)), 0.03);
+                // ── Backdrop gradient ───────────────────────────────────────────
+                float up   = saturate(dir.y * 0.5 + 0.5);
+                half3 col  = lerp(_SkyBottom.rgb, _SkyTop.rgb, pow(up, _HorizonSharp));
 
-                // ── 拼装多通道颜色 ──
-                half3 baseMatrixCol = _CodeColor.rgb * streamG;
-                
-                // 故障色散混色：R和B通道偏向赛博霓虹粉/蓝
-                half3 glitchComponent = _GlitchColor.rgb * streamR + half3(0.0, 0.3, 1.0) * streamB;
-                half3 finalCodeNet = lerp(baseMatrixCol, glitchComponent, saturate(_CombatMode * 1.2));
+                // ── Astral aurora (domain-warped, flowing ribbons) ──────────────
+                float3 p = dir * _Scale;
+                p.y -= t * 0.6;                         // slow upward drift
+                float3 warpQ;
+                float field = DomainWarp(p, t, warpQ);
 
-                // ── 数字化透视扫描网格 (Neuromancer Lattice) ──
-                float3 gridLines = abs(frac(dir * _GridDensity * 0.5) - 0.5) / fwidth(dir * _GridDensity * 0.5);
-                float lattice = 1.0 - min(min(gridLines.x, gridLines.y), gridLines.z);
-                lattice = saturate(lattice * 0.08) * (1.0 - _CombatMode * 0.4); // 战斗时线框破碎
+                // Colour the ribbons: cool→warm by the field, rare signal flares.
+                half3 neb = lerp(_NebulaA.rgb, _NebulaB.rgb, smoothstep(0.30, 0.70, field));
+                neb = lerp(neb, _NebulaC.rgb, smoothstep(0.70, 0.97, warpQ.x));
+                neb *= (0.7 + warpQ.y * 0.8);          // internal brightness variation
 
-                // ── 音乐超载脉冲 (Core Overload) ──
-                float intensity = 0.5 + _MusicIntensity * 0.5;
-                half3 bgCol = _MatrixBgColor.rgb * (1.0 + _BeatPulse * 2.0 * intensity);
-                
-                // 激烈战斗时背景反转为刺眼的死机灰白，随后被数据吞噬
-                bgCol = lerp(bgCol, half3(0.08, 0.1, 0.15), _CombatMode);
+                float ribbon = pow(smoothstep(0.35, 0.9, field), 1.6) * (0.5 + 0.5 * warpQ.z);
+                col += neb * ribbon * _Intensity;          // full-sphere aurora (top & bottom)
 
-                half3 result = bgCol + finalCodeNet * (1.0 + _BeatPulse * 1.2) + _CodeColor.rgb * lattice;
+                // ── Sparse star field (full sphere) ─────────────────────────────
+                float3 sp = floor(dir * 220.0);
+                float  sh = Hash3(sp);
+                float  star = smoothstep(0.998 - _StarDensity * 0.01, 1.0, sh);
+                float  tw   = 0.6 + 0.4 * sin(t * 6.0 + sh * 40.0);     // twinkle
+                col += _StarColor.rgb * star * tw;
 
-                // ── 全局系统损坏滤镜 (System Corrupted/Damage Pass) ──
-                // 区别于传统的血红，这里将画面转为极具数码感的“硬件过载致命红”
-                float finalLuma = dot(result, float3(0.299, 0.587, 0.114));
-                half3 corruptedPalette = half3(finalLuma * 1.8, result.g * 0.02, result.b * 0.05);
-                result = lerp(result, corruptedPalette, _DamageTint);
+                // ── Slow hue breathing ──────────────────────────────────────────
+                col = lerp(col, HsvShift(col, sin(t * 0.5) * _HueDrift), 0.6);
 
-                return half4(result, 1.0);
+                return half4(col, 1.0);
             }
             ENDHLSL
         }

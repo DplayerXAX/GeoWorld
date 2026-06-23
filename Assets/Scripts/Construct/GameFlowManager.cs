@@ -73,6 +73,7 @@ public class GameFlowManager : MonoBehaviour
     public int  ActiveLoopCount         => loopingUnits.Count;
     public int  RunsSinceLastEndpoint   => _runsSinceLastEndpoint;
     public int  RoundIndex              => roundIndex;
+    public int  WavesCleared            => _wavesCompleted;
     public IReadOnlyList<Vector3Int> AllStarts => allStarts;
     public IReadOnlyList<Vector3Int> AllEnds   => allEnds;
 
@@ -145,7 +146,8 @@ public class GameFlowManager : MonoBehaviour
 
         if (RunConfig.Mode == GameMode.Level && RunConfig.Level != null
             && RunConfig.Level.wavesToClear > 0
-            && _wavesCompleted >= RunConfig.Level.wavesToClear)
+            && _wavesCompleted >= RunConfig.Level.wavesToClear
+            && (!RunConfig.Level.requireAllObjectives || LevelObjectivesTracker.AllRequiredSatisfied))
         {
             SaveSystem.RecordClear(RunConfig.Level, _wavesCompleted);
             ReturnToMap();

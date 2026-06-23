@@ -27,6 +27,16 @@ public partial class PlacementController : MonoBehaviour
     public static event System.Action<BlockData, Vector3Int[]> BlockPlaced;
     // Fired when the held block is rotated (tutorial 'rotate' step).
     public static event System.Action BlockRotated;
+    // Fired when a block is grabbed (bought) from the shop.
+    public static event System.Action<BlockData> BlockPurchased;
+    // Fired when the player selects (clicks) a placed block.
+    public static event System.Action<BlockData> BlockSelected;
+    // Fired when the selected block is sold.
+    public static event System.Action<BlockData> BlockSold;
+    // Fired when the shop is successfully refreshed.
+    public static event System.Action ShopRefreshed;
+    // Fired when a selected turret is successfully upgraded.
+    public static event System.Action TurretUpgraded;
     public Vector3Int SnappedGridPos => baseGridPos;
     public Vector3Int CurrentGridPos => currentGridPos;
     [Range(0.5f, 4f)] public float snapGridRadius = 1.5f;
@@ -243,6 +253,7 @@ public partial class PlacementController : MonoBehaviour
         shop.ClearItems();
         SpawnRoundBlocks(gfm.blocksPerTurn, gfm.turretsPerTurn);
 
+        ShopRefreshed?.Invoke();
         return true;
     }
     void OnGUI()
@@ -368,7 +379,7 @@ public partial class PlacementController : MonoBehaviour
 
     void Update()
     {
-        if (SettingsScreen.Open) return;   // settings overlay is modal — block placement input
+        if (SettingsScreen.Open || IntroDirector.Playing) return;   // modal overlay / intro — block placement input
 
         _currentRotation = Quaternion.Slerp(
             _currentRotation,
@@ -745,6 +756,7 @@ public partial class PlacementController : MonoBehaviour
         {
             selectedInstance    = instance;
             _selectedEndpoint   = null;
+            BlockSelected?.Invoke(instance.data);
             currentBlock        = instance.data;
             currentSynergyColor = instance.color;
             // Re-derive tint from synergy color when present keeps placed
@@ -813,7 +825,7 @@ public partial class PlacementController : MonoBehaviour
                     break;
                 }
             }
-            if (outlineMat == null) continue;
+            if (outlineMat == null || !outlineMat.HasProperty(_OutlineColorID)) continue;
 
             r.GetPropertyBlock(_highlightMpb);
             var color = restoreDefault
@@ -858,6 +870,7 @@ public partial class PlacementController : MonoBehaviour
 
         string branch = path == BasicTurretUpgradePath.Power ? "Power" : "Burst";
         ShowPlacementPopup($"{branch} upgraded");
+        TurretUpgraded?.Invoke();
     }
 
     void TryUpgradeSelectedAoeTurret(AoeTurretUpgradePath path)
@@ -880,6 +893,7 @@ public partial class PlacementController : MonoBehaviour
 
         string branch = path == AoeTurretUpgradePath.Fire ? "Fire" : "Gravity";
         ShowPlacementPopup($"{branch} upgraded");
+        TurretUpgraded?.Invoke();
     }
 
     // Removes the selected block and refunds part of its value to the matching
@@ -915,6 +929,7 @@ public partial class PlacementController : MonoBehaviour
 
         GameFlowManager.Instance?.EvaluateGrid();
         ShowPlacementPopup($"Sold for +{refund}");
+        BlockSold?.Invoke(ins.data);
     }
 
     // =========================
@@ -1508,6 +1523,7 @@ public partial class PlacementController : MonoBehaviour
             return;
         }
 
+        BlockPurchased?.Invoke(sb.data);
         currentBlock        = sb.data;
         currentSynergyColor = sb.color;
         currentColor        = sb.color != BlockColor.None

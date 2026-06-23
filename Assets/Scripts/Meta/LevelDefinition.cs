@@ -26,6 +26,12 @@ public class LevelDefinition : ScriptableObject
     [Tooltip("Waves the player must survive to clear the level. 0 = endless within this level.")]
     [Min(0)] public int wavesToClear = 5;
 
+    [Header("Objectives (shown top-left; tracked by LevelObjectivesTracker)")]
+    [Tooltip("Special goals for this level. Non-optional ones can gate the clear if requireAllObjectives is on.")]
+    public List<LevelObjective> objectives = new();
+    [Tooltip("If on, ALL non-optional objectives must be satisfied (in addition to wavesToClear) to count as cleared.")]
+    public bool requireAllObjectives = false;
+
     [Header("Progression")]
     [Tooltip("This level starts unlocked (e.g. the first level).")]
     public bool unlockedByDefault;
@@ -47,11 +53,57 @@ public class LevelDefinition : ScriptableObject
     public List<TutorialStep> tutorialSteps = new();
 }
 
+// ── Special objectives ──────────────────────────────────────────────────────
+public enum ObjectiveType
+{
+    ClearWaves,         // clear `target` waves
+    ReachWave,          // reach wave number `target`
+    KillEnemies,        // defeat `target` enemies
+    PlaceBlocks,        // place `target` blocks
+    ActivateSynergies,  // have `target` synergies active at the same time
+    LimitLeaks,         // let AT MOST `target` enemies reach the end (fails if exceeded)
+    KeepLivesAtLeast,   // finish with AT LEAST `target` lives
+}
+
+[System.Serializable]
+public class LevelObjective
+{
+    public ObjectiveType type = ObjectiveType.ClearWaves;
+    [Min(0)] public int target = 1;
+    [Tooltip("Shown text. Leave empty to auto-generate from the type + target.")]
+    public string description;
+    [Tooltip("Bonus objective — never blocks the clear, just shown as extra.")]
+    public bool optional;
+
+    public string AutoText() => type switch
+    {
+        ObjectiveType.ClearWaves        => $"Clear {target} waves",
+        ObjectiveType.ReachWave         => $"Reach wave {target}",
+        ObjectiveType.KillEnemies       => $"Defeat {target} enemies",
+        ObjectiveType.PlaceBlocks       => $"Place {target} blocks",
+        ObjectiveType.ActivateSynergies => $"Activate {target} synergies at once",
+        ObjectiveType.LimitLeaks        => $"Let through at most {target}",
+        ObjectiveType.KeepLivesAtLeast  => $"Finish with {target}+ lives",
+        _                               => "",
+    };
+
+    public string Label => string.IsNullOrEmpty(description) ? AutoText() : description;
+    public bool IsLimit => type == ObjectiveType.LimitLeaks || type == ObjectiveType.KeepLivesAtLeast;
+}
+
 public enum TutorialStepKind
 {
-    Place,    // place a block so it covers `cells` (shape + position)
-    Rotate,   // wait for the player to rotate the held block
-    Run,      // wait for the player to start the wave (combat begins)
+    Place,      // place a block so it covers `cells` (shape + position)
+    Rotate,     // wait for the player to rotate the held block
+    Run,        // wait for the player to start the wave (combat begins)
+    Wait,       // show the hint; auto-advance after waitSeconds (0 = wait for a click)
+    FreePlace,  // free placement (no ghost); advance after `count` blocks placed anywhere
+    Input,      // wait for the player to press `inputKey` (e.g. W / Q / 1 / Space / Mouse0)
+    Purchase,   // wait for the player to buy a block from the shop (optionally a specific `block`)
+    Select,     // wait for the player to click/select a placed block (optionally a specific `block`)
+    Sell,       // wait for the player to sell a block
+    Refresh,    // wait for the player to refresh the shop
+    Upgrade,    // wait for the player to upgrade a turret
 }
 
 // One tutorial step. For Place: the player must place `block` at `origin` — the
@@ -71,6 +123,14 @@ public class TutorialStep
     public Vector3Int rotation90;
     [Tooltip("Advanced: explicit absolute cells; overrides block+origin+rotation when set.")]
     public Vector3Int[] cellsOverride;
+
+    [Header("Wait / FreePlace step")]
+    [Tooltip("Wait step: auto-advance after this many seconds. 0 = wait for a click.")]
+    public float waitSeconds = 0f;
+    [Tooltip("FreePlace step: how many blocks the player must place (anywhere) to advance.")]
+    [Min(1)] public int count = 1;
+    [Tooltip("Input step: the key the player must press to advance (e.g. W, Q, Alpha1, Space, Mouse0).")]
+    public KeyCode inputKey = KeyCode.Space;
 
     [TextArea] public string hint;
 
