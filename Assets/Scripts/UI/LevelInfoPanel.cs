@@ -15,19 +15,28 @@ public class LevelInfoPanel : MonoBehaviour
     public float bodySize   = 20f;
     public float buttonSize = 22f;
 
-    [Header("Colors")]
-    public Color panelColor      = new Color(0.949f, 0.937f, 0.902f, 0.96f);  // paper
-    public Color titleColor      = new Color(0.086f, 0.086f, 0.086f);          // ink
-    public Color bodyColor       = new Color(0.30f, 0.30f, 0.30f);
-    public Color accentColor     = new Color(0.886f, 0.141f, 0.106f);          // signal
-    public Color buttonColor     = new Color(0.086f, 0.086f, 0.086f);
-    public Color buttonTextColor = new Color(0.949f, 0.937f, 0.902f);
+    [Header("Use your existing panel (UI Image) — drag its RectTransform here")]
+    [Tooltip("If set, the level info is laid out INTO this existing panel (its art stays; only the text fades). Leave null to auto-build a panel.")]
+    public RectTransform targetPanel;
+
+    [Header("Background (auto-build only; null = rounded paper)")]
+    public Sprite panelSprite;
+
+    [Header("Colors (defaults tuned for a dark panel)")]
+    public Color panelColor      = new Color(0.949f, 0.937f, 0.902f, 0.96f);  // used only when no sprite
+    public Color titleColor      = new Color(0.96f, 0.96f, 0.96f);             // light
+    public Color bodyColor       = new Color(0.80f, 0.80f, 0.82f);
+    public Color accentColor     = new Color(0.910f, 0.698f, 0.227f);          // gold rule / status
+    public Color buttonColor     = new Color(0.949f, 0.937f, 0.902f);          // paper button
+    public Color buttonTextColor = new Color(0.086f, 0.086f, 0.086f);          // ink label
 
     [Header("Layout")]
-    public float width        = 460f;
-    public float rightMargin  = 60f;
-    public int   cornerRadius = 26;
-    public float fadeSpeed    = 12f;
+    [Tooltip("Fixed panel size (match your right-panel art). x = width, y = height.")]
+    public Vector2 panelSize   = new Vector2(420f, 700f);
+    public float rightMargin   = 60f;
+    public Vector2 contentPad  = new Vector2(36f, 40f);   // inner padding (x sides, y top/bottom)
+    public int   cornerRadius  = 26;
+    public float fadeSpeed     = 12f;
 
     CanvasGroup _cg;
     TMP_Text    _title, _status, _best, _desc, _enterLabel;
@@ -71,47 +80,82 @@ public class LevelInfoPanel : MonoBehaviour
     // ── Build ──────────────────────────────────────────────────────────────────
     void BuildUI()
     {
-        var canvasGO = new GameObject("LevelInfoCanvas", typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster));
-        canvasGO.transform.SetParent(transform, false);
-        var canvas = canvasGO.GetComponent<Canvas>();
-        canvas.renderMode  = RenderMode.ScreenSpaceOverlay;
-        canvas.sortingOrder = 80;
-        var sc = canvasGO.GetComponent<CanvasScaler>();
-        sc.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-        sc.referenceResolution = new Vector2(1920f, 1080f);
-        sc.matchWidthOrHeight = 1f;
-
         EnsureEventSystem();
+        RectTransform content;
 
-        var panel = NewRect("Panel", canvasGO.transform);
-        panel.anchorMin = panel.anchorMax = new Vector2(1f, 0.5f);   // right-centre
-        panel.pivot = new Vector2(1f, 0.5f);
-        panel.anchoredPosition = new Vector2(-rightMargin, 0f);
-        panel.sizeDelta = new Vector2(width, 100f);
-        _cg = panel.gameObject.AddComponent<CanvasGroup>();
-        _cg.alpha = 0f;
+        if (targetPanel != null)
+        {
+            // Lay the text into your existing panel (a child container so we don't
+            // disturb the panel's own children; only this content fades).
+            content = NewRect("LevelInfoContent", targetPanel);
+            content.anchorMin = Vector2.zero; content.anchorMax = Vector2.one;
+            content.offsetMin = new Vector2(contentPad.x, contentPad.y);
+            content.offsetMax = new Vector2(-contentPad.x, -contentPad.y);
+            _cg = content.gameObject.AddComponent<CanvasGroup>();
+            _cg.alpha = 0f;
+            AddLayout(content, 0);
+        }
+        else
+        {
+            var panel = NewRect("LevelInfoPanel", transform);
 
-        var bg = panel.gameObject.AddComponent<Image>();
-        bg.color = panelColor;
-        bg.sprite = UIRoundedRect.Get(cornerRadius);
-        bg.type   = Image.Type.Sliced;
+            panel.anchorMin = panel.anchorMax = new Vector2(1f, 0.5f);
+            panel.pivot = new Vector2(1f, 0.5f);
+            panel.anchoredPosition = new Vector2(-rightMargin, 0f);
+            panel.sizeDelta = panelSize;
 
-        var vlg = panel.gameObject.AddComponent<VerticalLayoutGroup>();
-        vlg.padding = new RectOffset(28, 28, 24, 24);
+            _cg = panel.gameObject.AddComponent<CanvasGroup>();
+            _cg.alpha = 0f;
+
+            var bg = panel.gameObject.AddComponent<Image>();
+
+            if (panelSprite != null)
+            {
+                bg.sprite = panelSprite;
+                bg.type = panelSprite.border != Vector4.zero
+                    ? Image.Type.Sliced
+                    : Image.Type.Simple;
+                bg.color = Color.white;
+            }
+            else
+            {
+                bg.sprite = UIRoundedRect.Get(cornerRadius);
+                bg.type = Image.Type.Sliced;
+                bg.color = panelColor;
+            }
+
+            content = NewRect("Content", panel);
+            content.anchorMin = Vector2.zero;
+            content.anchorMax = Vector2.one;
+            content.offsetMin = new Vector2(contentPad.x, contentPad.y);
+            content.offsetMax = new Vector2(-contentPad.x, -contentPad.y);
+
+            AddLayout(content, 0);
+        }
+
+        BuildContent(content);
+    }
+
+    void AddLayout(RectTransform parent, int padX, int padY = -1)
+    {
+        if (padY < 0) padY = padX;
+        var vlg = parent.gameObject.AddComponent<VerticalLayoutGroup>();
+        vlg.padding = new RectOffset(padX, padX, padY, padY);
         vlg.spacing = 12f;
+        vlg.childAlignment = TextAnchor.UpperLeft;
         vlg.childControlWidth = vlg.childControlHeight = true;
         vlg.childForceExpandWidth = true; vlg.childForceExpandHeight = false;
-        var fit = panel.gameObject.AddComponent<ContentSizeFitter>();
-        fit.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+    }
 
-        _title  = NewText("Title",  panel, titleSize, titleColor, FontStyles.Bold,   TextAlignmentOptions.TopLeft, false);
-        AddRule(panel);
-        _status = NewText("Status", panel, bodySize,  accentColor, FontStyles.Bold,  TextAlignmentOptions.TopLeft, false);
-        _best   = NewText("Best",   panel, bodySize,  bodyColor,  FontStyles.Normal, TextAlignmentOptions.TopLeft, false);
-        _desc   = NewText("Desc",   panel, bodySize,  bodyColor,  FontStyles.Normal, TextAlignmentOptions.TopLeft, true);
+    void BuildContent(RectTransform parent)
+    {
+        _title  = NewText("Title",  parent, titleSize, titleColor, FontStyles.Bold,   TextAlignmentOptions.TopLeft, false);
+        AddRule(parent);
+        _status = NewText("Status", parent, bodySize,  accentColor, FontStyles.Bold,  TextAlignmentOptions.TopLeft, false);
+        _best   = NewText("Best",   parent, bodySize,  bodyColor,  FontStyles.Normal, TextAlignmentOptions.TopLeft, false);
+        _desc   = NewText("Desc",   parent, bodySize,  bodyColor,  FontStyles.Normal, TextAlignmentOptions.TopLeft, true);
 
-        // Enter button.
-        var brt = NewRect("Enter", panel);
+        var brt = NewRect("Enter", parent);
         var img = brt.gameObject.AddComponent<Image>();
         img.color = buttonColor;
         _enter = brt.gameObject.AddComponent<Button>();

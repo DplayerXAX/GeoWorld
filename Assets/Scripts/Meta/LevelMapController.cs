@@ -125,7 +125,7 @@ public class LevelMapController : MonoBehaviour
         if (_orbit != null)
         {
             _orbit.focusViewport = new Vector2(focusViewportX, focusViewportY);
-            _orbit.FocusOnPoint(worldPoint);
+            _orbit.FocusOnPoint(worldPoint, snap: false);   // glide to the clicked cell
         }
     }
 

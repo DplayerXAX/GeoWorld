@@ -36,6 +36,8 @@ public class EnemySurfaceUnit : MonoBehaviour
     // face). Null before the first step. Used by area synergies (e.g. Order
     // slow) to test whether the enemy is standing on the synergy.
     public Vector3Int? CurrentCell => _prevNode?.cell;
+    // Normal of the face the enemy is currently on (for re-pathing on grid changes).
+    public Vector3? CurrentNormal => _prevNode != null ? _prevNode.normal : (Vector3?)null;
 
     List<FaceNode> _path;
     int _index;

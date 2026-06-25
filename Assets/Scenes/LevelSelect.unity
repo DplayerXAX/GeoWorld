@@ -299,14 +299,17 @@ MonoBehaviour:
   titleSize: 34
   bodySize: 20
   buttonSize: 22
+  targetPanel: {fileID: 0}
+  panelSprite: {fileID: 0}
   panelColor: {r: 0.949, g: 0.937, b: 0.902, a: 0.96}
   titleColor: {r: 0.086, g: 0.086, b: 0.086, a: 1}
   bodyColor: {r: 0.3, g: 0.3, b: 0.3, a: 1}
   accentColor: {r: 0.886, g: 0.141, b: 0.106, a: 1}
   buttonColor: {r: 0.086, g: 0.086, b: 0.086, a: 1}
   buttonTextColor: {r: 0.949, g: 0.937, b: 0.902, a: 1}
-  width: 460
+  panelSize: {x: 420, y: 700}
   rightMargin: 60
+  contentPad: {x: 36, y: 40}
   cornerRadius: 26
   fadeSpeed: 12
 --- !u!225 &303145626

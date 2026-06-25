@@ -39,18 +39,81 @@ MonoBehaviour:
   techReward: 1
   isTutorial: 1
   fixedEndpoints: 1
-  startCell: {x: 0, y: 0, z: 0}
+  startCell: {x: 1, y: 0, z: 0}
   endCell: {x: 3, y: 0, z: 3}
   tutorialSteps:
-  - kind: 3
+  - kind: 5
     block: {fileID: 11400000, guid: eb476e18de9d37e4dbc97c8247017e54, type: 2}
     origin: {x: 1, y: 0, z: 1}
     rotation90: {x: 1, y: 0, z: 0}
     cellsOverride: []
     waitSeconds: 1
     count: 1
-    inputKey: 32
-    hint: Welcome fellas
+    inputKey: 323
+    freeOperations: 0
+    cameraFocus: 0
+    focusZoom: 0
+    hint: Welcome god, please help us defend chaos
+  - kind: 5
+    block: {fileID: 11400000, guid: 3bcfeb02226d44d49a6df82d6c36a1a7, type: 2}
+    origin: {x: 1, y: 1, z: 1}
+    rotation90: {x: 1, y: 0, z: 0}
+    cellsOverride: []
+    waitSeconds: 2
+    count: 1
+    inputKey: 323
+    freeOperations: 0
+    cameraFocus: 1
+    focusZoom: 3
+    hint: Enemy is spawning from this portal, trying to break and destroy our order.
+  - kind: 5
+    block: {fileID: 11400000, guid: 3bcfeb02226d44d49a6df82d6c36a1a7, type: 2}
+    origin: {x: 1, y: 1, z: 1}
+    rotation90: {x: 1, y: 0, z: 0}
+    cellsOverride: []
+    waitSeconds: 2
+    count: 1
+    inputKey: 323
+    freeOperations: 0
+    cameraFocus: 2
+    focusZoom: 3
+    hint: This is our core, we need to prevent enemies from entering it.
+  - kind: 5
+    block: {fileID: 11400000, guid: 3bcfeb02226d44d49a6df82d6c36a1a7, type: 2}
+    origin: {x: 1, y: 1, z: 1}
+    rotation90: {x: 1, y: 0, z: 0}
+    cellsOverride: []
+    waitSeconds: 2
+    count: 1
+    inputKey: 323
+    freeOperations: 0
+    cameraFocus: 1
+    focusZoom: 10
+    hint: We build our path to misguide enemies
+  - kind: 5
+    block: {fileID: 11400000, guid: 3bcfeb02226d44d49a6df82d6c36a1a7, type: 2}
+    origin: {x: 1, y: 1, z: 1}
+    rotation90: {x: 1, y: 0, z: 0}
+    cellsOverride: []
+    waitSeconds: 2
+    count: 1
+    inputKey: 323
+    freeOperations: 0
+    cameraFocus: 0
+    focusZoom: 0
+    hint: We use blocks to build path, and turret to attack enemies
+  - kind: 5
+    block: {fileID: 11400000, guid: 3bcfeb02226d44d49a6df82d6c36a1a7, type: 2}
+    origin: {x: 1, y: 1, z: 1}
+    rotation90: {x: 1, y: 0, z: 0}
+    cellsOverride: []
+    waitSeconds: 2
+    count: 1
+    inputKey: 102
+    freeOperations: 0
+    cameraFocus: 0
+    focusZoom: 0
+    hint: Press F to open store
   - kind: 6
     block: {fileID: 11400000, guid: eb476e18de9d37e4dbc97c8247017e54, type: 2}
     origin: {x: 1, y: 0, z: 1}
@@ -59,7 +122,10 @@ MonoBehaviour:
     waitSeconds: 0
     count: 1
     inputKey: 32
-    hint: Retrieve a L-shape block from the panel
+    freeOperations: 0
+    cameraFocus: 0
+    focusZoom: 0
+    hint: Purchase the L-shape block from the panel
   - kind: 0
     block: {fileID: 11400000, guid: eb476e18de9d37e4dbc97c8247017e54, type: 2}
     origin: {x: 1, y: 0, z: 1}
@@ -68,33 +134,58 @@ MonoBehaviour:
     waitSeconds: 0
     count: 1
     inputKey: 32
-    hint: Place the block on the white area
-  - kind: 3
+    freeOperations: 0
+    cameraFocus: 0
+    focusZoom: 0
+    hint: Place the block on the white area, Connecting the portal and the core
+  - kind: 5
     block: {fileID: 11400000, guid: eb476e18de9d37e4dbc97c8247017e54, type: 2}
     origin: {x: 1, y: 0, z: 1}
     rotation90: {x: 1, y: 0, z: 0}
     cellsOverride: []
     waitSeconds: 2
     count: 1
+    inputKey: 323
+    freeOperations: 0
+    cameraFocus: 0
+    focusZoom: 0
+    hint: After they are connected, enemies tend to move towards core through shortest
+      path
+  - kind: 8
+    block: {fileID: 0}
+    origin: {x: 0, y: 0, z: 1}
+    rotation90: {x: 1, y: 0, z: 0}
+    cellsOverride: []
+    waitSeconds: 2
+    count: 1
     inputKey: 32
-    hint: Connect start point and end point generate path for enemy
+    freeOperations: 1
+    cameraFocus: 0
+    focusZoom: 0
+    hint: Now try to purchase a turret for denfense
   - kind: 0
     block: {fileID: 11400000, guid: 3bcfeb02226d44d49a6df82d6c36a1a7, type: 2}
+    origin: {x: 0, y: 1, z: 1}
+    rotation90: {x: 1, y: 0, z: 0}
+    cellsOverride: []
+    waitSeconds: 2
+    count: 1
+    inputKey: 32
+    freeOperations: 0
+    cameraFocus: 0
+    focusZoom: 0
+    hint: After placed on the block, turrets would attack enemies in range
+  - kind: 9
+    block: {fileID: 0}
     origin: {x: 1, y: 1, z: 1}
     rotation90: {x: 1, y: 0, z: 0}
     cellsOverride: []
     waitSeconds: 2
     count: 1
     inputKey: 32
-    hint: 'Place an turret to defense your endpoint '
-  - kind: 7
-    block: {fileID: 11400000, guid: 3bcfeb02226d44d49a6df82d6c36a1a7, type: 2}
-    origin: {x: 1, y: 1, z: 1}
-    rotation90: {x: 1, y: 0, z: 0}
-    cellsOverride: []
-    waitSeconds: 2
-    count: 1
-    inputKey: 32
+    freeOperations: 0
+    cameraFocus: 0
+    focusZoom: 0
     hint: Click any placed items for detail
   - kind: 2
     block: {fileID: 11400000, guid: 3bcfeb02226d44d49a6df82d6c36a1a7, type: 2}
@@ -104,4 +195,8 @@ MonoBehaviour:
     waitSeconds: 2
     count: 1
     inputKey: 32
-    hint: Press space to start a wave
+    freeOperations: 1
+    cameraFocus: 0
+    focusZoom: 0
+    hint: After finish editing for the round, Press space to start wave, trying to
+      defeat all the enemies
