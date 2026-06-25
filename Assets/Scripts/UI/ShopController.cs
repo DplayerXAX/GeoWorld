@@ -242,6 +242,8 @@ public class ShopController : MonoBehaviour
     // ── Shop screen anchors (GUI coords) for HUD elements that dock to the rift ──
     public bool    ShopVisible   => _riftScale > 0.1f;
     public bool    IsExpanded    => _expanded;
+    // Current top letterbox-bar height in pixels (0 when not in letterbox / collapsed).
+    public float   TopBarHeight  => letterbox ? Screen.height * barHeight * _riftScale : 0f;
     public Vector2 ShopTopCenter => new Vector2(_riftScreenCenter.x,
                                                 _riftScreenCenter.y - _riftSizeY * _riftScale);
     public Vector2 ShopTopRight  => new Vector2(_riftScreenCenter.x + _riftSizeX,
@@ -410,10 +412,10 @@ public class ShopController : MonoBehaviour
     void HandleToggleKey()
     {
         if (!Input.GetKeyDown(shopToggleKey)) return;
-        var phase = GameFlowManager.Instance?.phase;
-        Debug.Log($"[Shop] {shopToggleKey} | phase={phase} | expanded={_expanded}");
-        if (phase == GamePhase.Running) { Debug.Log("[Shop] blocked combat."); return; }
-        _expanded = !_expanded;
+        // Toggle off what the player actually SEES, not a possibly-stale _expanded
+        // (grab/Collapse/RestoreItem/combat paths can desync it → a press did nothing).
+        bool visiblyOpen = _riftScale > 0.5f;
+        _expanded = !visiblyOpen;   // openable during combat too (buy / place new pieces)
     }
 
     public void Collapse()      => _expanded = false;
@@ -487,9 +489,8 @@ public class ShopController : MonoBehaviour
 
     void AnimateRift()
     {
-        bool combat = GameFlowManager.Instance?.phase == GamePhase.Running;
-        _riftTarget = combat ? 0f
-                    : letterbox ? (_expanded ? 1f : 0f)        // bars: fully out / fully hidden
+        // Shop can open during combat too (buy / place new pieces), so no combat gate.
+        _riftTarget = letterbox ? (_expanded ? 1f : 0f)        // bars: fully out / fully hidden
                                 : (_expanded ? 0.6f : riftHintScale);
 
         float t    = 1f - Mathf.Exp(-expandSpeed * Time.deltaTime);
@@ -498,7 +499,7 @@ public class ShopController : MonoBehaviour
                              _expanded ? cameraOffsetLarge : cameraOffsetSmall, t);
 
         // Track expanded-ness for screen-position offset interpolation.
-        float expandTarget = (combat || !_expanded) ? 0f : 1f;
+        float expandTarget = _expanded ? 1f : 0f;
         _expandT = Mathf.Lerp(_expandT, expandTarget, t);
     }
 
@@ -800,6 +801,13 @@ public class ShopController : MonoBehaviour
             return true;                // consume click, stay in shop
         }
 
+        // Tutorial: block buying the wrong item (flash, stay in shop, item kept).
+        if (!TutorialDirector.CanPurchase(_hovered.sb.data))
+        {
+            _cantAffordFlash = 0.55f;
+            return true;
+        }
+
         // Hide the item while held RestoreItem re-shows it on cancel.
         _hovered.root.SetActive(false);
         PlacementController.Instance?.GrabFromShop(_hovered.sb);
@@ -1057,8 +1065,6 @@ public class ShopController : MonoBehaviour
     // bottom-right corner. Clicking it opens the shop. Hidden during combat.
     void DrawShopOpenButton()
     {
-        if (GameFlowManager.Instance != null && GameFlowManager.Instance.phase == GamePhase.Running) return;
-
         float s = Mathf.Max(0.5f, Screen.height / 1080f);
         float d = refreshButtonSize * s;
         Vector2 br = ShopBottomRight;   // bottom-right corner (Screen.width, Screen.height) when collapsed
@@ -1479,7 +1485,19 @@ public class ShopController : MonoBehaviour
         var rm = ResourceManager.Instance;
         if (rm == null || shopCam == null) return;
 
-        const float w = 64f, h = 18f;
+        // Size everything EXPLICITLY here. `_ttSub` is a shared GUIStyle that
+        // DrawTooltip mutates (fontSize = 9 × tooltipScale), so price tags were
+        // stuck at the small base size 9 until the player hovered an item once —
+        // which is why the floating price "sometimes" showed small instead of max.
+        float ts = Mathf.Max(0.5f, tooltipScale);
+        float k  = ts * 0.5f;                 // 1.0 at the default tooltipScale (= 2)
+        float w  = 64f * k, h = 18f * k;
+        int   prevFs   = _ttSub.fontSize;
+        var   prevCol0 = _ttSub.normal.textColor;
+        var   prevAlgn = _ttSub.alignment;
+        _ttSub.fontSize  = Mathf.RoundToInt(9f * ts);
+        _ttSub.alignment = TextAnchor.MiddleCenter;
+
         foreach (var item in _items)
         {
             if (item.root == null || item.sb?.data == null) continue;
@@ -1496,20 +1514,19 @@ public class ShopController : MonoBehaviour
             Color     col    = afford ? new Color(0.55f, 1f, 0.60f, 1f)
                                        : new Color(1f,    0.45f, 0.45f, 1f);
 
-            var rect = new Rect(screenPos.x - w * 0.5f, screenPos.y - 34f, w, h);
+            var rect = new Rect(screenPos.x - w * 0.5f, screenPos.y - 34f * k, w, h);
 
             GUI.color = new Color(0f, 0f, 0f, 0.60f);
             GUI.DrawTexture(rect, Texture2D.whiteTexture);
             GUI.color = Color.white;
 
-            var prevCol  = _ttSub.normal.textColor;
-            var prevAlgn = _ttSub.alignment;
             _ttSub.normal.textColor = col;
-            _ttSub.alignment        = TextAnchor.MiddleCenter;
             GUI.Label(rect, $"{price}¤{sfx}", _ttSub);
-            _ttSub.normal.textColor = prevCol;
-            _ttSub.alignment        = prevAlgn;
         }
+
+        _ttSub.fontSize         = prevFs;
+        _ttSub.normal.textColor = prevCol0;
+        _ttSub.alignment        = prevAlgn;
     }
 
     // Forward map: shop camera viewport (0..1) screen position inside rift polygon.

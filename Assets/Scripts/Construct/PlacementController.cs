@@ -238,6 +238,8 @@ public partial class PlacementController : MonoBehaviour
         // Validate every dependency BEFORE charging. If we charged first and
         // then bailed on a null manager, the player would lose currency for a
         // refresh that never happened.
+        if (!TutorialDirector.CanRefresh()) return false;   // tutorial gate
+
         var rm   = ResourceManager.Instance;
         var gfm  = GameFlowManager.Instance;
         var shop = ShopController.Instance;
@@ -618,11 +620,10 @@ public partial class PlacementController : MonoBehaviour
         if (selectedInstance == null || selectedInstance.visualObject == null)
             return false;
 
-        // Non-turret blocks are locked during combat.
-        if (GameFlowManager.Instance?.phase == GamePhase.Running
-            && !TurretTypes.Is(selectedInstance.data?.blockType ?? BlockType.Empty))
+        // Editing PLACED objects (pick up / move) is locked during combat.
+        if (GameFlowManager.Instance?.phase == GamePhase.Running)
         {
-            Debug.Log("[Placement] Block editing locked during combat.");
+            Debug.Log("[Placement] Editing placed objects is locked during combat.");
             return false;
         }
 
@@ -852,6 +853,7 @@ public partial class PlacementController : MonoBehaviour
 
     void TryUpgradeSelectedBasicTurret(BasicTurretUpgradePath path)
     {
+        if (!TutorialDirector.CanUpgrade()) return;   // tutorial gate
         var ins = selectedInstance;
         var turret = ins?.visualObject != null
             ? ins.visualObject.GetComponentInChildren<TurretController>()
@@ -875,6 +877,7 @@ public partial class PlacementController : MonoBehaviour
 
     void TryUpgradeSelectedAoeTurret(AoeTurretUpgradePath path)
     {
+        if (!TutorialDirector.CanUpgrade()) return;   // tutorial gate
         var ins = selectedInstance;
         var turret = ins?.visualObject != null
             ? ins.visualObject.GetComponentInChildren<TurretController>()
@@ -906,12 +909,13 @@ public partial class PlacementController : MonoBehaviour
 
         bool isTurret = TurretTypes.Is(ins.data.blockType);
 
-        // Phase gate — same rule as pickup / delete (non-turrets combat-locked).
-        if (GameFlowManager.Instance?.phase == GamePhase.Running && !isTurret)
+        // Selling a PLACED object is locked during combat.
+        if (GameFlowManager.Instance?.phase == GamePhase.Running)
         {
-            Debug.Log("[Placement] Block selling locked during combat.");
+            Debug.Log("[Placement] Selling is locked during combat.");
             return;
         }
+        if (!TutorialDirector.CanSell()) return;   // tutorial gate
 
         int refund = ComputeSellRefund(ins);
 
@@ -975,14 +979,15 @@ public partial class PlacementController : MonoBehaviour
         var  gfm       = GameFlowManager.Instance;
         bool inRunning = gfm != null && gfm.phase == GamePhase.Running;
         bool isTurret  = TurretTypes.Is(currentBlock.blockType);
-        if (inRunning && !isTurret)
+        // In combat you may place NEW blocks/turrets (but not reposition existing),
+        // as long as it doesn't fully wall off the path — blocked enemies re-route.
+        if (inRunning)
         {
-            ShowPlacementPopup(ReasonToMessage(PlaceFailureReason.CombatLocked));
-            return;
-        }
-
-        if (inRunning && isTurret)
-        {
+            if (isPickingUpObject)   // repositioning an existing piece is a "modify" → locked
+            {
+                ShowPlacementPopup(ReasonToMessage(PlaceFailureReason.CombatLocked));
+                return;
+            }
             var worldCells = new Vector3Int[cells.Length];
             for (int i = 0; i < cells.Length; i++)
                 worldCells[i] = currentGridPos + cells[i];
@@ -1310,11 +1315,10 @@ public partial class PlacementController : MonoBehaviour
     {
         if (selectedInstance == null) return;
 
-        // Phase gate same rule as picking up a block.
-        if (GameFlowManager.Instance?.phase == GamePhase.Running
-            && !TurretTypes.Is(selectedInstance.data?.blockType ?? BlockType.Empty))
+        // Deleting a PLACED object is locked during combat.
+        if (GameFlowManager.Instance?.phase == GamePhase.Running)
         {
-            Debug.Log("[Placement] Block deletion locked during combat.");
+            Debug.Log("[Placement] Deletion is locked during combat.");
             return;
         }
 
@@ -1515,11 +1519,11 @@ public partial class PlacementController : MonoBehaviour
     {
         if (sb == null || sb.data == null) return;
 
-        // Phase gate same rule as tray tokens.
-        if (GameFlowManager.Instance?.phase == GamePhase.Running
-            && !TurretTypes.Is(sb.data.blockType))
+        // Buying NEW items is allowed during combat. Tutorial may restrict to the
+        // current step's block (blocks buying the wrong one).
+        if (!TutorialDirector.CanPurchase(sb.data))
         {
-            Debug.Log("[Shop] Block editing locked during combat.");
+            ShowPlacementPopup("Not this one — follow the tutorial.");
             return;
         }
 

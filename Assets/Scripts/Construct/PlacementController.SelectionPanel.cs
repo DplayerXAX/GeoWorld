@@ -46,8 +46,9 @@ public partial class PlacementController
         string title    = isTurret ? TurretTypes.DisplayName(ins.data.blockType) : ins.data.DisplayName;
         string body     = BuildInfoBody(ins, isTurret);
 
+        // No editing of placed objects during combat (pick up / sell / upgrade).
         bool combatLocked = GameFlowManager.Instance != null
-            && GameFlowManager.Instance.phase == GamePhase.Running && !isTurret;
+            && GameFlowManager.Instance.phase == GamePhase.Running;
         int refund = ComputeSellRefund(ins);
 
         Vector3 worldPos = ins.visualObject.transform.position;
@@ -412,7 +413,7 @@ public partial class PlacementController
         }
 
         bool combatLocked = GameFlowManager.Instance != null
-            && GameFlowManager.Instance.phase == GamePhase.Running && !isTurret;
+            && GameFlowManager.Instance.phase == GamePhase.Running;
         if (combatLocked) extra += row;
 
         return padding + title + divider + rows * row + extra
@@ -633,8 +634,7 @@ public partial class PlacementController
     void DrawPanelButtons(PlacedBlockInstance ins, bool isTurret)
     {
         bool combatLocked = GameFlowManager.Instance != null
-            && GameFlowManager.Instance.phase == GamePhase.Running
-            && !isTurret;
+            && GameFlowManager.Instance.phase == GamePhase.Running;
 
         GUI.enabled = !combatLocked;
 

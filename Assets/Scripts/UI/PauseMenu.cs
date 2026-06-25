@@ -165,7 +165,7 @@ public class PauseMenu : MonoBehaviour
         float cell    = dFont * 0.7f;     // tight columns
         float spacing = dFont * 0f;
         float dRowH   = dFont * 1.25f;
-        float diamondY = y + s - dRowH+18f;    // just inside the bottom edge
+        float diamondY = y + s - dRowH+8f;    // just inside the bottom edge
 
         float totalW = (cell * 3f) + (spacing * 2f);
         float startX = xSpeed + (s - totalW) * 0.5f;

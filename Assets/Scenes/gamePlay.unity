@@ -2271,7 +2271,7 @@ GameObject:
   - component: {fileID: 1066240906}
   - component: {fileID: 1066240905}
   m_Layer: 0
-  m_Name: GameObject
+  m_Name: levelObjective
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -2841,6 +2841,8 @@ MonoBehaviour:
     action: Raise / lower
   - key: 1 / 2 / 3
     action: Rotate block
+  - key: F
+    action: Shop
   - key: LMB
     action: Select / place
   - key: Space
@@ -2849,6 +2851,8 @@ MonoBehaviour:
     action: Rotate camera
   - key: Scroll
     action: Zoom
+  - key: Esc
+    action: Pause / setting
   - key: Esc
     action: Pause / setting
   font: {fileID: 11400000, guid: 656fc90eefbca1448b0b452bc9a3178c, type: 2}

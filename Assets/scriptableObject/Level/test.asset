@@ -16,10 +16,17 @@ MonoBehaviour:
   displayName: Test
   description: Room for play test
   runSeed: 0
-  blocksPerTurn: 8
+  blocksPerTurn: 3
   turretsPerTurn: 3
   waves: []
   wavesToClear: 5
+  objectives: []
+  requireAllObjectives: 0
   unlockedByDefault: 1
   unlocks: []
   techReward: 1
+  isTutorial: 0
+  fixedEndpoints: 0
+  startCell: {x: 0, y: 0, z: 0}
+  endCell: {x: 0, y: 0, z: 0}
+  tutorialSteps: []
