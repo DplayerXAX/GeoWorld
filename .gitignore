@@ -81,3 +81,5 @@ crashlytics-build.properties
 *.csproj.Iscache
 *.sln.Iscache
 /[Aa]ssets/_[Rr]ecovery/
+# unity-cli-plugin: snippet stats are observability data, not project state
+.unity-cli/snippets-stats.json
