@@ -63,6 +63,7 @@ public enum ObjectiveType
     ActivateSynergies,  // have `target` synergies active at the same time
     LimitLeaks,         // let AT MOST `target` enemies reach the end (fails if exceeded)
     KeepLivesAtLeast,   // finish with AT LEAST `target` lives
+    BuildPathLength,    // build an enemy path of AT LEAST `target` faces long (each block face = 1)
 }
 
 [System.Serializable]
@@ -84,6 +85,7 @@ public class LevelObjective
         ObjectiveType.ActivateSynergies => $"Activate {target} synergies at once",
         ObjectiveType.LimitLeaks        => $"Let through at most {target}",
         ObjectiveType.KeepLivesAtLeast  => $"Finish with {target}+ lives",
+        ObjectiveType.BuildPathLength   => $"Build a path {target}+ long",
         _                               => "",
     };
 
@@ -100,11 +102,17 @@ public enum TutorialStepKind
     FreePlace,  // free placement (no ghost); advance after `count` blocks placed anywhere
     Input,      // wait for the player to press `inputKey` (e.g. W / Q / 1 / Space / Mouse0)
     Purchase,   // wait for the player to buy a block from the shop (optionally a specific `block`)
+    PurchaseBlock,  // buy a regular (non-turret) block; block==null = any block, else match blockShape
+    PurchaseTurret, // buy a turret; block==null = any turret, else match blockType
     Select,     // wait for the player to click/select a placed block (optionally a specific `block`)
     Sell,       // wait for the player to sell a block
     Refresh,    // wait for the player to refresh the shop
     Upgrade,    // wait for the player to upgrade a turret
+    PathLength, // wait until the current enemy path is at least `pathLength` faces long
 }
+
+// Optional camera focus for a step — glides the orbit camera to a point of interest.
+public enum TutorialFocus { None, StartPoint, EndPoint }
 
 // One tutorial step. For Place: the player must place `block` at `origin` — the
 // block's WHOLE shape is shown as a ghost. (Advanced: set `cellsOverride` to an
@@ -131,6 +139,16 @@ public class TutorialStep
     [Min(1)] public int count = 1;
     [Tooltip("Input step: the key the player must press to advance (e.g. W, Q, Alpha1, Space, Mouse0).")]
     public KeyCode inputKey = KeyCode.Space;
+    [Tooltip("PathLength step: advance once the current enemy path is at least this many faces long (each block face = 1).")]
+    [Min(1)] public int pathLength = 15;
+    [Tooltip("Allow ALL operations during this step (no tutorial gating). Use for sandbox / FreePlace steps.")]
+    public bool freeOperations = false;
+
+    [Header("Camera")]
+    [Tooltip("When the step begins, glide the camera to focus on the start or end point. None = leave the camera where it is.")]
+    public TutorialFocus cameraFocus = TutorialFocus.None;
+    [Tooltip("Zoom level applied with cameraFocus (ortho size / orbit distance). SMALLER = more zoomed in. 0 = keep current zoom.")]
+    public float focusZoom = 0f;
 
     [TextArea] public string hint;
 

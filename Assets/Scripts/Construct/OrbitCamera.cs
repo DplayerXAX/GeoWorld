@@ -127,6 +127,15 @@ public class OrbitCamera : MonoBehaviour
         }
     }
 
+    // Absolute zoom target. In ortho this is the orthographicSize; in perspective
+    // it's the orbit distance. SMALLER = more zoomed in. Clamped to each mode's
+    // range and eased by LateUpdate's distance/orthoSize lerp.
+    public void SetZoom(float zoom)
+    {
+        if (useOrthographic) targetOrthoSize = Mathf.Clamp(zoom, 2f, 12f);
+        else                 targetDistance  = Mathf.Clamp(zoom, 2f, 40f);
+    }
+
     public void SetFocus(Transform newTarget)
     {
         // Always cancel any accumulated free-pan so a focus request truly
@@ -144,13 +153,15 @@ public class OrbitCamera : MonoBehaviour
     // anchor and snaps currentFocusPoint so the very first frame is already
     // centred. Sets `target` too, so it survives whatever Start() order ran.
     Transform _focusAnchor;
-    public void FocusOnPoint(Vector3 worldPoint)
+    public void FocusOnPoint(Vector3 worldPoint, bool snap = true)
     {
         if (_focusAnchor == null) _focusAnchor = new GameObject("OrbitFocusAnchor").transform;
         _focusAnchor.position = worldPoint;
         target            = _focusAnchor;
         desiredTarget     = _focusAnchor;
-        currentFocusPoint = worldPoint;
+        // snap=true → instant centre (initial framing). snap=false → leave
+        // currentFocusPoint so LateUpdate glides both position and LookAt target.
+        if (snap) currentFocusPoint = worldPoint;
         _panOffset        = Vector3.zero;
     }
 

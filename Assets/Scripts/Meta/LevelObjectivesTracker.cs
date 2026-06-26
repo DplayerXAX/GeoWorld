@@ -127,6 +127,9 @@ public class LevelObjectivesTracker : MonoBehaviour
             case ObjectiveType.KeepLivesAtLeast:
                 cur = hp != null ? hp.CurrentLives : 0;
                 return cur >= tgt ? State.Done : State.Failed;
+            case ObjectiveType.BuildPathLength:
+                cur = gfm != null ? gfm.CurrentPathLength : 0;
+                return cur >= tgt ? State.Done : State.Pending;
         }
         cur = 0; return State.Pending;
     }

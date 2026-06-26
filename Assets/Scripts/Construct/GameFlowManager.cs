@@ -74,6 +74,10 @@ public class GameFlowManager : MonoBehaviour
     public int  RunsSinceLastEndpoint   => _runsSinceLastEndpoint;
     public int  RoundIndex              => roundIndex;
     public int  WavesCleared            => _wavesCompleted;
+    // Length (in faces, each block face = 1) of the current start→end enemy path.
+    // 0 when no path connects. Refreshed by EvaluateGrid on every grid change.
+    public int  CurrentPathLength       => _currentPathLength;
+    int _currentPathLength;
     public IReadOnlyList<Vector3Int> AllStarts => allStarts;
     public IReadOnlyList<Vector3Int> AllEnds   => allEnds;
 
@@ -277,7 +281,7 @@ public class GameFlowManager : MonoBehaviour
         if (phase == GamePhase.Build)
         {
             // Space: commit and run
-            if (Input.GetKeyDown(KeyCode.Space))
+            if (Input.GetKeyDown(KeyCode.Space) && TutorialDirector.CanRun())
                 Run();
 
             // P: manual re-evaluate (force-refresh live preview line)
@@ -301,7 +305,7 @@ public class GameFlowManager : MonoBehaviour
         if (phase == GamePhase.ReadyToRun)
         {
             // Space confirms from preview state; B cancels back to build
-            if (Input.GetKeyDown(KeyCode.Space))
+            if (Input.GetKeyDown(KeyCode.Space) && TutorialDirector.CanRun())
                 Run();
 
             if (Input.GetKeyDown(KeyCode.B))
@@ -438,6 +442,7 @@ public class GameFlowManager : MonoBehaviour
         graph.Build();
 
         var path = FindCurrentPath();
+        _currentPathLength = path != null ? path.Count : 0;
 
         if (phase == GamePhase.Running)
         {
@@ -451,7 +456,9 @@ public class GameFlowManager : MonoBehaviour
                 phase = GamePhase.Build;
                 // No live line yet — will appear on next block placement.
             }
-            // Path still valid while running: loop line already visible, leave it.
+            // Path still valid while running — re-route live enemies so anything the
+            // newly-placed block blocked finds a fresh way to the end.
+            enemyBaseManager?.RerouteActive(graph, CurrentEndFaces());
             return;
         }
 
@@ -667,6 +674,14 @@ public class GameFlowManager : MonoBehaviour
 
     // Builds and returns the path for the current challenge state,
     // or null if no valid path exists.
+    // End faces for the active run (mirrors FindCurrentPath's end selection).
+    List<FaceNode> CurrentEndFaces()
+    {
+        if (_challengeCell != Vector3Int.zero && !_challengeIsStart)
+            return CollectFacesFromGraph(graph, new List<Vector3Int> { _challengeCell });
+        return CollectFaces(allEnds);
+    }
+
     List<FaceNode> FindCurrentPath()
     {
         List<FaceNode> startFaces, endFaces;

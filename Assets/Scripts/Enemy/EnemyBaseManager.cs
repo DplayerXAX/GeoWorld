@@ -310,6 +310,26 @@ public class EnemyBaseManager : MonoBehaviour
         enemy.SetPath(path, enemyBpm, enemyMoveRatio);
     }
 
+    // Re-route every live enemy from its CURRENT face to the end — called when the
+    // grid changes mid-combat (a new block was placed), so blocked enemies find a
+    // new way instead of walking into the wall.
+    public void RerouteActive(SurfaceGraphBuilder graph, List<FaceNode> endFaces)
+    {
+        if (graph == null || endFaces == null || endFaces.Count == 0) return;
+
+        foreach (var e in _activeEnemies)
+        {
+            if (e == null || e.CurrentHealth <= 0 || e.CurrentCell == null) continue;
+
+            var startFace = graph.GetFaceNode(e.CurrentCell.Value, e.CurrentNormal ?? default);
+            if (startFace == null) continue;
+
+            var path = SurfacePathfinding.FindPath(new List<FaceNode> { startFace }, endFaces);
+            if (path != null && path.Count > 0)
+                e.SetPath(path, enemyBpm, enemyMoveRatio);
+        }
+    }
+
     // Fills empty material slots on a freshly-instantiated prefab so a
     // single set of materials (enemyOutlineMaterial / enemyShardMaterial /
     // enemyAccentMaterial) on this manager applies to every enemy type
