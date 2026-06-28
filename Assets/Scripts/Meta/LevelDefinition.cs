@@ -143,6 +143,8 @@ public class TutorialStep
     [Min(1)] public int pathLength = 15;
     [Tooltip("Allow ALL operations during this step (no tutorial gating). Use for sandbox / FreePlace steps.")]
     public bool freeOperations = false;
+    [Tooltip("Hide & disable this step during combat (Running phase): its dialogue/hint hides, gating lifts, and it won't advance until combat ends.")]
+    public bool hideInCombat = false;
 
     [Header("Camera")]
     [Tooltip("When the step begins, glide the camera to focus on the start or end point. None = leave the camera where it is.")]
@@ -151,6 +153,20 @@ public class TutorialStep
     public float focusZoom = 0f;
 
     [TextArea] public string hint;
+
+    [Header("Dialogue (optional — delivers the hint as a conversation instead of the hint box)")]
+    [Tooltip("Full conversation played when the step begins. Overrides `speaker` + `hint`.")]
+    public DialogueConversation conversation;
+    [Tooltip("If set (and no `conversation`), the hint text is spoken by THIS character as a one-line conversation.")]
+    public DialogueCharacter speaker;
+    [Tooltip("Portrait slot for the speaker (one-line mode).")]
+    public PortraitSlot speakerSlot = PortraitSlot.Left;
+    [Tooltip("Portrait / expression key for the speaker (blank = default).")]
+    public string speakerPortrait = "";
+
+    // True when this step delivers its hint through the dialogue system.
+    public bool UsesDialogue =>
+        conversation != null || (speaker != null && !string.IsNullOrEmpty(hint));
 
     // Absolute target cells = the ghost shape (rotated) AND the required placement.
     public Vector3Int[] TargetCells()

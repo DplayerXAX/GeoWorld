@@ -462,8 +462,9 @@ public class GameFlowManager : MonoBehaviour
             return;
         }
 
-        // Build / ReadyToRun: show or hide the live preview line.
-        PathFlowManager.Instance?.UpdateLiveLine(path);
+        // Build / ReadyToRun: show a live preview line for EVERY connected spawn
+        // point, not just the challenge path (multi-spawn rounds redraw all routes).
+        PathFlowManager.Instance?.UpdateLiveLines(FindAllSpawnPaths());
         phase = path != null ? GamePhase.ReadyToRun : GamePhase.Build;
     }
 

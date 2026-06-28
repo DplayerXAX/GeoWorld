@@ -29,8 +29,8 @@ MonoBehaviour:
     target: 10
     description: 
     optional: 0
-  - type: 6
-    target: 1
+  - type: 7
+    target: 15
     description: 
     optional: 0
   requireAllObjectives: 1
@@ -50,10 +50,16 @@ MonoBehaviour:
     waitSeconds: 1
     count: 1
     inputKey: 323
+    pathLength: 15
     freeOperations: 0
+    hideInCombat: 0
     cameraFocus: 0
     focusZoom: 0
     hint: Welcome god, please help us defend chaos
+    conversation: {fileID: 0}
+    speaker: {fileID: 11400000, guid: 80993e3c86b4337429c2d6273c8eedc2, type: 2}
+    speakerSlot: 1
+    speakerPortrait: Default
   - kind: 5
     block: {fileID: 11400000, guid: 3bcfeb02226d44d49a6df82d6c36a1a7, type: 2}
     origin: {x: 1, y: 1, z: 1}
@@ -62,10 +68,16 @@ MonoBehaviour:
     waitSeconds: 2
     count: 1
     inputKey: 323
+    pathLength: 15
     freeOperations: 0
+    hideInCombat: 0
     cameraFocus: 1
     focusZoom: 3
     hint: Enemy is spawning from this portal, trying to break and destroy our order.
+    conversation: {fileID: 0}
+    speaker: {fileID: 11400000, guid: 80993e3c86b4337429c2d6273c8eedc2, type: 2}
+    speakerSlot: 1
+    speakerPortrait: Default
   - kind: 5
     block: {fileID: 11400000, guid: 3bcfeb02226d44d49a6df82d6c36a1a7, type: 2}
     origin: {x: 1, y: 1, z: 1}
@@ -74,10 +86,16 @@ MonoBehaviour:
     waitSeconds: 2
     count: 1
     inputKey: 323
+    pathLength: 15
     freeOperations: 0
+    hideInCombat: 0
     cameraFocus: 2
     focusZoom: 3
     hint: This is our core, we need to prevent enemies from entering it.
+    conversation: {fileID: 0}
+    speaker: {fileID: 11400000, guid: 80993e3c86b4337429c2d6273c8eedc2, type: 2}
+    speakerSlot: 1
+    speakerPortrait: Default
   - kind: 5
     block: {fileID: 11400000, guid: 3bcfeb02226d44d49a6df82d6c36a1a7, type: 2}
     origin: {x: 1, y: 1, z: 1}
@@ -86,10 +104,16 @@ MonoBehaviour:
     waitSeconds: 2
     count: 1
     inputKey: 323
+    pathLength: 15
     freeOperations: 0
+    hideInCombat: 0
     cameraFocus: 1
     focusZoom: 10
     hint: We build our path to misguide enemies
+    conversation: {fileID: 0}
+    speaker: {fileID: 11400000, guid: 80993e3c86b4337429c2d6273c8eedc2, type: 2}
+    speakerSlot: 1
+    speakerPortrait: Default
   - kind: 5
     block: {fileID: 11400000, guid: 3bcfeb02226d44d49a6df82d6c36a1a7, type: 2}
     origin: {x: 1, y: 1, z: 1}
@@ -98,10 +122,16 @@ MonoBehaviour:
     waitSeconds: 2
     count: 1
     inputKey: 323
+    pathLength: 15
     freeOperations: 0
+    hideInCombat: 0
     cameraFocus: 0
     focusZoom: 0
     hint: We use blocks to build path, and turret to attack enemies
+    conversation: {fileID: 0}
+    speaker: {fileID: 11400000, guid: 80993e3c86b4337429c2d6273c8eedc2, type: 2}
+    speakerSlot: 1
+    speakerPortrait: Default
   - kind: 5
     block: {fileID: 11400000, guid: 3bcfeb02226d44d49a6df82d6c36a1a7, type: 2}
     origin: {x: 1, y: 1, z: 1}
@@ -110,10 +140,16 @@ MonoBehaviour:
     waitSeconds: 2
     count: 1
     inputKey: 102
+    pathLength: 15
     freeOperations: 0
+    hideInCombat: 0
     cameraFocus: 0
     focusZoom: 0
     hint: Press F to open store
+    conversation: {fileID: 0}
+    speaker: {fileID: 11400000, guid: 80993e3c86b4337429c2d6273c8eedc2, type: 2}
+    speakerSlot: 1
+    speakerPortrait: Default
   - kind: 6
     block: {fileID: 11400000, guid: eb476e18de9d37e4dbc97c8247017e54, type: 2}
     origin: {x: 1, y: 0, z: 1}
@@ -122,10 +158,16 @@ MonoBehaviour:
     waitSeconds: 0
     count: 1
     inputKey: 32
+    pathLength: 15
     freeOperations: 0
+    hideInCombat: 0
     cameraFocus: 0
     focusZoom: 0
     hint: Purchase the L-shape block from the panel
+    conversation: {fileID: 0}
+    speaker: {fileID: 11400000, guid: 80993e3c86b4337429c2d6273c8eedc2, type: 2}
+    speakerSlot: 1
+    speakerPortrait: Default
   - kind: 0
     block: {fileID: 11400000, guid: eb476e18de9d37e4dbc97c8247017e54, type: 2}
     origin: {x: 1, y: 0, z: 1}
@@ -134,10 +176,16 @@ MonoBehaviour:
     waitSeconds: 0
     count: 1
     inputKey: 32
+    pathLength: 15
     freeOperations: 0
+    hideInCombat: 0
     cameraFocus: 0
     focusZoom: 0
     hint: Place the block on the white area, Connecting the portal and the core
+    conversation: {fileID: 0}
+    speaker: {fileID: 11400000, guid: 80993e3c86b4337429c2d6273c8eedc2, type: 2}
+    speakerSlot: 1
+    speakerPortrait: Default
   - kind: 5
     block: {fileID: 11400000, guid: eb476e18de9d37e4dbc97c8247017e54, type: 2}
     origin: {x: 1, y: 0, z: 1}
@@ -146,11 +194,17 @@ MonoBehaviour:
     waitSeconds: 2
     count: 1
     inputKey: 323
+    pathLength: 15
     freeOperations: 0
+    hideInCombat: 0
     cameraFocus: 0
     focusZoom: 0
     hint: After they are connected, enemies tend to move towards core through shortest
       path
+    conversation: {fileID: 0}
+    speaker: {fileID: 11400000, guid: 80993e3c86b4337429c2d6273c8eedc2, type: 2}
+    speakerSlot: 1
+    speakerPortrait: Default
   - kind: 8
     block: {fileID: 0}
     origin: {x: 0, y: 0, z: 1}
@@ -159,10 +213,16 @@ MonoBehaviour:
     waitSeconds: 2
     count: 1
     inputKey: 32
+    pathLength: 15
     freeOperations: 1
+    hideInCombat: 0
     cameraFocus: 0
     focusZoom: 0
     hint: Now try to purchase a turret for denfense
+    conversation: {fileID: 0}
+    speaker: {fileID: 11400000, guid: 80993e3c86b4337429c2d6273c8eedc2, type: 2}
+    speakerSlot: 1
+    speakerPortrait: Default
   - kind: 0
     block: {fileID: 11400000, guid: 3bcfeb02226d44d49a6df82d6c36a1a7, type: 2}
     origin: {x: 0, y: 1, z: 1}
@@ -171,10 +231,16 @@ MonoBehaviour:
     waitSeconds: 2
     count: 1
     inputKey: 32
+    pathLength: 15
     freeOperations: 0
+    hideInCombat: 0
     cameraFocus: 0
     focusZoom: 0
     hint: After placed on the block, turrets would attack enemies in range
+    conversation: {fileID: 0}
+    speaker: {fileID: 11400000, guid: 80993e3c86b4337429c2d6273c8eedc2, type: 2}
+    speakerSlot: 1
+    speakerPortrait: Default
   - kind: 9
     block: {fileID: 0}
     origin: {x: 1, y: 1, z: 1}
@@ -183,10 +249,16 @@ MonoBehaviour:
     waitSeconds: 2
     count: 1
     inputKey: 32
+    pathLength: 15
     freeOperations: 0
+    hideInCombat: 0
     cameraFocus: 0
     focusZoom: 0
     hint: Click any placed items for detail
+    conversation: {fileID: 0}
+    speaker: {fileID: 11400000, guid: 80993e3c86b4337429c2d6273c8eedc2, type: 2}
+    speakerSlot: 1
+    speakerPortrait: Default
   - kind: 2
     block: {fileID: 11400000, guid: 3bcfeb02226d44d49a6df82d6c36a1a7, type: 2}
     origin: {x: 1, y: 1, z: 1}
@@ -195,8 +267,89 @@ MonoBehaviour:
     waitSeconds: 2
     count: 1
     inputKey: 32
+    pathLength: 15
     freeOperations: 1
+    hideInCombat: 0
     cameraFocus: 0
     focusZoom: 0
     hint: After finish editing for the round, Press space to start wave, trying to
       defeat all the enemies
+    conversation: {fileID: 0}
+    speaker: {fileID: 11400000, guid: 80993e3c86b4337429c2d6273c8eedc2, type: 2}
+    speakerSlot: 1
+    speakerPortrait: Default
+  - kind: 5
+    block: {fileID: 11400000, guid: 3bcfeb02226d44d49a6df82d6c36a1a7, type: 2}
+    origin: {x: 1, y: 1, z: 1}
+    rotation90: {x: 1, y: 0, z: 0}
+    cellsOverride: []
+    waitSeconds: 2
+    count: 1
+    inputKey: 323
+    pathLength: 15
+    freeOperations: 1
+    hideInCombat: 1
+    cameraFocus: 0
+    focusZoom: 0
+    hint: Good Job.
+    conversation: {fileID: 0}
+    speaker: {fileID: 11400000, guid: 80993e3c86b4337429c2d6273c8eedc2, type: 2}
+    speakerSlot: 1
+    speakerPortrait: Default
+  - kind: 5
+    block: {fileID: 11400000, guid: 3bcfeb02226d44d49a6df82d6c36a1a7, type: 2}
+    origin: {x: 1, y: 1, z: 1}
+    rotation90: {x: 1, y: 0, z: 0}
+    cellsOverride: []
+    waitSeconds: 2
+    count: 1
+    inputKey: 323
+    pathLength: 15
+    freeOperations: 1
+    hideInCombat: 0
+    cameraFocus: 0
+    focusZoom: 0
+    hint: When an enemy enter the core, you lose 1 health. Try to keep your health
+      above 0.
+    conversation: {fileID: 0}
+    speaker: {fileID: 11400000, guid: 80993e3c86b4337429c2d6273c8eedc2, type: 2}
+    speakerSlot: 1
+    speakerPortrait: Default
+  - kind: 5
+    block: {fileID: 11400000, guid: 3bcfeb02226d44d49a6df82d6c36a1a7, type: 2}
+    origin: {x: 1, y: 1, z: 1}
+    rotation90: {x: 1, y: 0, z: 0}
+    cellsOverride: []
+    waitSeconds: 2
+    count: 1
+    inputKey: 323
+    pathLength: 15
+    freeOperations: 1
+    hideInCombat: 0
+    cameraFocus: 0
+    focusZoom: 0
+    hint: it's hard to defend enemies when the path is so short, but we can reorganize
+      them.....
+    conversation: {fileID: 0}
+    speaker: {fileID: 11400000, guid: 80993e3c86b4337429c2d6273c8eedc2, type: 2}
+    speakerSlot: 1
+    speakerPortrait: Default
+  - kind: 13
+    block: {fileID: 11400000, guid: 3bcfeb02226d44d49a6df82d6c36a1a7, type: 2}
+    origin: {x: 1, y: 1, z: 1}
+    rotation90: {x: 1, y: 0, z: 0}
+    cellsOverride: []
+    waitSeconds: 2
+    count: 1
+    inputKey: 323
+    pathLength: 10
+    freeOperations: 1
+    hideInCombat: 0
+    cameraFocus: 0
+    focusZoom: 0
+    hint: Try replacing or adding new blocks to force enemies to take a longer path
+      before reaching the Core.
+    conversation: {fileID: 0}
+    speaker: {fileID: 11400000, guid: 80993e3c86b4337429c2d6273c8eedc2, type: 2}
+    speakerSlot: 1
+    speakerPortrait: Default

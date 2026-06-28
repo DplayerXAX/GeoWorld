@@ -74,6 +74,8 @@ public class DialogueRunner : MonoBehaviour
     int     _line;
     bool    _typing, _choiceMode;
     float   _typed, _alphaTarget, _blink;
+    int     _lineFrame = -1;   // frame a line was shown — ignore the click that opened it
+    bool    _passive;          // display-only (tutorial): no click-advance, no input block
 
     void Awake()
     {
@@ -87,15 +89,34 @@ public class DialogueRunner : MonoBehaviour
 
     // ── Public API ───────────────────────────────────────────────────────────────
 
-    public void Play(DialogueConversation conversation)
+    // passive = display-only: ignores clicks and doesn't block game input. Used by
+    // the tutorial so its dialogue can only be advanced by COMPLETING the step,
+    // never by clicking the box away.
+    public void Play(DialogueConversation conversation, bool passive = false)
     {
         if (conversation == null) { Finish(null); return; }
+        _passive    = passive;
         _convo      = conversation;
         _line       = 0;
         IsPlaying   = true;
         _alphaTarget = 1f;
         _topicText.text = conversation.topic;
+        ResetPortraits();   // clear any portrait left over from the previous conversation
         ShowLine(0);
+    }
+
+    // Hide all portraits + restore their scale. Called at the start of each
+    // conversation so a new speaker doesn't show alongside the previous one's
+    // standing portrait (within ONE conversation ShowLine accumulates speakers).
+    void ResetPortraits()
+    {
+        if (_portraits == null) return;
+        for (int s = 0; s < _portraits.Length; s++)
+            if (_portraits[s] != null)
+            {
+                _portraits[s].enabled = false;
+                _portraits[s].rectTransform.localScale = Vector3.one;
+            }
     }
 
     public void Stop() => Finish(_convo);
@@ -106,7 +127,9 @@ public class DialogueRunner : MonoBehaviour
     {
         if (_group == null) return;
         _group.alpha = Mathf.MoveTowards(_group.alpha, _alphaTarget, fadeSpeed * Time.unscaledDeltaTime);
-        _group.blocksRaycasts = _group.interactable = _alphaTarget > 0.5f;
+        // Passive (tutorial) dialogue must NOT block the game — the player needs to
+        // interact to complete the step that advances it.
+        _group.blocksRaycasts = _group.interactable = !_passive && _alphaTarget > 0.5f;
         if (!IsPlaying) return;
 
         // Typewriter (uses maxVisibleCharacters so rich text isn't sliced).
@@ -118,8 +141,8 @@ public class DialogueRunner : MonoBehaviour
             if (_bodyText.maxVisibleCharacters >= total) _typing = false;
         }
 
-        // Blinking continue indicator (hidden while typing / choosing).
-        bool showContinue = !_typing && !_choiceMode;
+        // Blinking continue indicator (hidden while typing / choosing / passive).
+        bool showContinue = !_typing && !_choiceMode && !_passive;
         _blink += Time.unscaledDeltaTime * 3f;
         _continue.gameObject.SetActive(showContinue);
         if (showContinue)
@@ -128,7 +151,11 @@ public class DialogueRunner : MonoBehaviour
         }
 
         // Advance on click / key (ignored while choices are up — buttons handle it).
-        if (!_choiceMode && (Input.GetMouseButtonDown(0) || (advanceKey != KeyCode.None && Input.GetKeyDown(advanceKey))))
+        // Skip the very frame a line opened, so the click that triggered this
+        // conversation (e.g. a tutorial Input step's Mouse0) doesn't instantly
+        // advance/dismiss the line it just brought up.
+        if (!_passive && !_choiceMode && Time.frameCount != _lineFrame
+            && (Input.GetMouseButtonDown(0) || (advanceKey != KeyCode.None && Input.GetKeyDown(advanceKey))))
         {
             if (_typing) { _typing = false; _bodyText.maxVisibleCharacters = _bodyText.textInfo.characterCount; }
             else Advance();
@@ -141,7 +168,7 @@ public class DialogueRunner : MonoBehaviour
         if (_convo != null && _line < _convo.lines.Count) { ShowLine(_line); return; }
 
         if (_convo != null && _convo.choices != null && _convo.choices.Count > 0) { ShowChoices(); return; }
-        if (_convo != null && _convo.autoNext != null) { Play(_convo.autoNext); return; }
+        if (_convo != null && _convo.autoNext != null) { Play(_convo.autoNext, _passive); return; }
         Finish(_convo);
     }
 
@@ -165,6 +192,9 @@ public class DialogueRunner : MonoBehaviour
                 _portraits[slot].sprite = sprite;
                 _portraits[slot].enabled = true;
                 _portraits[slot].SetNativeSizePreserve();
+                // Per-portrait size (pivot is the bottom, so it grows upward).
+                _portraits[slot].rectTransform.localScale =
+                    Vector3.one * line.character.GetPortraitScale(line.portrait);
             }
             for (int s = 0; s < _portraits.Length; s++)
             {
@@ -180,6 +210,7 @@ public class DialogueRunner : MonoBehaviour
         _bodyText.maxVisibleCharacters = 0;
         _typed  = 0f;
         _typing = true;
+        _lineFrame = Time.frameCount;   // ignore the click that opened this line
 
         if (!string.IsNullOrEmpty(line.eventId)) OnLineEvent?.Invoke(line.eventId);
     }
@@ -253,7 +284,7 @@ public class DialogueRunner : MonoBehaviour
         canvasGO.transform.SetParent(transform, false);
         _canvas = canvasGO.GetComponent<Canvas>();
         _canvas.renderMode  = RenderMode.ScreenSpaceOverlay;
-        _canvas.sortingOrder = 500;   // above gameplay HUD
+        _canvas.sortingOrder = 50;   // below the shop letterbox bars (55) so the bars frame the dialogue
 
         var scaler = canvasGO.GetComponent<CanvasScaler>();
         scaler.uiScaleMode         = CanvasScaler.ScaleMode.ScaleWithScreenSize;
@@ -267,8 +298,12 @@ public class DialogueRunner : MonoBehaviour
         root.offsetMin = root.offsetMax = Vector2.zero;
         _group = root.gameObject.AddComponent<CanvasGroup>();
 
-        BuildPortraits(root);
+        // Layering (bottom → top): box panel, portraits, box TEXT, choices. So the
+        // standing portrait sits on the panel but the dialogue text stays on top of
+        // the portrait (never covered). Choices are above everything.
         BuildBox(root);
+        BuildPortraits(root);
+        BuildBoxText(root);
         BuildChoices(root);
     }
 
@@ -293,6 +328,11 @@ public class DialogueRunner : MonoBehaviour
         return img;
     }
 
+    RectTransform _boxRect;
+
+    // The panel only (background + accent rule). Built BELOW the portraits so the
+    // standing portrait sits on top of the box. The TEXT is built separately, above
+    // the portraits (BuildBoxText), so the dialogue text is never covered.
     void BuildBox(RectTransform root)
     {
         var box = NewRect("Box", root);
@@ -302,11 +342,22 @@ public class DialogueRunner : MonoBehaviour
         box.anchoredPosition = new Vector2(0f, 40f);
         var bg = box.gameObject.AddComponent<Image>();
         bg.color = boxColor;
+        _boxRect = box;
 
         // Accent rule along the top of the box.
         var rule = NewImage("Rule", box, accentColor, false).rectTransform;
         rule.anchorMin = new Vector2(0f, 1f); rule.anchorMax = new Vector2(1f, 1f);
         rule.pivot = new Vector2(0.5f, 1f); rule.sizeDelta = new Vector2(0f, 5f); rule.anchoredPosition = Vector2.zero;
+    }
+
+    // Name / topic / body / continue — an overlay matching the box rect, parented to
+    // root AFTER the portraits so the text renders ON TOP of the standing portrait.
+    void BuildBoxText(RectTransform root)
+    {
+        var box = NewRect("BoxText", root);
+        box.anchorMin = _boxRect.anchorMin; box.anchorMax = _boxRect.anchorMax;
+        box.pivot = _boxRect.pivot; box.sizeDelta = _boxRect.sizeDelta;
+        box.anchoredPosition = _boxRect.anchoredPosition;
 
         // Name box (overlaps the top edge).
         _nameBg = NewImage("NameBg", box, accentColor, false);

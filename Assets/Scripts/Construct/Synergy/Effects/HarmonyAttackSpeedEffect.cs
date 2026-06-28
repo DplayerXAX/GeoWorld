@@ -1,4 +1,3 @@
-using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -6,10 +5,15 @@ using UnityEngine;
 //
 // Turrets are colorless blocks (never part of a color claim), so "on the
 // synergy" means a turret block that is face-adjacent to any claimed cell —
-// sitting on top of, or right beside, the Harmony structure. While active, a
-// coroutine reconciles which turrets qualify and grants each a reversible
-// fire-rate multiplier; turrets that leave the set (or the whole synergy on
-// revoke) are restored to normal.
+// sitting on top of, or right beside, the Harmony structure. While active, each
+// qualifying turret gets a reversible fire-rate multiplier; turrets that leave
+// the set (or the whole synergy on revoke) are restored to normal.
+//
+// EVENT-DRIVEN (no per-frame polling): the buffed-turret set is only reconciled
+// when something that could change it happens —
+//   • a block is (re)placed                 → PlacementController.BlockPlaced
+//   • the Harmony claim grows/shrinks/moves  → SynergyEvaluator.OnClaimChanged
+//   • the synergy activates / deactivates    → Apply / Revoke
 [CreateAssetMenu(menuName = "GeoWorld/Synergy/Effects/Harmony Attack Speed",
                  fileName = "HarmonyAttackSpeedEffect")]
 public class HarmonyAttackSpeedEffect : GameEffect
@@ -18,15 +22,17 @@ public class HarmonyAttackSpeedEffect : GameEffect
     [Tooltip("Fire-rate bonus for turrets touching the synergy. 0.3 = +30% attack speed.")]
     [Min(0f)] public float attackSpeedBonus = 0.3f;
 
-    [Tooltip("How often the buffed-turret set is reconciled.")]
-    [Min(0.1f)] public float reconcileInterval = 0.4f;
+    [Header("Visual")]
+    [Tooltip("Aura colour shown on turrets the synergy is speeding up.")]
+    public Color auraColor = new Color(0.4f, 1f, 0.8f);
 
-    Coroutine       _routine;
-    GameFlowManager _runner;
-    readonly HashSet<Vector3Int>      _cells   = new();
+    readonly HashSet<Vector3Int>       _cells   = new();
     readonly HashSet<TurretController> _buffed  = new();
     readonly HashSet<TurretController> _desired = new();
     readonly List<TurretController>    _scratch = new();
+    readonly Dictionary<TurretController, SynergyAura> _auras = new();
+
+    bool _subscribed;
 
     static readonly Vector3Int[] _neighbors =
     {
@@ -36,34 +42,48 @@ public class HarmonyAttackSpeedEffect : GameEffect
 
     public override void Apply(GameFlowManager game)
     {
-        if (game == null) return;
-        Stop(restore: false);
-        _runner  = game;
-        _routine = game.StartCoroutine(Tick());
+        Subscribe();
+        ReconcileNow();
     }
 
-    public override void Revoke(GameFlowManager game) => Stop(restore: true);
-
-    void Stop(bool restore)
+    public override void Revoke(GameFlowManager game)
     {
-        if (_routine != null && _runner != null) _runner.StopCoroutine(_routine);
-        _routine = null;
-        _runner  = null;
+        Unsubscribe();
+        RestoreAll();
+    }
 
-        if (restore)
-            foreach (var t in _buffed)
-                if (t != null) t.SetSynergyFireRateMultiplier(1f);
+    void Subscribe()
+    {
+        if (_subscribed) return;
+        _subscribed = true;
+        PlacementController.BlockPlaced += OnBlockPlaced;
+        var ev = SynergyEvaluator.Instance;
+        if (ev != null) ev.OnClaimChanged += OnClaimChanged;
+    }
+
+    void Unsubscribe()
+    {
+        if (!_subscribed) return;
+        _subscribed = false;
+        PlacementController.BlockPlaced -= OnBlockPlaced;
+        var ev = SynergyEvaluator.Instance;
+        if (ev != null) ev.OnClaimChanged -= OnClaimChanged;
+    }
+
+    // Reconcile only when something relevant changed.
+    void OnBlockPlaced(BlockData data, Vector3Int[] cells)        => ReconcileNow();
+    void OnClaimChanged(SynergyRule rule, ActiveSynergy active)   => ReconcileNow();
+
+    void ReconcileNow() => Reconcile(1f + Mathf.Max(0f, attackSpeedBonus));
+
+    void RestoreAll()
+    {
+        foreach (var t in _buffed)
+            if (t != null) t.SetSynergyFireRateMultiplier(1f);
         _buffed.Clear();
-    }
 
-    IEnumerator Tick()
-    {
-        var wait = new WaitForSeconds(reconcileInterval);
-        while (true)
-        {
-            Reconcile(1f + Mathf.Max(0f, attackSpeedBonus));
-            yield return wait;
-        }
+        foreach (var kv in _auras) if (kv.Value != null) kv.Value.Remove();
+        _auras.Clear();
     }
 
     void Reconcile(float mult)
@@ -87,11 +107,16 @@ public class HarmonyAttackSpeedEffect : GameEffect
             }
         }
 
-        // Buff newcomers.
+        // Buff newcomers + give them a speed aura.
+        float size = grid.cellSize * 1.1f;
         foreach (var t in _desired)
-            if (t != null && _buffed.Add(t)) t.SetSynergyFireRateMultiplier(mult);
+            if (t != null && _buffed.Add(t))
+            {
+                t.SetSynergyFireRateMultiplier(mult);
+                _auras[t] = SynergyBuffFx.AttachAura(t.transform, auraColor, size);
+            }
 
-        // Restore turrets that left the set (or were destroyed).
+        // Restore turrets that left the set (or were destroyed) + drop their aura.
         _scratch.Clear();
         foreach (var t in _buffed)
             if (t == null || !_desired.Contains(t)) _scratch.Add(t);
@@ -100,6 +125,11 @@ public class HarmonyAttackSpeedEffect : GameEffect
             var t = _scratch[i];
             _buffed.Remove(t);
             if (t != null) t.SetSynergyFireRateMultiplier(1f);
+            if (_auras.TryGetValue(t, out var aura))
+            {
+                if (aura != null) aura.Remove();
+                _auras.Remove(t);
+            }
         }
     }
 }

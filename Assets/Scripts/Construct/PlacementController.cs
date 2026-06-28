@@ -1283,11 +1283,12 @@ public partial class PlacementController : MonoBehaviour
         for (int i = 0; i < cs.Length; i++)
         {
             var p = bp + cs[i];
-            if (p.y < 0)            return PlaceFailureReason.OutOfBounds;
             if (grid.IsOccupied(p)) return PlaceFailureReason.Occupied;
             worldCells[i] = p;
         }
 
+        // Underground (y < 0) is allowed — you can build down into the earth — but
+        // a block must still touch an existing block or endpoint.
         if (!grid.HasOccupiedNeighbor26(worldCells))
             return PlaceFailureReason.NotAdjacent;
 

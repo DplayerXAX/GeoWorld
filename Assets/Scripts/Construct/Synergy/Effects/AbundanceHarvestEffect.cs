@@ -26,6 +26,10 @@ public class AbundanceHarvestEffect : GameEffect
     [Tooltip("Flat block currency added on top each turn, regardless of size.")]
     [Min(0)] public int flatBonus = 0;
 
+    [Header("Visual")]
+    [Tooltip("Colour of the harvest mote that floats up from the loop each turn.")]
+    public Color moteColor = new Color(0.95f, 0.8f, 0.3f);
+
     bool _subscribed;
 
     public override void Apply(GameFlowManager game)
@@ -50,6 +54,11 @@ public class AbundanceHarvestEffect : GameEffect
         if (count <= 0) return;
 
         int amount = count * Mathf.Max(0, blockPerUnit) + Mathf.Max(0, flatBonus);
-        if (amount > 0) ResourceManager.Instance?.AddBlockCurrency(amount);
+        if (amount <= 0) return;
+        ResourceManager.Instance?.AddBlockCurrency(amount);
+
+        if (SynergyEffectUtil.TryGetClaimedCellWorld(this, out var w))
+            SynergyBuffFx.Mote(w, moteColor,
+                GridSystem.instance != null ? GridSystem.instance.cellSize * 0.8f : 0.8f);
     }
 }

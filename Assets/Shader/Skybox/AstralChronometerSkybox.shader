@@ -1,28 +1,28 @@
 Shader "Custom/LevelSelectSky"
 {
-    // Painterly level-select sky in the same spirit as the abyss / manifold skyboxes:
-    // a slowly drifting "astral aurora" built from domain-warped fbm (flowing colour
-    // ribbons), soft glowing concentric arcs for the constructivist signature, a sparse
-    // star field, and gentle HSV breathing. Calm — but with real depth, not a flat poster.
+    // Serene, misty level-select sky in the same spirit as the abyss / manifold
+    // skyboxes: a pale luminous vertical gradient, slow domain-warped fbm read as
+    // soft drifting MIST (not bright ribbons), a gentle sacred horizon glow, a very
+    // sparse star field, and subtle HSV breathing. Calm and hazy — "雾茫茫神圣静谧".
     Properties
     {
         [Header(Backdrop)]
-        _SkyTop       ("Zenith",  Color) = (0.02, 0.02, 0.06, 1)
-        _SkyBottom    ("Horizon", Color) = (0.05, 0.06, 0.14, 1)
-        _HorizonSharp ("Gradient Curve", Range(1, 8)) = 3.0
+        _SkyTop       ("Zenith",  Color) = (0.62, 0.70, 0.80, 1)
+        _SkyBottom    ("Horizon", Color) = (0.90, 0.90, 0.86, 1)
+        _HorizonSharp ("Gradient Curve", Range(1, 8)) = 2.0
 
-        [Header(Astral Aurora)]
-        _NebulaA   ("Aurora Cool", Color) = (0.169, 0.424, 0.690, 1)  // blue
-        _NebulaB   ("Aurora Warm", Color) = (0.910, 0.698, 0.227, 1)  // gold
-        _NebulaC   ("Aurora Flare", Color) = (0.886, 0.141, 0.106, 1) // signal
-        _Scale     ("Aurora Scale", Float) = 3.0
-        _Intensity ("Aurora Intensity", Range(0, 3)) = 1.2
-        _FlowSpeed ("Flow Speed", Float) = 0.12
-        _HueDrift  ("Hue Drift", Range(0, 0.5)) = 0.10
+        [Header(Drifting Mist)]
+        _NebulaA   ("Mist Cool", Color) = (0.80, 0.84, 0.90, 1)  // pale blue
+        _NebulaB   ("Mist Warm / Glow", Color) = (0.95, 0.90, 0.78, 1)  // soft gold
+        _NebulaC   ("Mist Accent", Color) = (0.95, 0.88, 0.78, 1)
+        _Scale     ("Mist Scale", Float) = 2.0
+        _Intensity ("Mist Intensity", Range(0, 3)) = 0.8
+        _FlowSpeed ("Flow Speed", Float) = 0.06
+        _HueDrift  ("Hue Drift", Range(0, 0.5)) = 0.05
 
         [Header(Stars)]
         _StarColor ("Star Color", Color) = (1.0, 0.97, 0.9, 1)
-        _StarDensity ("Star Density", Range(0, 1)) = 0.5
+        _StarDensity ("Star Density", Range(0, 1)) = 0.2
     }
 
     SubShader
@@ -109,33 +109,37 @@ Shader "Custom/LevelSelectSky"
                 float3 dir = normalize(IN.dir);
                 float  t   = _Time.y * _FlowSpeed;
 
-                // ── Backdrop gradient ───────────────────────────────────────────
+                // ── Backdrop gradient (pale, luminous, serene) ──────────────────
                 float up   = saturate(dir.y * 0.5 + 0.5);
                 half3 col  = lerp(_SkyBottom.rgb, _SkyTop.rgb, pow(up, _HorizonSharp));
 
-                // ── Astral aurora (domain-warped, flowing ribbons) ──────────────
+                // ── Drifting mist (domain-warped fbm, soft & low-contrast) ──────
                 float3 p = dir * _Scale;
-                p.y -= t * 0.6;                         // slow upward drift
+                p.y -= t * 0.3;                         // slow drift
                 float3 warpQ;
                 float field = DomainWarp(p, t, warpQ);
 
-                // Colour the ribbons: cool→warm by the field, rare signal flares.
-                half3 neb = lerp(_NebulaA.rgb, _NebulaB.rgb, smoothstep(0.30, 0.70, field));
-                neb = lerp(neb, _NebulaC.rgb, smoothstep(0.70, 0.97, warpQ.x));
-                neb *= (0.7 + warpQ.y * 0.8);          // internal brightness variation
+                // Pale mist veil — cool→warm by the field, thicker low (toward the
+                // horizon), clearing toward the zenith. Blend TOWARD the mist colour
+                // (a participating veil) rather than adding bright ribbons.
+                half3 mistCol = lerp(_NebulaA.rgb, _NebulaB.rgb, smoothstep(0.40, 0.72, field));
+                float mist    = smoothstep(0.35, 0.85, field) * (0.6 + 0.4 * warpQ.y);
+                mist         *= (1.0 - up * 0.5);
+                col = lerp(col, mistCol, saturate(mist * _Intensity * 0.5));
 
-                float ribbon = pow(smoothstep(0.35, 0.9, field), 1.6) * (0.5 + 0.5 * warpQ.z);
-                col += neb * ribbon * _Intensity;          // full-sphere aurora (top & bottom)
+                // ── Sacred horizon glow (soft bright band at the horizon) ───────
+                float horizonGlow = pow(1.0 - abs(dir.y), 6.0);
+                col += _NebulaB.rgb * horizonGlow * 0.25;
 
-                // ── Sparse star field (full sphere) ─────────────────────────────
+                // ── Very sparse star field (barely there against the bright mist) ─
                 float3 sp = floor(dir * 220.0);
                 float  sh = Hash3(sp);
-                float  star = smoothstep(0.998 - _StarDensity * 0.01, 1.0, sh);
+                float  star = smoothstep(0.999 - _StarDensity * 0.01, 1.0, sh);
                 float  tw   = 0.6 + 0.4 * sin(t * 6.0 + sh * 40.0);     // twinkle
-                col += _StarColor.rgb * star * tw;
+                col += _StarColor.rgb * star * tw * 0.4;
 
-                // ── Slow hue breathing ──────────────────────────────────────────
-                col = lerp(col, HsvShift(col, sin(t * 0.5) * _HueDrift), 0.6);
+                // ── Subtle hue breathing ────────────────────────────────────────
+                col = lerp(col, HsvShift(col, sin(t * 0.4) * _HueDrift), 0.3);
 
                 return half4(col, 1.0);
             }

@@ -31,6 +31,10 @@ public class AbundanceIncomeEffect : GameEffect
     [Tooltip("Extra one-shot payment dropped the moment the synergy activates (in addition to subsequent ticks).")]
     [Min(0)] public int activationBonus = 0;
 
+    [Header("Visual")]
+    [Tooltip("Colour of the currency mote that floats up from the structure each drip.")]
+    public Color moteColor = new Color(0.95f, 0.8f, 0.3f);
+
     // Runtime state — assumes one active coroutine per asset.
     Coroutine _tickRoutine;
     GameFlowManager _runner;
@@ -79,5 +83,9 @@ public class AbundanceIncomeEffect : GameEffect
 
         if (currency == CurrencyKind.Block) rm.AddBlockCurrency(amount);
         else                                rm.AddTurretCurrency(amount);
+
+        if (SynergyEffectUtil.TryGetClaimedCellWorld(this, out var w))
+            SynergyBuffFx.Mote(w, moteColor,
+                GridSystem.instance != null ? GridSystem.instance.cellSize * 0.7f : 0.7f);
     }
 }
