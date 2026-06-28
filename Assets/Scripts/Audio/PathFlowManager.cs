@@ -35,9 +35,9 @@ public class PathFlowManager : MonoBehaviour
     }
     readonly List<FlowEntry> _flows = new();
 
-    // ── Live preview line ─────────────────────────────────────────────────────
-    GameObject _liveGO;
-    Coroutine  _liveCoroutine;
+    // ── Live preview lines (one per spawn point) ───────────────────────────────
+    readonly List<GameObject> _liveGOs        = new();
+    readonly List<Coroutine>  _liveCoroutines = new();
 
     void Awake() => Instance = this;
 
@@ -66,18 +66,33 @@ public class PathFlowManager : MonoBehaviour
     // Pass null to hide the preview.
     public void UpdateLiveLine(List<FaceNode> path)
     {
-        ClearLiveLine();
-        if (laserMaterial == null || path == null || path.Count < 2) return;
-
-        var lr = MakeLine("PathLaser_Live", livePathColor, out _liveGO);
-        _liveCoroutine = StartCoroutine(RevealLine(lr, BuildPositions(path)));
+        if (path == null) { ClearLiveLine(); return; }
+        UpdateLiveLines(new List<List<FaceNode>> { path });
     }
 
-    // Removes the live preview line (called when Run() commits the path).
+    // Shows a live preview line for EVERY spawn-point path (so all routes redraw on
+    // each block placement, not just the last one). Pass null/empty to hide.
+    public void UpdateLiveLines(List<List<FaceNode>> paths)
+    {
+        ClearLiveLine();
+        if (laserMaterial == null || paths == null) return;
+
+        foreach (var path in paths)
+        {
+            if (path == null || path.Count < 2) continue;
+            var lr = MakeLine("PathLaser_Live", livePathColor, out GameObject go);
+            _liveGOs.Add(go);
+            _liveCoroutines.Add(StartCoroutine(RevealLine(lr, BuildPositions(path))));
+        }
+    }
+
+    // Removes the live preview lines (called when Run() commits the path).
     public void ClearLiveLine()
     {
-        if (_liveCoroutine != null) { StopCoroutine(_liveCoroutine); _liveCoroutine = null; }
-        if (_liveGO != null) { Destroy(_liveGO); _liveGO = null; }
+        foreach (var c in _liveCoroutines) if (c != null) StopCoroutine(c);
+        _liveCoroutines.Clear();
+        foreach (var g in _liveGOs) if (g != null) Destroy(g);
+        _liveGOs.Clear();
     }
 
     // Removes all loop lines whose path overlaps any of the given cells.

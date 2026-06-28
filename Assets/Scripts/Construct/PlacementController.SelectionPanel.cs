@@ -86,7 +86,10 @@ public partial class PlacementController
             float fireRate = t.fireInterval > 0.0001f ? 1f / t.fireInterval : 0f;
             sb.AppendLine($"Damage     <b>{t.bulletDamage}</b>");
             sb.AppendLine($"Range      <b>{t.attackRange:0.#}</b>");
-            sb.AppendLine($"Fire rate  <b>{fireRate:0.0}/s</b>");
+            if (t.SynergyFireRateMultiplier > 1.0001f)
+                sb.AppendLine($"Fire rate  <b>{t.EffectiveFireRate:0.0}/s</b>  <color=#7BE6B0>(+{(t.SynergyFireRateMultiplier - 1f) * 100f:0}%)</color>");
+            else
+                sb.AppendLine($"Fire rate  <b>{fireRate:0.0}/s</b>");
             sb.AppendLine($"Bullets    <b>{Mathf.Max(1, t.projectilesPerShot)}</b>");
 
             if (t.mode == TurretController.Mode.Slow)
@@ -535,7 +538,11 @@ public partial class PlacementController
 
         PanelRow("Damage",    turret.bulletDamage.ToString());
         PanelRow("Range",     turret.attackRange.ToString("0.#"));
-        PanelRow("Fire rate", fireRate.ToString("0.0") + "/s");
+        if (turret.SynergyFireRateMultiplier > 1.0001f)
+            PanelRow("Fire rate", turret.EffectiveFireRate.ToString("0.0") + "/s  (+"
+                                  + ((turret.SynergyFireRateMultiplier - 1f) * 100f).ToString("0") + "%)");
+        else
+            PanelRow("Fire rate", fireRate.ToString("0.0") + "/s");
         PanelRow("Bullets",   Mathf.Max(1, turret.projectilesPerShot).ToString());
 
         if (turret.mode == TurretController.Mode.Slow)

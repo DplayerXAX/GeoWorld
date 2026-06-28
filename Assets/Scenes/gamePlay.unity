@@ -850,13 +850,13 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 330585543}
   serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalRotation: {x: -0.17364825, y: 0, z: 0, w: 0.9848078}
   m_LocalPosition: {x: 0, y: 1, z: -10}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 0}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+  m_LocalEulerAnglesHint: {x: -20, y: 0, z: 0}
 --- !u!114 &330585547
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2315,6 +2315,7 @@ GameObject:
   m_Component:
   - component: {fileID: 1188158438}
   - component: {fileID: 1188158437}
+  - component: {fileID: 1188158439}
   m_Layer: 0
   m_Name: BackgroundReact
   m_TagString: Untagged
@@ -2362,6 +2363,92 @@ Transform:
   m_Children: []
   m_Father: {fileID: 154636173}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1188158439
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1188158436}
+  m_Enabled: 0
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e91067c67225c9f4ebca5863cb054e69, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::AtmosphereDecor
+  backdropLayer: 11
+  archCount: 30
+  archRadiusRange: {x: 300, y: 500}
+  archHeightRange: {x: 300, y: 420}
+  archWidthRange: {x: 25, y: 30}
+  archBaseY: -600
+  archCapChance: 0.25
+  pillarColor: {r: 0.8, g: 0.8, b: 0.8, a: 1}
+  pillarColorJitter: 0.12
+  shapeCount: 0
+  radiusRange: {x: 80, y: 160}
+  heightRange: 75
+  sizeRange: {x: 2.5, y: 9}
+  spinSpeed: 6
+  bobAmplitude: 2.2
+  bobSpeed: 0.3
+  driftSpeed: 1
+  palette:
+  - {r: 0.9496855, g: 0.9359094, b: 0.91086185, a: 1}
+  - {r: 0.8301887, g: 0.82350284, b: 0.8119141, a: 1}
+  - {r: 0.754717, g: 0.7333571, b: 0.70487714, a: 1}
+  shaftCount: 6
+  shaftLength: {x: 170, y: 320}
+  shaftWidth: {x: 150, y: 100}
+  shaftDistance: {x: 90, y: 240}
+  shaftBaseY: -55
+  shaftColor: {r: 1, g: 0.88, b: 0.6, a: 0.32}
+  shaftPulse: 0.3
+  shaftPulseSpeed: 0.5
+  baseFog: 0
+  baseFogPerColumn: 6
+  baseFogY: -10
+  baseFogSize: {x: 45, y: 95}
+  baseFogAlpha: 0.5
+  baseFogScatter: 18
+  sunGlow: 1
+  sunGlowDir: {x: 0.15, y: 1, z: 0.1}
+  sunGlowColor: {r: 1, g: 0.85, b: 0.55, a: 0.6}
+  sunGlowSize: 140
+  sunGlowDistance: 240
+  sunGlowPulse: 0.12
+  fogPatches: 0
+  fogPatchCount: 28
+  fogPatchDistance: {x: 75, y: 240}
+  fogPatchHeight: {x: -12, y: 45}
+  fogPatchSize: {x: 60, y: 135}
+  fogPatchAlpha: 0.45
+  fogPatchDrift: 1.2
+  depthFog: 1
+  depthFogColor: {r: 0.9308176, g: 0.9308176, b: 0.9308176, a: 1}
+  depthFogScatterTint: {r: 1, g: 1, b: 1, a: 1}
+  depthFogBaseDensity: 0.04
+  depthFogExtinction: 1
+  depthFogStart: 300
+  depthFogRamp: 140
+  depthFogMaxDistance: 600
+  depthFogHeight: -300
+  depthFogHeightFalloff: 0.03
+  depthFogStrength: 0.9
+  depthFogAnisotropy: 0.6
+  depthFogScatter: 0.8
+  depthFogSteps: 14
+  depthFogNoiseScale: 0.02
+  depthFogNoiseAmount: 0.7
+  depthFogWind: {x: 0.5, y: 0.05, z: 0.3}
+  depthFogRadius: 25
+  enableFog: 0
+  fogColor: {r: 1, g: 1, b: 1, a: 1}
+  fogStart: 40
+  fogEnd: 280
+  fogMaxStrength: 0.9
+  combatMotionBoost: 0.6
+  combatGlowBoost: 0.5
+  combatLerpSpeed: 2
 --- !u!1 &1207342288
 GameObject:
   m_ObjectHideFlags: 0

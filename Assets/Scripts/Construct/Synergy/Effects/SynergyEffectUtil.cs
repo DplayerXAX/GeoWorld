@@ -47,6 +47,31 @@ public static class SynergyEffectUtil
         return n;
     }
 
+    // A world position on a random claimed cell of this effect's active synergy
+    // (for spawning income/harvest motes). Returns false when nothing is claimed.
+    public static bool TryGetClaimedCellWorld(GameEffect effect, out Vector3 world)
+    {
+        world = Vector3.zero;
+        var ev   = SynergyEvaluator.Instance;
+        var grid = GridSystem.instance;
+        if (ev == null || grid == null || effect == null) return false;
+
+        var actives = ev.Actives;
+        for (int i = 0; i < actives.Count; i++)
+        {
+            var a = actives[i];
+            if (a?.rule == null || a.rule.effect != effect || a.claimedPieces == null) continue;
+            foreach (var p in a.claimedPieces)
+            {
+                if (p?.cells == null || p.cells.Length == 0) continue;
+                var c = p.cells[Random.Range(0, p.cells.Length)];
+                world = grid.GridToWorld(c) + Vector3.up * (grid.cellSize * 0.6f);
+                return true;
+            }
+        }
+        return false;
+    }
+
     // Total claimed CELLS (cubes) across this effect's active synergies.
     public static int CountClaimedCells(GameEffect effect)
     {

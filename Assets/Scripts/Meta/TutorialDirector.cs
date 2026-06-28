@@ -45,6 +45,10 @@ public class TutorialDirector : MonoBehaviour
         var step = Cur;
         if (step == null) return true;            // tutorial finished → no gating
         if (step.freeOperations) return true;     // sandbox step
+        // Hidden-in-combat steps lift their gating during the wave so the tutorial
+        // never blocks combat actions.
+        if (step.hideInCombat && GameFlowManager.Instance != null
+            && GameFlowManager.Instance.phase == GamePhase.Running) return true;
         // Buying: CanPurchase passes the generic Purchase intent. Allow it when the
         // current step is ANY purchase kind and the bought item fits that kind.
         if (op == TutorialStepKind.Purchase)
@@ -101,6 +105,12 @@ public class TutorialDirector : MonoBehaviour
     string _hintMsg = "";
     int    _hintCharCount;
 
+    // ── Dialogue delivery ───────────────────────────────────────────────────────
+    int                  _dialoguePlayedStep = -1;   // which step has had its convo kicked off
+    bool                 _dialogueActive;            // a tutorial conversation is on screen
+    DialogueConversation _runtimeConvo;              // built for one-line speaker hints
+    DialogueRunner       _runner;                    // cached so OnDestroy doesn't spawn one
+
     // RuntimeInitializeOnLoadMethod runs ONCE at startup — not per scene load — so
     // hook sceneLoaded and (re)spawn whenever a gameplay scene loads with a tutorial
     // RunConfig (e.g. after entering the level from LevelSelect).
@@ -156,6 +166,8 @@ public class TutorialDirector : MonoBehaviour
         if (pc != null && pc.placementConstraint == (System.Func<BlockData, Vector3Int[], bool>)MatchesStep)
             pc.placementConstraint = null;
         if (_ghost != null) Destroy(_ghost);
+        if (_runner != null) _runner.OnFinished -= OnDialogueFinished;
+        if (_runtimeConvo != null) Destroy(_runtimeConvo);
     }
 
     TutorialStep Cur =>
@@ -167,6 +179,31 @@ public class TutorialDirector : MonoBehaviour
         if (IntroDirector.Playing) return;   // wait for the entrance animation before running steps
 
         var step = Cur;
+
+        // Steps flagged hideInCombat go dark during the Running phase: hide their
+        // dialogue/hint and don't advance until combat ends (then they re-show).
+        if (step != null && step.hideInCombat
+            && GameFlowManager.Instance != null && GameFlowManager.Instance.phase == GamePhase.Running)
+        {
+            if (_dialogueActive) CloseDialogue();
+            if (_hintCanvas != null) _hintCanvas.enabled = false;
+            _dialoguePlayedStep = -1;   // replay the dialogue when combat ends
+            return;
+        }
+
+        // Kick off this step's conversation once (now that the intro is done). The
+        // dialogue REPLACES the hint box for the step.
+        if (step != null && step.UsesDialogue && _dialoguePlayedStep != _step)
+        {
+            _dialoguePlayedStep = _step;
+            PlayStepDialogue(step);
+        }
+
+        // Note: a tutorial conversation is DISPLAY-ONLY (passive) — it ignores clicks
+        // and doesn't block the game. The step's own completion (action / Input / Wait
+        // timer) is what advances to the next step (and the next dialogue). So we do
+        // NOT early-out here while a dialogue is showing.
+
         if (step != null && step.kind == TutorialStepKind.Run
             && GameFlowManager.Instance != null
             && GameFlowManager.Instance.phase == GamePhase.Running)
@@ -314,6 +351,7 @@ public class TutorialDirector : MonoBehaviour
         if (step == null)                              // tutorial finished → lift constraint
         {
             if (pc != null) pc.placementConstraint = null;
+            CloseDialogue();
             return;
         }
 
@@ -321,7 +359,66 @@ public class TutorialDirector : MonoBehaviour
         if (step.kind == TutorialStepKind.Place) BuildGhost(step);
 
         FocusCameraForStep(step);
+
+        // Deliver this step's dialogue the moment the step begins — so completing the
+        // previous step flows straight into it. During the intro it's deferred; Update
+        // plays it after. If the new step has NO dialogue, close any open one.
+        if (step.UsesDialogue && !IntroDirector.Playing)
+        {
+            _dialoguePlayedStep = _step;
+            PlayStepDialogue(step);
+        }
+        else if (!step.UsesDialogue)
+        {
+            CloseDialogue();
+        }
     }
+
+    void CloseDialogue()
+    {
+        if (_dialogueActive && _runner != null) _runner.Stop();
+        _dialogueActive = false;
+    }
+
+    // ── Dialogue delivery ───────────────────────────────────────────────────────
+
+    void PlayStepDialogue(TutorialStep step)
+    {
+        var convo = step.conversation != null ? step.conversation : BuildOneLineConvo(step);
+        if (convo == null) return;
+
+        _runner = DialogueRunner.Instance;
+        if (_runner == null) return;
+
+        _dialogueActive = true;
+        _runner.OnFinished -= OnDialogueFinished;
+        _runner.OnFinished += OnDialogueFinished;
+        _runner.Play(convo, passive: true);   // display-only: only completing the step advances it
+    }
+
+    // A throwaway one-line conversation: `speaker` says the step's `hint`.
+    DialogueConversation BuildOneLineConvo(TutorialStep step)
+    {
+        if (step.speaker == null || string.IsNullOrEmpty(step.hint)) return null;
+        if (_runtimeConvo != null) Destroy(_runtimeConvo);
+        _runtimeConvo = ScriptableObject.CreateInstance<DialogueConversation>();
+        _runtimeConvo.topic = "";
+        _runtimeConvo.lines = new List<DialogueLine>
+        {
+            new DialogueLine
+            {
+                character = step.speaker,
+                text      = step.hint,
+                slot      = step.speakerSlot,
+                portrait  = step.speakerPortrait,
+            }
+        };
+        return _runtimeConvo;
+    }
+
+    // Tutorial dialogue is passive — it never finishes by a click. This only fires
+    // when WE stop/replace it (advancing the step), so just clear the active flag.
+    void OnDialogueFinished(DialogueConversation _) => _dialogueActive = false;
 
     // Glide the orbit camera to the start / end point when the step requests it.
     void FocusCameraForStep(TutorialStep step)
@@ -476,7 +573,7 @@ public class TutorialDirector : MonoBehaviour
 
         var    step = Cur;
         string msg  = step != null ? step.hint : null;
-        bool   show = !string.IsNullOrEmpty(msg)
+        bool   show = !string.IsNullOrEmpty(msg) && step != null && !step.UsesDialogue
                       && !SettingsScreen.Open && !PauseMenu.Paused && !IntroDirector.Playing;
 
         _hintCanvas.enabled = show;

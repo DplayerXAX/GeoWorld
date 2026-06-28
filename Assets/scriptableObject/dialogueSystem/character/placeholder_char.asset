@@ -10,10 +10,11 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: af172a97d6451a94fa53b7e10986f1a4, type: 3}
-  m_Name: Character
+  m_Name: placeholder_char
   m_EditorClassIdentifier: Assembly-CSharp::DialogueCharacter
-  displayName: Test
+  displayName: Placeholder
   nameColor: {r: 0.086, g: 0.086, b: 0.086, a: 1}
   portraits:
   - key: Default
-    sprite: {fileID: 21300000, guid: bcd7eb48f0ad10e468d4749463c1cc2f, type: 3}
+    sprite: {fileID: 21300000, guid: dab2a1f55f5a5374f9ddf79abf9181f5, type: 3}
+    scale: 1.5

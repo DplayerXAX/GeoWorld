@@ -70,6 +70,11 @@ public class TurretController : MonoBehaviour
         _synergyFireRateMult = Mathf.Max(0.01f, multiplier);
     }
 
+    // Current synergy fire-rate multiplier (1 = none) and the effective shots/sec
+    // after it — used by the selection panel to show the live buff.
+    public float SynergyFireRateMultiplier => _synergyFireRateMult;
+    public float EffectiveFireRate => fireInterval > 0.0001f ? _synergyFireRateMult / fireInterval : 0f;
+
     public void AddAttackSpeed(float percent)
     {
         if (percent <= 0f) return;
