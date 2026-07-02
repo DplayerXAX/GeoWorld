@@ -58,7 +58,10 @@ public class AbundanceHarvestEffect : GameEffect
         ResourceManager.Instance?.AddBlockCurrency(amount);
 
         if (SynergyEffectUtil.TryGetClaimedCellWorld(this, out var w))
+        {
             SynergyBuffFx.Mote(w, moteColor,
                 GridSystem.instance != null ? GridSystem.instance.cellSize * 0.8f : 0.8f);
+            CurrencyFlyFx.Fly(w, isTurret: false, amount);
+        }
     }
 }

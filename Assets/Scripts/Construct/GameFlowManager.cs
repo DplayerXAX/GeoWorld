@@ -153,8 +153,7 @@ public class GameFlowManager : MonoBehaviour
             && _wavesCompleted >= RunConfig.Level.wavesToClear
             && (!RunConfig.Level.requireAllObjectives || LevelObjectivesTracker.AllRequiredSatisfied))
         {
-            SaveSystem.RecordClear(RunConfig.Level, _wavesCompleted);
-            ReturnToMap();
+            DoLevelClear(_wavesCompleted);
             return true;
         }
 
@@ -164,7 +163,62 @@ public class GameFlowManager : MonoBehaviour
         return false;
     }
 
-    void ReturnToMap()
+    // Continuous objective-driven clear: fires the moment every NON-optional
+    // objective is satisfied (any phase). Gated by Level.clearOnObjectivesComplete.
+    bool _levelDone;
+
+    // True while the level-clear settlement is on screen — systems read this to
+    // lock input (shop, pickup, sell, …) and hide gameplay HUD.
+    public bool LevelCleared => _levelDone;
+    public static bool SettlementUp => Instance != null && Instance._levelDone;
+
+    bool TryObjectiveClear()
+    {
+        if (_levelDone) return false;
+        var lv = RunConfig.Mode == GameMode.Level ? RunConfig.Level : null;
+        if (lv == null || !lv.clearOnObjectivesComplete) return false;
+        if (!LevelObjectivesTracker.Tracking) return false;   // tracker not live yet
+        if (!HasRequiredObjective(lv) || !LevelObjectivesTracker.AllRequiredSatisfied) return false;
+
+        DoLevelClear(_wavesCompleted);
+        return true;
+    }
+
+    static bool HasRequiredObjective(LevelDefinition lv)
+    {
+        if (lv == null || lv.objectives == null) return false;
+        for (int i = 0; i < lv.objectives.Count; i++)
+            if (lv.objectives[i] != null && !lv.objectives[i].optional) return true;
+        return false;
+    }
+
+    // Records the clear, stops any in-progress wave, and shows the settlement.
+    void DoLevelClear(int wavesReached)
+    {
+        if (_levelDone) return;
+        _levelDone = true;
+
+        if (phase == GamePhase.Running)
+        {
+            ArpeggiatorManager.Instance?.StopRecording();
+            if (currentUnit != null) { Destroy(currentUnit.gameObject); currentUnit = null; }
+            ResourceManager.Instance?.SetCombatActive(false);
+            enemyBaseManager?.CancelWave();
+            BackgroundReactor.Instance?.SetCombatMode(false);
+            AudioManager.Instance?.ExitBattleBGM();
+        }
+        Time.timeScale = 1f;
+        phase = GamePhase.Build;
+
+        SaveSystem.RecordClear(RunConfig.Level, wavesReached);
+
+        int lives    = PlayerHealth.Instance != null ? PlayerHealth.Instance.CurrentLives : 0;
+        int maxLives = PlayerHealth.Instance != null ? PlayerHealth.Instance.maxLives     : 0;
+        bool objMet  = LevelObjectivesTracker.AllRequiredSatisfied;
+        LevelClearScreen.Show(RunConfig.Level, wavesReached, lives, maxLives, objMet, ReturnToMap);
+    }
+
+    public void ReturnToMap()
     {
         Time.timeScale = 1f;
         LoadingScreen.Go("LevelSelect");   // spinning-cube loading page, then async-load
@@ -277,6 +331,10 @@ public class GameFlowManager : MonoBehaviour
     void Update()
     {
         if (phase == GamePhase.GameOver) return;
+
+        // Objective-driven levels clear the instant every required goal is met (any
+        // phase), independent of wavesToClear.
+        if (TryObjectiveClear()) return;
 
         if (phase == GamePhase.Build)
         {

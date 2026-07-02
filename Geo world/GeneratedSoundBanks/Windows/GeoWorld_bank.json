@@ -10,7 +10,7 @@
     "Type": "User",
     "GUID": "{FBAC0406-FA36-4CC0-8121-80F7B6376C7E}",
     "Language": "SFX",
-    "Hash": "{F0D801FE-3DFF-080B-0A4B-9EB0800FF48C}",
+    "Hash": "{BE4D1C7F-A473-37C4-5A9E-3695BA3F8123}",
     "ObjectPath": "\\SoundBanks\\Default Work Unit\\GeoWorld_bank",
     "ShortName": "GeoWorld_bank",
     "Path": "GeoWorld_bank.bnk",
@@ -70,6 +70,14 @@
       "Location": "Memory",
       "ShortName": "2.wav",
       "CachePath": "5A/{5A86A6C0-68E1-5E45-F13B-F453451E2AC5}.wem"
+     },
+     {
+      "Id": "265774773",
+      "Language": "SFX",
+      "Streaming": "false",
+      "Location": "Memory",
+      "ShortName": "Geo world\\Originals\\SFX\\time drain.wav",
+      "CachePath": "83/{8335D484-A790-CAD0-9284-05AC887809DD}.wem"
      },
      {
       "Id": "267990303",
@@ -521,6 +529,18 @@
         "Id": "282693327"
        }
       ]
+     },
+     {
+      "Id": "3258153068",
+      "Name": "TimeDrain",
+      "ObjectPath": "\\Events\\Default Work Unit\\TimeDrain",
+      "GUID": "{E43C13E8-CAF7-4BCA-BA8F-99755EFA551A}",
+      "DurationType": "Infinite",
+      "MediaRefs": [
+       {
+        "Id": "265774773"
+       }
+      ]
      }
     ],
     "GameParameters": [
@@ -622,6 +642,6 @@
     ]
    }
   ],
-  "FileHash": "{2A539AC4-0909-B8A0-F9AD-9A4F419F32E7}"
+  "FileHash": "{FA024343-0CBC-9433-8C5D-30686CCC82E3}"
  }
 }

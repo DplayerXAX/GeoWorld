@@ -11,6 +11,7 @@ Event	ID	Name			Wwise Object Path	Notes
 	1836525772	Dm			\Default Work Unit\Dm	
 	1886858551	Am			\Default Work Unit\Am	
 	2050041828	Play_Arp_Note			\Default Work Unit\Play_Arp_Note	
+	3258153068	TimeDrain			\Default Work Unit\TimeDrain	
 
 Switch Group	ID	Name			Wwise Object Path	Notes
 	3818020044	NoteRange			\Default Work Unit\NoteRange	
@@ -44,6 +45,7 @@ In Memory Audio	ID	Name	Audio source file		Wwise Object Path	Notes	Data Size
 	135888558	3	.cache\4E\{4EB90DB4-0F73-5D35-95A7-8286A0C58173}.wem		\Containers\Default Work Unit\SC_Note\3		352896
 	205244938	4	.cache\FD\{FDA079BE-5726-49B1-C760-541B3852183F}.wem		\Containers\Default Work Unit\SC_Note\4		352896
 	217994856	2	.cache\5A\{5A86A6C0-68E1-5E45-F13B-F453451E2AC5}.wem		\Containers\Default Work Unit\SC_Note\2		352896
+	265774773	time drain	.cache\83\{8335D484-A790-CAD0-9284-05AC887809DD}.wem		\Containers\Default Work Unit\drainLoop\time drain\time drain		4939296
 	267990303	rotate	.cache\31\{3130154D-6829-8B70-A9C1-31B1F15B577D}.wem		\Containers\Default Work Unit\rotate\rotate		244320
 	282693327	dragon-studio-pop-402323	.cache\E4\{E4A48526-DE10-26C9-DD32-53D849D0FAF3}.wem		\Containers\Default Work Unit\dragon-studio-pop-402323\dragon-studio-pop-402323		138336
 	318210178	New Music Track_02	.cache\B3\{B368F3FC-2490-3758-E160-4B28D80FCEFF}.wem		\Containers\Default Work Unit\C\New Music Track_02		352896

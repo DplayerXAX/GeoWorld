@@ -25,6 +25,14 @@ public partial class PlacementController
     {
         if (infoPanel == null) return;
 
+        // Clear settlement: hide the selection panel entirely (no pick-up / sell / upgrade).
+        if (GameFlowManager.SettlementUp)
+        {
+            infoPanel.Hide();
+            upgradePanel?.Hide();
+            return;
+        }
+
         // Spawn-point forecast (same gate as the IMGUI start panel).
         if (mode == PlacementMode.Select && _selectedEndpoint != null && _selectedEndpointIsStart
             && (GameFlowManager.Instance == null || GameFlowManager.Instance.phase != GamePhase.Running))

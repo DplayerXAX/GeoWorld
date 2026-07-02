@@ -135,6 +135,17 @@
 						</Action>
 					</ChildrenList>
 				</Event>
+				<Event Name="TimeDrain" ID="{E43C13E8-CAF7-4BCA-BA8F-99755EFA551A}">
+					<ChildrenList>
+						<Action Name="" ID="{5BE31293-89D2-4675-8488-2DC6E1EE8DF8}" ShortID="565196289">
+							<ReferenceList>
+								<Reference Name="Target">
+									<ObjectRef Name="drainLoop" ID="{6E89A3F9-1208-4040-BC4D-AD836FE96AF3}" WorkUnitID="{48502AC3-EE10-4952-8017-84D50D1C5C35}"/>
+								</Reference>
+							</ReferenceList>
+						</Action>
+					</ChildrenList>
+				</Event>
 			</ChildrenList>
 		</WorkUnit>
 	</Events>

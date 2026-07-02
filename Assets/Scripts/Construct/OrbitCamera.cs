@@ -20,6 +20,12 @@ public class OrbitCamera : MonoBehaviour
     [Tooltip("Where the focus point sits on screen (0.5,0.5 = centre). e.g. LevelMapController sets x≈0.3 to bias the selected cell to the left.")]
     public Vector2 focusViewport = new Vector2(0.5f, 0.5f);
 
+    [Header("Gamepad")]
+    [Tooltip("Right-stick look sensitivity multiplier (mirrors mouse 'speed').")]
+    public float gamepadLookScale = 1f;
+    [Tooltip("Trigger/bumper zoom speed.")]
+    public float gamepadZoomSpeed = 12f;
+
     [Header("Projection toggle")]
     public KeyCode projectionToggleKey = KeyCode.F8;
     [Tooltip("Perspective FOV applied when switching out of ortho.")]
@@ -199,12 +205,20 @@ public class OrbitCamera : MonoBehaviour
             1f - Mathf.Exp(-transitionSpeed * Time.deltaTime)
         );
 
+        Vector2 lookInput = GamepadInput.Look;   // right stick — orbits without a button hold
+
         if (!useOrthographic)
         {
             if (Input.GetMouseButton(1))
             {
                 yaw += Input.GetAxis("Mouse X") * speed * Time.deltaTime;
                 pitch -= Input.GetAxis("Mouse Y") * speed * Time.deltaTime;
+                pitch = Mathf.Clamp(pitch, minPitch, maxPitch);
+            }
+            else if (lookInput.sqrMagnitude > 0.0001f)
+            {
+                yaw += lookInput.x * speed * gamepadLookScale * Time.deltaTime;
+                pitch -= lookInput.y * speed * gamepadLookScale * Time.deltaTime;
                 pitch = Mathf.Clamp(pitch, minPitch, maxPitch);
             }
         }
@@ -217,7 +231,16 @@ public class OrbitCamera : MonoBehaviour
                 pitch -= Input.GetAxis("Mouse Y") * speed * 0.2f * Time.deltaTime;
                 pitch = Mathf.Clamp(pitch, 10f, 80f);
             }
+            else if (lookInput.sqrMagnitude > 0.0001f)
+            {
+                yaw += lookInput.x * speed * 0.3f * gamepadLookScale * Time.deltaTime;
+                pitch -= lookInput.y * speed * 0.2f * gamepadLookScale * Time.deltaTime;
+                pitch = Mathf.Clamp(pitch, 10f, 80f);
+            }
         }
+
+        if (Mathf.Abs(GamepadInput.ZoomDelta) > 0.05f)
+            AddDistance(-GamepadInput.ZoomDelta * gamepadZoomSpeed * Time.deltaTime);
         Quaternion rot;
 
         if (useOrthographic)

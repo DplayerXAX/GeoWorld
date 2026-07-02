@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::BalanceTable
   blockStartingCurrency: 250
   blockIncomeByRound: 2300000025000000280000002b0000002f00000033000000370000003c00000041000000470000004d000000530000005a0000006100000069000000
-  blockIncomeEndlessGrowth: 8
+  blockIncomeEndlessGrowth: 30
   turretStartingCurrency: 20
   turretIncomeByRound: 030000000300000004000000040000000500000005000000060000000600000007000000070000000800000008000000090000000900000014000000
   turretIncomeEndlessGrowth: 1
@@ -26,9 +26,9 @@ MonoBehaviour:
   fluctuationRange: {x: 0.82, y: 1.22}
   commonRarityMult: 1
   uncommonRarityMult: 1.4
-  rareRarityMult: 2
-  liftTypeMult: 1.4
-  shadowTypeMult: 0.85
+  rareRarityMult: 1.6
+  liftTypeMult: 1
+  shadowTypeMult: 1
   startingLives: 10
   enemies:
   - name: Fast

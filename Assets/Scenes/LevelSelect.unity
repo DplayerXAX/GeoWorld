@@ -1219,6 +1219,10 @@ MonoBehaviour:
   gridSystem: {fileID: 1293787489}
   cubePrefab: {fileID: 1003193531}
   pawn: {fileID: 1132883677}
+  timeLoop:
+    idInternal: 0
+    valueGuidInternal: 
+    WwiseObjectReference: {fileID: 11400000, guid: 52054f8a490aa594fbe07f471ed6fe84, type: 2}
   infoPanel: {fileID: 303145625}
   gameplayScene: gamePlay
   titleScene: Title
@@ -1450,6 +1454,8 @@ MonoBehaviour:
   orthoZoomSpeed: 2
   orthoAngle: {x: 35, y: 45, z: 0}
   focusViewport: {x: 0.5, y: 0.2}
+  gamepadLookScale: 1
+  gamepadZoomSpeed: 12
   projectionToggleKey: 289
   perspectiveFov: 50
   transitionSpeed: 6
@@ -1465,7 +1471,7 @@ GameObject:
   - component: {fileID: 1911354783}
   - component: {fileID: 1911354782}
   m_Layer: 0
-  m_Name: GameObject
+  m_Name: pauseMenu
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -1486,14 +1492,14 @@ MonoBehaviour:
   toggleKey: 27
   titleScene: Title
   overlayColor: {r: 1, g: 1, b: 1, a: 0.6}
-  titleColor: {r: 0.6, g: 0.95, b: 1, a: 1}
   panelWidth: 260
   buttonHeight: 42
   showControls: 1
-  controlsRight: 12
-  controlsTop: 12
-  controlSize: 50
-  controlFg: {r: 1, g: 1, b: 1, a: 1}
+  pauseIcon: {fileID: 21300000, guid: 2f6dd4e25db6d5940b6f64a87b995189, type: 3}
+  resumeIcon: {fileID: 21300000, guid: 198ba2fc8853d664e8ee311ca9a29522, type: 3}
+  fastForwardIcon: {fileID: 21300000, guid: 3e1f31c09da1c7a4a94d710aa2a7dcff, type: 3}
+  speedPipFilled: {fileID: 10917, guid: 0000000000000000f000000000000000, type: 0}
+  speedPipEmpty: {fileID: 10905, guid: 0000000000000000f000000000000000, type: 0}
 --- !u!4 &1911354783
 Transform:
   m_ObjectHideFlags: 0
@@ -1519,6 +1525,7 @@ GameObject:
   m_Component:
   - component: {fileID: 1965468296}
   - component: {fileID: 1965468295}
+  - component: {fileID: 1965468297}
   m_Layer: 0
   m_Name: BackgroundReact
   m_TagString: Untagged
@@ -1627,6 +1634,31 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1965468297
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1965468294}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e4958a0c109860647aebf65a62e482f9, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: AK.Wwise.Unity.MonoBehaviour::AkBank
+  triggerList: f7e1664c
+  useOtherObject: 0
+  data:
+    idInternal: 0
+    valueGuidInternal: 
+    WwiseObjectReference: {fileID: 11400000, guid: 6f1abaeb51019fc48ad73bcf3b869753, type: 2}
+  decodeBank: 0
+  overrideLoadSetting: 0
+  loadAsynchronous: 0
+  saveDecodedBank: 0
+  unloadTriggerList: 958ca0ea
+  bankNameInternal: 
+  valueGuidInternal: 
 --- !u!1 &2021819522
 GameObject:
   m_ObjectHideFlags: 0

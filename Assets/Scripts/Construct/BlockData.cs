@@ -2,9 +2,9 @@ using UnityEngine;
 
 public enum BlockRarity
 {
-    Common,     // 普通：线条、单格
-    Uncommon,   // 少见：L形、长线
-    Rare,       // 稀有：T/S/2×2/3D角
+    Common,    
+    Uncommon,   
+    Rare,      
 }
 
 public enum BlockType
@@ -19,18 +19,6 @@ public enum BlockType
     AoeTurret
 }
 
-// Predefined Tetris-style shapes.
-// All shapes lie in the XZ plane (Y = 0) as their canonical orientation.
-// Cells are relative to origin (0,0,0).
-//
-// Rotation is handled entirely by PlacementController (keys 1 / 2 / 3 rotate
-// around X / Y / Z), so mirror-images and vertical variants are NOT needed here:
-//   J4  = L4  rotated 180° around Y          → removed
-//   Z4  = S4  rotated  90° around Y          → removed
-//   I2Y = I2  rotated  90° around Z          → removed
-//   I3Y = I3  rotated  90° around Z          → removed
-//   LY  = L3  rotated  90° around Z          → removed
-//   TY  = T4  rotated  90° around Z          → removed
 public enum BlockShape
 {
     Custom,     // cells defined manually — ignore auto-fill
@@ -82,7 +70,12 @@ public class BlockData : ScriptableObject
 
     [Header("Shape  (world-relative cell offsets)")]
     public Vector3Int[] cells;
-
+    //Special slot for turrets
+    public GameObject turretPrefab;
+    [Tooltip("Bullet prefab this turret fires. Overrides TurretController's Resources-folder fallback — set this instead of relying on Resources.Load, since TurretController is added at runtime (AddComponent) and has no prefab of its own to bind in the Inspector.")]
+    public GameObject bulletPrefab;
+    [Tooltip("Uniform scale applied to spawned bullets (1 = prefab's authored size unchanged). 0 = don't override, use TurretController's own bulletScale default.")]
+    [Min(0f)] public float bulletScale = 0f;
     [Header("Audio")]
     public AK.Wwise.Event onStepEvent;
     public AK.Wwise.Event previewEvent;

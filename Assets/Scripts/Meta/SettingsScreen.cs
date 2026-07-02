@@ -1,21 +1,32 @@
 using UnityEngine;
+using UnityEngine.UI;
+using UnityEngine.EventSystems;
+using TMPro;
 
-// Sectioned settings overlay (IMGUI), constructivist styling to match the title.
-// Auto-spawns a persistent instance — open from anywhere with SettingsScreen.Open
-// = true (Title menu, Pause menu). Edits GameSettings, applies + saves live.
+// Runtime UGUI settings overlay (rewritten from IMGUI so gamepad Navigate/Submit/Cancel
+// work via the scene's InputSystemUIInputModule — real Slider/Toggle components are
+// natively gamepad-navigable once selected, no custom input code needed). Same house
+// style as LevelClearScreen.cs / PauseMenu.cs. Auto-spawns a persistent instance —
+// open from anywhere with SettingsScreen.Open = true (Title menu, Pause menu).
 [DisallowMultipleComponent]
 public class SettingsScreen : MonoBehaviour
 {
-    public static bool Open;
+    static bool _open;
+    public static bool Open
+    {
+        get => _open;
+        set { if (_open != value) { _open = value; Instance?.OnOpenChanged(); } }
+    }
+    static SettingsScreen Instance;
 
-    static readonly string[] Sections    = { "AUDIO", "DISPLAY", "CONTROLS" };
+    static readonly string[] Sections = { "AUDIO", "DISPLAY", "CONTROLS" };
     static readonly string[] FrameLabels = { "Off", "30", "60", "120", "144" };
 
-    int      _section;
-    string   _rowLabel;
-    string   _drag;
-    GUIStyle _h1, _tab, _label, _val, _btn;
-    float    _builtScale = -1f;
+    int _section;
+    Canvas _canvas;
+    GameObject[] _tabButtons = new GameObject[3];
+    GameObject[] _sectionRoots = new GameObject[3];
+    GameObject _firstControlAudio, _firstControlDisplay, _firstControlControls;
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     static void Spawn()
@@ -26,192 +37,439 @@ public class SettingsScreen : MonoBehaviour
         go.AddComponent<SettingsScreen>();
     }
 
+    void Awake()
+    {
+        Instance = this;
+        BuildUI();
+        OnOpenChanged();
+    }
+
     void Update()
     {
-        if (Open && Input.GetKeyDown(KeyCode.Escape)) Open = false;
+        if (_open && (Input.GetKeyDown(KeyCode.Escape) || GamepadInput.CancelDown)) Open = false;
     }
 
-    void OnGUI()
+    void OnOpenChanged()
     {
-        if (!Open) return;
-        GUI.depth = -1000;            // force on top of every other IMGUI panel
-        float s = UiScale.Get();
-        BuildStyles(s);
+        if (_canvas != null) _canvas.enabled = _open;
+        if (_open)
+        {
+            RefreshAll();
+            FocusSection();
+        }
+        else
+        {
+            EventSystem.current?.SetSelectedGameObject(null);
+        }
+    }
 
-        Fill(new Rect(0, 0, Screen.width, Screen.height), new Color(0.05f, 0.05f, 0.06f, 0.78f));
+    void SelectSection(int i)
+    {
+        _section = i;
+        for (int s = 0; s < _sectionRoots.Length; s++) _sectionRoots[s].SetActive(s == i);
+        FocusSection();
+    }
 
-        float w = Mathf.Min(1080f * s, Screen.width  * 0.86f);
-        float h = Mathf.Min(700f  * s, Screen.height * 0.86f);
-        var panel = new Rect((Screen.width - w) * 0.5f, (Screen.height - h) * 0.5f, w, h);
-        Fill(panel, GeoPalette.Paper);
-        Fill(new Rect(panel.x, panel.y, 12f * s, h), GeoPalette.Signal);   // left spine
-        Fill(new Rect(panel.x, panel.y, w, 6f * s), GeoPalette.Ink);       // top rule
+    void FocusSection()
+    {
+        var go = _section switch
+        {
+            0 => _firstControlAudio,
+            1 => _firstControlDisplay,
+            _ => _firstControlControls,
+        };
+        if (go != null) EventSystem.current?.SetSelectedGameObject(go);
+    }
 
-        _h1.normal.textColor = GeoPalette.Ink;
-        GUI.Label(new Rect(panel.x + 34f * s, panel.y + 18f * s, w, 50f * s), "SETTINGS", _h1);
+    // ── Live-refresh widgets from GameSettings (called on open + after Reset) ──
+    Slider _masterSlider, _musicSlider, _sfxSlider, _panSlider, _lookSlider;
+    Toggle _fullscreenToggle, _vsyncToggle;
+    TMP_Text _qualityLabel, _frameCapLabel;
+    int _qualityIndex, _frameCapIndex;
 
-        // Section tabs (left column).
-        float tabX = panel.x + 30f * s, tabY = panel.y + 90f * s, tabW = 200f * s, tabH = 46f * s;
+    void RefreshAll()
+    {
+        _masterSlider.SetValueWithoutNotify(GameSettings.MasterVolume);
+        _musicSlider.SetValueWithoutNotify(GameSettings.MusicVolume);
+        _sfxSlider.SetValueWithoutNotify(GameSettings.SfxVolume);
+        _panSlider.SetValueWithoutNotify(GameSettings.CameraPanSpeed);
+        _lookSlider.SetValueWithoutNotify(GameSettings.LookSensitivity);
+        _fullscreenToggle.SetIsOnWithoutNotify(GameSettings.Fullscreen);
+        _vsyncToggle.SetIsOnWithoutNotify(GameSettings.VSync);
+
+        _qualityIndex = Mathf.Clamp(GameSettings.QualityLevel, 0, QualitySettings.names.Length - 1);
+        _qualityLabel.text = QualitySettings.names.Length > 0 ? QualitySettings.names[_qualityIndex] : "-";
+
+        _frameCapIndex = Mathf.Max(0, System.Array.IndexOf(GameSettings.FrameCaps, GameSettings.FrameCap));
+        _frameCapLabel.text = FrameLabels[Mathf.Clamp(_frameCapIndex, 0, FrameLabels.Length - 1)];
+    }
+
+    // ── UI build ──────────────────────────────────────────────────────────────
+    void BuildUI()
+    {
+        var canvasGo = new GameObject("SettingsCanvas", typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster));
+        canvasGo.transform.SetParent(transform, false);
+        _canvas = canvasGo.GetComponent<Canvas>();
+        _canvas.renderMode = RenderMode.ScreenSpaceOverlay;
+        _canvas.sortingOrder = 850;   // above Pause (800), below LevelClearScreen/Intro
+        var sc = canvasGo.GetComponent<CanvasScaler>();
+        sc.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+        sc.referenceResolution = new Vector2(1920f, 1080f);
+        sc.matchWidthOrHeight = 0.5f;
+        EnsureEventSystem();
+
+        var dim = NewRect("Dim", canvasGo.transform);
+        dim.anchorMin = Vector2.zero; dim.anchorMax = Vector2.one;
+        dim.offsetMin = dim.offsetMax = Vector2.zero;
+        dim.gameObject.AddComponent<Image>().color = new Color(0.05f, 0.05f, 0.06f, 0.78f);
+
+        var panel = NewRect("Panel", canvasGo.transform);
+        panel.anchorMin = panel.anchorMax = panel.pivot = new Vector2(0.5f, 0.5f);
+        panel.sizeDelta = new Vector2(1080f, 700f);
+        var bg = panel.gameObject.AddComponent<Image>();
+        bg.color = GeoPalette.Paper;
+        bg.sprite = UIRoundedRect.Get(24);
+        bg.type = Image.Type.Sliced;
+
+        var titleT = NewText("Title", panel, 42f, GeoPalette.Ink, FontStyles.Bold, TextAlignmentOptions.TopLeft);
+        titleT.text = "SETTINGS";
+        var trt = titleT.rectTransform;
+        trt.anchorMin = new Vector2(0f, 1f); trt.anchorMax = new Vector2(1f, 1f); trt.pivot = new Vector2(0f, 1f);
+        trt.anchoredPosition = new Vector2(34f, -18f);
+        trt.sizeDelta = new Vector2(-68f, 50f);
+
+        // Left tab column.
+        var tabCol = NewRect("Tabs", panel);
+        tabCol.anchorMin = new Vector2(0f, 0f); tabCol.anchorMax = new Vector2(0f, 1f); tabCol.pivot = new Vector2(0f, 1f);
+        tabCol.anchoredPosition = new Vector2(30f, -90f);
+        tabCol.sizeDelta = new Vector2(200f, 300f);
+        var tabVlg = tabCol.gameObject.AddComponent<VerticalLayoutGroup>();
+        tabVlg.spacing = 8f;
+        tabVlg.childControlWidth = tabVlg.childControlHeight = true;
+        tabVlg.childForceExpandWidth = true; tabVlg.childForceExpandHeight = false;
+
         for (int i = 0; i < Sections.Length; i++)
         {
-            var r = new Rect(tabX, tabY + i * (tabH + 8f * s), tabW, tabH);
-            bool on = i == _section;
-            if (on) Fill(r, GeoPalette.Ink);
-            Fill(new Rect(r.x, r.y, 6f * s, tabH), on ? GeoPalette.Signal : new Color(0, 0, 0, 0.18f));
-            _tab.normal.textColor = on ? GeoPalette.Paper : GeoPalette.Ink;
-            GUI.Label(new Rect(r.x + 18f * s, r.y, tabW, tabH), Sections[i], _tab);
-            if (GUI.Button(r, GUIContent.none, GUIStyle.none)) _section = i;
+            int idx = i;
+            var tab = BuildTabButton(tabCol, Sections[i], () => SelectSection(idx));
+            _tabButtons[i] = tab.gameObject;
         }
 
-        var content = new Rect(panel.x + 260f * s, panel.y + 96f * s, w - 290f * s, h - 180f * s);
-        switch (_section)
+        // Right content area.
+        var content = NewRect("Content", panel);
+        content.anchorMin = new Vector2(0f, 0f); content.anchorMax = new Vector2(1f, 1f);
+        content.offsetMin = new Vector2(260f, 96f); content.offsetMax = new Vector2(-30f, -96f);
+
+        _sectionRoots[0] = BuildAudioSection(content);
+        _sectionRoots[1] = BuildDisplaySection(content);
+        _sectionRoots[2] = BuildControlsSection(content);
+
+        // Bottom buttons.
+        var resetBtn = BuildTextButton(panel, "RESET", false, () =>
         {
-            case 0: DrawAudio(content, s);    break;
-            case 1: DrawDisplay(content, s);  break;
-            default: DrawControls(content, s); break;
-        }
+            GameSettings.ResetDefaults();   // saves + applies internally
+            RefreshAll();
+        });
+        var brt = resetBtn.GetComponent<RectTransform>();
+        brt.anchorMin = brt.anchorMax = new Vector2(0f, 0f); brt.pivot = new Vector2(0f, 0f);
+        brt.anchoredPosition = new Vector2(30f, 24f);
+        brt.sizeDelta = new Vector2(150f, 46f);
 
-        float by = panel.y + h - 64f * s, bw = 150f * s, bh = 44f * s;
-        if (TextButton(new Rect(panel.x + 30f * s, by, bw, bh), "RESET", false))
-            GameSettings.ResetDefaults();
-        if (TextButton(new Rect(panel.x + w - bw - 30f * s, by, bw, bh), "BACK", true))
-            Open = false;
+        var backBtn = BuildTextButton(panel, "BACK", true, () => Open = false);
+        var bkrt = backBtn.GetComponent<RectTransform>();
+        bkrt.anchorMin = bkrt.anchorMax = new Vector2(1f, 0f); bkrt.pivot = new Vector2(1f, 0f);
+        bkrt.anchoredPosition = new Vector2(-30f, 24f);
+        bkrt.sizeDelta = new Vector2(150f, 46f);
+
+        SelectSection(0);
+        _canvas.enabled = false;
     }
 
-    // ── Sections ────────────────────────────────────────────────────────────────
-
-    void DrawAudio(Rect c, float s)
+    GameObject BuildAudioSection(RectTransform parent)
     {
-        float y = c.y; bool ch = false;
-        GameSettings.MasterVolume = Slider(Row(c, ref y, s, "Master"), GameSettings.MasterVolume, 0f, 1f, "P0", ref ch);
-        GameSettings.MusicVolume  = Slider(Row(c, ref y, s, "Music"),  GameSettings.MusicVolume,  0f, 1f, "P0", ref ch);
-        GameSettings.SfxVolume    = Slider(Row(c, ref y, s, "SFX"),    GameSettings.SfxVolume,    0f, 1f, "P0", ref ch);
-        if (ch) { GameSettings.ApplyAudio(); GameSettings.Save(); }
+        var root = NewRect("Audio", parent);
+        StretchFull(root);
+        var vlg = root.gameObject.AddComponent<VerticalLayoutGroup>();
+        vlg.spacing = 22f;
+        vlg.childControlWidth = vlg.childControlHeight = true;
+        vlg.childForceExpandWidth = true; vlg.childForceExpandHeight = false;
+
+        _masterSlider = BuildSliderRow(root, "Master", 0f, 1f, v => { GameSettings.MasterVolume = v; GameSettings.ApplyAudio(); GameSettings.Save(); });
+        _musicSlider  = BuildSliderRow(root, "Music",  0f, 1f, v => { GameSettings.MusicVolume  = v; GameSettings.ApplyAudio(); GameSettings.Save(); });
+        _sfxSlider    = BuildSliderRow(root, "SFX",    0f, 1f, v => { GameSettings.SfxVolume    = v; GameSettings.ApplyAudio(); GameSettings.Save(); });
+
+        _firstControlAudio = _masterSlider.gameObject;
+        return root.gameObject;
     }
 
-    void DrawDisplay(Rect c, float s)
+    GameObject BuildDisplaySection(RectTransform parent)
     {
-        float y = c.y; bool ch = false;
-        GameSettings.Fullscreen   = Toggle(Row(c, ref y, s, "Fullscreen"), GameSettings.Fullscreen, ref ch);
-        GameSettings.VSync        = Toggle(Row(c, ref y, s, "V-Sync"),     GameSettings.VSync,      ref ch);
-        GameSettings.QualityLevel = Choice(Row(c, ref y, s, "Quality"),    GameSettings.QualityLevel, QualitySettings.names, ref ch);
+        var root = NewRect("Display", parent);
+        StretchFull(root);
+        var vlg = root.gameObject.AddComponent<VerticalLayoutGroup>();
+        vlg.spacing = 22f;
+        vlg.childControlWidth = vlg.childControlHeight = true;
+        vlg.childForceExpandWidth = true; vlg.childForceExpandHeight = false;
 
-        int fi = Mathf.Max(0, System.Array.IndexOf(GameSettings.FrameCaps, GameSettings.FrameCap));
-        fi = Choice(Row(c, ref y, s, "Frame cap"), fi, FrameLabels, ref ch);
-        GameSettings.FrameCap = GameSettings.FrameCaps[Mathf.Clamp(fi, 0, GameSettings.FrameCaps.Length - 1)];
+        _fullscreenToggle = BuildToggleRow(root, "Fullscreen", v => { GameSettings.Fullscreen = v; GameSettings.ApplyDisplay(); GameSettings.Save(); });
+        _vsyncToggle      = BuildToggleRow(root, "V-Sync",     v => { GameSettings.VSync      = v; GameSettings.ApplyDisplay(); GameSettings.Save(); });
 
-        if (ch) { GameSettings.ApplyDisplay(); GameSettings.Save(); }
+        BuildChoiceRow(root, "Quality", out _qualityLabel,
+            () => { _qualityIndex = (_qualityIndex - 1 + QualitySettings.names.Length) % QualitySettings.names.Length; ApplyQuality(); },
+            () => { _qualityIndex = (_qualityIndex + 1) % QualitySettings.names.Length; ApplyQuality(); });
+
+        BuildChoiceRow(root, "Frame cap", out _frameCapLabel,
+            () => { _frameCapIndex = (_frameCapIndex - 1 + FrameLabels.Length) % FrameLabels.Length; ApplyFrameCap(); },
+            () => { _frameCapIndex = (_frameCapIndex + 1) % FrameLabels.Length; ApplyFrameCap(); });
+
+        _firstControlDisplay = _fullscreenToggle.gameObject;
+        return root.gameObject;
     }
 
-    void DrawControls(Rect c, float s)
+    void ApplyQuality()
     {
-        float y = c.y; bool ch = false;
-        GameSettings.CameraPanSpeed  = Slider(Row(c, ref y, s, "Camera pan speed"), GameSettings.CameraPanSpeed,  2f, 20f,  "0.0", ref ch);
-        GameSettings.LookSensitivity = Slider(Row(c, ref y, s, "Look sensitivity"), GameSettings.LookSensitivity, 40f, 300f, "0",  ref ch);
-        if (ch) { GameSettings.ApplyInput(); GameSettings.Save(); }
+        _qualityLabel.text = QualitySettings.names.Length > 0 ? QualitySettings.names[_qualityIndex] : "-";
+        GameSettings.QualityLevel = _qualityIndex;
+        GameSettings.ApplyDisplay(); GameSettings.Save();
     }
 
-    // ── Row + controls ───────────────────────────────────────────────────────────
-
-    // Draws the row's label and returns the rect for its control (right side).
-    Rect Row(Rect c, ref float y, float s, string label)
+    void ApplyFrameCap()
     {
-        float rowH = 60f * s;
-        var full = new Rect(c.x, y, c.width, rowH);
-        y += rowH + 14f * s;
-
-        _rowLabel = label;
-        _label.normal.textColor = GeoPalette.Ink;
-        GUI.Label(new Rect(full.x, full.y, full.width * 0.45f, rowH), label, _label);
-        return new Rect(full.x + full.width * 0.45f, full.y + rowH * 0.18f,
-                        full.width * 0.55f, rowH * 0.64f);
+        _frameCapLabel.text = FrameLabels[_frameCapIndex];
+        GameSettings.FrameCap = GameSettings.FrameCaps[Mathf.Clamp(_frameCapIndex, 0, GameSettings.FrameCaps.Length - 1)];
+        GameSettings.ApplyDisplay(); GameSettings.Save();
     }
 
-    float Slider(Rect r, float val, float min, float max, string fmt, ref bool changed)
+    GameObject BuildControlsSection(RectTransform parent)
     {
-        float t = Mathf.InverseLerp(min, max, val);
-        var track = new Rect(r.x, r.center.y - 3f, r.width - 70f, 6f);
-        Fill(track, new Color(0, 0, 0, 0.16f));
-        Fill(new Rect(track.x, track.y, track.width * t, track.height), GeoPalette.Signal);
-        float hx = track.x + track.width * t;
-        Fill(new Rect(hx - 7f, track.y - 8f, 14f, 22f), GeoPalette.Gold);
+        var root = NewRect("Controls", parent);
+        StretchFull(root);
+        var vlg = root.gameObject.AddComponent<VerticalLayoutGroup>();
+        vlg.spacing = 22f;
+        vlg.childControlWidth = vlg.childControlHeight = true;
+        vlg.childForceExpandWidth = true; vlg.childForceExpandHeight = false;
 
-        var e = Event.current;
-        var hit = new Rect(track.x - 8f, track.y - 14f, track.width + 16f, 34f);
-        if (e.type == EventType.MouseDown && hit.Contains(e.mousePosition)) _drag = _rowLabel;
-        if (_drag == _rowLabel)
-        {
-            if (e.type == EventType.MouseDrag || e.type == EventType.MouseDown)
-            {
-                float nt = Mathf.Clamp01((e.mousePosition.x - track.x) / Mathf.Max(1f, track.width));
-                float nv = Mathf.Lerp(min, max, nt);
-                if (!Mathf.Approximately(nv, val)) { val = nv; changed = true; }
-                e.Use();
-            }
-            if (e.type == EventType.MouseUp) _drag = null;
-        }
+        _panSlider  = BuildSliderRow(root, "Camera pan speed", 2f, 20f,  v => { GameSettings.CameraPanSpeed  = v; GameSettings.ApplyInput(); GameSettings.Save(); });
+        _lookSlider = BuildSliderRow(root, "Look sensitivity", 40f, 300f, v => { GameSettings.LookSensitivity = v; GameSettings.ApplyInput(); GameSettings.Save(); });
 
-        _val.normal.textColor = GeoPalette.Ink;
-        GUI.Label(new Rect(r.xMax - 64f, r.y - r.height * 0.18f, 64f, r.height * 1.36f), val.ToString(fmt), _val);
-        return val;
+        _firstControlControls = _panSlider.gameObject;
+        return root.gameObject;
     }
 
-    bool Toggle(Rect r, bool on, ref bool changed)
+    // ── Row builders ──────────────────────────────────────────────────────────
+    static void StretchFull(RectTransform rt)
     {
-        var pill = new Rect(r.x, r.center.y - 16f, 88f, 32f);
-        Fill(pill, on ? GeoPalette.Signal : new Color(0, 0, 0, 0.22f));
-        _val.normal.textColor = on ? GeoPalette.Paper : GeoPalette.Ink;
-        var a = _val.alignment; _val.alignment = TextAnchor.MiddleCenter;
-        GUI.Label(pill, on ? "ON" : "OFF", _val);
-        _val.alignment = a;
-        if (GUI.Button(pill, GUIContent.none, GUIStyle.none)) { on = !on; changed = true; }
-        return on;
+        rt.anchorMin = Vector2.zero; rt.anchorMax = Vector2.one;
+        rt.offsetMin = rt.offsetMax = Vector2.zero;
     }
 
-    int Choice(Rect r, int idx, string[] opts, ref bool changed)
+    Slider BuildSliderRow(RectTransform parent, string label, float min, float max, System.Action<float> onChanged)
     {
-        if (opts == null || opts.Length == 0) return idx;
-        idx = Mathf.Clamp(idx, 0, opts.Length - 1);
+        var row = NewRect("Row", parent);
+        row.gameObject.AddComponent<LayoutElement>().minHeight = 54f;
+        var hlg = row.gameObject.AddComponent<HorizontalLayoutGroup>();
+        hlg.spacing = 16f; hlg.childAlignment = TextAnchor.MiddleLeft;
+        hlg.childControlWidth = hlg.childControlHeight = true;
+        hlg.childForceExpandWidth = false; hlg.childForceExpandHeight = false;
 
-        float bh = 32f;
-        var lA = new Rect(r.x, r.center.y - bh * 0.5f, bh, bh);
-        var rA = new Rect(r.x + 230f, r.center.y - bh * 0.5f, bh, bh);
-        if (TextButton(lA, "‹", false)) { idx = (idx - 1 + opts.Length) % opts.Length; changed = true; }
-        if (TextButton(rA, "›", false)) { idx = (idx + 1) % opts.Length; changed = true; }
+        var labelT = NewText("Label", row, 22f, GeoPalette.Ink, FontStyles.Bold, TextAlignmentOptions.MidlineLeft);
+        labelT.text = label;
+        labelT.gameObject.AddComponent<LayoutElement>().preferredWidth = 260f;
 
-        _val.normal.textColor = GeoPalette.Ink;
-        var a = _val.alignment; _val.alignment = TextAnchor.MiddleCenter;
-        GUI.Label(new Rect(lA.xMax + 6f, r.center.y - 16f, rA.x - lA.xMax - 12f, 32f), opts[idx], _val);
-        _val.alignment = a;
-        return idx;
+        var sliderRt = NewRect("Slider", row);
+        var sliderLe = sliderRt.gameObject.AddComponent<LayoutElement>();
+        sliderLe.flexibleWidth = 1f;
+        sliderLe.preferredHeight = 20f;   // HorizontalLayoutGroup controls height — give it one, or it collapses to 0
+        var slider = BuildSlider(sliderRt, min, max);
+        slider.onValueChanged.AddListener(v => onChanged(v));
+        return slider;
     }
 
-    bool TextButton(Rect r, string label, bool primary)
+    Toggle BuildToggleRow(RectTransform parent, string label, System.Action<bool> onChanged)
     {
-        Fill(r, primary ? GeoPalette.Ink : new Color(0, 0, 0, 0.12f));
-        Fill(new Rect(r.x, r.y, 5f, r.height), GeoPalette.Signal);
-        _btn.normal.textColor = primary ? GeoPalette.Paper : GeoPalette.Ink;
-        var a = _btn.alignment; _btn.alignment = TextAnchor.MiddleCenter;
-        GUI.Label(r, label, _btn);
-        _btn.alignment = a;
-        return GUI.Button(r, GUIContent.none, GUIStyle.none);
+        var row = NewRect("Row", parent);
+        row.gameObject.AddComponent<LayoutElement>().minHeight = 46f;
+        var hlg = row.gameObject.AddComponent<HorizontalLayoutGroup>();
+        hlg.spacing = 16f; hlg.childAlignment = TextAnchor.MiddleLeft;
+        hlg.childControlWidth = hlg.childControlHeight = true;
+        hlg.childForceExpandWidth = false; hlg.childForceExpandHeight = false;
+
+        var labelT = NewText("Label", row, 22f, GeoPalette.Ink, FontStyles.Bold, TextAlignmentOptions.MidlineLeft);
+        labelT.text = label;
+        labelT.gameObject.AddComponent<LayoutElement>().preferredWidth = 260f;
+
+        var toggleRt = NewRect("Toggle", row);
+        toggleRt.gameObject.AddComponent<LayoutElement>().preferredWidth = 60f;
+        var bgImg = toggleRt.gameObject.AddComponent<Image>();
+        bgImg.sprite = UIRoundedRect.Get(14); bgImg.type = Image.Type.Sliced;
+        bgImg.color = new Color(0f, 0f, 0f, 0.18f);
+
+        var checkRt = NewRect("Check", toggleRt);
+        checkRt.anchorMin = Vector2.zero; checkRt.anchorMax = Vector2.one;
+        checkRt.offsetMin = new Vector2(4f, 4f); checkRt.offsetMax = new Vector2(-4f, -4f);
+        var checkImg = checkRt.gameObject.AddComponent<Image>();
+        checkImg.sprite = UIRoundedRect.Get(10); checkImg.type = Image.Type.Sliced;
+        checkImg.color = GeoPalette.Signal;
+
+        var toggle = toggleRt.gameObject.AddComponent<Toggle>();
+        toggle.targetGraphic = bgImg;
+        toggle.graphic = checkImg;
+        toggle.onValueChanged.AddListener(v => onChanged(v));
+        return toggle;
     }
 
-    static void Fill(Rect r, Color c)
+    void BuildChoiceRow(RectTransform parent, string label, out TMP_Text valueLabel,
+                         System.Action onPrev, System.Action onNext)
     {
-        Color p = GUI.color; GUI.color = c;
-        GUI.DrawTexture(r, Texture2D.whiteTexture);
-        GUI.color = p;
+        var row = NewRect("Row", parent);
+        row.gameObject.AddComponent<LayoutElement>().minHeight = 46f;
+        var hlg = row.gameObject.AddComponent<HorizontalLayoutGroup>();
+        hlg.spacing = 16f; hlg.childAlignment = TextAnchor.MiddleLeft;
+        hlg.childControlWidth = hlg.childControlHeight = true;
+        hlg.childForceExpandWidth = false; hlg.childForceExpandHeight = false;
+
+        var labelT = NewText("Label", row, 22f, GeoPalette.Ink, FontStyles.Bold, TextAlignmentOptions.MidlineLeft);
+        labelT.text = label;
+        labelT.gameObject.AddComponent<LayoutElement>().preferredWidth = 260f;
+
+        BuildSmallArrowButton(row, "‹", onPrev);   // ‹
+
+        var valueT = NewText("Value", row, 20f, GeoPalette.Ink, FontStyles.Bold, TextAlignmentOptions.Center);
+        valueT.gameObject.AddComponent<LayoutElement>().preferredWidth = 140f;
+        valueLabel = valueT;
+
+        BuildSmallArrowButton(row, "›", onNext);   // ›
     }
 
-    void BuildStyles(float s)
+    void BuildSmallArrowButton(RectTransform parent, string glyph, System.Action onClick)
     {
-        if (_builtScale == s && _h1 != null) return;
-        _builtScale = s;
-        _h1    = new GUIStyle { fontStyle = FontStyle.Bold, alignment = TextAnchor.UpperLeft,    fontSize = Mathf.RoundToInt(42f * s) };
-        _tab   = new GUIStyle { fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleLeft,   fontSize = Mathf.RoundToInt(21f * s) };
-        _label = new GUIStyle { fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleLeft,   fontSize = Mathf.RoundToInt(21f * s) };
-        _val   = new GUIStyle { fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleRight,  fontSize = Mathf.RoundToInt(18f * s) };
-        _btn   = new GUIStyle { fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter, fontSize = Mathf.RoundToInt(19f * s) };
+        var rt = NewRect("Arrow", parent);
+        rt.gameObject.AddComponent<LayoutElement>().preferredWidth = 40f;
+        var img = rt.gameObject.AddComponent<Image>();
+        img.sprite = UIRoundedRect.Get(10); img.type = Image.Type.Sliced;
+        img.color = new Color(0f, 0f, 0f, 0.12f);
+        var btn = rt.gameObject.AddComponent<Button>();
+        btn.targetGraphic = img;
+        var colors = btn.colors; colors.highlightedColor = GeoPalette.Gold; btn.colors = colors;
+        btn.onClick.AddListener(() => onClick());
+
+        var t = NewText("Label", rt, 22f, GeoPalette.Ink, FontStyles.Bold, TextAlignmentOptions.Center);
+        t.text = glyph;
+        var lrt = t.rectTransform; lrt.anchorMin = Vector2.zero; lrt.anchorMax = Vector2.one;
+        lrt.offsetMin = lrt.offsetMax = Vector2.zero;
+    }
+
+    Slider BuildSlider(RectTransform parent, float min, float max)
+    {
+        var bgRt = NewRect("Track", parent);
+        bgRt.anchorMin = new Vector2(0f, 0.5f); bgRt.anchorMax = new Vector2(1f, 0.5f);
+        bgRt.sizeDelta = new Vector2(0f, 4f);
+        var bgImg = bgRt.gameObject.AddComponent<Image>();
+        bgImg.color = new Color(0f, 0f, 0f, 0.16f);
+
+        var fillArea = NewRect("Fill Area", parent);
+        fillArea.anchorMin = new Vector2(0f, 0.5f); fillArea.anchorMax = new Vector2(1f, 0.5f);
+        fillArea.sizeDelta = new Vector2(-10f, 4f);
+        var fillRt = NewRect("Fill", fillArea);
+        // Fixed full-stretch rect, never resized — Slider's normal fill mode works by
+        // rewriting fillRect's anchors each frame (anchorMin=(0,0), anchorMax=(value,1)
+        // ALWAYS, regardless of what's set here), which made the fill inherit a
+        // completely different — and much taller — effective height than Track. Using
+        // Image.Type.Filled sidesteps that: Slider only sets fillAmount on this type,
+        // the RectTransform itself is untouched, so it stays exactly 4px tall.
+        fillRt.anchorMin = Vector2.zero; fillRt.anchorMax = Vector2.one;
+        fillRt.offsetMin = fillRt.offsetMax = Vector2.zero;
+        var fillImg = fillRt.gameObject.AddComponent<Image>();
+        fillImg.color = GeoPalette.Signal;
+        fillImg.type = Image.Type.Filled;
+        fillImg.fillMethod = Image.FillMethod.Horizontal;
+        fillImg.fillOrigin = (int)Image.OriginHorizontal.Left;
+
+        var handleArea = NewRect("Handle Slide Area", parent);
+        handleArea.anchorMin = Vector2.zero; handleArea.anchorMax = Vector2.one;
+        handleArea.offsetMin = new Vector2(5f, 0f); handleArea.offsetMax = new Vector2(-5f, 0f);
+        var handleRt = NewRect("Handle", handleArea);
+        // Slider only ever overwrites anchorMin.x/anchorMax.x when it moves the handle —
+        // the Y anchor is left at NewRect's default (0,0), i.e. the BOTTOM edge of the
+        // slide area, not the middle. Left unset, the handle renders pinned to the
+        // bottom of the track instead of centred on it.
+        handleRt.anchorMin = handleRt.anchorMax = new Vector2(0f, 0.5f);
+        handleRt.pivot = new Vector2(0.5f, 0.5f);
+        handleRt.sizeDelta = new Vector2(12f, 16f);
+        var handleImg = handleRt.gameObject.AddComponent<Image>();
+        handleImg.sprite = UIRoundedRect.Get(4); handleImg.type = Image.Type.Sliced;
+        handleImg.color = GeoPalette.Gold;
+
+        var slider = parent.gameObject.AddComponent<Slider>();
+        slider.fillRect = fillRt;
+        slider.handleRect = handleRt;
+        slider.targetGraphic = handleImg;
+        slider.direction = Slider.Direction.LeftToRight;
+        slider.minValue = min; slider.maxValue = max;
+        return slider;
+    }
+
+    Button BuildTabButton(RectTransform parent, string label, System.Action onClick)
+    {
+        var rt = NewRect("Tab", parent);
+        rt.gameObject.AddComponent<LayoutElement>().minHeight = 50f;
+        var img = rt.gameObject.AddComponent<Image>();
+        img.sprite = UIRoundedRect.Get(12); img.type = Image.Type.Sliced;
+        img.color = new Color(0f, 0f, 0f, 0.08f);
+        var btn = rt.gameObject.AddComponent<Button>();
+        btn.targetGraphic = img;
+        var colors = btn.colors; colors.highlightedColor = GeoPalette.Gold; colors.pressedColor = GeoPalette.Signal; btn.colors = colors;
+        btn.onClick.AddListener(() => onClick());
+
+        var t = NewText("Label", rt, 20f, GeoPalette.Ink, FontStyles.Bold, TextAlignmentOptions.MidlineLeft);
+        t.text = label;
+        var lrt = t.rectTransform; lrt.anchorMin = Vector2.zero; lrt.anchorMax = Vector2.one;
+        lrt.offsetMin = new Vector2(16f, 0f); lrt.offsetMax = Vector2.zero;
+        return btn;
+    }
+
+    Button BuildTextButton(RectTransform parent, string label, bool primary, System.Action onClick)
+    {
+        var go = new GameObject("Button", typeof(RectTransform));
+        go.transform.SetParent(parent, false);
+        var rt = (RectTransform)go.transform;
+        var img = go.AddComponent<Image>();
+        img.sprite = UIRoundedRect.Get(12); img.type = Image.Type.Sliced;
+        img.color = primary ? GeoPalette.Ink : new Color(0f, 0f, 0f, 0.12f);
+        var btn = go.AddComponent<Button>();
+        btn.targetGraphic = img;
+        var colors = btn.colors; colors.highlightedColor = GeoPalette.Gold; btn.colors = colors;
+        btn.onClick.AddListener(() => onClick());
+
+        var t = NewText("Label", rt, 20f, primary ? GeoPalette.Paper : GeoPalette.Ink, FontStyles.Bold, TextAlignmentOptions.Center);
+        t.text = label;
+        var lrt = t.rectTransform; lrt.anchorMin = Vector2.zero; lrt.anchorMax = Vector2.one;
+        lrt.offsetMin = lrt.offsetMax = Vector2.zero;
+        return btn;
+    }
+
+    static void EnsureEventSystem()
+    {
+        if (EventSystem.current != null) return;
+        new GameObject("EventSystem",
+            typeof(EventSystem),
+            typeof(UnityEngine.InputSystem.UI.InputSystemUIInputModule));
+    }
+
+    RectTransform NewRect(string name, Transform parent)
+    {
+        var go = new GameObject(name, typeof(RectTransform));
+        go.transform.SetParent(parent, false);
+        return (RectTransform)go.transform;
+    }
+
+    TMP_Text NewText(string name, Transform parent, float size, Color color, FontStyles style, TextAlignmentOptions align)
+    {
+        var rt = NewRect(name, parent);
+        var t = rt.gameObject.AddComponent<TextMeshProUGUI>();
+        t.fontSize = size; t.color = color; t.fontStyle = style; t.alignment = align;
+        t.raycastTarget = false; t.richText = true;
+        t.textWrappingMode = TextWrappingModes.NoWrap;
+        return t;
     }
 }

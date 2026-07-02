@@ -214,12 +214,13 @@ public class TutorialDirector : MonoBehaviour
         {
             _stepTimer += Time.deltaTime;
             bool timed   = step.waitSeconds > 0f && _stepTimer >= step.waitSeconds;
-            bool clicked = step.waitSeconds <= 0f && Input.GetMouseButtonDown(0);
+            bool clicked = step.waitSeconds <= 0f && (Input.GetMouseButtonDown(0) || GamepadInput.ConfirmDown);
             if (timed || clicked) { Advance(); return; }
         }
 
-        // Input step: advance when the required key is pressed.
-        if (step != null && step.kind == TutorialStepKind.Input && Input.GetKeyDown(step.inputKey))
+        // Input step: advance when the required key (or its gamepad equivalent) is pressed.
+        if (step != null && step.kind == TutorialStepKind.Input
+            && (Input.GetKeyDown(step.inputKey) || GamepadInput.MatchesKeyCode(step.inputKey)))
         {
             Advance();
             return;

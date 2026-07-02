@@ -25,6 +25,7 @@ namespace AK
         static const AkUniqueID PLAY_ARP_NOTE = 2050041828U;
         static const AkUniqueID ROTATE = 1302771492U;
         static const AkUniqueID SCROLL = 454121546U;
+        static const AkUniqueID TIMEDRAIN = 3258153068U;
     } // namespace EVENTS
 
     namespace STATES

@@ -23,6 +23,7 @@ public class LevelMapController : MonoBehaviour
 
     [Header("Refs")]
     public Transform pawn;
+    public AK.Wwise.Event timeLoop;
     [Tooltip("UGUI level-info panel (right side). Wire it and the old IMGUI box is skipped.")]
     public LevelInfoPanel infoPanel;
 
@@ -66,6 +67,7 @@ public class LevelMapController : MonoBehaviour
 
     void Start()
     {
+        timeLoop.Post(this.gameObject);
         _cam = Camera.main;
 
         if (buildFromFile) BuildMap();
@@ -107,6 +109,10 @@ public class LevelMapController : MonoBehaviour
             _camReady = true;
         }
     }
+
+    // The loop was Post()'d against this GameObject — Wwise doesn't stop it on its own
+    // just because the scene unloads, so stop it explicitly or it bleeds into gameplay.
+    void OnDestroy() => timeLoop.Stop(this.gameObject);
 
     void LateUpdate()
     {
@@ -210,13 +216,13 @@ public class LevelMapController : MonoBehaviour
     void Update()
     {
         if (_moving || SettingsScreen.Open) return;
-        if (Input.GetMouseButtonDown(0)) HandleClick();
+        if (Input.GetMouseButtonDown(0) || VirtualCursor.ConfirmPressedThisFrame) HandleClick();
     }
 
     void HandleClick()
     {
         if (_cam == null) { _cam = Camera.main; if (_cam == null) return; }
-        if (!Physics.Raycast(_cam.ScreenPointToRay(Input.mousePosition), out var hit)) return;
+        if (!Physics.Raycast(_cam.ScreenPointToRay(VirtualCursor.Position), out var hit)) return;
 
         var node = hit.collider.GetComponentInParent<LevelNode>();
         if (node != null) OpenPanel(node);   // show level info right away

@@ -31,6 +31,8 @@ public class LevelDefinition : ScriptableObject
     public List<LevelObjective> objectives = new();
     [Tooltip("If on, ALL non-optional objectives must be satisfied (in addition to wavesToClear) to count as cleared.")]
     public bool requireAllObjectives = false;
+    [Tooltip("OBJECTIVE-DRIVEN clear: the level is cleared the moment every non-optional objective is satisfied (checked any phase), regardless of wavesToClear. Use for build/puzzle levels.")]
+    public bool clearOnObjectivesComplete = false;
 
     [Header("Progression")]
     [Tooltip("This level starts unlocked (e.g. the first level).")]

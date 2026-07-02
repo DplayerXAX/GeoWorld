@@ -31,12 +31,16 @@ public partial class PlacementController
         {
             if (ins.visualObject == null) continue;
             // Parent stays at scale 1; we drive each child independently.
-            ins.visualObject.transform.localScale = Vector3.one;
+            //ins.visualObject.transform.localScale = Vector3.one;
 
             int count = Mathf.Min(ins.visualObject.transform.childCount, ins.occupiedCells.Count);
             for (int i = 0; i < count; i++)
             {
                 var t = ins.visualObject.transform.GetChild(i);
+                // Turret prefab visuals (TurretBeacon, scaled to fit a cell) are NOT
+                // cell cubes — skip them so the cube ripple doesn't reset their scale
+                // to 1. They pop back via BeaconPop at their own captured scale.
+                if (t.GetComponent<TurretBeacon>() != null) continue;
                 cubes.Add((t, ins.occupiedCells[i], t.position, t.localPosition));
                 t.localScale = Vector3.zero;
             }
@@ -50,7 +54,7 @@ public partial class PlacementController
                 beacon.transform.localScale = Vector3.zero;
             }
         }
-        if (cubes.Count == 0) yield break;
+        if (cubes.Count == 0 && beacons.Count == 0) yield break;
         yield return null;
 
         // Step 2: cell first index along path.

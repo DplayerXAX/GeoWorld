@@ -30,6 +30,8 @@ Shader "Custom/ManifoldSkybox"
         _PitchGlow     ("Pitch Glow",     Range(0,1)) = 0
         // Combat mode (0=calm build, 1=intense battle) — driven by BackgroundReactor
         _CombatMode    ("Combat Mode",    Range(0,1)) = 0
+        // Level-clear reaction (0=normal, 1=ordered crystalline geometry) — driven by BackgroundReactor
+        _ClearReact    ("Clear Reaction", Range(0,1)) = 0
 
         // Intro reveal: 0 = flat _IntroColor, 1 = full sky. Driven by IntroDirector.
         _IntroBlend    ("Intro Blend",    Range(0,1)) = 1
@@ -54,6 +56,7 @@ Shader "Custom/ManifoldSkybox"
             float _HorizonSharp, _TimeSpeed;
             float _BeatPulse, _MusicIntensity, _ColorShift, _TypeHue, _PitchGlow;
             float _CombatMode;
+            float _ClearReact;
             float _DamageTint;
             half4 _FlashColor;
             float _FlashAmount;
@@ -96,6 +99,28 @@ Shader "Custom/ManifoldSkybox"
                             lerp(lerp(n001,n101,u.x), lerp(n011,n111,u.x), u.y), u.z);
             }
 
+            // Voronoi cell-edge distance (F2 - F1). Small near a cell boundary, which
+            // is a STRAIGHT edge between two feature points — no curved iso-contours.
+            // Used for the clear-reaction crystalline facets.
+            float VoronoiEdge(float3 p)
+            {
+                float3 i = floor(p), f = frac(p);
+                float d1 = 8.0, d2 = 8.0;
+                [unroll] for (int x = -1; x <= 1; x++)
+                [unroll] for (int y = -1; y <= 1; y++)
+                [unroll] for (int z = -1; z <= 1; z++)
+                {
+                    float3 g = float3(x, y, z);
+                    float3 c = i + g;
+                    float3 o = float3(Hash3(c), Hash3(c + 19.1), Hash3(c + 43.7));
+                    float3 r = g + o - f;
+                    float d = dot(r, r);
+                    if (d < d1)      { d2 = d1; d1 = d; }
+                    else if (d < d2) { d2 = d; }
+                }
+                return sqrt(d2) - sqrt(d1);   // ~0 on straight cell borders
+            }
+
             // Quantised noise → blocky stained-glass cells (the look the user liked)
             float StainedGlassFog(float3 p)
             {
@@ -103,6 +128,16 @@ Shader "Custom/ManifoldSkybox"
                 float n2 = floor(Noise(p * 2.0) * 4.0) / 4.0 * 0.5;
                 float n3 = floor(Noise(p * 4.0) * 4.0) / 4.0 * 0.25;
                 return saturate(n1 + n2 + n3);
+            }
+
+            // Flooring smooth Noise() still leaves ROUNDED cell boundaries (it quantises
+            // a curved value, the contour itself stays organic/blobby). This instead reads
+            // one constant hash per unit cube — dead-straight cube-facet edges, no curve at
+            // all — used to replace the fog layer during the clear reaction so the "ordered"
+            // look doesn't inherit the fog's blobby transitions.
+            float OrderedCellLayer(float3 p)
+            {
+                return Hash3(floor(p));
             }
 
             // Per-cell color modulation. Returns:
@@ -281,6 +316,28 @@ Shader "Custom/ManifoldSkybox"
                 }
                 float3 sampleDir = normalize(lerp(dir, foldedDir, cm * 0.65));
 
+                // ── Clear reaction: ORDERED octahedral kaleidoscope ────────────
+                // The mirror of the combat fracture — a STABLE (unrotating) octahedral
+                // fold that snaps the sky into clean, symmetric crystalline facets, so
+                // on level clear the whole sky reorganises into geometric order.
+                float cr = _ClearReact;
+                if (cr > 0.001)
+                {
+                    float3 od = dir;
+                    [unroll] for (int ko = 0; ko < 4; ko++)
+                    {
+                        od = abs(od);
+                        if (od.x < od.y) { float tmp = od.x; od.x = od.y; od.y = tmp; }
+                        if (od.x < od.z) { float tmp = od.x; od.x = od.z; od.z = tmp; }
+                        if (od.y < od.z) { float tmp = od.y; od.y = od.z; od.z = tmp; }
+                        const float a = 0.39269908;   // fixed 22.5° — geometric, not animated
+                        float c = cos(a), s = sin(a);
+                        od.xy = float2(c * od.x - s * od.y, s * od.x + c * od.y);
+                    }
+                    od = normalize(od);
+                    sampleDir = normalize(lerp(sampleDir, od, cr));   // full fold → clean symmetry
+                }
+
                 // ── Music-driven boosts ─────────────────────────────────────────
                 float beat      = _BeatPulse;
                 float intensity = 0.4 + _MusicIntensity * 0.6 + cm * 0.15;
@@ -311,6 +368,12 @@ half3 combatHorizon =
         damageRed * 0.6,
         _DamageTint
     );
+                // Clear reaction: push the base palette itself toward warm gold — not
+                // just an overlay — so the whole sky visibly turns golden, not only
+                // its facet lines.
+                combatZenith  = lerp(combatZenith,  half3(0.12, 0.08, 0.03), cr * 0.5);
+                combatHorizon = lerp(combatHorizon, half3(0.62, 0.44, 0.16), cr * 0.55);
+
                 half3 zenith = combatZenith * (1.0 + _PitchGlow * 3.5 * up);
                 half3 sky    = lerp(combatHorizon, zenith, t);
 
@@ -319,6 +382,10 @@ half3 combatHorizon =
                 float timeSpeed = _TimeSpeed * lerp(1.0, 2.0, cm);
                 float3 p        = sampleDir * 8.0 + _Time.y * timeSpeed;
                 float fogLayer  = StainedGlassFog(p);
+                // Clear: swap the blobby noise-quantised layer for the hard cube-cell one —
+                // same grid the panel hues already use, so fog density and panel colour
+                // share dead-straight facet edges instead of soft round blob boundaries.
+                fogLayer = lerp(fogLayer, OrderedCellLayer(p), cr);
 
                 float baseFog = HorizonFog(dir);
                 float height  = dir.y * 0.5 + 0.5;
@@ -326,15 +393,27 @@ half3 combatHorizon =
                 float fog     = saturate(baseFog * (0.6 + fogLayer))
                               * smoothstep(0.0, 0.6, 1.0 - height)
                               * fogStr;
+                fog *= 1.0 - cr * 0.35;   // clear: thin the haze a bit, but keep enough for panel variety to read
 
                 half3 fogCol = lerp(_FogColor.rgb, _ZenithColor.rgb, fogLayer);
                 // Combat: fog takes on crystalline deep-purple instead of orange
                 fogCol = lerp(fogCol, half3(0.06, 0.02, 0.35), cm * fogLayer * 0.7);
 
                 float3 panel   = StainedGlassPanel(p);
-                float panelHue = _ColorShift + panel.x + cm * 0.30;
+                // Clear: keep panels in a GOLD FAMILY instead of one identical hue — each
+                // panel's hash (panel.x) offsets it a little toward bronze/amber/champagne,
+                // so neighbouring facets still contrast against each other instead of
+                // reading as one flat sheet of yellow.
+                float goldBandHue = 0.085;                         // amber-gold centre (not pure yellow)
+                panel.x = lerp(panel.x, goldBandHue + (panel.x - 0.5) * 0.05, cr);
+                panel.y = saturate((panel.y - 0.5) * (1.0 + cr * 0.9) + 0.5 + cr * 0.10);
+                // Clear: fade _ColorShift's contribution out too — same reasoning as the
+                // final hue rotation below, it's what was pulling fogCol off gold.
+                float panelHue = (_ColorShift + panel.x + cm * 0.30) * (1.0 - cr) + panel.x * cr;
                 fogCol = HsvShift(fogCol, panelHue);
-                fogCol = SaturationBoost(fogCol, panel.z + cm * 0.25);
+                // Clear: a touch more saturation than a flat metallic read, short of
+                // neon-pigment territory.
+                fogCol = SaturationBoost(fogCol, panel.z + cm * 0.25 + cr * 0.12);
                 fogCol *= panel.y * lerp(1.0, 1.12, cm);
 
                 sky = lerp(fogCol, sky, 1.0 - fog);
@@ -361,6 +440,9 @@ half3 combatHorizon =
 
                 // Grid color: muted teal in combat — present but not demanding attention
                 half3 combatGridCol = lerp(_GridColor.rgb, half3(0.08, 0.48, 0.58), cm * 0.55);
+                // Clear: pull the grid lines gold too, so they read WITH the sky instead
+                // of leaving a leftover cool teal cast fighting the warm tint.
+                combatGridCol = lerp(combatGridCol, half3(0.95, 0.78, 0.40), cr * 0.6);
                 half3 grid2Col      = lerp(combatGridCol,  half3(0.12, 0.35, 0.72), cm * 0.35);
                 half3 gridCol  = combatGridCol * beatBoost * intensity;
                 half3 floorCol = gridCol * half3(1.10, 1.00, 0.85);
@@ -402,9 +484,13 @@ half3 combatHorizon =
                 }
 
                 // ── Final hue rotation ──────────────────────────────────────────
+                // Clear: fade out the ambient music-driven hue drift — otherwise
+                // _ColorShift keeps rotating the whole sky regardless of cr and the
+                // "gold" target below ends up fighting an arbitrary hue (that's what
+                // was reading as a random pink/brown instead of gold).
                 result = HsvShift(
                     result,
-                    _ColorShift + cm * 0.04
+                    (_ColorShift + cm * 0.04) * (1.0 - cr)
                 );
                 
                 // ── Combat comfort pass ─────────────────────────────────────────
@@ -414,6 +500,45 @@ half3 combatHorizon =
                 float luma = dot(result, float3(0.299, 0.587, 0.114));
                 result = lerp(result, luma * half3(0.80, 0.84, 0.98), cm * 0.45);
                 result *= lerp(1.0, 0.82, cm);
+
+                // ── Clear-reaction harmony pass ─────────────────────────────────
+                // A single flat target colour reads as "yellow paint", not gold — real
+                // gold is a GRADIENT: dark bronze in the shadows, warm (slightly
+                // desaturated, almost white) highlights. Interpolate the target itself
+                // by luma instead of tinting a fixed colour, and keep enough of the
+                // upstream per-panel hue (from the fogCol pass above) that neighbouring
+                // facets still contrast — this pass shapes tone, it doesn't flatten hue.
+                if (cr > 0.001)
+                {
+                    float crS = cr * cr * (3.0 - 2.0 * cr);   // smoothstep(0,1,cr)
+
+                    float oluma = dot(result, float3(0.299, 0.587, 0.114));
+                    oluma = saturate((oluma - 0.5) * 1.3 + 0.5);   // contrast, no extra brighten here
+
+                    half3 bronze    = half3(0.42, 0.26, 0.09);   // shadow gold — deep, coppery
+                    // Brighter, more translucent-glass highlight — "金盈剔透" reads through
+                    // a hotter, near-white-gold top end rather than a matte mid-gold.
+                    half3 highlight = half3(1.55, 1.32, 0.86);
+                    half3 goldTone  = lerp(bronze, highlight, oluma);
+
+                    half3 ordered = lerp(result, goldTone, 0.55);   // keep 45% of upstream hue → panels still contrast
+                    result = lerp(result, ordered, crS * 0.75);
+                    result = SaturationBoost(result, crS * 0.15);
+                    result *= 1.0 + crS * 0.12;
+
+                    // ── Central crystal core ─────────────────────────────────────
+                    // A radiant gem sitting at the zenith, with straight star-rays
+                    // fanning out — gives the ordered facets something to visually
+                    // radiate FROM, the "中心晶体" focal point, instead of reading as
+                    // a flat all-over tint with no source.
+                    float3 coreDir = float3(0.0, 1.0, 0.0);
+                    float  coreDot = saturate(dot(dir, coreDir));
+                    float  core    = pow(coreDot, 5.0);                 // tight hot core near the top
+                    float  coreAng = atan2(dir.z, dir.x) + _Time.y * 0.05;
+                    float  rays    = pow(saturate(cos(coreAng * 6.0)), 10.0) * pow(coreDot, 1.5);
+                    half3  coreGlow = half3(1.7, 1.5, 1.05) * (core * 1.1 + rays * 0.6) * crS;
+                    result += coreGlow;
+                }
 
                 // ── 全全局伤害滤镜 (Damage Tint Pass Fix) ──────────────────────────
                 // 基于最终画面的亮度计算出一个兼顾结构亮度的血红/深红调色盘

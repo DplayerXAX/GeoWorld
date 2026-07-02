@@ -14,6 +14,9 @@ public class LevelObjectivesTracker : MonoBehaviour
     enum State { Pending, Done, Failed }
 
     static LevelObjectivesTracker _inst;
+    // True once the tracker is live (so callers don't treat the vacuous
+    // "no tracker → AllRequiredSatisfied = true" as a real completion).
+    public static bool Tracking => _inst != null;
     // True when every non-optional objective is currently satisfied (gates the clear
     // if the level has requireAllObjectives).
     public static bool AllRequiredSatisfied
@@ -85,7 +88,7 @@ public class LevelObjectivesTracker : MonoBehaviour
         var ev = SynergyEvaluator.Instance;
         if (ev != null) _maxSynergies = Mathf.Max(_maxSynergies, ev.Actives.Count);
 
-        if (_canvas != null) _canvas.enabled = !IntroDirector.Playing;   // hold until the intro finishes
+        if (_canvas != null) _canvas.enabled = !IntroDirector.Playing && !GameFlowManager.SettlementUp;   // hidden during intro / clear settlement
         if (_rows == null) return;
         for (int i = 0; i < _rows.Length; i++)
         {

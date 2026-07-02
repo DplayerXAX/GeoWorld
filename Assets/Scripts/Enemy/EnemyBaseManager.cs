@@ -352,7 +352,10 @@ public class EnemyBaseManager : MonoBehaviour
         //   • Block currency   ← combat-success income (kill rewards) so
         //                        clearing waves feeds the building budget.
         if (enemy != null && enemy.rewardOnKill > 0 && ResourceManager.Instance != null)
+        {
             ResourceManager.Instance.AddBlockCurrency(enemy.rewardOnKill);
+            CurrencyFlyFx.Fly(enemy.transform.position, isTurret: false, enemy.rewardOnKill);
+        }
 
         RemoveEnemy(enemy, destroy: true);
     }

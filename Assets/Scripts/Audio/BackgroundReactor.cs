@@ -61,6 +61,11 @@ public class BackgroundReactor : MonoBehaviour
     float _pitchGlow;
     float _combatMode;        // current smoothed value (0=calm, 1=intense)
     float _targetCombatMode;  // 0 or 1
+    float _clearReact;        // level-clear ordered-geometry reaction (0→1)
+
+    [Header("Clear reaction")]
+    [Tooltip("How fast the skybox reorganises into ordered geometry on level clear.")]
+    public float clearTransitionSpeed = 2.5f;
 
     static readonly int BeatPulseId  = Shader.PropertyToID("_BeatPulse");
     static readonly int IntensityId  = Shader.PropertyToID("_MusicIntensity");
@@ -68,6 +73,7 @@ public class BackgroundReactor : MonoBehaviour
     static readonly int TypeHueId    = Shader.PropertyToID("_TypeHue");
     static readonly int PitchGlowId  = Shader.PropertyToID("_PitchGlow");
     static readonly int CombatModeId = Shader.PropertyToID("_CombatMode");
+    static readonly int ClearReactId = Shader.PropertyToID("_ClearReact");
 
     void Awake()
     {
@@ -109,6 +115,10 @@ public class BackgroundReactor : MonoBehaviour
         _combatMode = Mathf.MoveTowards(_combatMode, _targetCombatMode,
                                         combatTransitionSpeed * dt);
 
+        // Level-clear: ramp the ordered-geometry reaction while the settlement is up.
+        float targetClear = GameFlowManager.SettlementUp ? 1f : 0f;
+        _clearReact = Mathf.MoveTowards(_clearReact, targetClear, clearTransitionSpeed * dt);
+
         // In combat, music intensity rides higher for extra visual energy
         float targetInt = _targetCombatMode > 0.5f
                           ? Mathf.Max(_targetIntensity, 0.85f)
@@ -139,6 +149,7 @@ public class BackgroundReactor : MonoBehaviour
         skyboxMaterial.SetFloat(TypeHueId,    _typeHue);
         skyboxMaterial.SetFloat(PitchGlowId,  _pitchGlow);
         skyboxMaterial.SetFloat(CombatModeId, _combatMode);
+        skyboxMaterial.SetFloat(ClearReactId, _clearReact);
     }
 
     /// <summary>

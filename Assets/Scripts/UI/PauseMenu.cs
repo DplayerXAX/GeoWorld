@@ -1,5 +1,12 @@
 using UnityEngine;
+using UnityEngine.UI;
+using UnityEngine.EventSystems;
+using TMPro;
 
+// Runtime UGUI pause menu (rewritten from IMGUI so gamepad Navigate/Submit/Cancel work
+// via the scene's InputSystemUIInputModule). Same house style as LevelClearScreen.cs /
+// DialogueRunner.cs: Canvas + CanvasScaler built in code, NewRect/NewText helpers,
+// UIRoundedRect.Get(radius) for rounded panels/buttons.
 public class PauseMenu : MonoBehaviour
 {
     [Header("Hotkey")]
@@ -10,32 +17,58 @@ public class PauseMenu : MonoBehaviour
 
     [Header("Look")]
     public Color overlayColor = new Color(0f, 0f, 0f, 0.6f);
-    public Color titleColor = new Color(0.6f, 0.95f, 1f);
-    public float panelWidth = 260f;
-    public float buttonHeight = 42f;
+    public float panelWidth = 340f;
+    public float buttonHeight = 58f;
 
     [Header("Top-right controls")]
     public bool showControls = true;
-    public float controlsRight = 12f;
-    public float controlsTop = 12f;
-    public float controlSize = 50f;
-    public Color controlFg = new Color(1f, 1f, 1f);
+
+    [Header("Top-right icons (sprites)")]
+    [Tooltip("Shown while the game is running (click = pause).")]
+    public Sprite pauseIcon;
+    [Tooltip("Shown while paused (click = resume).")]
+    public Sprite resumeIcon;
+    [Tooltip("Speed-cycle button icon.")]
+    public Sprite fastForwardIcon;
+    [Tooltip("Speed-level pip, lit.")]
+    public Sprite speedPipFilled;
+    [Tooltip("Speed-level pip, unlit.")]
+    public Sprite speedPipEmpty;
 
     bool _paused;
     float _prevTimeScale = 1f;
 
-    GUIStyle _title, _btn, _iconLabel, _diamondStyle, _fastForwardStyle;
-    Texture2D _overlay;
-    Material _glMat;
-    bool _stylesBuilt;
+    Canvas _canvas;
+    GameObject _overlayGo, _panelGo, _controlsGo;
+    Button _resumeButton;
+    Image _pauseIconImg;
+    Image _fastForwardIconImg;
+    Image[] _speedPips = new Image[3];
 
     public bool IsPaused => _paused;
     public static bool Paused;
 
+    void Awake() => BuildUI();
+
     void Update()
     {
-        if (Input.GetKeyDown(toggleKey) && !SettingsScreen.Open)
+        if (IntroDirector.Playing) { SetCanvasVisible(false); return; }   // hidden behind the intro overlay
+
+        if ((Input.GetKeyDown(toggleKey) || GamepadInput.TogglePauseDown) && !SettingsScreen.Open)
             SetPaused(!_paused);
+
+        _controlsGo.SetActive(showControls);
+        if (showControls) UpdateTopRightControls();
+
+        bool showPanel = _paused && !SettingsScreen.Open;
+        _overlayGo.SetActive(showPanel);
+        _panelGo.SetActive(showPanel);
+        SetCanvasVisible(true);
+    }
+
+    void SetCanvasVisible(bool visible)
+    {
+        if (_canvas != null) _canvas.enabled = visible;
     }
 
     void OnDisable()
@@ -46,8 +79,6 @@ public class PauseMenu : MonoBehaviour
             _paused = false;
         }
         Paused = false;
-        if (_overlay != null) { Destroy(_overlay); _overlay = null; _stylesBuilt = false; }
-        if (_glMat != null)   { Destroy(_glMat);   _glMat = null; }
     }
 
     public void SetPaused(bool paused)
@@ -60,65 +91,13 @@ public class PauseMenu : MonoBehaviour
         {
             _prevTimeScale = Time.timeScale > 0.0001f ? Time.timeScale : 1f;
             Time.timeScale = 0f;
+            EventSystem.current?.SetSelectedGameObject(_resumeButton.gameObject);
         }
         else
         {
             Time.timeScale = _prevTimeScale;
+            EventSystem.current?.SetSelectedGameObject(null);
         }
-    }
-
-    void OnGUI()
-    {
-        if (IntroDirector.Playing) return;   // hidden behind the intro overlay
-        EnsureStyles();
-        DrawTopRightControls();
-
-        if (!_paused || SettingsScreen.Open) return;
-
-        GUI.DrawTexture(new Rect(0, 0, Screen.width, Screen.height), _overlay, ScaleMode.StretchToFill);
-
-        float w = panelWidth;
-        float h = 44f + 5 * (buttonHeight + 8f) + 28f;
-        var rect = new Rect((Screen.width - w) * 0.5f, (Screen.height - h) * 0.5f, w, h);
-
-        // Paper panel — ink top rule + signal spine (constructivist).
-        Fill(rect, GeoPalette.Paper);
-        Fill(new Rect(rect.x, rect.y, rect.width, 5f), GeoPalette.Ink);
-        Fill(new Rect(rect.x, rect.y, 6f, rect.height), GeoPalette.Signal);
-
-        GUILayout.BeginArea(new Rect(rect.x + 20f, rect.y + 14f, rect.width - 40f, rect.height - 26f));
-        GUILayout.Label("PAUSED", _title, GUILayout.ExpandWidth(true));
-        GUILayout.Space(16);
-
-        var prevBg = GUI.backgroundColor;
-        GUI.backgroundColor = new Color(0.86f, 0.85f, 0.81f);   // paper-tinted buttons
-
-        if (GUILayout.Button("Resume",   _btn, GUILayout.Height(buttonHeight))) SetPaused(false);
-        GUILayout.Space(8);
-        if (GUILayout.Button("Settings", _btn, GUILayout.Height(buttonHeight))) SettingsScreen.Open = true;
-        GUILayout.Space(8);
-        if (GUILayout.Button("Restart",  _btn, GUILayout.Height(buttonHeight)))
-        {
-            Time.timeScale = 1f;
-            _paused = false;
-            GameFlowManager.Instance?.RestartGame();
-        }
-        GUILayout.Space(8);
-        if (GUILayout.Button("Back to Title", _btn, GUILayout.Height(buttonHeight))) GoToTitle();
-        GUILayout.Space(8);
-
-        GUI.backgroundColor = new Color(0.86f, 0.36f, 0.32f);   // red-tinted quit
-        if (GUILayout.Button("Quit", _btn, GUILayout.Height(buttonHeight))) QuitGame();
-        GUI.backgroundColor = prevBg;
-
-        GUILayout.EndArea();
-    }
-
-    static void Fill(Rect r, Color c)
-    {
-        var p = GUI.color; GUI.color = c;
-        GUI.DrawTexture(r, Texture2D.whiteTexture);
-        GUI.color = p;
     }
 
     void GoToTitle()
@@ -126,123 +105,6 @@ public class PauseMenu : MonoBehaviour
         Time.timeScale = 1f;
         _paused = false; Paused = false;
         LoadingScreen.Go(titleScene);
-    }
-
-    void DrawTopRightControls()
-    {
-        if (!showControls) return;
-
-        // White icons while the shop (black letterbox bar) is open, black otherwise.
-        bool shopOpen = ShopController.Instance != null && ShopController.Instance.IsExpanded;
-        controlFg = shopOpen ? Color.white : Color.black;
-
-        float ui = Screen.height / 1080f;
-        float scale = ui * 2f;
-        float s = controlSize * scale;
-        float gap = 1f * scale;
-
-        float xPause = Screen.width - (controlsRight * ui) - s;
-        float xSpeed = xPause - gap - s;
-        float y = controlsTop * ui;
-
-        var pauseRect = new Rect(xPause, y, s, s);
-        if (GUI.Button(pauseRect, GUIContent.none, GUIStyle.none)) SetPaused(!_paused);
-        DrawPauseGlyph(pauseRect, _paused);
-
-        var speedRect = new Rect(xSpeed, y+4f, s, s);
-        if (GUI.Button(speedRect, GUIContent.none, GUIStyle.none)) CycleSpeed();
-
-        _fastForwardStyle.normal.textColor = controlFg;
-        DrawFastForwardGlyph(speedRect);
-
-        float speed = _paused ? _prevTimeScale : Time.timeScale;
-        int level = speed >= 2.95f ? 3 : (speed >= 1.95f ? 2 : 1);
-
-        // Diamonds scale with the icon (font was fixed → looked tiny + far apart).
-        float dFont = s * 0.45f;
-        _diamondStyle.fontSize = Mathf.Max(8, Mathf.RoundToInt(dFont));
-        _diamondStyle.normal.textColor = controlFg;   // white when shop open, black otherwise
-        float cell    = dFont * 0.7f;     // tight columns
-        float spacing = dFont * 0f;
-        float dRowH   = dFont * 1.25f;
-        float diamondY = y + s - dRowH+8f;    // just inside the bottom edge
-
-        float totalW = (cell * 3f) + (spacing * 2f);
-        float startX = xSpeed + (s - totalW) * 0.5f;
-
-        for (int i = 0; i < 3; i++)
-        {
-            Rect dRect = new Rect(startX + (i * (cell + spacing)), diamondY, cell, dRowH);
-            GUI.Label(dRect, i < level ? "◆" : "◇", _diamondStyle);
-        }
-    }
-
-    void DrawTriangle(Vector2 a, Vector2 b, Vector2 c)
-    {
-        GL.Begin(GL.TRIANGLES);
-        GL.Color(controlFg);
-
-        GL.Vertex(a);
-        GL.Vertex(b);
-        GL.Vertex(c);
-
-        GL.End();
-    }
-    void DrawFastForwardGlyph(Rect r)
-    {
-        if (Event.current.type != EventType.Repaint) return;   // GL only valid on Repaint
-
-        EnsureGlMaterial();
-        Color prev = GUI.color;
-        GUI.color = controlFg;
-
-        GL.PushMatrix();
-        GL.LoadPixelMatrix();
-        _glMat.SetPass(0);   // required before GL.Begin/End
-
-        float w = r.width;
-        float h = r.height;
-
-        float triW = w * 0.3f;     // wider → chunkier, less pointy
-        float triH = h * 0.42f;
-
-        float x = r.x + w * 0.24f;  // recentred for the wider pair
-        float y = r.y + h * 0.45f;  // lift a touch so the diamonds sit below
-
-        // left triangle
-        DrawTriangle(
-            new Vector2(x, y - triH / 2),
-            new Vector2(x, y + triH / 2),
-            new Vector2(x + triW, y)
-        );
-
-        // right triangle
-        DrawTriangle(
-            new Vector2(x + triW * 0.7f, y - triH / 2),
-            new Vector2(x + triW * 0.7f, y + triH / 2),
-            new Vector2(x + triW * 1.7f, y)
-        );
-
-        GL.PopMatrix();
-        GUI.color = prev;
-    }
-    void DrawPauseGlyph(Rect r, bool paused)
-    {
-        Color prev = GUI.color;
-        GUI.color = controlFg;
-        if (paused)
-        {
-            GUI.Label(r, "▶", _iconLabel);
-        }
-        else
-        {
-            float bw = r.width * 0.15f;
-            float bh = r.height * 0.5f;
-            float cx = r.center.x, cy = r.center.y;
-            GUI.DrawTexture(new Rect(cx - bw - 4f, cy - bh * 0.5f, bw, bh), Texture2D.whiteTexture);
-            GUI.DrawTexture(new Rect(cx + 4f, cy - bh * 0.5f, bw, bh), Texture2D.whiteTexture);
-        }
-        GUI.color = prev;
     }
 
     void CycleSpeed()
@@ -263,32 +125,217 @@ public class PauseMenu : MonoBehaviour
 #endif
     }
 
-    void EnsureStyles()
+    void UpdateTopRightControls()
     {
-        if (_stylesBuilt) return;
-        _stylesBuilt = true;
+        // White icons while the shop (black letterbox bar) is open, black otherwise.
+        bool shopOpen = ShopController.Instance != null && ShopController.Instance.IsExpanded;
+        Color fg = shopOpen ? Color.white : Color.black;
 
-        _title = new GUIStyle(GUI.skin.label) { fontSize = 26, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter };
-        _title.normal.textColor = GeoPalette.Ink;
-        _btn = new GUIStyle(GUI.skin.button) { fontSize = 16, fontStyle = FontStyle.Bold };
-        _btn.normal.textColor = _btn.hover.textColor = _btn.active.textColor = GeoPalette.Ink;
-        _iconLabel = new GUIStyle(GUI.skin.label) { fontSize = 28, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter };
-        _fastForwardStyle = new GUIStyle(GUI.skin.label) { fontSize = 22, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter };
-        _diamondStyle = new GUIStyle(GUI.skin.label) { fontSize = 16, alignment = TextAnchor.MiddleCenter };
+        _pauseIconImg.sprite = _paused ? resumeIcon : pauseIcon;
+        _pauseIconImg.color  = fg;
+        _fastForwardIconImg.color = fg;
 
-        _overlay = new Texture2D(1, 1);
-        _overlay.SetPixel(0, 0, overlayColor);
-        _overlay.Apply();
+        float speed = _paused ? _prevTimeScale : Time.timeScale;
+        int level = speed >= 2.95f ? 3 : (speed >= 1.95f ? 2 : 1);
+        for (int i = 0; i < _speedPips.Length; i++)
+        {
+            _speedPips[i].sprite = (i < level) ? speedPipFilled : speedPipEmpty;
+            _speedPips[i].color  = fg;
+        }
     }
 
-    void EnsureGlMaterial()
+    // ── UI build ──────────────────────────────────────────────────────────────
+    void BuildUI()
     {
-        if (_glMat != null) return;
-        var sh = Shader.Find("Hidden/Internal-Colored");
-        _glMat = new Material(sh) { hideFlags = HideFlags.HideAndDontSave };
-        _glMat.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
-        _glMat.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
-        _glMat.SetInt("_Cull",     (int)UnityEngine.Rendering.CullMode.Off);
-        _glMat.SetInt("_ZWrite",   0);
+        var canvasGo = new GameObject("PauseCanvas", typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster));
+        canvasGo.transform.SetParent(transform, false);
+        _canvas = canvasGo.GetComponent<Canvas>();
+        _canvas.renderMode = RenderMode.ScreenSpaceOverlay;
+        _canvas.sortingOrder = 800;   // below LevelClearScreen(900)/Intro(1000), above gameplay HUD
+        var sc = canvasGo.GetComponent<CanvasScaler>();
+        sc.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+        sc.referenceResolution = new Vector2(1920f, 1080f);
+        sc.matchWidthOrHeight = 0.5f;
+        EnsureEventSystem();
+
+        // Dim overlay.
+        _overlayGo = NewRect("Overlay", canvasGo.transform).gameObject;
+        var overlayRt = (RectTransform)_overlayGo.transform;
+        overlayRt.anchorMin = Vector2.zero; overlayRt.anchorMax = Vector2.one;
+        overlayRt.offsetMin = overlayRt.offsetMax = Vector2.zero;
+        var overlayImg = _overlayGo.AddComponent<Image>();
+        overlayImg.color = overlayColor;
+        _overlayGo.SetActive(false);
+
+        // Paper panel.
+        var panel = NewRect("Panel", canvasGo.transform);
+        panel.anchorMin = panel.anchorMax = panel.pivot = new Vector2(0.5f, 0.5f);
+        panel.sizeDelta = new Vector2(panelWidth, 5f * (buttonHeight + 14f) + 90f);
+        _panelGo = panel.gameObject;
+
+        var bg = panel.gameObject.AddComponent<Image>();
+        bg.color = GeoPalette.Paper;
+        bg.sprite = UIRoundedRect.Get(24);
+        bg.type = Image.Type.Sliced;
+
+        var vlg = panel.gameObject.AddComponent<VerticalLayoutGroup>();
+        vlg.padding = new RectOffset(28, 28, 26, 26);
+        vlg.spacing = 12f;
+        vlg.childControlWidth = vlg.childControlHeight = true;
+        vlg.childForceExpandWidth = true; vlg.childForceExpandHeight = false;
+        vlg.childAlignment = TextAnchor.UpperCenter;
+
+        var title = NewText("Title", panel, 34f, GeoPalette.Ink, FontStyles.Bold, TextAlignmentOptions.Center);
+        title.text = "PAUSED";
+        title.gameObject.AddComponent<LayoutElement>().minHeight = 46f;
+
+        _resumeButton = BuildButton(panel, "Resume", GeoPalette.Signal, () => SetPaused(false));
+        BuildButton(panel, "Settings", GeoPalette.Blue, () => SettingsScreen.Open = true);
+        BuildButton(panel, "Restart", GeoPalette.Blue, () =>
+        {
+            Time.timeScale = 1f;
+            _paused = false;
+            GameFlowManager.Instance?.RestartGame();
+        });
+        BuildButton(panel, "Back to Title", GeoPalette.Blue, GoToTitle);
+        BuildButton(panel, "Quit", new Color(0.86f, 0.36f, 0.32f), QuitGame);
+
+        _panelGo.SetActive(false);
+
+        // Top-right speed / pause controls — round paper chips, same visual language
+        // as ShopController's bottom-right shop-open button (54px circle, paper fill,
+        // gold tint on hover).
+        _controlsGo = NewRect("TopRightControls", canvasGo.transform).gameObject;
+        var crt = (RectTransform)_controlsGo.transform;
+        crt.anchorMin = crt.anchorMax = new Vector2(1f, 1f);
+        crt.pivot = new Vector2(1f, 1f);
+        crt.sizeDelta = new Vector2(ChipSize * 2f + ChipGap + 20f, ChipSize + PipGap + PipRowHeight);
+        crt.anchoredPosition = new Vector2(-16f, -16f);
+
+        var hlg = _controlsGo.AddComponent<HorizontalLayoutGroup>();
+        hlg.spacing = ChipGap; hlg.childAlignment = TextAnchor.UpperRight;
+        hlg.childControlWidth = hlg.childControlHeight = true;
+        hlg.childForceExpandWidth = false; hlg.childForceExpandHeight = false;
+
+        BuildSpeedButton(crt, CycleSpeed);
+        _pauseIconImg = BuildIconButton(crt, pauseIcon, () => SetPaused(!_paused));
+    }
+
+    const float ChipSize     = 80f;
+    const float ChipGap      = 12f;    // gap between the two icons (pause / speed)
+    const float PipGap       = -4f;    // gap between the fast-forward icon and its pip row — pulled up, overlapping its bottom edge slightly
+    const float PipRowHeight = 16f;
+
+    // Bare icon (no background chip) that IS the button — clicking anywhere the icon's
+    // rect covers (its full square, not just opaque pixels) triggers onClick.
+    Image BuildChip(RectTransform parent, Sprite icon, System.Action onClick, out Button btn)
+    {
+        var iconRt = NewRect("Icon", parent);
+        // Top-center anchor/pivot so the icon's TOP edge sits at its parent's top —
+        // matters when parent isn't a LayoutGroup (BuildIconButton's plain rect); a
+        // LayoutGroup parent (BuildSpeedButton) overrides these anyway.
+        iconRt.anchorMin = iconRt.anchorMax = iconRt.pivot = new Vector2(0.5f, 1f);
+        iconRt.anchoredPosition = Vector2.zero;
+        iconRt.sizeDelta = new Vector2(ChipSize, ChipSize);
+        var iconImg = iconRt.gameObject.AddComponent<Image>();
+        iconImg.sprite = icon;
+        iconImg.preserveAspect = true;
+        btn = iconRt.gameObject.AddComponent<Button>();
+        btn.targetGraphic = iconImg;
+        var colors = btn.colors; colors.highlightedColor = GeoPalette.Gold; colors.pressedColor = GeoPalette.Gold; btn.colors = colors;
+        btn.onClick.AddListener(() => onClick());
+        return iconImg;
+    }
+
+    // Fast-forward chip with 3 speed-level pips in a slim strip underneath.
+    void BuildSpeedButton(RectTransform parent, System.Action onClick)
+    {
+        var rt = NewRect("SpeedButton", parent);
+        var rootLe = rt.gameObject.AddComponent<LayoutElement>();
+        rootLe.preferredWidth  = ChipSize;
+        rootLe.preferredHeight = ChipSize + PipGap + PipRowHeight;
+
+        var vlg = rt.gameObject.AddComponent<VerticalLayoutGroup>();
+        vlg.spacing = PipGap;
+        vlg.childAlignment = TextAnchor.UpperCenter;
+        vlg.childControlWidth = vlg.childControlHeight = true;
+        vlg.childForceExpandWidth = vlg.childForceExpandHeight = false;
+
+        _fastForwardIconImg = BuildChip(rt, fastForwardIcon, onClick, out _);
+
+        var pipRow = NewRect("Pips", rt);
+        var pipRowLe = pipRow.gameObject.AddComponent<LayoutElement>();
+        pipRowLe.preferredWidth = ChipSize; pipRowLe.preferredHeight = PipRowHeight;
+        var pipHlg = pipRow.gameObject.AddComponent<HorizontalLayoutGroup>();
+        pipHlg.spacing = 4f; pipHlg.childAlignment = TextAnchor.MiddleCenter;
+        pipHlg.childControlWidth = pipHlg.childControlHeight = true;
+        pipHlg.childForceExpandWidth = pipHlg.childForceExpandHeight = false;
+
+        for (int i = 0; i < 3; i++)
+        {
+            var pipRt = NewRect("Pip", pipRow);
+            var pipLe = pipRt.gameObject.AddComponent<LayoutElement>();
+            pipLe.preferredWidth = pipLe.preferredHeight = PipRowHeight;
+            var pipImg = pipRt.gameObject.AddComponent<Image>();
+            pipImg.preserveAspect = true;
+            pipImg.raycastTarget = false;
+            _speedPips[i] = pipImg;
+        }
+    }
+
+    // Pause/resume icon — top-aligned to the same height as the speed icon above its
+    // pip row, so the two icons sit on one visual line.
+    Image BuildIconButton(RectTransform parent, Sprite initial, System.Action onClick)
+    {
+        var rt = NewRect("PauseButton", parent);
+        var rootLe = rt.gameObject.AddComponent<LayoutElement>();
+        rootLe.preferredWidth  = ChipSize;
+        rootLe.preferredHeight = ChipSize + PipGap + PipRowHeight;   // matches BuildSpeedButton's total height, keeps both icons top-aligned
+
+        return BuildChip(rt, initial, onClick, out _);
+    }
+
+    Button BuildButton(RectTransform parent, string label, Color color, System.Action onClick)
+    {
+        var rt = NewRect("Button", parent);
+        rt.gameObject.AddComponent<LayoutElement>().minHeight = buttonHeight;
+        var img = rt.gameObject.AddComponent<Image>();
+        img.sprite = UIRoundedRect.Get(16); img.type = Image.Type.Sliced;
+        img.color = color;
+        var btn = rt.gameObject.AddComponent<Button>();
+        btn.targetGraphic = img;
+        var colors = btn.colors; colors.highlightedColor = GeoPalette.Gold; colors.pressedColor = GeoPalette.Ink; btn.colors = colors;
+        btn.onClick.AddListener(() => onClick());
+
+        var t = NewText("Label", rt, 22f, GeoPalette.Paper, FontStyles.Bold, TextAlignmentOptions.Center);
+        t.text = label;
+        var lrt = t.rectTransform; lrt.anchorMin = Vector2.zero; lrt.anchorMax = Vector2.one;
+        lrt.offsetMin = lrt.offsetMax = Vector2.zero;
+        return btn;
+    }
+
+    static void EnsureEventSystem()
+    {
+        if (EventSystem.current != null) return;
+        new GameObject("EventSystem",
+            typeof(EventSystem),
+            typeof(UnityEngine.InputSystem.UI.InputSystemUIInputModule));
+    }
+
+    RectTransform NewRect(string name, Transform parent)
+    {
+        var go = new GameObject(name, typeof(RectTransform));
+        go.transform.SetParent(parent, false);
+        return (RectTransform)go.transform;
+    }
+
+    TMP_Text NewText(string name, Transform parent, float size, Color color, FontStyles style, TextAlignmentOptions align)
+    {
+        var rt = NewRect(name, parent);
+        var t = rt.gameObject.AddComponent<TextMeshProUGUI>();
+        t.fontSize = size; t.color = color; t.fontStyle = style; t.alignment = align;
+        t.raycastTarget = false; t.richText = true;
+        t.textWrappingMode = TextWrappingModes.NoWrap;
+        return t;
     }
 }

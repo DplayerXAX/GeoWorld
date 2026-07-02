@@ -411,7 +411,8 @@ public class ShopController : MonoBehaviour
 
     void HandleToggleKey()
     {
-        if (!Input.GetKeyDown(shopToggleKey)) return;
+        if (GameFlowManager.SettlementUp) { _expanded = false; return; }   // locked during clear settlement
+        if (!Input.GetKeyDown(shopToggleKey) && !GamepadInput.ToggleShopDown) return;
         // Toggle off what the player actually SEES, not a possibly-stale _expanded
         // (grab/Collapse/RestoreItem/combat paths can desync it → a press did nothing).
         bool visiblyOpen = _riftScale > 0.5f;
@@ -428,7 +429,7 @@ public class ShopController : MonoBehaviour
 
     void UpdateLetterboxBars()
     {
-        if (!letterbox)
+        if (!letterbox || GameFlowManager.SettlementUp)
         {
             if (_lbCanvas != null) _lbCanvas.enabled = false;
             return;
@@ -649,6 +650,7 @@ public class ShopController : MonoBehaviour
                     : new Color(0.85f, 0.18f, 0.12f));
         }
 
+
         foreach (var cell in data.cells)
         {
             var c = Instantiate(cubePrefab, root.transform);
@@ -658,6 +660,7 @@ public class ShopController : MonoBehaviour
             {
                 rend.sharedMaterial   = FlatMat();
                 rend.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                if (isTurret) rend.enabled = false;
             }
             MpbColor.Set(rend, col);
         }
@@ -670,8 +673,25 @@ public class ShopController : MonoBehaviour
         sb.cachedPrice = ResourceManager.Instance != null
                          ? ResourceManager.Instance.ComputePrice(data, fluc) : 0;
 
-        if (isTurret) AttachTurretBeacon(root, grid.cellSize, cubePrefab, data.blockType,
-                                         flatBlocks ? FlatMat() : null);
+        //if (isTurret) AttachTurretBeacon(root, grid.cellSize, cubePrefab, data.blockType,
+        //                                 flatBlocks ? FlatMat() : null);
+
+        if (isTurret)
+        {
+            if (data.turretPrefab != null)
+            {
+                GameObject visual = Instantiate(
+                    data.turretPrefab,
+                    root.transform);
+
+                visual.transform.localPosition = Vector3.zero;
+                visual.transform.localRotation = Quaternion.identity;
+                visual.transform.localScale = Vector3.one * 50f;
+
+                //foreach (var r in visual.GetComponentsInChildren<Renderer>())
+                //    MpbColor.Set(r, currentColor);
+            }
+        }
 
         if (_shopLayer >= 0) SetLayerRecursive(root, _shopLayer);   // keep off the main camera
 
@@ -712,6 +732,7 @@ public class ShopController : MonoBehaviour
 
         foreach (var r in root.GetComponentsInChildren<Renderer>())
             r.enabled = false;
+
 
         var marker  = GameObject.CreatePrimitive(PrimitiveType.Cube);
         marker.name = "TurretBeacon";
@@ -830,9 +851,9 @@ public class ShopController : MonoBehaviour
     public bool IsMouseInShopView()
     {
         if (_riftScale < 0.05f || _screenVerts == null) return false;
-        // Input.mousePosition has y=0 at bottom; GUI space has y=0 at top.
-        Vector2 mp = new Vector2(Input.mousePosition.x,
-                                 Screen.height - Input.mousePosition.y);
+        // VirtualCursor.Position has y=0 at bottom (mouse convention); GUI space has y=0 at top.
+        Vector2 mp = new Vector2(VirtualCursor.Position.x,
+                                 Screen.height - VirtualCursor.Position.y);
         return PointInPolygon(mp, _screenVerts);
     }
 
@@ -880,7 +901,7 @@ public class ShopController : MonoBehaviour
         _hovered = null;
         if (shopCam == null || !IsMouseInShopView()) return;
 
-        Vector3 vp  = ScreenToShopViewport(Input.mousePosition);
+        Vector3 vp  = ScreenToShopViewport(VirtualCursor.Position);
         Ray     ray = shopCam.ViewportPointToRay(vp);
         RaycastHit hit;
         bool got = hoverRadius > 0f
@@ -966,7 +987,7 @@ public class ShopController : MonoBehaviour
 
     void OnGUI()
     {
-        if (SettingsScreen.Open || IntroDirector.Playing) return;   // hidden behind settings / intro overlay
+        if (SettingsScreen.Open || IntroDirector.Playing || GameFlowManager.SettlementUp) return;   // hidden behind settings / intro / clear settlement
         BuildStyles();
         if (_riftScale > 0.005f) DrawRift();
         if (_riftScale > 0.5f)   DrawPriceLabels();

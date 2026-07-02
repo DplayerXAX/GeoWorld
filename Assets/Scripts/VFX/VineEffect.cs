@@ -91,6 +91,18 @@ public class VineEffect : MonoBehaviour
     [Tooltip("Optional line material. It MUST read vertex colors (default line / URP Particles-Unlit / Sprites-Default) for the brown→green gradient to show — a plain URP/Unlit material renders the line WHITE. Leave EMPTY to auto-use a built-in vertex-color material so the gradient always works.")]
     public Material lineMaterialOverride;
 
+    [Header("Leaves")]
+    [Tooltip("Sprout green leaves along the vine as it grows.")]
+    public bool enableLeaves = true;
+    [Tooltip("How many leaves to try sprouting at each node.")]
+    [Range(0, 4)] public int leavesPerNode = 4;
+    [Tooltip("Leaf size range (world units, base→tip of one leaf).")]
+    public Vector2 leafSize = new Vector2(0.09f, 0.17f);
+    public Color leafColor    = new Color(0.27f, 0.62f, 0.20f);   // deep leaf green
+    public Color leafTipColor = new Color(0.55f, 0.86f, 0.35f);   // bright new-growth green
+    [Tooltip("Seconds for one leaf to scale in.")]
+    public float leafGrowDuration = 0.18f;
+
     [Header("Timing")]
     [Tooltip("Seconds to extend ONE segment. Total grow time ~ this x (segments - 1). Smaller = faster.")]
     public float segmentGrowDuration = 0.08f;
@@ -102,6 +114,8 @@ public class VineEffect : MonoBehaviour
     private static readonly int ColorID     = Shader.PropertyToID("_Color");
     private static MaterialPropertyBlock _mpb;
     private static Material _lineMat;   // shared vertex-color material for all vines/forks
+    private static Material _leafMat;   // shared vertex-color material for leaves
+    private static Mesh     _leafMesh;  // shared leaf quad (pointed, vertex-coloured)
 
     private LineRenderer _line;
     private Coroutine    _routine;
@@ -306,6 +320,8 @@ public class VineEffect : MonoBehaviour
             _line.SetPosition(i, next);
             current = next;
 
+            if (enableLeaves) SpawnLeavesAt(next, mainDir, lengthScale);
+
             // Maybe sprout a fork at this node (not at the very base or tip).
             if (enableForking && _prefab != null
                 && depth < maxForkDepth && _forks < maxForksPerBranch
@@ -408,9 +424,94 @@ public class VineEffect : MonoBehaviour
             }
             _line.SetPosition(i, next);
             prev = next;
+
+            if (enableLeaves) SpawnLeavesAt(next, (next - _coilCenter).normalized, 1f);
         }
 
         _routine = null;
+    }
+
+    // ── Leaves ───────────────────────────────────────────────────────────────
+    // Sprout a few green leaf quads at a vine node, fanned around the growth axis
+    // and tilted up/out, each scaling in. Parented to the vine so they die with it.
+    private void SpawnLeavesAt(Vector3 pos, Vector3 growthDir, float sizeScale)
+    {
+        if (leavesPerNode <= 0) return;
+        if (growthDir.sqrMagnitude < 1e-4f) growthDir = Vector3.up;
+        growthDir = growthDir.normalized;
+
+        for (int k = 0; k < leavesPerNode; k++)
+        {
+            var go = new GameObject("VineLeaf");
+            go.transform.SetParent(transform, false);
+            go.transform.position = pos;
+
+            var mf = go.AddComponent<MeshFilter>();
+            mf.sharedMesh = GetLeafMesh(leafColor, leafTipColor);
+            var mr = go.AddComponent<MeshRenderer>();
+            mr.sharedMaterial    = GetLeafMaterial();
+            mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            mr.receiveShadows    = false;
+
+            // Fan out around the growth axis, tilt up + outward, random roll.
+            Vector3 side = Vector3.Cross(growthDir, Vector3.up);
+            if (side.sqrMagnitude < 1e-4f) side = Vector3.right;
+            side.Normalize();
+            float fan = (k / Mathf.Max(1f, leavesPerNode - 1f) - 0.5f) * 2f;   // -1..1
+            Vector3 outDir = Quaternion.AngleAxis(fan * 55f + Random.Range(-20f, 20f), growthDir) * side;
+            Vector3 up     = (outDir + Vector3.up * 0.6f + growthDir * 0.3f).normalized;
+            go.transform.rotation = Quaternion.LookRotation(Random.onUnitSphere * 0.2f + outDir, up)
+                                  * Quaternion.Euler(Random.Range(-25f, 25f), 0f, Random.Range(-20f, 20f));
+
+            float target = Random.Range(leafSize.x, leafSize.y) * Mathf.Max(0.4f, sizeScale);
+            StartCoroutine(LeafGrow(go.transform, target));
+        }
+    }
+
+    private IEnumerator LeafGrow(Transform t, float target)
+    {
+        float dur = Mathf.Max(0.0001f, leafGrowDuration);
+        float e = 0f;
+        while (e < dur)
+        {
+            if (t == null) yield break;
+            e += Time.deltaTime;
+            float p = Mathf.Clamp01(e / dur);
+            float s = 1f - (1f - p) * (1f - p);     // ease-out
+            t.localScale = Vector3.one * (target * s);
+            yield return null;
+        }
+        if (t != null) t.localScale = Vector3.one * target;
+    }
+
+    // Pointed leaf quad (base at origin → tip at +Y), vertex-coloured base→tip so
+    // the leaf shades from deep to bright green. Shared across all leaves.
+    private static Mesh GetLeafMesh(Color baseCol, Color tipCol)
+    {
+        if (_leafMesh != null) return _leafMesh;
+        _leafMesh = new Mesh { name = "VineLeaf" };
+        _leafMesh.vertices = new[]
+        {
+            new Vector3( 0f,   0f,  0f),    // base
+            new Vector3(-0.45f, 0.5f, 0f),  // left
+            new Vector3( 0f,   1f,  0f),    // tip
+            new Vector3( 0.45f, 0.5f, 0f),  // right
+        };
+        _leafMesh.colors = new[] { baseCol, Color.Lerp(baseCol, tipCol, 0.5f), tipCol, Color.Lerp(baseCol, tipCol, 0.5f) };
+        _leafMesh.triangles = new[] { 0, 1, 2, 0, 2, 3 };
+        _leafMesh.RecalculateNormals();
+        _leafMesh.RecalculateBounds();
+        return _leafMesh;
+    }
+
+    private static Material GetLeafMaterial()
+    {
+        if (_leafMat != null) return _leafMat;
+        Shader sh = Shader.Find("Sprites/Default")
+                 ?? Shader.Find("Universal Render Pipeline/Particles/Unlit")
+                 ?? Shader.Find("Universal Render Pipeline/Unlit");
+        _leafMat = new Material(sh) { name = "VineLeaf (runtime, vertex color)" };
+        return _leafMat;
     }
 
     // Graceful teardown: freeze growth, wither the whole bush's width to 0, then

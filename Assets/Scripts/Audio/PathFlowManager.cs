@@ -8,8 +8,16 @@ public class PathFlowManager : MonoBehaviour
 
     [Header("Laser line")]
     public Material laserMaterial;
-    [Range(0.02f, 0.3f)] public float lineWidth    = 0.055f;
+    [Range(0.02f, 0.3f)] public float lineWidth    = 0.085f;   // slightly thicker than before
     [Range(0f,    1f)]   public float heightOffset = 0.04f;
+
+    [Header("X-ray (hold middle mouse)")]
+    [Tooltip("Mouse button that reveals every path line through walls/blocks while held (2 = middle).")]
+    public int xrayMouseButton = 2;
+    static readonly int ZTestId = Shader.PropertyToID("_ZTest");
+    const float ZTestNormal = 4f;   // LEqual — occluded by geometry (default)
+    const float ZTestXray   = 8f;   // Always — draws through everything
+    bool _xrayActive;
 
     [Header("Live path")]
     public Color livePathColor = new Color(1f, 1f, 0.70f, 0.90f);   
@@ -39,7 +47,26 @@ public class PathFlowManager : MonoBehaviour
     readonly List<GameObject> _liveGOs        = new();
     readonly List<Coroutine>  _liveCoroutines = new();
 
+    // Every per-line material instance ever created (MakeLine), so the x-ray toggle
+    // can flip ZTest on all of them at once regardless of which list they live in.
+    readonly List<Material> _lineMats = new();
+
     void Awake() => Instance = this;
+
+    void Update()
+    {
+        bool held = Input.GetMouseButton(xrayMouseButton);
+        if (held == _xrayActive) return;
+        _xrayActive = held;
+
+        float zt = held ? ZTestXray : ZTestNormal;
+        for (int i = _lineMats.Count - 1; i >= 0; i--)
+        {
+            var m = _lineMats[i];
+            if (m == null) { _lineMats.RemoveAt(i); continue; }
+            m.SetFloat(ZTestId, zt);
+        }
+    }
 
     // ── Public API ────────────────────────────────────────────────────────────
 
@@ -131,6 +158,8 @@ public class PathFlowManager : MonoBehaviour
         var lr  = go.AddComponent<LineRenderer>();
         var mat = new Material(laserMaterial);
         mat.SetColor("_Color", col);
+        mat.SetFloat(ZTestId, _xrayActive ? ZTestXray : ZTestNormal);
+        _lineMats.Add(mat);
         lr.material          = mat;
         lr.useWorldSpace     = true;
         lr.positionCount     = 0;

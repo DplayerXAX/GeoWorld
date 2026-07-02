@@ -29,11 +29,11 @@ public class TitleFlow : MonoBehaviour
 
     void Update()
     {
-        if (CurrentFace == Face.Title && (Input.anyKeyDown || Input.GetMouseButtonDown(0)))
+        if (CurrentFace == Face.Title && (Input.anyKeyDown || Input.GetMouseButtonDown(0) || GamepadInput.ConfirmDown))
             GoToMainMenu();
-        else if (CurrentFace == Face.SaveSelect && Input.GetKeyDown(KeyCode.Escape))
+        else if (CurrentFace == Face.SaveSelect && (Input.GetKeyDown(KeyCode.Escape) || GamepadInput.CancelDown))
             GoToMainMenu();
-        else if (CurrentFace == Face.MainMenu && Input.GetKeyDown(KeyCode.Escape))
+        else if (CurrentFace == Face.MainMenu && (Input.GetKeyDown(KeyCode.Escape) || GamepadInput.CancelDown))
             GoToTitle();
     }
 

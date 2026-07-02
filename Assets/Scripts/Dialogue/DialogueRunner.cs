@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
@@ -95,6 +96,10 @@ public class DialogueRunner : MonoBehaviour
     public void Play(DialogueConversation conversation, bool passive = false)
     {
         if (conversation == null) { Finish(null); return; }
+        // Box is currently hidden (fresh appearance, not a mid-conversation chain via
+        // autoNext/choice) — play the pop-in. Checking alpha rather than IsPlaying
+        // catches the very first Play() too, when nothing has run yet this session.
+        bool freshAppearance = _group.alpha < 0.05f;
         _passive    = passive;
         _convo      = conversation;
         _line       = 0;
@@ -103,6 +108,27 @@ public class DialogueRunner : MonoBehaviour
         _topicText.text = conversation.topic;
         ResetPortraits();   // clear any portrait left over from the previous conversation
         ShowLine(0);
+        if (freshAppearance) StartCoroutine(BoxAppearAnim());
+    }
+
+    // Simple pop-in: box scales up from slightly-shrunk to full size, easing out.
+    // Both box and boxText pivot at bottom-centre, so it reads as the box popping
+    // up off the bottom edge rather than growing from its middle.
+    IEnumerator BoxAppearAnim()
+    {
+        const float dur = 0.22f;
+        float t = 0f;
+        while (t < dur)
+        {
+            t += Time.unscaledDeltaTime;
+            float k = 1f - Mathf.Pow(1f - Mathf.Clamp01(t / dur), 3f);   // ease-out cubic
+            float s = Mathf.LerpUnclamped(0.9f, 1f, k);
+            if (_boxRect != null)     _boxRect.localScale     = new Vector3(s, s, 1f);
+            if (_boxTextRect != null) _boxTextRect.localScale = new Vector3(s, s, 1f);
+            yield return null;
+        }
+        if (_boxRect != null)     _boxRect.localScale     = Vector3.one;
+        if (_boxTextRect != null) _boxTextRect.localScale = Vector3.one;
     }
 
     // Hide all portraits + restore their scale. Called at the start of each
@@ -155,7 +181,8 @@ public class DialogueRunner : MonoBehaviour
         // conversation (e.g. a tutorial Input step's Mouse0) doesn't instantly
         // advance/dismiss the line it just brought up.
         if (!_passive && !_choiceMode && Time.frameCount != _lineFrame
-            && (Input.GetMouseButtonDown(0) || (advanceKey != KeyCode.None && Input.GetKeyDown(advanceKey))))
+            && (Input.GetMouseButtonDown(0) || (advanceKey != KeyCode.None && Input.GetKeyDown(advanceKey))
+                || GamepadInput.ConfirmDown))
         {
             if (_typing) { _typing = false; _bodyText.maxVisibleCharacters = _bodyText.textInfo.characterCount; }
             else Advance();
@@ -202,6 +229,38 @@ public class DialogueRunner : MonoBehaviour
                 float b = (s == slot) ? 1f : portraitDim;
                 _portraits[s].color = new Color(b, b, b, 1f);
             }
+
+            // Keep the text column clear of whichever side is actually showing a
+            // portrait right now. Measured from the PORTRAIT'S OWN actual rendered
+            // width (sprite aspect × its authored per-portrait scale), not a guessed
+            // flat constant — a fixed guess only happens to clear whatever portrait
+            // it was tuned against; any other sprite/scale can still poke into the
+            // text. This can never fall short regardless of art size.
+            bool  portraitShown = _portraits[slot].enabled;
+            float portraitW     = portraitShown
+                ? PortraitRenderedWidth(_portraits[slot].sprite, line.character.GetPortraitScale(line.portrait))
+                : 0f;
+            var brt = _bodyText.rectTransform;
+            float padLeft, padRight;
+            if (!portraitShown)
+            {
+                padLeft = padRight = TextPadNormal;
+            }
+            else if (slot == (int)PortraitSlot.Left)
+            {
+                padLeft = portraitW + PortraitTextGap; padRight = TextPadNormal;
+            }
+            else if (slot == (int)PortraitSlot.Right)
+            {
+                padLeft = TextPadNormal; padRight = portraitW + PortraitTextGap;
+            }
+            else   // Center — the portrait stands over the middle, so both sides need
+                   // to give way, not just one; text ends up a narrower centred column.
+            {
+                padLeft = padRight = portraitW * 0.5f + PortraitTextGap;
+            }
+            brt.offsetMin = new Vector2(padLeft, brt.offsetMin.y);
+            brt.offsetMax = new Vector2(-padRight, brt.offsetMax.y);
         }
 
         // Text (typewriter via maxVisibleCharacters).
@@ -221,6 +280,7 @@ public class DialogueRunner : MonoBehaviour
         _continue.gameObject.SetActive(false);
         ClearChoices();
 
+        Button firstButton = null;
         foreach (var ch in _convo.choices)
         {
             var choice = ch;   // capture
@@ -233,8 +293,13 @@ public class DialogueRunner : MonoBehaviour
                 if (choice.next != null) Play(choice.next);
                 else Finish(_convo);
             });
+            if (firstButton == null) firstButton = btn;
         }
         _choiceBox.gameObject.SetActive(true);
+
+        // Gamepad: give Navigate/Submit a starting focus the instant choices appear.
+        if (firstButton != null)
+            UnityEngine.EventSystems.EventSystem.current?.SetSelectedGameObject(firstButton.gameObject);
     }
 
     void Finish(DialogueConversation convo)
@@ -310,8 +375,10 @@ public class DialogueRunner : MonoBehaviour
     void BuildPortraits(RectTransform root)
     {
         _portraits = new Image[3];
-        _portraits[(int)PortraitSlot.Left]   = MakePortrait(root, new Vector2(0f,   0f), new Vector2(0f,   0f), new Vector2(60f,  0f));
-        _portraits[(int)PortraitSlot.Right]  = MakePortrait(root, new Vector2(1f,   0f), new Vector2(1f,   0f), new Vector2(-60f, 0f));
+        // Pushed closer to the screen edge (was 60px in) so they read as standing at
+        // the sides instead of crowding into the middle of the text column.
+        _portraits[(int)PortraitSlot.Left]   = MakePortrait(root, new Vector2(0f,   0f), new Vector2(0f,   0f), new Vector2(12f,  0f));
+        _portraits[(int)PortraitSlot.Right]  = MakePortrait(root, new Vector2(1f,   0f), new Vector2(1f,   0f), new Vector2(-12f, 0f));
         _portraits[(int)PortraitSlot.Center] = MakePortrait(root, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0f,   0f));
         foreach (var p in _portraits) p.enabled = false;
     }
@@ -328,7 +395,24 @@ public class DialogueRunner : MonoBehaviour
         return img;
     }
 
-    RectTransform _boxRect;
+    RectTransform _boxRect, _boxTextRect;
+    // Body-text horizontal padding: normal on the side with no portrait, wide on the
+    // speaking portrait's side so the text column never runs under the standing art.
+    const float TextPadNormal = 34f;
+    const float PortraitTextGap = 24f;   // breathing room between the portrait's edge and the text
+
+    // Portrait box is a fixed 560×840 with preserveAspect=true, so the sprite is
+    // letterboxed to fit — actual on-screen width depends on the SPRITE's own aspect,
+    // not just the 560 box width. Same math Image.preserveAspect uses internally.
+    static float PortraitRenderedWidth(Sprite sprite, float scale)
+    {
+        if (sprite == null) return 0f;
+        const float boxW = 560f, boxH = 840f;
+        float spriteAspect = sprite.rect.width / Mathf.Max(1f, sprite.rect.height);
+        float boxAspect     = boxW / boxH;
+        float w = spriteAspect > boxAspect ? boxW : boxH * spriteAspect;
+        return w * scale;
+    }
 
     // The panel only (background + accent rule). Built BELOW the portraits so the
     // standing portrait sits on top of the box. The TEXT is built separately, above
@@ -358,6 +442,7 @@ public class DialogueRunner : MonoBehaviour
         box.anchorMin = _boxRect.anchorMin; box.anchorMax = _boxRect.anchorMax;
         box.pivot = _boxRect.pivot; box.sizeDelta = _boxRect.sizeDelta;
         box.anchoredPosition = _boxRect.anchoredPosition;
+        _boxTextRect = box;
 
         // Name box (overlaps the top edge).
         _nameBg = NewImage("NameBg", box, accentColor, false);
@@ -378,7 +463,7 @@ public class DialogueRunner : MonoBehaviour
         _bodyText.textWrappingMode = TextWrappingModes.Normal;
         var brt = _bodyText.rectTransform;
         brt.anchorMin = Vector2.zero; brt.anchorMax = Vector2.one;
-        brt.offsetMin = new Vector2(34f, 28f); brt.offsetMax = new Vector2(-34f, -58f);
+        brt.offsetMin = new Vector2(TextPadNormal, 28f); brt.offsetMax = new Vector2(-TextPadNormal, -58f);
 
         // Continue indicator.
         _continue = NewText("Continue", box, textSize, accentColor, FontStyles.Bold, TextAlignmentOptions.Center);
@@ -413,7 +498,7 @@ public class DialogueRunner : MonoBehaviour
         if (UnityEngine.EventSystems.EventSystem.current != null) return;
         new GameObject("EventSystem",
             typeof(UnityEngine.EventSystems.EventSystem),
-            typeof(UnityEngine.EventSystems.StandaloneInputModule));
+            typeof(UnityEngine.InputSystem.UI.InputSystemUIInputModule));
     }
 
     static void StretchInto(RectTransform rt, float padX, float padY)

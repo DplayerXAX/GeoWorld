@@ -153,7 +153,7 @@ public class HudSidePanels : MonoBehaviour
 
     void UpdatePointerOver()
     {
-        Vector2 mp = Input.mousePosition;
+        Vector2 mp = VirtualCursor.Position;
         bool over = Contains(_leftHandle, mp) || Contains(_rightHandle, mp);
         if (_synOpen)  over |= Contains(_leftContent,  mp);
         if (_ctrlOpen) over |= Contains(_rightContent, mp);
