@@ -24,6 +24,7 @@ public class EnemySurfaceUnit : MonoBehaviour
 
     public event Action<EnemySurfaceUnit> OnReachedEnd;
     public event Action<EnemySurfaceUnit> OnDied;
+    public event Action<EnemySurfaceUnit, int> OnBlockTraveled;
 
     // Global hooks (for objectives / score / stats) — fire for ANY enemy.
     public static event Action<EnemySurfaceUnit> AnyDied;
@@ -31,6 +32,7 @@ public class EnemySurfaceUnit : MonoBehaviour
 
     public int CurrentHealth => _health;
     public IReadOnlyList<FaceNode> Path => _path;
+    public int BlocksTraveled => _blocksTraveled;
 
     // The grid cell the enemy is currently on (the block under its current
     // face). Null before the first step. Used by area synergies (e.g. Order
@@ -56,6 +58,7 @@ public class EnemySurfaceUnit : MonoBehaviour
     float _moveTimer;
     FaceNode _prevNode;
     Vector3Int? _lastRewardCell;
+    int _blocksTraveled;
 
     void Awake()
     {
@@ -88,10 +91,22 @@ public class EnemySurfaceUnit : MonoBehaviour
         _index = 0;
         _prevNode = null;
         _lastRewardCell = null;
+        _blocksTraveled = 0;
         _temporarySpeedMultiplier = 1f;
 
         StepToNode(_path[0]);
         _index = 1;
+    }
+
+    public List<FaceNode> GetRemainingPathSnapshot()
+    {
+        if (_path == null || _path.Count == 0) return null;
+
+        int start = Mathf.Clamp(_index - 1, 0, _path.Count - 1);
+        var remaining = new List<FaceNode>(_path.Count - start);
+        for (int i = start; i < _path.Count; i++)
+            remaining.Add(_path[i]);
+        return remaining;
     }
 
     public void TakeDamage(int amount)
@@ -202,11 +217,19 @@ public class EnemySurfaceUnit : MonoBehaviour
     {
         if (_lastRewardCell.HasValue && _lastRewardCell.Value == cell) return;
 
+        bool traveledToNewBlock = _lastRewardCell.HasValue;
+
         var instance = GridSystem.instance?.GetInstanceAt(cell);
         if (instance?.data != null)
             ResourceManager.Instance?.OnEnemyPassedBlock(instance.data.blockType);
 
         _lastRewardCell = cell;
+
+        if (traveledToNewBlock)
+        {
+            _blocksTraveled++;
+            OnBlockTraveled?.Invoke(this, _blocksTraveled);
+        }
     }
 
     void ReachEnd()

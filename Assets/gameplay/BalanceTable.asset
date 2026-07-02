@@ -53,6 +53,17 @@ MonoBehaviour:
     spawnWeight: 1.5
     groupSize: {x: 6, y: 10}
     spawnInterval: 0.25
+  - name: Splitter
+    prefab: {fileID: 3000000000000000004, guid: 7f9459c0f939e624c8b042b0ee3c0803, type: 3}
+    maxHealth: 8
+    speedMultiplier: 0.85
+    rewardOnKill: 0
+    targetPriority: 20
+    spawnCost: 4
+    minRound: 2
+    spawnWeight: 0.75
+    groupSize: {x: 1, y: 2}
+    spawnInterval: 0.85
   waveBaseBudget: 10
   waveBudgetGrowth: 4
   waveBudgetVariance: 0.15
