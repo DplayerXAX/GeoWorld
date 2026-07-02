@@ -46,6 +46,19 @@ public class EnemyBaseManager : MonoBehaviour
     public int SpawnedCount => _spawnedCount;
     public int TargetSpawnCount => _spawnTotal > 0 ? _spawnTotal : spawnCount;
 
+    public int CountActiveSplitEnemies()
+    {
+        int count = 0;
+        for (int i = 0; i < _activeEnemies.Count; i++)
+        {
+            var enemy = _activeEnemies[i];
+            if (enemy != null && enemy.CurrentHealth > 0
+                && enemy.GetComponent<EnemySplitOnAlive>() != null)
+                count++;
+        }
+        return count;
+    }
+
     readonly List<EnemySurfaceUnit> _activeEnemies = new();
     Coroutine _spawnRoutine;
     bool _waveActive;
@@ -206,6 +219,56 @@ public class EnemyBaseManager : MonoBehaviour
             if (path != null && path.Count > 0)
                 SpawnOneEnemy(source, path);
         }
+    }
+
+    public int SpawnSplitChildren(EnemySurfaceUnit parent,
+                                  EnemySurfaceUnit childPrefab,
+                                  int childCount,
+                                  float childHealthMultiplier,
+                                  float childSpeedMultiplier,
+                                  float childScaleMultiplier,
+                                  float childRewardMultiplier,
+                                  float scatterRadius)
+    {
+        if (!_waveActive || parent == null || parent.CurrentHealth <= 0) return 0;
+
+        var path = parent.GetRemainingPathSnapshot();
+        if (path == null || path.Count == 0) return 0;
+
+        EnemySurfaceUnit source = childPrefab != null ? childPrefab : parent;
+        int spawned = 0;
+        int count = Mathf.Max(0, childCount);
+
+        for (int i = 0; i < count; i++)
+        {
+            var child = Instantiate(source);
+            InjectVisualMaterials(child);
+
+            child.faceClearance = parent.faceClearance;
+            child.SetMaxHealth(Mathf.Max(1, Mathf.CeilToInt(parent.maxHealth * Mathf.Max(0.01f, childHealthMultiplier))));
+            child.rewardOnKill = Mathf.Max(0, Mathf.RoundToInt(parent.rewardOnKill * Mathf.Max(0f, childRewardMultiplier)));
+            child.baseSpeedMultiplier = Mathf.Max(0.01f, parent.baseSpeedMultiplier * Mathf.Max(0.01f, childSpeedMultiplier));
+            child.targetPriority = parent.targetPriority;
+
+            Vector3 offset = scatterRadius > 0f ? UnityEngine.Random.insideUnitSphere * scatterRadius : Vector3.zero;
+            offset.y = Mathf.Abs(offset.y) * 0.25f;
+            child.transform.position = parent.transform.position + offset;
+            child.transform.rotation = parent.transform.rotation;
+            child.transform.localScale = parent.transform.localScale * Mathf.Max(0.1f, childScaleMultiplier);
+
+            var parentSplit = parent.GetComponent<EnemySplitOnAlive>();
+            var childSplit = child.GetComponent<EnemySplitOnAlive>();
+            if (childSplit != null)
+                childSplit.SetGeneration(parentSplit != null ? parentSplit.Generation + 1 : 1);
+
+            child.OnReachedEnd += HandleEnemyReachedEnd;
+            child.OnDied += HandleEnemyDied;
+            _activeEnemies.Add(child);
+            child.SetPath(path, enemyBpm, enemyMoveRatio);
+            spawned++;
+        }
+
+        return spawned;
     }
 
     // Instantiates and launches a single enemy of `source` along `path`.
