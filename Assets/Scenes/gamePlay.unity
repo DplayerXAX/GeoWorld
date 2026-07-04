@@ -1444,6 +1444,7 @@ GameObject:
   m_Component:
   - component: {fileID: 621363998}
   - component: {fileID: 621363997}
+  - component: {fileID: 621363999}
   m_Layer: 0
   m_Name: WwiseGlobal
   m_TagString: Untagged
@@ -1491,6 +1492,19 @@ Transform:
   m_Children: []
   m_Father: {fileID: 1896091937}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &621363999
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 621363996}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ed39f2b237e573f4f85990bb5d1440ac, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: AK.Wwise.Unity.Addressables::AK.Wwise.Unity.WwiseAddressables.InitBankHolder
+  InitBank: {fileID: 11400000, guid: 921dbaf0e79e14b4c898d5962608c29d, type: 2}
 --- !u!1 &653921579
 GameObject:
   m_ObjectHideFlags: 0
@@ -1569,6 +1583,7 @@ MonoBehaviour:
   laserMaterial: {fileID: 2100000, guid: cbe27151982a69641ab591e07a569734, type: 2}
   lineWidth: 0.055
   heightOffset: 0.04
+  xrayMouseButton: 2
   livePathColor: {r: 1, g: 1, b: 0.7, a: 0.9}
 --- !u!1 &658080851
 GameObject:

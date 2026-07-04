@@ -14,30 +14,28 @@ public class LevelClearScreen : MonoBehaviour
 {
     Action _onContinue;
 
+    // stars/score are precomputed by GameFlowManager via RunStats (single source of
+    // truth for the formula, shared with the Endless settlement path). prevBest/isNewBest
+    // are captured BEFORE SaveSystem.RecordClear runs, since that call already bumps the
+    // saved best — reading it back here would always look like a tie, never "NEW!".
     public static void Show(LevelDefinition level, int wavesCleared, int lives, int maxLives,
+                            int stars, int score, int prevBest, bool isNewBest,
                             bool objectivesMet, Action onContinue)
     {
         var go = new GameObject("LevelClearScreen");
-        go.AddComponent<LevelClearScreen>().Begin(level, wavesCleared, lives, maxLives, objectivesMet, onContinue);
+        go.AddComponent<LevelClearScreen>().Begin(level, wavesCleared, lives, maxLives, stars, score, prevBest, isNewBest, objectivesMet, onContinue);
     }
 
     void Begin(LevelDefinition level, int wavesCleared, int lives, int maxLives,
-               bool objectivesMet, Action onContinue)
+               int stars, int score, int prevBest, bool isNewBest, bool objectivesMet, Action onContinue)
     {
         _onContinue = onContinue;
-
-        // ── Star / score derivation ───────────────────────────────────────────
-        int stars = 1;                                            // cleared
-        if (objectivesMet)                       stars++;        // bonus goals
-        if (maxLives > 0 && lives >= maxLives)   stars++;        // flawless (no leaks)
-        stars = Mathf.Clamp(stars, 1, 3);
-        int score = Mathf.Max(0, wavesCleared) * 150 + Mathf.Max(0, lives) * 40 + (stars - 1) * 250;
 
         Debug.Log($"[LevelClear] settlement shown — waves {wavesCleared}, lives {lives}/{maxLives}, stars {stars}, score {score}");
 
         // Build the panel FIRST so it always shows even if the camera/skybox steps
         // throw for any reason.
-        BuildUI(level, wavesCleared, lives, stars, score);
+        BuildUI(level, wavesCleared, lives, stars, score, prevBest, isNewBest);
         try { FrameBlocksLeft(); } catch (Exception e) { Debug.LogWarning("[LevelClear] camera step skipped: " + e.Message); }
         try { HarmonyReaction(); } catch (Exception e) { Debug.LogWarning("[LevelClear] skybox step skipped: " + e.Message); }
     }
@@ -72,7 +70,7 @@ public class LevelClearScreen : MonoBehaviour
     }
 
     // ── UI ────────────────────────────────────────────────────────────────────
-    void BuildUI(LevelDefinition level, int wavesCleared, int lives, int stars, int score)
+    void BuildUI(LevelDefinition level, int wavesCleared, int lives, int stars, int score, int prevBest, bool isNewBest)
     {
         var go = new GameObject("ClearCanvas", typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster));
         go.transform.SetParent(transform, false);
@@ -89,7 +87,7 @@ public class LevelClearScreen : MonoBehaviour
         var panel = NewRect("Panel", go.transform);
         panel.anchorMin = new Vector2(1f, 0.5f); panel.anchorMax = new Vector2(1f, 0.5f);
         panel.pivot     = new Vector2(1f, 0.5f);
-        panel.sizeDelta = new Vector2(640f, 760f);
+        panel.sizeDelta = new Vector2(640f, 900f);
         panel.anchoredPosition = new Vector2(-70f, 0f);
         var bg = panel.gameObject.AddComponent<Image>();
         bg.color  = new Color(0.949f, 0.937f, 0.902f, 0.96f);   // paper
@@ -112,7 +110,12 @@ public class LevelClearScreen : MonoBehaviour
 
         StatRow(panel, "Waves Cleared", wavesCleared.ToString());
         StatRow(panel, "Lives Left",    lives.ToString());
+        StatRow(panel, "Enemies Killed", RunStats.Kills.ToString());
+        StatRow(panel, "Time",          FormatTime(RunStats.ElapsedTime));
         StatRow(panel, "Stars",         stars + " / 3");
+
+        if (isNewBest) StatRow(panel, "Best Score", "NEW!");
+        else if (prevBest > 0) StatRow(panel, "Best Score", prevBest.ToString());
 
         // spacer
         var spacer = NewRect("Spacer", panel); spacer.gameObject.AddComponent<LayoutElement>().flexibleHeight = 1f;
@@ -150,6 +153,12 @@ public class LevelClearScreen : MonoBehaviour
     }
 
     // ── Helpers ────────────────────────────────────────────────────────────────
+    static string FormatTime(float seconds)
+    {
+        int s = Mathf.Max(0, Mathf.RoundToInt(seconds));
+        return $"{s / 60}:{s % 60:00}";
+    }
+
     TMP_Text Title(RectTransform parent, string text, float size, Color color, FontStyles style)
     {
         var t = NewText("Title", parent, size, color, style, TextAlignmentOptions.Center);

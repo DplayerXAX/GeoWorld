@@ -53,6 +53,12 @@ public class LevelDefinition : ScriptableObject
     public Vector3Int endCell;
     [Tooltip("Ordered guided placements. Each shows a ghost the player must match exactly before they can place.")]
     public List<TutorialStep> tutorialSteps = new();
+
+    [Header("Starting layout")]
+    [Tooltip("Optional pre-built blocks placed on the grid at level start, authored with LevelMapAuthor "
+           + "in any scene with a GridSystem + PlacementController (save under a level-specific map name, "
+           + "then bake via GeoWorld ▸ Level Map ▸ Bake JSON → Asset).")]
+    public LevelMapAsset startingLayout;
 }
 
 // ── Special objectives ──────────────────────────────────────────────────────

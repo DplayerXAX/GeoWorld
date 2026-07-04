@@ -34,6 +34,11 @@ public class OrbitCamera : MonoBehaviour
     private float pitch = 20f;
 
     public float transitionSpeed = 6f;
+
+    // Set true while a modal camera view (e.g. WavePreview) owns the framing — blocks
+    // player-driven orbit/zoom/pan input, but NOT programmatic FocusOnPoint/SetZoom/
+    // SetPhysicalDistance calls (those are how the modal view drives the camera itself).
+    public static bool InputLocked;
     public Camera myCam;
     private Vector3 currentFocusPoint;
     private Transform desiredTarget;
@@ -115,6 +120,7 @@ public class OrbitCamera : MonoBehaviour
 
     public void AddDistance(float delta)
     {
+        if (InputLocked) return;
         if (useOrthographic)
         {
             targetOrthoSize = Mathf.Clamp(
@@ -132,6 +138,15 @@ public class OrbitCamera : MonoBehaviour
             );
         }
     }
+
+    // Physical camera-to-focus distance, independent of ortho/perspective "zoom"
+    // (orthoSize controls apparent size in ortho mode, not physical position — see
+    // LateUpdate's `offset = rot * (0,0,-distance)`, used regardless of projection).
+    // Bypasses SetZoom's normal 2-40 clamp so the camera can be pushed almost all
+    // the way to the focus point — e.g. WavePreview pushing it inside the start
+    // portal's core sphere (small enough that the opaque shader's default backface
+    // culling makes it disappear from inside, so it never occludes anything).
+    public void SetPhysicalDistance(float d) => targetDistance = Mathf.Max(0.01f, d);
 
     // Absolute zoom target. In ortho this is the orthographicSize; in perspective
     // it's the orbit distance. SMALLER = more zoomed in. Clamped to each mode's
@@ -174,6 +189,7 @@ public class OrbitCamera : MonoBehaviour
     // Called by PlacementController on WASD/QE in Select mode.
     public void Pan(Vector3 worldDelta)
     {
+        if (InputLocked) return;
         _panOffset += worldDelta;
     }
 
@@ -205,8 +221,10 @@ public class OrbitCamera : MonoBehaviour
             1f - Mathf.Exp(-transitionSpeed * Time.deltaTime)
         );
 
-        Vector2 lookInput = GamepadInput.Look;   // right stick — orbits without a button hold
+        Vector2 lookInput = InputLocked ? Vector2.zero : GamepadInput.Look;   // right stick — orbits without a button hold
 
+        if (!InputLocked)
+        {
         if (!useOrthographic)
         {
             if (Input.GetMouseButton(1))
@@ -241,6 +259,7 @@ public class OrbitCamera : MonoBehaviour
 
         if (Mathf.Abs(GamepadInput.ZoomDelta) > 0.05f)
             AddDistance(-GamepadInput.ZoomDelta * gamepadZoomSpeed * Time.deltaTime);
+        }
         Quaternion rot;
 
         if (useOrthographic)

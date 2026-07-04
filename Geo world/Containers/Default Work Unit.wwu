@@ -2238,6 +2238,7 @@
 														<Property Name="EndTrimOffset" Type="Real64" Value="2000"/>
 														<Property Name="FadeInMode" Type="int16" Value="0"/>
 														<Property Name="FadeOutMode" Type="int16" Value="0"/>
+														<Property Name="PlayAt" Type="Real64" Value="125"/>
 													</PropertyList>
 													<AudioSourceRef Name="完璧" ID="{1DD73FC4-8099-4F23-BDBD-CDC6F7DC664A}"/>
 												</MusicClip>
@@ -2254,7 +2255,7 @@
 							<MusicCue Name="Exit Cue" ID="{8396A2D5-C807-4571-ABD4-2A64DBFB9510}">
 								<PropertyList>
 									<Property Name="CueType" Type="int16" Value="1"/>
-									<Property Name="TimeMs" Type="Real64" Value="2000"/>
+									<Property Name="TimeMs" Type="Real64" Value="2125"/>
 								</PropertyList>
 							</MusicCue>
 						</ObjectList>
@@ -2307,13 +2308,36 @@
 									<MusicTrackSequence Name="" ID="{825A5BFB-6C6B-4146-BC45-FF6B13CAAABE}">
 										<ObjectLists>
 											<ObjectList Name="Clips">
-												<MusicClip Name="start fight" ID="{A6B1D8AF-2300-4BB4-8C7C-A7B32FDDB53C}">
+												<MusicClip Name="start fight" ID="{39288318-4A63-4944-BA3E-21B2C4C2C511}">
 													<PropertyList>
+														<Property Name="BeginTrimOffset" Type="Real64" Value="125"/>
 														<Property Name="EndTrimOffset" Type="Real64" Value="2000"/>
 														<Property Name="FadeInMode" Type="int16" Value="0"/>
 														<Property Name="FadeOutMode" Type="int16" Value="0"/>
+														<Property Name="PlayAt" Type="Real64" Value="-125"/>
 													</PropertyList>
 													<AudioSourceRef Name="start fight" ID="{83D4D349-0A02-4CFB-AED2-E3E5EFE116EE}"/>
+													<PropertyCurveList>
+														<PropertyCurve PropertyName="Volume">
+															<Curve Name="" ID="{1A83F5C2-51CA-48D5-ABE8-3B5D894E421B}">
+																<PropertyList>
+																	<Property Name="Flags" Type="int32" Value="3"/>
+																</PropertyList>
+																<PointList>
+																	<Point>
+																		<XPos>0.125</XPos>
+																		<YPos>-0</YPos>
+																		<Flags>5</Flags>
+																	</Point>
+																	<Point>
+																		<XPos>2</XPos>
+																		<YPos>0</YPos>
+																		<Flags>37</Flags>
+																	</Point>
+																</PointList>
+															</Curve>
+														</PropertyCurve>
+													</PropertyCurveList>
 												</MusicClip>
 											</ObjectList>
 										</ObjectLists>
@@ -2328,7 +2352,7 @@
 							<MusicCue Name="Exit Cue" ID="{75BDBBBF-1626-4533-AB7B-9126892E84B2}">
 								<PropertyList>
 									<Property Name="CueType" Type="int16" Value="1"/>
-									<Property Name="TimeMs" Type="Real64" Value="2000"/>
+									<Property Name="TimeMs" Type="Real64" Value="1875"/>
 								</PropertyList>
 							</MusicCue>
 						</ObjectList>

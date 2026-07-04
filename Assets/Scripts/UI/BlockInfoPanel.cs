@@ -91,7 +91,7 @@ public class BlockInfoPanel : MonoBehaviour
     // ── Public API (called by PlacementController) ───────────────────────────────
 
     public void Show(Vector3 worldPos, string title, string body, bool canEdit,
-                     string sellText, Action onPickUp, Action onSell)
+                     string sellText, Action onPickUp, Action onSell, string lockedReason = "Locked during combat")
     {
         _anchor = worldPos;
         _titleText.text = title;
@@ -102,6 +102,7 @@ public class BlockInfoPanel : MonoBehaviour
         _sellButton.gameObject.SetActive(true);
         _pickUpButton.interactable = canEdit;
         _sellButton.interactable   = canEdit;
+        _lockedNote.text = lockedReason;
         _lockedNote.gameObject.SetActive(!canEdit);
 
         if (_target < 0.5f)

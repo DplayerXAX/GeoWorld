@@ -646,6 +646,11 @@ public partial class PlacementController : MonoBehaviour
             Debug.Log("[Placement] Editing placed objects is locked during combat.");
             return false;
         }
+        if (selectedInstance.locked)
+        {
+            Debug.Log("[Placement] This block is part of the level's fixed layout and can't be moved.");
+            return false;
+        }
 
         isPickingUpObject = true;
         lastObjectPos   = selectedInstance.visualObject.transform.position;
@@ -708,6 +713,7 @@ public partial class PlacementController : MonoBehaviour
             _selectedEndpoint = null;
             UpdateHighlight(null);
             _lastClickTarget = null;
+            if (WavePreview.Active) WavePreview.Exit();
             return;
         }
 
@@ -746,6 +752,24 @@ public partial class PlacementController : MonoBehaviour
         var ep = hit.transform.GetComponentInParent<GridEndpoint>();
         if (ep != null)
         {
+            bool isStart = ep.gameObject.name.IndexOf(
+                "start", System.StringComparison.OrdinalIgnoreCase) >= 0;
+
+            // Start points: click toggles the zoomed-in wave preview instead of the
+            // old side-panel forecast. Not available mid-combat (the forecast is for
+            // the NEXT wave, ambiguous while one is running) — falls through to plain
+            // selection in that case, same as before this feature existed.
+            bool combatRunning = GameFlowManager.Instance != null && GameFlowManager.Instance.phase == GamePhase.Running;
+            if (isStart && !combatRunning)
+            {
+                selectedInstance    = null;
+                activePhysicsObject = null;
+                _selectedEndpoint   = null;   // old side panel stays off for starts now
+                UpdateHighlight(ep.gameObject);
+                WavePreview.Toggle(ep, GameFlowManager.Instance != null ? GameFlowManager.Instance.GetNextWaveForecast() : default);
+                return;
+            }
+
             UpdateHighlight(ep.gameObject);
             selectedInstance    = null;
             activePhysicsObject = null;
@@ -754,8 +778,7 @@ public partial class PlacementController : MonoBehaviour
             // wave when it's a START point. Endpoints are named "startBlock" /
             // "endBlock" by LevelEndpointGenerator.
             _selectedEndpoint        = ep.gameObject;
-            _selectedEndpointIsStart = ep.gameObject.name.IndexOf(
-                "start", System.StringComparison.OrdinalIgnoreCase) >= 0;
+            _selectedEndpointIsStart = isStart;
             _startForecastRound      = int.MinValue;   // force a fresh forecast
 
             bool isDouble = ep.gameObject == _lastClickTarget
@@ -934,6 +957,11 @@ public partial class PlacementController : MonoBehaviour
         if (GameFlowManager.Instance?.phase == GamePhase.Running)
         {
             Debug.Log("[Placement] Selling is locked during combat.");
+            return;
+        }
+        if (ins.locked)
+        {
+            Debug.Log("[Placement] This block is part of the level's fixed layout and can't be sold.");
             return;
         }
         if (!TutorialDirector.CanSell()) return;   // tutorial gate
@@ -1337,6 +1365,18 @@ public partial class PlacementController : MonoBehaviour
         return null;
     }
 
+    // Unambiguous lookup by asset name — unlike FindBlockData(BlockType), which just
+    // returns the first match and silently picks the wrong shape if two BlockData
+    // assets share a BlockType. Used by LevelMapAuthor/GameFlowManager to resolve
+    // LevelMapNode.blockAssetName.
+    public BlockData FindBlockDataByName(string name)
+    {
+        if (blocks == null || string.IsNullOrEmpty(name)) return null;
+        foreach (var b in blocks)
+            if (b != null && b.name == name) return b;
+        return null;
+    }
+
     public enum PlaceFailureReason
     {
         None,
@@ -1397,6 +1437,11 @@ public partial class PlacementController : MonoBehaviour
         if (GameFlowManager.Instance?.phase == GamePhase.Running)
         {
             Debug.Log("[Placement] Deletion is locked during combat.");
+            return;
+        }
+        if (selectedInstance.locked)
+        {
+            Debug.Log("[Placement] This block is part of the level's fixed layout and can't be deleted.");
             return;
         }
 

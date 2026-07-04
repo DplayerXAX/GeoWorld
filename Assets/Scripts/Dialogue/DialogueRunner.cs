@@ -38,6 +38,8 @@ public class DialogueRunner : MonoBehaviour
     public float   fadeSpeed   = 12f;
     [Range(0f, 1f)] public float portraitDim = 0.45f;
     public KeyCode advanceKey  = KeyCode.Space;
+    [Tooltip("Opacity the passive tutorial dialogue box fades to while the shop is expanded (F).")]
+    [Range(0f, 1f)] public float passiveShopDim = 0.25f;
 
     // ── Events (for game hooks) ──────────────────────────────────────────────────
     public event Action<DialogueConversation> OnFinished;
@@ -152,10 +154,21 @@ public class DialogueRunner : MonoBehaviour
     void Update()
     {
         if (_group == null) return;
-        _group.alpha = Mathf.MoveTowards(_group.alpha, _alphaTarget, fadeSpeed * Time.unscaledDeltaTime);
+
+        // Passive tutorial dialogue dims (doesn't hide) while the shop is expanded, so
+        // the opaque letterbox bars (rendered above this canvas) don't fight it for
+        // attention — same box, same position, just lower opacity.
+        float dimMul = 1f;
+        if (_passive && ShopController.Instance != null && ShopController.Instance.IsExpanded)
+            dimMul = passiveShopDim;
+
+        float targetAlpha = _alphaTarget * dimMul;
+        _group.alpha = Mathf.MoveTowards(_group.alpha, targetAlpha, fadeSpeed * Time.unscaledDeltaTime);
+
         // Passive (tutorial) dialogue must NOT block the game — the player needs to
         // interact to complete the step that advances it.
         _group.blocksRaycasts = _group.interactable = !_passive && _alphaTarget > 0.5f;
+
         if (!IsPlaying) return;
 
         // Typewriter (uses maxVisibleCharacters so rich text isn't sliced).

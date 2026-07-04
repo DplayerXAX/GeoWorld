@@ -21,6 +21,11 @@ public class PlacedBlockInstance
     public int basicBurstUpgradeLevel;
     public int aoeFireUpgradeLevel;
     public int aoeGravityUpgradeLevel;
+
+    // Pre-built level furniture (LevelDefinition.startingLayout) — can't be picked up,
+    // sold, or deleted by the player. Checked in PlacementController's pickup/sell/
+    // delete paths, same shape as the existing combat-phase lock.
+    public bool locked;
 }
 
 public class GridSystem : MonoBehaviour

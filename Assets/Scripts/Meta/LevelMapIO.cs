@@ -22,11 +22,14 @@ public static class LevelMapIO
             var tag  = ins.visualObject.GetComponent<LevelNodeTag>();
             data.nodes.Add(new LevelMapNode
             {
-                cells         = ins.occupiedCells.ToArray(),
-                color         = rend != null ? MpbColor.Get(rend) : Color.white,
-                blockTypeName = ins.data != null ? ins.data.blockType.ToString() : "",
-                levelId       = (tag != null && tag.level != null) ? tag.level.levelId : "",
-                isStart       = tag != null && tag.isStart,
+                cells          = ins.occupiedCells.ToArray(),
+                color          = rend != null ? MpbColor.Get(rend) : Color.white,
+                blockTypeName  = ins.data != null ? ins.data.blockType.ToString() : "",
+                levelId        = (tag != null && tag.level != null) ? tag.level.levelId : "",
+                isStart        = tag != null && tag.isStart,
+                blockAssetName = ins.data != null ? ins.data.name : "",
+                rotation       = ins.visualObject.transform.rotation,
+                synergyColor   = ins.color,
             });
         }
         return data;

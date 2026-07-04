@@ -23,7 +23,7 @@ public class WaveDefinition : ScriptableObject
     public string displayName;
 
     public List<SpawnGroup> groups = new();
-
+    public int difficulty;
     public int TotalSpawnCount
     {
         get
