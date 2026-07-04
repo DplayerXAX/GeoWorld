@@ -15,6 +15,7 @@ public class ProfileData
 
     // ── Endless ─────────────────────────────────────────────────────────────
     public int endlessBestWave;
+    public int endlessBestScore;
 
     // ── Tech tree ───────────────────────────────────────────────────────────
     public int          techPoints;
@@ -54,5 +55,6 @@ public class LevelRecord
 {
     public string levelId;
     public bool   cleared;
-    public int    bestWave;   // furthest wave reached across attempts
+    public int    bestWave;    // furthest wave reached across attempts
+    public int    bestScore;   // highest RunStats.ComputeScore across attempts
 }

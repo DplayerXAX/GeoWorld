@@ -85,7 +85,10 @@ public class AbundanceIncomeEffect : GameEffect
         else                                rm.AddTurretCurrency(amount);
 
         if (SynergyEffectUtil.TryGetClaimedCellWorld(this, out var w))
+        {
             SynergyBuffFx.Mote(w, moteColor,
                 GridSystem.instance != null ? GridSystem.instance.cellSize * 0.7f : 0.7f);
+            CurrencyFlyFx.Fly(w, isTurret: currency == CurrencyKind.Turret, amount);
+        }
     }
 }

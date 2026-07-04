@@ -40,6 +40,9 @@ public class EndpointPortalVisual : MonoBehaviour
     [Tooltip("If set, applies the cartoon outline material (same as blocks) to the cube frame so it pops the same way.")]
     public Material frameOutlineMaterial;
 
+    // The portal-core sphere's transform, once built — WavePreview zooms/orbits around this.
+    public Transform Core { get; private set; }
+
     void Start()
     {
         var frameCol = (mode == Mode.Start) ? startFrameColor : endFrameColor;
@@ -117,6 +120,7 @@ public class EndpointPortalVisual : MonoBehaviour
         sphere.transform.SetParent(transform, false);
         sphere.transform.localPosition = Vector3.zero;
         sphere.transform.localScale    = Vector3.one * coreScale;
+        Core = sphere.transform;
 
         var rend = sphere.GetComponent<Renderer>();
         rend.sharedMaterial       = portalMaterial;

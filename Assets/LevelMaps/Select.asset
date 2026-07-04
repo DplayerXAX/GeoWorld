@@ -25,12 +25,18 @@ MonoBehaviour:
       blockTypeName: Lift
       levelId: 
       isStart: 0
+      blockAssetName: 
+      rotation: {x: 0, y: 0, z: 0, w: 1}
+      synergyColor: 0
     - cells:
       - {x: 5, y: 0, z: 1}
       color: {r: 1, g: 0.82921654, b: 0, a: 1}
       blockTypeName: Home
       levelId: 
       isStart: 1
+      blockAssetName: 
+      rotation: {x: 0, y: 0, z: 0, w: 1}
+      synergyColor: 0
     - cells:
       - {x: 3, y: 0, z: 6}
       - {x: 3, y: 0, z: 5}
@@ -40,6 +46,9 @@ MonoBehaviour:
       blockTypeName: Lift
       levelId: 
       isStart: 0
+      blockAssetName: 
+      rotation: {x: 0, y: 0, z: 0, w: 1}
+      synergyColor: 0
     - cells:
       - {x: 4, y: 0, z: 5}
       - {x: 5, y: 0, z: 5}
@@ -49,6 +58,9 @@ MonoBehaviour:
       blockTypeName: Pull
       levelId: 
       isStart: 0
+      blockAssetName: 
+      rotation: {x: 0, y: 0, z: 0, w: 1}
+      synergyColor: 0
     - cells:
       - {x: 3, y: 2, z: 6}
       - {x: 2, y: 2, z: 6}
@@ -58,23 +70,35 @@ MonoBehaviour:
       blockTypeName: Shadow
       levelId: 
       isStart: 0
+      blockAssetName: 
+      rotation: {x: 0, y: 0, z: 0, w: 1}
+      synergyColor: 0
     - cells:
       - {x: 3, y: 2, z: 9}
       - {x: 3, y: 2, z: 8}
       - {x: 3, y: 2, z: 7}
       color: {r: 0.19999993, g: 0.75, b: 0.29999995, a: 1}
       blockTypeName: Lift
-      levelId: 
+      levelId: 1-1
       isStart: 0
+      blockAssetName: 
+      rotation: {x: 0, y: 0, z: 0, w: 1}
+      synergyColor: 3
     - cells:
       - {x: 7, y: 0, z: 5}
       color: {r: 0.20000002, g: 0.7490196, b: 0.29803923, a: 1}
       blockTypeName: Home
       levelId: Tutorial
       isStart: 0
+      blockAssetName: 
+      rotation: {x: 0, y: 0, z: 0, w: 1}
+      synergyColor: 0
     - cells:
       - {x: 1, y: 3, z: 4}
       color: {r: 0.59607846, g: 0.20000002, b: 0.8431373, a: 1}
       blockTypeName: Home
       levelId: Test
       isStart: 0
+      blockAssetName: 
+      rotation: {x: 0, y: 0, z: 0, w: 1}
+      synergyColor: 0

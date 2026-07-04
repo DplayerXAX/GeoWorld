@@ -115,12 +115,59 @@ public class GameFlowManager : MonoBehaviour
         if (enemyBaseManager != null)
             enemyBaseManager.OnWaveCompleted += HandleWaveCompleted;
 
+        RunStats.BeginRun();   // reset kill/blocks/time counters for score-keeping
         ApplyRunConfig();   // Level vs Endless setup (seed, pacing, authored waves)
         CreateFirstStage();
+        SpawnStartingLayout();       // pre-built blocks authored via LevelMapAuthor, if any
         FocusCameraOnFirstStage();   // centre the camera between the first start & end
 
         phase = GamePhase.Build;
         StartTurn();
+    }
+
+    // Populated by SpawnStartingLayout(); IntroDirector reads this to pop the pre-built
+    // blocks in alongside the start/end endpoints once the intro finishes, instead of
+    // having them sit visible (at full scale) through the whole intro sequence.
+    public readonly List<GameObject> startingLayoutVisuals = new();
+
+    // Places the level's optional pre-built starting layout (LevelDefinition.startingLayout,
+    // authored with LevelMapAuthor) as REAL functional blocks — reuses the same
+    // PlacementController.PlaceBlockDirect path SnapshotManager uses for save/load, so turrets
+    // get AttachTurretController and pieces get registered with SynergyEvaluator, not just
+    // decorative geometry.
+    void SpawnStartingLayout()
+    {
+        var layout = RunConfig.Mode == GameMode.Level ? RunConfig.Level?.startingLayout : null;
+        if (layout?.data?.nodes == null) return;
+        var pc = PlacementController.Instance;
+        if (pc == null) return;
+
+        foreach (var node in layout.data.nodes)
+        {
+            if (node.cells == null || node.cells.Length == 0) continue;
+
+            bool clash = false;
+            foreach (var c in node.cells) if (gridSystem.IsOccupied(c)) { clash = true; break; }
+            if (clash) continue;
+
+            BlockData bd = !string.IsNullOrEmpty(node.blockAssetName) ? pc.FindBlockDataByName(node.blockAssetName) : null;
+            if (bd == null && System.Enum.TryParse(node.blockTypeName, out BlockType bt)) bd = pc.FindBlockData(bt);
+            if (bd == null)
+            {
+                Debug.LogWarning($"[GameFlowManager] starting layout: can't resolve block '{node.blockAssetName}'/'{node.blockTypeName}', skipped.");
+                continue;
+            }
+
+            var ins = pc.PlaceBlockDirect(bd, node.cells, node.rotation, node.color, node.synergyColor);
+            if (ins != null)
+            {
+                ins.locked = true;   // level furniture — not pickup/sell/delete-able
+                ResourceManager.Instance?.OnBlockPlaced(bd.blockType);
+                if (ins.visualObject != null) startingLayoutVisuals.Add(ins.visualObject);
+            }
+        }
+
+        EvaluateGrid();   // reconcile pathing/synergy once, same as SnapshotManager's restore flow
     }
 
     // Pull this run's settings from RunConfig (set by Title / LevelSelect before
@@ -153,18 +200,81 @@ public class GameFlowManager : MonoBehaviour
             && _wavesCompleted >= RunConfig.Level.wavesToClear
             && (!RunConfig.Level.requireAllObjectives || LevelObjectivesTracker.AllRequiredSatisfied))
         {
-            SaveSystem.RecordClear(RunConfig.Level, _wavesCompleted);
-            ReturnToMap();
+            DoLevelClear(_wavesCompleted);
             return true;
         }
 
         if (RunConfig.Mode == GameMode.Endless)
-            SaveSystem.RecordEndless(_wavesCompleted);
+        {
+            int lives = PlayerHealth.Instance != null ? PlayerHealth.Instance.CurrentLives : 0;
+            int score = RunStats.ComputeScore(_wavesCompleted, lives, stars: 1);   // no star tiers in endless
+            SaveSystem.RecordEndless(_wavesCompleted, score);
+        }
 
         return false;
     }
 
-    void ReturnToMap()
+    // Continuous objective-driven clear: fires the moment every NON-optional
+    // objective is satisfied (any phase). Gated by Level.clearOnObjectivesComplete.
+    bool _levelDone;
+
+    // True while the level-clear settlement is on screen — systems read this to
+    // lock input (shop, pickup, sell, …) and hide gameplay HUD.
+    public bool LevelCleared => _levelDone;
+    public static bool SettlementUp => Instance != null && Instance._levelDone;
+
+    bool TryObjectiveClear()
+    {
+        if (_levelDone) return false;
+        var lv = RunConfig.Mode == GameMode.Level ? RunConfig.Level : null;
+        if (lv == null || !lv.clearOnObjectivesComplete) return false;
+        if (!LevelObjectivesTracker.Tracking) return false;   // tracker not live yet
+        if (!HasRequiredObjective(lv) || !LevelObjectivesTracker.AllRequiredSatisfied) return false;
+
+        DoLevelClear(_wavesCompleted);
+        return true;
+    }
+
+    static bool HasRequiredObjective(LevelDefinition lv)
+    {
+        if (lv == null || lv.objectives == null) return false;
+        for (int i = 0; i < lv.objectives.Count; i++)
+            if (lv.objectives[i] != null && !lv.objectives[i].optional) return true;
+        return false;
+    }
+
+    // Records the clear, stops any in-progress wave, and shows the settlement.
+    void DoLevelClear(int wavesReached)
+    {
+        if (_levelDone) return;
+        _levelDone = true;
+
+        if (phase == GamePhase.Running)
+        {
+            ArpeggiatorManager.Instance?.StopRecording();
+            if (currentUnit != null) { Destroy(currentUnit.gameObject); currentUnit = null; }
+            ResourceManager.Instance?.SetCombatActive(false);
+            enemyBaseManager?.CancelWave();
+            BackgroundReactor.Instance?.SetCombatMode(false);
+            AudioManager.Instance?.ExitBattleBGM();
+        }
+        Time.timeScale = 1f;
+        phase = GamePhase.Build;
+
+        int lives    = PlayerHealth.Instance != null ? PlayerHealth.Instance.CurrentLives : 0;
+        int maxLives = PlayerHealth.Instance != null ? PlayerHealth.Instance.maxLives     : 0;
+        bool objMet  = LevelObjectivesTracker.AllRequiredSatisfied;
+        int stars    = RunStats.ComputeStars(objMet, lives, maxLives);
+        int score    = RunStats.ComputeScore(wavesReached, lives, stars);
+
+        int prevBest = RunConfig.Level != null ? SaveSystem.Profile.GetRecord(RunConfig.Level.levelId)?.bestScore ?? 0 : 0;
+        bool isNewBest = score > prevBest;
+
+        SaveSystem.RecordClear(RunConfig.Level, wavesReached, score);
+        LevelClearScreen.Show(RunConfig.Level, wavesReached, lives, maxLives, stars, score, prevBest, isNewBest, objMet, ReturnToMap);
+    }
+
+    public void ReturnToMap()
     {
         Time.timeScale = 1f;
         LoadingScreen.Go("LevelSelect");   // spinning-cube loading page, then async-load
@@ -277,6 +387,10 @@ public class GameFlowManager : MonoBehaviour
     void Update()
     {
         if (phase == GamePhase.GameOver) return;
+
+        // Objective-driven levels clear the instant every required goal is met (any
+        // phase), independent of wavesToClear.
+        if (TryObjectiveClear()) return;
 
         if (phase == GamePhase.Build)
         {
@@ -638,7 +752,7 @@ public class GameFlowManager : MonoBehaviour
             string name = g.prefab != null ? g.prefab.name : "Enemy";
             int at = dst.FindIndex(e => e.name == name);
             if (at >= 0) { var e = dst[at]; e.count += g.count; dst[at] = e; }
-            else dst.Add(new WaveGenerator.WaveForecastGroup { name = name, count = g.count });
+            else dst.Add(new WaveGenerator.WaveForecastGroup { name = name, count = g.count, prefab = g.prefab });
         }
     }
 

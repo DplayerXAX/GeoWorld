@@ -91,6 +91,7 @@ Material:
     - _BumpScale: 1
     - _ClearCoatMask: 0
     - _ClearCoatSmoothness: 0
+    - _ClearReact: 0
     - _ColorShift: 0.9909666
     - _CombatMode: 0
     - _Cull: 2

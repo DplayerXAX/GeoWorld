@@ -27,7 +27,7 @@ public class AudioManager : MonoBehaviour
     public AK.Wwise.Event rotate;
     public AK.Wwise.Event fight_start;
     public AK.Wwise.Event fight_end;
-
+    public AK.Wwise.Event UISound;
     [Header("Volume RTPCs (Wwise global, 0..100)")]
     [Tooltip("Global Wwise RTPC names bound to your bus volumes. SettingsScreen drives these 0..1 → 0..100. Set them up on the Master / Music / SFX buses in Wwise.")]
     public string masterVolumeRtpc = "MasterVolume";
@@ -43,6 +43,7 @@ public class AudioManager : MonoBehaviour
     // (event-swap path). 0 = nothing playing.
     uint _currentBgmPlayingId;
 
+    
     void Awake()
     {
         Instance = this;
@@ -62,6 +63,11 @@ public class AudioManager : MonoBehaviour
         if (Instance == this) Instance = null;
     }
 
+
+    public void PlayUISound() 
+    {
+        UISound.Post(this.gameObject);
+    }
     private void Start()
     {
         SetChordOnObject(BlockType.Home, this.gameObject);

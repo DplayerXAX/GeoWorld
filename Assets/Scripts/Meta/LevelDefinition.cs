@@ -31,6 +31,8 @@ public class LevelDefinition : ScriptableObject
     public List<LevelObjective> objectives = new();
     [Tooltip("If on, ALL non-optional objectives must be satisfied (in addition to wavesToClear) to count as cleared.")]
     public bool requireAllObjectives = false;
+    [Tooltip("OBJECTIVE-DRIVEN clear: the level is cleared the moment every non-optional objective is satisfied (checked any phase), regardless of wavesToClear. Use for build/puzzle levels.")]
+    public bool clearOnObjectivesComplete = false;
 
     [Header("Progression")]
     [Tooltip("This level starts unlocked (e.g. the first level).")]
@@ -51,6 +53,12 @@ public class LevelDefinition : ScriptableObject
     public Vector3Int endCell;
     [Tooltip("Ordered guided placements. Each shows a ghost the player must match exactly before they can place.")]
     public List<TutorialStep> tutorialSteps = new();
+
+    [Header("Starting layout")]
+    [Tooltip("Optional pre-built blocks placed on the grid at level start, authored with LevelMapAuthor "
+           + "in any scene with a GridSystem + PlacementController (save under a level-specific map name, "
+           + "then bake via GeoWorld ▸ Level Map ▸ Bake JSON → Asset).")]
+    public LevelMapAsset startingLayout;
 }
 
 // ── Special objectives ──────────────────────────────────────────────────────

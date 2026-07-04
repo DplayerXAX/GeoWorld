@@ -13,6 +13,7 @@
 						<ObjectRef Name="Am" ID="{BB56AD18-4D11-459E-BE7C-D7C7C8E259C3}" WorkUnitID="{FD1D3805-1493-4712-94C6-0E6DB7322D3D}" Origin="Manual" Filter="7"/>
 						<ObjectRef Name="BGM_event" ID="{5D34EB93-16B4-45EF-A43E-418990DD278C}" WorkUnitID="{FD1D3805-1493-4712-94C6-0E6DB7322D3D}" Origin="Manual" Filter="7"/>
 						<ObjectRef Name="C" ID="{9E235787-7790-47A5-BB82-21A19C922CA0}" WorkUnitID="{FD1D3805-1493-4712-94C6-0E6DB7322D3D}" Origin="Manual" Filter="7"/>
+						<ObjectRef Name="TimeDrain" ID="{E43C13E8-CAF7-4BCA-BA8F-99755EFA551A}" WorkUnitID="{FD1D3805-1493-4712-94C6-0E6DB7322D3D}" Origin="Manual" Filter="7"/>
 						<ObjectRef Name="fight_start" ID="{ECE38540-761C-4C47-94DE-38127713B664}" WorkUnitID="{FD1D3805-1493-4712-94C6-0E6DB7322D3D}" Origin="Manual" Filter="7"/>
 						<ObjectRef Name="Dm" ID="{406CC23D-8CFE-4C6E-86CF-B3044EE7C794}" WorkUnitID="{FD1D3805-1493-4712-94C6-0E6DB7322D3D}" Origin="Manual" Filter="7"/>
 						<ObjectRef Name="fight_finish" ID="{F86A791E-8754-4CBE-BDA1-C0642D056C88}" WorkUnitID="{FD1D3805-1493-4712-94C6-0E6DB7322D3D}" Origin="Manual" Filter="7"/>

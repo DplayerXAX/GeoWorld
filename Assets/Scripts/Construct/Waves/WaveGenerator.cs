@@ -124,8 +124,9 @@ public class WaveGenerator : ScriptableObject
             });
             forecastOut?.Add(new WaveForecastGroup
             {
-                name  = picked.prefab != null ? picked.prefab.name : "Enemy",
-                count = size,
+                name   = picked.prefab != null ? picked.prefab.name : "Enemy",
+                count  = size,
+                prefab = picked.prefab,
             });
 
             budget -= picked.cost * size;
@@ -217,9 +218,10 @@ public class WaveGenerator : ScriptableObject
             });
             forecastOut?.Add(new WaveForecastGroup
             {
-                name  = !string.IsNullOrEmpty(picked.name) ? picked.name
-                      : (picked.prefab != null ? picked.prefab.name : "Enemy"),
-                count = size,
+                name   = !string.IsNullOrEmpty(picked.name) ? picked.name
+                       : (picked.prefab != null ? picked.prefab.name : "Enemy"),
+                count  = size,
+                prefab = picked.prefab,
             });
 
             budget -= picked.spawnCost * size;
@@ -294,6 +296,7 @@ public class WaveGenerator : ScriptableObject
     {
         public string name;
         public int    count;
+        public EnemySurfaceUnit prefab;   // for spawning visual-only previews (WavePreview)
     }
 }
 

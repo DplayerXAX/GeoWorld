@@ -24,7 +24,6 @@ public class CarouselMenu : MonoBehaviour
     [Header("Feel")]
     public float scrollLerp = 12f;
     public bool  wrap       = false;
-
     int         _selected;
     float       _scroll;
     CanvasGroup _panelCg;
@@ -37,7 +36,10 @@ public class CarouselMenu : MonoBehaviour
         {
             items = new List<RectTransform>();
             foreach (Transform c in transform)
-                if (c.GetComponent<Button>() != null) items.Add((RectTransform)c);
+                if (c.GetComponent<Button>() != null)
+                { 
+                    items.Add((RectTransform)c);
+                }
         }
         foreach (var rt in items)
             if (rt != null && rt.GetComponent<CanvasGroup>() == null)
@@ -80,9 +82,10 @@ public class CarouselMenu : MonoBehaviour
         float wheel = Input.mouseScrollDelta.y;
         if (wheel >  0.01f) Move(-1);
         if (wheel < -0.01f) Move( 1);
-        if (Input.GetKeyDown(KeyCode.S) || Input.GetKeyDown(KeyCode.DownArrow)) Move( 1);
-        if (Input.GetKeyDown(KeyCode.W) || Input.GetKeyDown(KeyCode.UpArrow))   Move(-1);
-        if (Input.GetKeyDown(KeyCode.Return) || Input.GetKeyDown(KeyCode.KeypadEnter) || Input.GetKeyDown(KeyCode.Space))
+        if (Input.GetKeyDown(KeyCode.S) || Input.GetKeyDown(KeyCode.DownArrow) || GamepadInput.DPadDownDown) Move( 1);
+        if (Input.GetKeyDown(KeyCode.W) || Input.GetKeyDown(KeyCode.UpArrow)   || GamepadInput.DPadUpDown)   Move(-1);
+        if (Input.GetKeyDown(KeyCode.Return) || Input.GetKeyDown(KeyCode.KeypadEnter) || Input.GetKeyDown(KeyCode.Space)
+            || GamepadInput.ConfirmDown)
             Confirm();
     }
 

@@ -79,6 +79,13 @@ public class IntroDirector : MonoBehaviour
             foreach (var go in gen.allEndpoints)
                 if (go != null) { eps.Add((go.transform, go.transform.localScale)); go.transform.localScale = Vector3.zero; }
 
+        // Pre-built starting-layout blocks (LevelDefinition.startingLayout) pop in
+        // alongside the endpoints, same treatment — hidden through the intro, not
+        // sitting there at full scale while the reveal plays.
+        if (GameFlowManager.Instance != null)
+            foreach (var go in GameFlowManager.Instance.startingLayoutVisuals)
+                if (go != null) { eps.Add((go.transform, go.transform.localScale)); go.transform.localScale = Vector3.zero; }
+
         SetupSky();
         SetBlend(0f);
 

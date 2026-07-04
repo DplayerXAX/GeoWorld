@@ -150,8 +150,10 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlacementController
   mode: 0
+  blocks: []
   grid: {fileID: 1219755449}
   currentBlock: {fileID: 11400000, guid: c8bcfd2efd3263845ad3ea61c80c0fe7, type: 2}
+  currentSynergyColor: 0
   cubePrefab: {fileID: 1376436057}
   previewParent: {fileID: 844867508}
   cam: {fileID: 330585545}
@@ -160,6 +162,34 @@ MonoBehaviour:
   maxDepth: 40
   scrollSpeed: 3
   rotateSpeed: 10
+  panSpeed: 8
+  blockPalette:
+  - {r: 0.85, g: 0.18, b: 0.12, a: 1}
+  - {r: 0.1, g: 0.2, b: 0.65, a: 1}
+  - {r: 0.95, g: 0.75, b: 0.1, a: 1}
+  - {r: 0.1, g: 0.5, b: 0.3, a: 1}
+  - {r: 0.1, g: 0.1, b: 0.14, a: 1}
+  - {r: 0.92, g: 0.9, b: 0.84, a: 1}
+  turretPalette:
+  - {r: 0.25, g: 0.85, b: 0.95, a: 1}
+  - {r: 0.4, g: 0.6, b: 1, a: 1}
+  - {r: 0.55, g: 0.3, b: 0.9, a: 1}
+  - {r: 0.92, g: 0.9, b: 0.84, a: 1}
+  trayAnchor: {fileID: 0}
+  trayLocalOffset: {x: 4.5, y: -2.5, z: 7}
+  traySpacing: 2
+  trayBlockScale: 0.6
+  selectionOutlineColor: {r: 1, g: 0.85, b: 0.1, a: 1}
+  _buildY: 0
+  buildYRange: {x: 0, y: 20}
+  refreshBaseCost: 5
+  refreshCostStep: 2
+  rangeSphereColor: {r: 1, g: 0.85, b: 0.2, a: 0.12}
+  rangeBlockedColor: {r: 1, g: 0.2, b: 0.14, a: 0.32}
+  sellRefundFraction: 0.5
+  selectionPopDuration: 0.16
+  infoPanel: {fileID: 0}
+  upgradePanel: {fileID: 0}
 --- !u!4 &164805053
 Transform:
   m_ObjectHideFlags: 0
@@ -188,6 +218,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::GridSystem
   cellSize: 1
+  size: {x: 10, y: 5, z: 10}
 --- !u!1 &330585543
 GameObject:
   m_ObjectHideFlags: 0
@@ -336,6 +367,17 @@ MonoBehaviour:
   speed: 200
   minPitch: -80
   maxPitch: 80
+  useOrthographic: 1
+  orthoSize: 5
+  orthoZoomSpeed: 2
+  orthoAngle: {x: 35, y: 45, z: 0}
+  focusViewport: {x: 0.5, y: 0.5}
+  gamepadLookScale: 1
+  gamepadZoomSpeed: 12
+  projectionToggleKey: 289
+  perspectiveFov: 50
+  transitionSpeed: 6
+  myCam: {fileID: 0}
 --- !u!114 &330585549
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -534,10 +576,24 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::GridOverlay
   grid: {fileID: 1219755449}
   placement: {fileID: 164805052}
+  cam: {fileID: 0}
+  followCursor: 1
+  onlyInEditMode: 0
+  hideInRunningPhase: 1
+  radiusXZ: 6
+  fadeStartPct: 0.55
+  useGridSize: 1
+  customSize: {x: 10, y: 5, z: 10}
+  originOffset: {x: 0, y: 0, z: 0}
+  drawAllHorizontalPlanes: 0
+  drawVerticalWalls: 0
   lineColor: {r: 1, g: 1, b: 1, a: 0.3647059}
   highlightColor: {r: 0, g: 0.9, b: 1, a: 0.7}
-  extentXZ: 9
-  extentY: 5
+  dashLen: 0.15
+  gapLen: 0.12
+  showCursor: 1
+  visible: 1
+  toggleKey: 103
 --- !u!4 &417052013
 Transform:
   m_ObjectHideFlags: 0
@@ -563,6 +619,7 @@ GameObject:
   m_Component:
   - component: {fileID: 621363998}
   - component: {fileID: 621363997}
+  - component: {fileID: 621363999}
   m_Layer: 0
   m_Name: WwiseGlobal
   m_TagString: Untagged
@@ -610,6 +667,19 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &621363999
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 621363996}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ed39f2b237e573f4f85990bb5d1440ac, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: AK.Wwise.Unity.Addressables::AK.Wwise.Unity.WwiseAddressables.InitBankHolder
+  InitBank: {fileID: 11400000, guid: 921dbaf0e79e14b4c898d5962608c29d, type: 2}
 --- !u!1 &832575517
 GameObject:
   m_ObjectHideFlags: 0
@@ -720,6 +790,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::GridSystem
   cellSize: 1
+  size: {x: 10, y: 5, z: 10}
 --- !u!4 &1219755450
 Transform:
   m_ObjectHideFlags: 0
@@ -928,6 +999,28 @@ MonoBehaviour:
     idInternal: 0
     valueGuidInternal: 
     WwiseObjectReference: {fileID: 11400000, guid: 7fad3a3e416e7354797459926717a80c, type: 2}
+  BGM_fight:
+    idInternal: 0
+    valueGuidInternal: 
+    WwiseObjectReference: {fileID: 0}
+  BGM_StateBattle:
+    idInternal: 0
+    valueGuidInternal: 
+    groupIdInternal: 0
+    groupGuidInternal: 
+    WwiseObjectReference: {fileID: 0}
+  BGM_StateCalm:
+    idInternal: 0
+    valueGuidInternal: 
+    groupIdInternal: 0
+    groupGuidInternal: 
+    WwiseObjectReference: {fileID: 0}
+  bgmFadeOutMs: 500
+  pianoKey: []
+  Note:
+    idInternal: 0
+    valueGuidInternal: 
+    WwiseObjectReference: {fileID: 0}
   scroll:
     idInternal: 0
     valueGuidInternal: 
@@ -936,6 +1029,22 @@ MonoBehaviour:
     idInternal: 0
     valueGuidInternal: 
     WwiseObjectReference: {fileID: 0}
+  fight_start:
+    idInternal: 0
+    valueGuidInternal: 
+    WwiseObjectReference: {fileID: 0}
+  fight_end:
+    idInternal: 0
+    valueGuidInternal: 
+    WwiseObjectReference: {fileID: 0}
+  UISound:
+    idInternal: 0
+    valueGuidInternal: 
+    WwiseObjectReference: {fileID: 0}
+  masterVolumeRtpc: MasterVolume
+  musicVolumeRtpc: MusicVolume
+  sfxVolumeRtpc: SFXVolume
+  chordSwitchGroup: BlockChord
 --- !u!114 &1746692275
 MonoBehaviour:
   m_ObjectHideFlags: 0

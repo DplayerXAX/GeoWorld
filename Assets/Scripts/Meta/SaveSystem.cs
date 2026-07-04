@@ -57,7 +57,7 @@ public static class SaveSystem
         if (changed) Save();
     }
 
-    public static void RecordClear(LevelDefinition level, int wavesReached)
+    public static void RecordClear(LevelDefinition level, int wavesReached, int score = 0)
     {
         if (level == null) return;
         var p   = Profile;
@@ -66,6 +66,7 @@ public static class SaveSystem
 
         rec.cleared = true;
         if (wavesReached > rec.bestWave) rec.bestWave = wavesReached;
+        if (score > rec.bestScore) rec.bestScore = score;
 
         if (firstClear)
         {
@@ -77,10 +78,13 @@ public static class SaveSystem
         Save();
     }
 
-    public static void RecordEndless(int wave)
+    public static void RecordEndless(int wave, int score = 0)
     {
         var p = Profile;
-        if (wave > p.endlessBestWave) { p.endlessBestWave = wave; Save(); }
+        bool changed = false;
+        if (wave  > p.endlessBestWave)  { p.endlessBestWave  = wave;  changed = true; }
+        if (score > p.endlessBestScore) { p.endlessBestScore = score; changed = true; }
+        if (changed) Save();
     }
 
     // ── Tech tree ─────────────────────────────────────────────────────────────

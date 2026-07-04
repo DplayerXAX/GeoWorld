@@ -26,6 +26,8 @@ public class TurretController : MonoBehaviour
     [Header("Bullet")]
     public GameObject bulletPrefab;
     public string bulletResourcePath = "Bullet";
+    [Tooltip("Uniform scale applied to the spawned bullet instance (the prefab asset itself is left untouched).")]
+    public float bulletScale = 1f;
     public float bulletSpeed = 9f;
     public int bulletDamage = 1;
     public float bulletLifetime = 3f;
@@ -111,9 +113,20 @@ public class TurretController : MonoBehaviour
         attackRange += amount;
     }
 
-    public void Configure(BlockType type)
+    // bulletPrefabOverride: pass BlockData.bulletPrefab here. TurretController is
+    // added at runtime (AddComponent on a placed block) so it has no prefab of its
+    // own to bind a bullet in the Inspector — BlockData does, since it's a real
+    // ScriptableObject asset. Leave null to keep whatever's already set / fall back
+    // to the Resources-folder lookup in ResolveBulletPrefab().
+    // bulletScaleOverride: pass BlockData.bulletScale. 0 means "unset" (BlockData
+    // assets predating this field default to 0) — leaves bulletScale at whatever
+    // Configure() is called with, or the Inspector/AddComponent default of 1.
+    public void Configure(BlockType type, GameObject bulletPrefabOverride = null, float bulletScaleOverride = 0f)
     {
         if (!TurretTypes.Is(type)) return;
+
+        if (bulletPrefabOverride != null) bulletPrefab = bulletPrefabOverride;
+        if (bulletScaleOverride > 0f) bulletScale = bulletScaleOverride;
 
         mode = TurretTypes.Mode(type);
 
@@ -503,6 +516,8 @@ public class TurretController : MonoBehaviour
     {
         var bullet = Instantiate(bulletPrefab, spawn, rot);
         bullet.SetActive(true);
+        if (!Mathf.Approximately(bulletScale, 1f))
+            bullet.transform.localScale *= bulletScale;
 
         if (!bullet.TryGetComponent(out TurretBullet projectile))
             projectile = bullet.AddComponent<TurretBullet>();

@@ -1,0 +1,178 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 83c315048f6cbe6419d5516add01351e, type: 3}
+  m_Name: Level_1
+  m_EditorClassIdentifier: Assembly-CSharp::LevelDefinition
+  levelId: 1-1
+  displayName: 1-1
+  description: More portals appear! Try to build up synergy.
+  runSeed: 1
+  blocksPerTurn: 3
+  turretsPerTurn: 3
+  waves:
+  - {fileID: 11400000, guid: 080e4b2a67c19904bbbfdce56bfad1ae, type: 2}
+  - {fileID: 11400000, guid: c82062cbbf585cf4682eb33064d8a19e, type: 2}
+  - {fileID: 11400000, guid: f836467ddfab2e147ae846bc04f5d38a, type: 2}
+  wavesToClear: 5
+  objectives:
+  - type: 1
+    target: 5
+    description: 
+    optional: 0
+  - type: 4
+    target: 2
+    description: 
+    optional: 0
+  - type: 6
+    target: 1
+    description: 
+    optional: 0
+  requireAllObjectives: 1
+  clearOnObjectivesComplete: 1
+  unlockedByDefault: 1
+  unlocks:
+  - {fileID: 11400000, guid: ecabc7baea398ff4caba7a43dc978c69, type: 2}
+  techReward: 1
+  isTutorial: 1
+  fixedEndpoints: 1
+  startCell: {x: 0, y: 2, z: 1}
+  endCell: {x: 2, y: 3, z: 4}
+  tutorialSteps:
+  - kind: 5
+    block: {fileID: 0}
+    origin: {x: 0, y: 0, z: 0}
+    rotation90: {x: 0, y: 0, z: 0}
+    cellsOverride: []
+    waitSeconds: 0
+    count: 0
+    inputKey: 323
+    pathLength: 0
+    freeOperations: 0
+    hideInCombat: 0
+    cameraFocus: 0
+    focusZoom: 0
+    hint: ...More Rift Portals appear to be opening across our dimension. We need
+      to prepare for what's coming.
+    conversation: {fileID: 0}
+    speaker: {fileID: 11400000, guid: 80993e3c86b4337429c2d6273c8eedc2, type: 2}
+    speakerSlot: 1
+    speakerPortrait: 
+  - kind: 5
+    block: {fileID: 0}
+    origin: {x: 0, y: 0, z: 0}
+    rotation90: {x: 0, y: 0, z: 0}
+    cellsOverride: []
+    waitSeconds: 0
+    count: 0
+    inputKey: 323
+    pathLength: 0
+    freeOperations: 0
+    hideInCombat: 0
+    cameraFocus: 0
+    focusZoom: 0
+    hint: Our faith in you reaches through all blocks, bestowing strength upon you.
+    conversation: {fileID: 0}
+    speaker: {fileID: 11400000, guid: 80993e3c86b4337429c2d6273c8eedc2, type: 2}
+    speakerSlot: 1
+    speakerPortrait: 
+  - kind: 7
+    block: {fileID: 11400000, guid: a8fa6df35bf1b6c438e02427ec8409c0, type: 2}
+    origin: {x: 1, y: 2, z: -1}
+    rotation90: {x: 0, y: 0, z: 0}
+    cellsOverride: []
+    waitSeconds: 0
+    count: 0
+    inputKey: 323
+    pathLength: 0
+    freeOperations: 0
+    hideInCombat: 0
+    cameraFocus: 0
+    focusZoom: 0
+    hint: My Lord, place an ORANGE block where indicated to awaken the power of ABUNDANCE.
+    conversation: {fileID: 0}
+    speaker: {fileID: 11400000, guid: 80993e3c86b4337429c2d6273c8eedc2, type: 2}
+    speakerSlot: 1
+    speakerPortrait: 
+  - kind: 0
+    block: {fileID: 11400000, guid: a8fa6df35bf1b6c438e02427ec8409c0, type: 2}
+    origin: {x: 1, y: 2, z: -1}
+    rotation90: {x: 0, y: 0, z: 0}
+    cellsOverride: []
+    waitSeconds: 0
+    count: 0
+    inputKey: 323
+    pathLength: 0
+    freeOperations: 0
+    hideInCombat: 0
+    cameraFocus: 0
+    focusZoom: 0
+    hint: My Lord, place an ORANGE block where indicated to awaken the power of ABUNDANCE.
+    conversation: {fileID: 0}
+    speaker: {fileID: 11400000, guid: 80993e3c86b4337429c2d6273c8eedc2, type: 2}
+    speakerSlot: 1
+    speakerPortrait: 
+  - kind: 5
+    block: {fileID: 11400000, guid: a8fa6df35bf1b6c438e02427ec8409c0, type: 2}
+    origin: {x: 1, y: 2, z: -1}
+    rotation90: {x: 0, y: 0, z: 0}
+    cellsOverride: []
+    waitSeconds: 0
+    count: 0
+    inputKey: 323
+    pathLength: 0
+    freeOperations: 0
+    hideInCombat: 0
+    cameraFocus: 0
+    focusZoom: 0
+    hint: After a block loop is connected, Abundance is activated on this set of
+      blocks.
+    conversation: {fileID: 0}
+    speaker: {fileID: 11400000, guid: 80993e3c86b4337429c2d6273c8eedc2, type: 2}
+    speakerSlot: 1
+    speakerPortrait: 
+  - kind: 5
+    block: {fileID: 11400000, guid: a8fa6df35bf1b6c438e02427ec8409c0, type: 2}
+    origin: {x: 1, y: 2, z: -1}
+    rotation90: {x: 0, y: 0, z: 0}
+    cellsOverride: []
+    waitSeconds: 0
+    count: 0
+    inputKey: 323
+    pathLength: 0
+    freeOperations: 0
+    hideInCombat: 0
+    cameraFocus: 0
+    focusZoom: 0
+    hint: 'Abundance grant us resources for building up blocks periodly. '
+    conversation: {fileID: 0}
+    speaker: {fileID: 11400000, guid: 80993e3c86b4337429c2d6273c8eedc2, type: 2}
+    speakerSlot: 1
+    speakerPortrait: 
+  - kind: 9
+    block: {fileID: 0}
+    origin: {x: 1, y: 2, z: -1}
+    rotation90: {x: 0, y: 0, z: 0}
+    cellsOverride: []
+    waitSeconds: 0
+    count: 0
+    inputKey: 323
+    pathLength: 0
+    freeOperations: 0
+    hideInCombat: 0
+    cameraFocus: 0
+    focusZoom: 0
+    hint: Select a block to see how the power is activated and its benefit.
+    conversation: {fileID: 0}
+    speaker: {fileID: 11400000, guid: 80993e3c86b4337429c2d6273c8eedc2, type: 2}
+    speakerSlot: 1
+    speakerPortrait: 
+  startingLayout: {fileID: 11400000, guid: ceaecea707d98794b95902fcad06060b, type: 2}

@@ -20,8 +20,13 @@ MonoBehaviour:
   turretsPerTurn: 3
   waves: []
   wavesToClear: 5
-  objectives: []
-  requireAllObjectives: 0
+  objectives:
+  - type: 3
+    target: 1
+    description: 
+    optional: 0
+  requireAllObjectives: 1
+  clearOnObjectivesComplete: 1
   unlockedByDefault: 1
   unlocks: []
   techReward: 1

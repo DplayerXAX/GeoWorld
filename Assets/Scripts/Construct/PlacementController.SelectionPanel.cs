@@ -25,6 +25,14 @@ public partial class PlacementController
     {
         if (infoPanel == null) return;
 
+        // Clear settlement: hide the selection panel entirely (no pick-up / sell / upgrade).
+        if (GameFlowManager.SettlementUp)
+        {
+            infoPanel.Hide();
+            upgradePanel?.Hide();
+            return;
+        }
+
         // Spawn-point forecast (same gate as the IMGUI start panel).
         if (mode == PlacementMode.Select && _selectedEndpoint != null && _selectedEndpointIsStart
             && (GameFlowManager.Instance == null || GameFlowManager.Instance.phase != GamePhase.Running))
@@ -46,17 +54,21 @@ public partial class PlacementController
         string title    = isTurret ? TurretTypes.DisplayName(ins.data.blockType) : ins.data.DisplayName;
         string body     = BuildInfoBody(ins, isTurret);
 
-        // No editing of placed objects during combat (pick up / sell / upgrade).
+        // No editing of placed objects during combat (pick up / sell / upgrade), or
+        // ever for pre-built level furniture (LevelDefinition.startingLayout).
         bool combatLocked = GameFlowManager.Instance != null
             && GameFlowManager.Instance.phase == GamePhase.Running;
+        bool canEdit = !combatLocked && !ins.locked;
         int refund = ComputeSellRefund(ins);
 
         Vector3 worldPos = ins.visualObject.transform.position;
 
         // Selection panel: title / stats / pick-up / sell.
-        infoPanel.Show(worldPos, title, body, !combatLocked, $"Sell +{refund}",
+        string lockedReason = ins.locked ? "Fixed block, locked" : "Locked during combat";
+        infoPanel.Show(worldPos, title, body, canEdit, $"Sell +{refund}",
             () => _panelPickUpRequested = true,
-            () => _panelSellRequested   = true);
+            () => _panelSellRequested   = true,
+            lockedReason);
 
         // Separate upgrade panel.
         if (upgradePanel != null)
@@ -65,6 +77,8 @@ public partial class PlacementController
                 out string upgradeAText, out bool canUpgradeA, out System.Action onUpgradeA,
                 out string upgradeBText, out bool canUpgradeB, out System.Action onUpgradeB);
 
+            // Upgrades stay available even when locked (locking only blocks pickup/sell —
+            // the point is to protect the level's fixed layout, not to freeze turret progression).
             bool hasUpgrades = !string.IsNullOrEmpty(upgradeAText) || !string.IsNullOrEmpty(upgradeBText);
             if (hasUpgrades && !combatLocked)
                 upgradePanel.Show(worldPos, upgradeAText, canUpgradeA, onUpgradeA,
