@@ -2268,7 +2268,7 @@
 							<MultiSwitchEntry Name="" ID="{303CC67E-13DC-49A4-B9F8-9CCE643C456F}">
 								<ReferenceList>
 									<Reference Name="AudioNode">
-										<ObjectRef Name="Piecing together" ID="{B9883AD3-6659-488E-9D67-B5A237A5AE9C}" WorkUnitID="{48502AC3-EE10-4952-8017-84D50D1C5C35}"/>
+										<ObjectRef Name="Piece_BGM" ID="{1ADB3116-59D9-49B5-BDAE-EDC5D67F9BDE}" WorkUnitID="{48502AC3-EE10-4952-8017-84D50D1C5C35}"/>
 									</Reference>
 								</ReferenceList>
 								<ObjectLists>
