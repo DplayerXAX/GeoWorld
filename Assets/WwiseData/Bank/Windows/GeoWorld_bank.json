@@ -10,7 +10,7 @@
     "Type": "User",
     "GUID": "{FBAC0406-FA36-4CC0-8121-80F7B6376C7E}",
     "Language": "SFX",
-    "Hash": "{015CB56F-100E-B544-B7B7-D3D63EE4B6E7}",
+    "Hash": "{FBF5FBD5-E66A-D86E-BD34-ED6745F8B120}",
     "ObjectPath": "\\SoundBanks\\Default Work Unit\\GeoWorld_bank",
     "ShortName": "GeoWorld_bank",
     "Path": "GeoWorld_bank.bnk",
@@ -152,12 +152,12 @@
       "CachePath": "3B/{3B77E4F8-81DB-8B8A-6735-C4CB80FC8E9C}.wem"
      },
      {
-      "Id": "566543099",
+      "Id": "597739749",
       "Language": "SFX",
       "Streaming": "false",
       "Location": "Memory",
-      "ShortName": "bgm_Jump.wav",
-      "CachePath": "28/{28D4672F-2484-1CD6-8135-CDAD372308AD}.wem"
+      "ShortName": "Geo world\\Originals\\SFX\\Piecing together.wav",
+      "CachePath": "A7/{A70C2F78-A495-F580-AC11-70B1F55D6419}.wem"
      },
      {
       "Id": "633751974",
@@ -168,28 +168,12 @@
       "CachePath": "7D/{7D33FDDD-17CE-8BDA-C0FB-75D5FB7BA202}.wem"
      },
      {
-      "Id": "759153527",
-      "Language": "SFX",
-      "Streaming": "false",
-      "Location": "Memory",
-      "ShortName": "ambient bgm.wav",
-      "CachePath": "EA/{EAE24123-C675-595C-B50B-C5C8DBB2DC3C}.wem"
-     },
-     {
       "Id": "799708269",
       "Language": "SFX",
       "Streaming": "false",
       "Location": "Memory",
       "ShortName": "solo_g.wav",
       "CachePath": "19/{1911F0A7-4D8E-A328-97B7-A96A592875B7}.wem"
-     },
-     {
-      "Id": "888948449",
-      "Language": "SFX",
-      "Streaming": "false",
-      "Location": "Memory",
-      "ShortName": "bgm_bright.wav",
-      "CachePath": "80/{802F01CA-1B7C-C650-FF9E-451F3BE2007C}.wem"
      },
      {
       "Id": "1062488858",
@@ -265,13 +249,7 @@
         },
         "MediaRefs": [
          {
-          "Id": "566543099"
-         },
-         {
-          "Id": "759153527"
-         },
-         {
-          "Id": "888948449"
+          "Id": "597739749"
          }
         ]
        },
@@ -642,6 +620,6 @@
     ]
    }
   ],
-  "FileHash": "{C560F036-5D72-6AFE-D486-EE76F307A7DC}"
+  "FileHash": "{BB095309-AA76-4994-80AB-581719A722F6}"
  }
 }

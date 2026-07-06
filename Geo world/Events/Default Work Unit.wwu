@@ -146,6 +146,17 @@
 						</Action>
 					</ChildrenList>
 				</Event>
+				<Event Name="Chill_Event" ID="{79255C4A-16B7-4027-8F85-430C19DD0914}">
+					<ChildrenList>
+						<Action Name="" ID="{6330A10C-19A9-4042-A053-F4D6D1DF3269}" ShortID="115143324">
+							<ReferenceList>
+								<Reference Name="Target">
+									<ObjectRef Name="Calm_BGM" ID="{A2518408-A2B6-47F4-9EA9-BF1874DBA83C}" WorkUnitID="{48502AC3-EE10-4952-8017-84D50D1C5C35}"/>
+								</Reference>
+							</ReferenceList>
+						</Action>
+					</ChildrenList>
+				</Event>
 			</ChildrenList>
 		</WorkUnit>
 	</Events>
