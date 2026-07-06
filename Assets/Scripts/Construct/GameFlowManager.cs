@@ -31,7 +31,7 @@ public class GameFlowManager : MonoBehaviour
 
     [Header("Tower Defense Pacing")]
     [Tooltip("Completed runs before a new endpoint is added.")]
-    public int runsPerEndpoint = 3;
+    public int runsPerEndpoint = 2;
     [Tooltip("Maximum concurrent ambient loop layers. Oldest retires when exceeded.")]
     public int maxLoopLayers   = 5;
     [Tooltip("ON: start/end spacing is auto-derived from blocksPerTurn each stage (overrides the generator). " +

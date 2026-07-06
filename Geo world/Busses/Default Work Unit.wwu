@@ -10,6 +10,24 @@
 						</Reference>
 					</ReferenceList>
 				</Bus>
+				<Bus Name="Spacial" ID="{D8B769F3-2EC1-4A98-A650-3DFC75E52DEE}">
+					<ReferenceList>
+						<Reference Name="AudioDevice" PluginName="System" CompanyID="0" PluginID="174" PluginType="7">
+							<ObjectRef Name="System" ID="{636E3E83-317B-4DF7-B77B-9861A9591CA6}" WorkUnitID="{131C46E4-FBA8-4672-8DD9-93A7318273A6}"/>
+						</Reference>
+					</ReferenceList>
+					<ObjectLists>
+						<ObjectList Name="Effects">
+							<EffectSlot Name="" ID="{126A150B-B55B-4478-9FC7-8651CDFF04BD}" ShortID="297704671">
+								<ReferenceList>
+									<Reference Name="Effect" PluginName="Wwise RoomVerb" CompanyID="0" PluginID="118" PluginType="3">
+										<ObjectRef Name="Space_Dreaming" ID="{4FF7C4B2-37B0-4DFF-8E8A-1420102AE2DD}" WorkUnitID="{E8613F7D-BAD3-45CD-A3ED-505576F31277}"/>
+									</Reference>
+								</ReferenceList>
+							</EffectSlot>
+						</ObjectList>
+					</ObjectLists>
+				</Bus>
 			</ChildrenList>
 		</WorkUnit>
 	</Busses>

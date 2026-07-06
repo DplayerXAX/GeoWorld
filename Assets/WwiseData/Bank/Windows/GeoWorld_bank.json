@@ -10,7 +10,7 @@
     "Type": "User",
     "GUID": "{FBAC0406-FA36-4CC0-8121-80F7B6376C7E}",
     "Language": "SFX",
-    "Hash": "{FBF5FBD5-E66A-D86E-BD34-ED6745F8B120}",
+    "Hash": "{ABB1E1D9-AE4D-EE21-8AA6-9ACC7AE7C967}",
     "ObjectPath": "\\SoundBanks\\Default Work Unit\\GeoWorld_bank",
     "ShortName": "GeoWorld_bank",
     "Path": "GeoWorld_bank.bnk",
@@ -152,14 +152,6 @@
       "CachePath": "3B/{3B77E4F8-81DB-8B8A-6735-C4CB80FC8E9C}.wem"
      },
      {
-      "Id": "597739749",
-      "Language": "SFX",
-      "Streaming": "false",
-      "Location": "Memory",
-      "ShortName": "Geo world\\Originals\\SFX\\Piecing together.wav",
-      "CachePath": "A7/{A70C2F78-A495-F580-AC11-70B1F55D6419}.wem"
-     },
-     {
       "Id": "633751974",
       "Language": "SFX",
       "Streaming": "false",
@@ -174,6 +166,14 @@
       "Location": "Memory",
       "ShortName": "solo_g.wav",
       "CachePath": "19/{1911F0A7-4D8E-A328-97B7-A96A592875B7}.wem"
+     },
+     {
+      "Id": "969998505",
+      "Language": "SFX",
+      "Streaming": "false",
+      "Location": "Memory",
+      "ShortName": "Piecing together.wav",
+      "CachePath": "07/{07380261-5851-21B4-FB73-0AA3725DE03D}.wem"
      },
      {
       "Id": "1062488858",
@@ -249,7 +249,7 @@
         },
         "MediaRefs": [
          {
-          "Id": "597739749"
+          "Id": "969998505"
          }
         ]
        },
@@ -348,8 +348,8 @@
       "ObjectPath": "\\Events\\Default Work Unit\\fight_start",
       "GUID": "{ECE38540-761C-4C47-94DE-38127713B664}",
       "DurationType": "OneShot",
-      "DurationMin": "1.875",
-      "DurationMax": "1.875",
+      "DurationMin": "2",
+      "DurationMax": "2",
       "MediaRefs": [
        {
         "Id": "480639662"
@@ -620,6 +620,6 @@
     ]
    }
   ],
-  "FileHash": "{BB095309-AA76-4994-80AB-581719A722F6}"
+  "FileHash": "{B3F3D9BC-9BD6-9427-4E95-57BF0D62E258}"
  }
 }
