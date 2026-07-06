@@ -64,10 +64,10 @@ MonoBehaviour:
     spawnWeight: 0.75
     groupSize: {x: 1, y: 2}
     spawnInterval: 0.85
-  waveBaseBudget: 10
-  waveBudgetGrowth: 4
+  waveBaseBudget: 20
+  waveBudgetGrowth: 7
   waveBudgetVariance: 0.15
-  waveBudgetMax: 80
+  waveBudgetMax: 160
   waveGroupSpacing: 1.5
   waveAffordSlack: 1.2
   basicTurret:

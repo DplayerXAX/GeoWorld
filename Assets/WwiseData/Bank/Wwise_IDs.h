@@ -17,6 +17,7 @@ namespace AK
         static const AkUniqueID BDIM = 1660099773U;
         static const AkUniqueID BGM_EVENT = 1799075776U;
         static const AkUniqueID C = 84696444U;
+        static const AkUniqueID CHILL_EVENT = 3153557168U;
         static const AkUniqueID DM = 1836525772U;
         static const AkUniqueID F = 84696441U;
         static const AkUniqueID FIGHT_FINISH = 1796482997U;

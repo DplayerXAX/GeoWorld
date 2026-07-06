@@ -762,7 +762,7 @@ MonoBehaviour:
   BGM:
     idInternal: 0
     valueGuidInternal: 
-    WwiseObjectReference: {fileID: 11400000, guid: 7fad3a3e416e7354797459926717a80c, type: 2}
+    WwiseObjectReference: {fileID: 11400000, guid: 9af7482c1975b204f94532c4a0b5216b, type: 2}
   BGM_fight:
     idInternal: 0
     valueGuidInternal: 
@@ -3259,7 +3259,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: ed39f2b237e573f4f85990bb5d1440ac, type: 3}
   m_Name: 
   m_EditorClassIdentifier: AK.Wwise.Unity.Addressables::AK.Wwise.Unity.WwiseAddressables.InitBankHolder
-  InitBank: {fileID: 11400000, guid: 921dbaf0e79e14b4c898d5962608c29d, type: 2}
 --- !u!1001 &1702906975
 PrefabInstance:
   m_ObjectHideFlags: 0

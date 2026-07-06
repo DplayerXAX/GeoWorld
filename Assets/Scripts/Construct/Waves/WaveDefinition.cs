@@ -23,7 +23,14 @@ public class WaveDefinition : ScriptableObject
     public string displayName;
 
     public List<SpawnGroup> groups = new();
+    [Tooltip("Manual designer override — set this yourself if you want a specific number regardless of the auto-estimate below.")]
     public int difficulty;
+
+    [Header("Auto-computed (recalculated whenever a field above changes — don't hand-edit)")]
+    [Tooltip("Mass^0.7 × Rate^0.5, where Mass = total enemy HP and Rate = Mass / spawn window (seconds). " +
+             "Mirrors EstimatedDifficulty below — kept as a serialized field purely so it's visible in the Inspector.")]
+    public float estimatedDifficulty;
+
     public int TotalSpawnCount
     {
         get
@@ -35,6 +42,38 @@ public class WaveDefinition : ScriptableObject
             return total;
         }
     }
+
+    // Difficulty estimate from raw wave shape: how much total enemy HP arrives (Mass),
+    // and how densely-packed in time it is (Rate = Mass / spawn window). Both terms use
+    // sub-linear exponents so neither pure quantity nor pure tempo can blow the score up
+    // on their own — matches how AOE/turret-coverage actually damps raw swarm size.
+    public float EstimatedDifficulty
+    {
+        get
+        {
+            if (groups == null) return 0f;
+            float mass = 0f, window = 0f;
+            foreach (var g in groups)
+            {
+                if (g == null || g.count <= 0) continue;
+                int hp = g.prefab != null ? g.prefab.maxHealth : 1;   // no prefab override → assume 1
+                mass   += g.count * hp;
+                window += g.preDelay + g.interval * Mathf.Max(0, g.count - 1);
+            }
+            float rate = mass / Mathf.Max(window, 0.01f);
+            return Mathf.Pow(mass, 0.7f) * Mathf.Pow(rate, 0.5f);
+        }
+    }
+
+#if UNITY_EDITOR
+    // Fires on every Inspector edit — keeps the visible estimatedDifficulty field in
+    // sync with the live EstimatedDifficulty property (same pattern BlockData.cs uses
+    // to auto-fill `cells` from `blockShape`).
+    void OnValidate()
+    {
+        estimatedDifficulty = EstimatedDifficulty;
+    }
+#endif
 }
 
 [Serializable]
