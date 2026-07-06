@@ -1,3 +1,4 @@
+using System.Collections;
 using UnityEngine;
 
 public class AudioManager : MonoBehaviour
@@ -73,6 +74,19 @@ public class AudioManager : MonoBehaviour
         SetChordOnObject(BlockType.Home, this.gameObject);
         SetChordOnObject(BlockType.Home, audioEmitter);
 
+        StartCoroutine(PostBgmAfterIntro());
+
+        GameSettings.ApplyAudio();   // push saved volumes once the engine is up
+    }
+
+    // In the gameplay scene, IntroDirector plays a short reveal before the player can
+    // act — don't start the BGM until that's done (it isn't present in other scenes,
+    // e.g. Title/LevelSelect, so this just posts next-frame there, no behavior change).
+    IEnumerator PostBgmAfterIntro()
+    {
+        yield return null;   // let IntroDirector spawn + set Playing=true first, if this scene has one
+        while (IntroDirector.Playing) yield return null;
+
         // Force the initial music state to Calm BEFORE posting the BGM event.
         // Wwise doesn't always honor a "default state" config in the authoring
         // tool reliably, so we set it explicitly here.
@@ -81,8 +95,6 @@ public class AudioManager : MonoBehaviour
 
         if (BGM != null && BGM.IsValid())
             _currentBgmPlayingId = BGM.Post(this.gameObject);
-
-        GameSettings.ApplyAudio();   // push saved volumes once the engine is up
     }
 
     void SetChordOnObject(BlockType type, GameObject target)

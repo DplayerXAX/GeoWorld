@@ -103,6 +103,7 @@ public class TutorialDirector : MonoBehaviour
     int    _typedStep = -1;
     float  _typeStart;
     string _hintMsg = "";
+    TMP_FontAsset hintFont;
     int    _hintCharCount;
 
     // ── Dialogue delivery ───────────────────────────────────────────────────────
@@ -110,6 +111,10 @@ public class TutorialDirector : MonoBehaviour
     bool                 _dialogueActive;            // a tutorial conversation is on screen
     DialogueConversation _runtimeConvo;              // built for one-line speaker hints
     DialogueRunner       _runner;                    // cached so OnDestroy doesn't spawn one
+
+    // ShowStep() also builds the placement ghost and moves the camera (FocusCameraForStep) —
+    // not just dialogue — so the FIRST step must wait for the intro too, not fire at Start().
+    bool _firstStepShown;
 
     // RuntimeInitializeOnLoadMethod runs ONCE at startup — not per scene load — so
     // hook sceneLoaded and (re)spawn whenever a gameplay scene loads with a tutorial
@@ -149,7 +154,8 @@ public class TutorialDirector : MonoBehaviour
         PlacementController.TurretUpgraded += OnUpgraded;
         Debug.Log($"[Tutorial] active — {(_lv.tutorialSteps != null ? _lv.tutorialSteps.Count : 0)} step(s).");
         BuildHintUI();
-        ShowStep();
+        // ShowStep() also spawns the ghost + moves the camera — deferred to Update() until
+        // the intro finishes (see _firstStepShown), so it doesn't fire mid-intro.
     }
 
     void OnDestroy()
@@ -177,6 +183,8 @@ public class TutorialDirector : MonoBehaviour
     void Update()
     {
         if (IntroDirector.Playing) return;   // wait for the entrance animation before running steps
+
+        if (!_firstStepShown) { _firstStepShown = true; ShowStep(); }
 
         var step = Cur;
 
@@ -585,6 +593,7 @@ public class TutorialDirector : MonoBehaviour
         {
             _typedStep = _step;
             _hintMsg   = msg;
+            if(hintFont!=null)_hintText.font = hintFont;
             _typeStart = Time.unscaledTime;
             _hintText.text = msg;
             _hintText.ForceMeshUpdate();

@@ -22,6 +22,8 @@ MonoBehaviour:
   - {fileID: 11400000, guid: 080e4b2a67c19904bbbfdce56bfad1ae, type: 2}
   - {fileID: 11400000, guid: c82062cbbf585cf4682eb33064d8a19e, type: 2}
   - {fileID: 11400000, guid: f836467ddfab2e147ae846bc04f5d38a, type: 2}
+  - {fileID: 11400000, guid: fa1e7e5fd68a6914d9718d1388053d43, type: 2}
+  - {fileID: 11400000, guid: 77517e05a4c85e8439528485ee1fd0a3, type: 2}
   wavesToClear: 5
   objectives:
   - type: 1
@@ -31,12 +33,12 @@ MonoBehaviour:
   - type: 4
     target: 2
     description: 
-    optional: 0
+    optional: 1
   - type: 6
     target: 1
     description: 
     optional: 0
-  requireAllObjectives: 1
+  requireAllObjectives: 0
   clearOnObjectivesComplete: 1
   unlockedByDefault: 1
   unlocks:
@@ -171,6 +173,25 @@ MonoBehaviour:
     cameraFocus: 0
     focusZoom: 0
     hint: Select a block to see how the power is activated and its benefit.
+    conversation: {fileID: 0}
+    speaker: {fileID: 11400000, guid: 80993e3c86b4337429c2d6273c8eedc2, type: 2}
+    speakerSlot: 1
+    speakerPortrait: 
+  - kind: 5
+    block: {fileID: 0}
+    origin: {x: 1, y: 2, z: -1}
+    rotation90: {x: 0, y: 0, z: 0}
+    cellsOverride: []
+    waitSeconds: 0
+    count: 0
+    inputKey: 323
+    pathLength: 0
+    freeOperations: 0
+    hideInCombat: 0
+    cameraFocus: 1
+    focusZoom: 0
+    hint: A new rift appears. Enemy will also appeear and attack the core. Try connecting
+      this to the path.
     conversation: {fileID: 0}
     speaker: {fileID: 11400000, guid: 80993e3c86b4337429c2d6273c8eedc2, type: 2}
     speakerSlot: 1

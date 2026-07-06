@@ -351,10 +351,10 @@ MonoBehaviour:
     hideInCombat: 0
     cameraFocus: 0
     focusZoom: 0
-    hint: (Try moving or adding  blocks to force enemies to take a longer path before
-      reaching the Core.)
+    hint: (Try moving or adding  blocks to force enemies to take a path longer than
+      10 before reaching the Core!)
     conversation: {fileID: 0}
-    speaker: {fileID: 11400000, guid: 80993e3c86b4337429c2d6273c8eedc2, type: 2}
+    speaker: {fileID: 0}
     speakerSlot: 1
     speakerPortrait: Default
   startingLayout: {fileID: 0}

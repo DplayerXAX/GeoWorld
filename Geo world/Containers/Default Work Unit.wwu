@@ -1652,7 +1652,7 @@
 													<ObjectRef Name="Battle_BGM" ID="{F58F28CD-1C24-4E26-9833-0B2D0400D14D}" WorkUnitID="{48502AC3-EE10-4952-8017-84D50D1C5C35}"/>
 												</Reference>
 												<Reference Name="SourceContextObject">
-													<ObjectRef Name="Calm_BGM" ID="{A2518408-A2B6-47F4-9EA9-BF1874DBA83C}" WorkUnitID="{48502AC3-EE10-4952-8017-84D50D1C5C35}"/>
+													<ObjectRef Name="Piece_BGM" ID="{1ADB3116-59D9-49B5-BDAE-EDC5D67F9BDE}" WorkUnitID="{48502AC3-EE10-4952-8017-84D50D1C5C35}"/>
 												</Reference>
 											</ReferenceList>
 											<TransitionInfo>
@@ -1684,7 +1684,7 @@
 											</PropertyList>
 											<ReferenceList>
 												<Reference Name="DestinationContextObject">
-													<ObjectRef Name="Calm_BGM" ID="{A2518408-A2B6-47F4-9EA9-BF1874DBA83C}" WorkUnitID="{48502AC3-EE10-4952-8017-84D50D1C5C35}"/>
+													<ObjectRef Name="Piece_BGM" ID="{1ADB3116-59D9-49B5-BDAE-EDC5D67F9BDE}" WorkUnitID="{48502AC3-EE10-4952-8017-84D50D1C5C35}"/>
 												</Reference>
 												<Reference Name="SourceContextObject">
 													<ObjectRef Name="Battle_BGM" ID="{F58F28CD-1C24-4E26-9833-0B2D0400D14D}" WorkUnitID="{48502AC3-EE10-4952-8017-84D50D1C5C35}"/>
@@ -2066,13 +2066,14 @@
 								<MusicSegment Name="geo fight" ID="{35CC08F4-5C01-4582-9379-FCEFE2EF3215}" ShortID="696153439">
 									<PropertyList>
 										<Property Name="EndPosition" Type="Real64" Value="60000"/>
+										<Property Name="OverrideOutput" Type="bool" Value="True"/>
 									</PropertyList>
 									<ReferenceList>
 										<Reference Name="Conversion">
 											<ObjectRef Name="Default Conversion Settings" ID="{6D1B890C-9826-4384-BF07-C15223E9FB56}" WorkUnitID="{BFF35AA4-1BFB-41E4-BB7F-8AF0856339D0}"/>
 										</Reference>
 										<Reference Name="OutputBus">
-											<ObjectRef Name="Main Audio Bus" ID="{1514A4D8-1DA6-412A-A17E-75CA0C2149F3}" WorkUnitID="{CBCBEBED-FDBD-448E-BC87-77DA2A9E2E45}"/>
+											<ObjectRef Name="Spacial" ID="{D8B769F3-2EC1-4A98-A650-3DFC75E52DEE}" WorkUnitID="{CBCBEBED-FDBD-448E-BC87-77DA2A9E2E45}"/>
 										</Reference>
 									</ReferenceList>
 									<ChildrenList>
@@ -2136,12 +2137,15 @@
 							</ChildrenList>
 						</MusicPlaylistContainer>
 						<MusicPlaylistContainer Name="Piece_BGM" ID="{1ADB3116-59D9-49B5-BDAE-EDC5D67F9BDE}" ShortID="818180628">
+							<PropertyList>
+								<Property Name="OverrideOutput" Type="bool" Value="True"/>
+							</PropertyList>
 							<ReferenceList>
 								<Reference Name="Conversion">
 									<ObjectRef Name="Default Conversion Settings" ID="{6D1B890C-9826-4384-BF07-C15223E9FB56}" WorkUnitID="{BFF35AA4-1BFB-41E4-BB7F-8AF0856339D0}"/>
 								</Reference>
 								<Reference Name="OutputBus">
-									<ObjectRef Name="Main Audio Bus" ID="{1514A4D8-1DA6-412A-A17E-75CA0C2149F3}" WorkUnitID="{CBCBEBED-FDBD-448E-BC87-77DA2A9E2E45}"/>
+									<ObjectRef Name="Spacial" ID="{D8B769F3-2EC1-4A98-A650-3DFC75E52DEE}" WorkUnitID="{CBCBEBED-FDBD-448E-BC87-77DA2A9E2E45}"/>
 								</Reference>
 								<Reference Name="PlaylistRoot">
 									<Custom>
@@ -2183,7 +2187,13 @@
 							<ChildrenList>
 								<MusicSegment Name="Piecing together" ID="{B9883AD3-6659-488E-9D67-B5A237A5AE9C}" ShortID="908011813">
 									<PropertyList>
-										<Property Name="EndPosition" Type="Real64" Value="42187.5056689342"/>
+										<Property Name="EndPosition" Type="Real64" Value="43875.0113378685"/>
+										<Property Name="OverrideOutput" Type="bool" Value="True"/>
+										<Property Name="PlaybackSpeed" Type="Real64">
+											<ValueList>
+												<Value>0.85</Value>
+											</ValueList>
+										</Property>
 									</PropertyList>
 									<ReferenceList>
 										<Reference Name="Conversion">
@@ -2195,6 +2205,13 @@
 									</ReferenceList>
 									<ChildrenList>
 										<MusicTrack Name="Piecing together" ID="{00C8D7DE-9499-49D4-B463-9858E7BA1C20}" ShortID="492431659">
+											<PropertyList>
+												<Property Name="Volume" Type="Real64">
+													<ValueList>
+														<Value>-2</Value>
+													</ValueList>
+												</Property>
+											</PropertyList>
 											<ReferenceList>
 												<Reference Name="OutputBus">
 													<ObjectRef Name="Main Audio Bus" ID="{1514A4D8-1DA6-412A-A17E-75CA0C2149F3}" WorkUnitID="{CBCBEBED-FDBD-448E-BC87-77DA2A9E2E45}"/>
@@ -2211,11 +2228,11 @@
 												</Reference>
 											</ReferenceList>
 											<ChildrenList>
-												<AudioFileSource Name="Piecing together" ID="{75889F75-3D7C-447A-A634-147B6DE98E81}">
+												<AudioFileSource Name="Piecing together" ID="{3B64A7B9-46C4-40F5-8845-58E47E1654FD}">
 													<Language>SFX</Language>
-													<AudioFile>Geo world\Originals\SFX\Piecing together.wav</AudioFile>
+													<AudioFile>Piecing together.wav</AudioFile>
 													<MediaIDList>
-														<MediaID ID="597739749"/>
+														<MediaID ID="969998505"/>
 													</MediaIDList>
 												</AudioFileSource>
 											</ChildrenList>
@@ -2224,13 +2241,13 @@
 													<MusicTrackSequence Name="" ID="{043E2FB7-2A4F-4A44-B432-2124382B1ADF}">
 														<ObjectLists>
 															<ObjectList Name="Clips">
-																<MusicClip Name="Piecing together" ID="{D670FF75-371E-4CA4-A821-C18710E3EAB9}">
+																<MusicClip Name="Piecing together" ID="{7771FF5E-5A9D-4A0D-9FE9-6EA7EA87C5FC}">
 																	<PropertyList>
-																		<Property Name="EndTrimOffset" Type="Real64" Value="42187.5056689342"/>
+																		<Property Name="EndTrimOffset" Type="Real64" Value="40200"/>
 																		<Property Name="FadeInMode" Type="int16" Value="0"/>
 																		<Property Name="FadeOutMode" Type="int16" Value="0"/>
 																	</PropertyList>
-																	<AudioSourceRef Name="Piecing together" ID="{75889F75-3D7C-447A-A634-147B6DE98E81}"/>
+																	<AudioSourceRef Name="Piecing together" ID="{3B64A7B9-46C4-40F5-8845-58E47E1654FD}"/>
 																</MusicClip>
 															</ObjectList>
 														</ObjectLists>
@@ -2245,7 +2262,7 @@
 											<MusicCue Name="Exit Cue" ID="{241A24D8-4AE6-411F-9B3E-ADE69E13A1CF}">
 												<PropertyList>
 													<Property Name="CueType" Type="int16" Value="1"/>
-													<Property Name="TimeMs" Type="Real64" Value="42187.5056689342"/>
+													<Property Name="TimeMs" Type="Real64" Value="40197.1552787432"/>
 												</PropertyList>
 											</MusicCue>
 										</ObjectList>
@@ -2432,7 +2449,6 @@
 														<Property Name="EndTrimOffset" Type="Real64" Value="2000"/>
 														<Property Name="FadeInMode" Type="int16" Value="0"/>
 														<Property Name="FadeOutMode" Type="int16" Value="0"/>
-														<Property Name="PlayAt" Type="Real64" Value="-125"/>
 													</PropertyList>
 													<AudioSourceRef Name="start fight" ID="{83D4D349-0A02-4CFB-AED2-E3E5EFE116EE}"/>
 													<PropertyCurveList>
@@ -2470,7 +2486,7 @@
 							<MusicCue Name="Exit Cue" ID="{75BDBBBF-1626-4533-AB7B-9126892E84B2}">
 								<PropertyList>
 									<Property Name="CueType" Type="int16" Value="1"/>
-									<Property Name="TimeMs" Type="Real64" Value="1875"/>
+									<Property Name="TimeMs" Type="Real64" Value="2000"/>
 								</PropertyList>
 							</MusicCue>
 						</ObjectList>

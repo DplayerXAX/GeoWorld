@@ -27,8 +27,10 @@ public class WaveDefinition : ScriptableObject
     public int difficulty;
 
     [Header("Auto-computed (recalculated whenever a field above changes — don't hand-edit)")]
-    [Tooltip("Mass^0.7 × Rate^0.5, where Mass = total enemy HP and Rate = Mass / spawn window (seconds). " +
-             "Mirrors EstimatedDifficulty below — kept as a serialized field purely so it's visible in the Inspector.")]
+    [Tooltip("Mass^0.7 × Rate^0.5, where Mass = total enemy HP and Rate = Mass / ACTIVE spawn time " +
+             "(preDelay gaps between groups don't count — they're breathing room, not threat, and " +
+             "shouldn't be able to drag the score down). Mirrors EstimatedDifficulty below — kept as " +
+             "a serialized field purely so it's visible in the Inspector.")]
     public float estimatedDifficulty;
 
     public int TotalSpawnCount
@@ -44,9 +46,17 @@ public class WaveDefinition : ScriptableObject
     }
 
     // Difficulty estimate from raw wave shape: how much total enemy HP arrives (Mass),
-    // and how densely-packed in time it is (Rate = Mass / spawn window). Both terms use
-    // sub-linear exponents so neither pure quantity nor pure tempo can blow the score up
-    // on their own — matches how AOE/turret-coverage actually damps raw swarm size.
+    // and how densely-packed in time it is (Rate = Mass / ACTIVE spawn window). Both
+    // terms use sub-linear exponents so neither pure quantity nor pure tempo can blow
+    // the score up on their own — matches how AOE/turret-coverage actually damps raw
+    // swarm size.
+    //
+    // Window intentionally EXCLUDES preDelay: it's the gap before a group starts (dead
+    // time, no threat), not part of the delivery rate. Folding it in let a single huge
+    // preDelay on one group crash Rate for the whole wave — so adding an enemy with a
+    // long preDelay could make the score go DOWN despite strictly more threat, which is
+    // never correct. Window only ever grows via `count`/`interval` now, so adding an
+    // enemy can't lower the score.
     public float EstimatedDifficulty
     {
         get
@@ -58,7 +68,7 @@ public class WaveDefinition : ScriptableObject
                 if (g == null || g.count <= 0) continue;
                 int hp = g.prefab != null ? g.prefab.maxHealth : 1;   // no prefab override → assume 1
                 mass   += g.count * hp;
-                window += g.preDelay + g.interval * Mathf.Max(0, g.count - 1);
+                window += g.interval * Mathf.Max(0, g.count - 1);
             }
             float rate = mass / Mathf.Max(window, 0.01f);
             return Mathf.Pow(mass, 0.7f) * Mathf.Pow(rate, 0.5f);

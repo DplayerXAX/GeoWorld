@@ -15,7 +15,7 @@ MonoBehaviour:
   displayName: Wave_mid_2
   groups:
   - prefab: {fileID: 1000000000000000004, guid: 8e112c6d7d9b44b29b6d28b4cf5a5401, type: 3}
-    count: 4
+    count: 7
     interval: 0.5
     preDelay: 0
   - prefab: {fileID: 2000000000000000004, guid: 9cd11ec29906452fae87b242eaa57704, type: 3}
@@ -27,3 +27,4 @@ MonoBehaviour:
     interval: 1
     preDelay: 1
   difficulty: 3
+  estimatedDifficulty: 22.627417
