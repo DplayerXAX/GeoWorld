@@ -37,6 +37,8 @@ public partial class PlacementController : MonoBehaviour
     public static event System.Action ShopRefreshed;
     // Fired when a selected turret is successfully upgraded.
     public static event System.Action TurretUpgraded;
+    // Fired with the highest branch level reached on that turret after an upgrade.
+    public static event System.Action<int> TurretUpgradeLevelReached;
     public Vector3Int SnappedGridPos => baseGridPos;
     public Vector3Int CurrentGridPos => currentGridPos;
     [Range(0.5f, 4f)] public float snapGridRadius = 1.5f;
@@ -916,6 +918,7 @@ public partial class PlacementController : MonoBehaviour
         string branch = path == BasicTurretUpgradePath.Power ? "Power" : "Burst";
         ShowPlacementPopup($"{branch} upgraded");
         TurretUpgraded?.Invoke();
+        TurretUpgradeLevelReached?.Invoke(Mathf.Max(turret.PowerPathLevel, turret.BurstPathLevel));
     }
 
     void TryUpgradeSelectedAoeTurret(AoeTurretUpgradePath path)
@@ -940,6 +943,7 @@ public partial class PlacementController : MonoBehaviour
         string branch = path == AoeTurretUpgradePath.Fire ? "Fire" : "Gravity";
         ShowPlacementPopup($"{branch} upgraded");
         TurretUpgraded?.Invoke();
+        TurretUpgradeLevelReached?.Invoke(Mathf.Max(turret.AoeFirePathLevel, turret.AoeGravityPathLevel));
     }
 
     // Removes the selected block and refunds part of its value to the matching
