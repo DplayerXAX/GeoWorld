@@ -35,7 +35,7 @@ public class LevelObjectivesTracker : MonoBehaviour
     public TMP_FontAsset font;
 
     LevelDefinition _lv;
-    int _kills, _leaks, _placed, _maxSynergies;
+    int _kills, _leaks, _placed, _maxSynergies, _maxTurretUpgradeLevel;
 
     Canvas    _canvas;
     TMP_Text[] _rows;
@@ -67,6 +67,7 @@ public class LevelObjectivesTracker : MonoBehaviour
         EnemySurfaceUnit.AnyDied       += OnKill;
         EnemySurfaceUnit.AnyReachedEnd += OnLeak;
         PlacementController.BlockPlaced += OnPlaced;
+        PlacementController.TurretUpgradeLevelReached += OnTurretUpgradeLevelReached;
     }
 
     void OnDisable()
@@ -74,12 +75,14 @@ public class LevelObjectivesTracker : MonoBehaviour
         EnemySurfaceUnit.AnyDied       -= OnKill;
         EnemySurfaceUnit.AnyReachedEnd -= OnLeak;
         PlacementController.BlockPlaced -= OnPlaced;
+        PlacementController.TurretUpgradeLevelReached -= OnTurretUpgradeLevelReached;
         if (_inst == this) _inst = null;
     }
 
     void OnKill(EnemySurfaceUnit _)            => _kills++;
     void OnLeak(EnemySurfaceUnit _)            => _leaks++;
     void OnPlaced(BlockData _, Vector3Int[] __) => _placed++;
+    void OnTurretUpgradeLevelReached(int level) => _maxTurretUpgradeLevel = Mathf.Max(_maxTurretUpgradeLevel, level);
 
     void Start() { if (_lv != null && _lv.objectives.Count > 0) BuildUI(); }
 
@@ -132,6 +135,9 @@ public class LevelObjectivesTracker : MonoBehaviour
                 return cur >= tgt ? State.Done : State.Failed;
             case ObjectiveType.BuildPathLength:
                 cur = gfm != null ? gfm.CurrentPathLength : 0;
+                return cur >= tgt ? State.Done : State.Pending;
+            case ObjectiveType.UpgradeTurretToLevel:
+                cur = _maxTurretUpgradeLevel;
                 return cur >= tgt ? State.Done : State.Pending;
         }
         cur = 0; return State.Pending;
