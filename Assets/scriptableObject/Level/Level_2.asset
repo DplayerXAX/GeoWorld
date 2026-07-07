@@ -45,7 +45,7 @@ MonoBehaviour:
     optional: 0
   requireAllObjectives: 1
   clearOnObjectivesComplete: 0
-  unlockedByDefault: 0
+  unlockedByDefault: 1
   unlocks: []
   techReward: 1
   isTutorial: 0
