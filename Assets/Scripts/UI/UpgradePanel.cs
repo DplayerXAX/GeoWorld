@@ -56,7 +56,10 @@ public class UpgradePanel : MonoBehaviour
         _cg.alpha = Mathf.Lerp(_cg.alpha, _target, 1f - Mathf.Exp(-fadeSpeed * Time.unscaledDeltaTime));
         bool on = _target > 0.5f && _cg.alpha > 0.5f;
         _cg.interactable = _cg.blocksRaycasts = on;
-        _canvas.enabled = _cg.alpha > 0.01f;
+
+        // Holding the middle mouse button temporarily ducks the panel — see BlockInfoPanel.
+        bool middleHeld = Input.GetMouseButton(2);
+        _canvas.enabled = _cg.alpha > 0.01f && !middleHeld;
         if (!_canvas.enabled || _cam == null) return;
 
         transform.position = BlockInfoPanel.StableSpot(_cam, _anchor, heightOffset, lateralOffset, cameraPull,

@@ -26,5 +26,13 @@ MonoBehaviour:
     count: 1
     interval: 1
     preDelay: 3
+  - prefab: {fileID: 1000000000000000004, guid: 8e112c6d7d9b44b29b6d28b4cf5a5401, type: 3}
+    count: 1
+    interval: 0.5
+    preDelay: 1
+  - prefab: {fileID: 2000000000000000004, guid: 9cd11ec29906452fae87b242eaa57704, type: 3}
+    count: 2
+    interval: 0
+    preDelay: 1
   difficulty: 4
-  estimatedDifficulty: 21.627926
+  estimatedDifficulty: 37.079517

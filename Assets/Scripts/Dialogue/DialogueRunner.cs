@@ -177,7 +177,11 @@ public class DialogueRunner : MonoBehaviour
             _typed += typeSpeed * Time.unscaledDeltaTime;
             int total = _bodyText.textInfo.characterCount;
             _bodyText.maxVisibleCharacters = Mathf.Min(total, Mathf.FloorToInt(_typed));
-            if (_bodyText.maxVisibleCharacters >= total) _typing = false;
+            if (_bodyText.maxVisibleCharacters >= total)
+            {
+                _typing = false;
+                AudioManager.Instance?.StopTextBlip();
+            }
         }
 
         // Blinking continue indicator (hidden while typing / choosing / passive).
@@ -197,7 +201,12 @@ public class DialogueRunner : MonoBehaviour
             && (Input.GetMouseButtonDown(0) || (advanceKey != KeyCode.None && Input.GetKeyDown(advanceKey))
                 || GamepadInput.ConfirmDown))
         {
-            if (_typing) { _typing = false; _bodyText.maxVisibleCharacters = _bodyText.textInfo.characterCount; }
+            if (_typing)
+            {
+                _typing = false;
+                _bodyText.maxVisibleCharacters = _bodyText.textInfo.characterCount;
+                AudioManager.Instance?.StopTextBlip();
+            }
             else Advance();
         }
     }
@@ -282,6 +291,7 @@ public class DialogueRunner : MonoBehaviour
         _bodyText.maxVisibleCharacters = 0;
         _typed  = 0f;
         _typing = true;
+        AudioManager.Instance?.StartTextBlip();
         _lineFrame = Time.frameCount;   // ignore the click that opened this line
 
         if (!string.IsNullOrEmpty(line.eventId)) OnLineEvent?.Invoke(line.eventId);
@@ -320,6 +330,8 @@ public class DialogueRunner : MonoBehaviour
         IsPlaying    = false;
         _choiceMode  = false;
         _alphaTarget = 0f;
+        _typing      = false;
+        AudioManager.Instance?.StopTextBlip();   // guard: convo can end mid-line (e.g. externally Stop()ped)
         ClearChoices();
         OnFinished?.Invoke(convo);
     }

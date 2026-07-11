@@ -833,7 +833,10 @@ public partial class PlacementController : MonoBehaviour
             SetOutlineHighlight(lastHighlightedObject, restoreDefault: true);
 
         if (target != null && target != lastHighlightedObject)
+        {
             SetOutlineHighlight(target, restoreDefault: false);
+            AudioManager.Instance?.PlaySelect();
+        }
 
         lastHighlightedObject = target;
     }

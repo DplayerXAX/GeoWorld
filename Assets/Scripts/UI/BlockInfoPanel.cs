@@ -65,7 +65,12 @@ public class BlockInfoPanel : MonoBehaviour
         _cg.alpha = Mathf.Lerp(_cg.alpha, _target, 1f - Mathf.Exp(-fadeSpeed * Time.unscaledDeltaTime));
         bool on = _target > 0.5f && _cg.alpha > 0.5f;
         _cg.interactable = _cg.blocksRaycasts = on;
-        _canvas.enabled = _cg.alpha > 0.01f;
+
+        // Holding the middle mouse button temporarily ducks the panel so it doesn't block
+        // the view of the block/scene behind it — instant hide/show, no fade, so it never
+        // fights the alpha animation driven by _target.
+        bool middleHeld = Input.GetMouseButton(2);
+        _canvas.enabled = _cg.alpha > 0.01f && !middleHeld;
         if (!_canvas.enabled || _cam == null) return;
 
         transform.position = StableSpot(_cam, _anchor, heightOffset, lateralOffset, cameraPull,

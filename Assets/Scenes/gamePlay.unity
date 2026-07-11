@@ -2453,6 +2453,7 @@ MonoBehaviour:
   combatTestKey: 48
   combatTransitionSpeed: 2
   clearTransitionSpeed: 2.5
+  killReactDecay: 5
 --- !u!4 &1188158438
 Transform:
   m_ObjectHideFlags: 0
@@ -3176,6 +3177,22 @@ MonoBehaviour:
     idInternal: 0
     valueGuidInternal: 
     WwiseObjectReference: {fileID: 0}
+  TextBlip:
+    idInternal: 0
+    valueGuidInternal: 
+    WwiseObjectReference: {fileID: 11400000, guid: 9ac59793028b02e49b541f82bcf5fbb7, type: 2}
+  SelectObject:
+    idInternal: 0
+    valueGuidInternal: 
+    WwiseObjectReference: {fileID: 11400000, guid: dbe831de9e1016543bca0dff3c88841e, type: 2}
+  ShopExpand:
+    idInternal: 0
+    valueGuidInternal: 
+    WwiseObjectReference: {fileID: 11400000, guid: 2b789b49972c54c4880d071f27323f77, type: 2}
+  ShopCollapse:
+    idInternal: 0
+    valueGuidInternal: 
+    WwiseObjectReference: {fileID: 11400000, guid: 76f1ac5ea6eafe447b1993ab558a11a5, type: 2}
   masterVolumeRtpc: MasterVolume
   musicVolumeRtpc: MusicVolume
   sfxVolumeRtpc: SFXVolume

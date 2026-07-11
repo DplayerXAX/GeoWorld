@@ -49,12 +49,41 @@ public class TutorialDirector : MonoBehaviour
         // never blocks combat actions.
         if (step.hideInCombat && GameFlowManager.Instance != null
             && GameFlowManager.Instance.phase == GamePhase.Running) return true;
+        // An earlier step can permanently unlock an op (TutorialStep.unlocksOps) —
+        // once reached, it stays allowed regardless of what the CURRENT step teaches.
+        if (IsOpUnlockedByPastStep(op)) return true;
         // Buying: CanPurchase passes the generic Purchase intent. Allow it when the
         // current step is ANY purchase kind and the bought item fits that kind.
         if (op == TutorialStepKind.Purchase)
             return IsPurchaseKind(step.kind) && PurchaseMatches(step, d);
         if (step.kind != op) return false;        // this op isn't the current step → locked
         return true;
+    }
+
+    // Scans every step up to (and including) the current one for an unlocksOps entry
+    // matching `op`. Step lists are short (tens of entries), so a linear scan each call
+    // is cheap — no need to cache/accumulate a running set.
+    bool IsOpUnlockedByPastStep(TutorialStepKind op)
+    {
+        var steps = _lv != null ? _lv.tutorialSteps : null;
+        if (steps == null) return false;
+        int upTo = Mathf.Min(_step, steps.Count - 1);
+        for (int i = 0; i <= upTo; i++)
+        {
+            var s = steps[i];
+            if (s?.unlocksOps == null) continue;
+            for (int j = 0; j < s.unlocksOps.Length; j++)
+            {
+                var u = s.unlocksOps[j];
+                if (u == op) return true;
+                // CanPurchase always queries the generic Purchase (never PurchaseBlock/
+                // PurchaseTurret directly — see CanPurchase above), so a designer marking
+                // PurchaseBlock or PurchaseTurret as unlocked clearly means "buying is
+                // unlocked" too — treat the whole purchase family as interchangeable here.
+                if (op == TutorialStepKind.Purchase && IsPurchaseKind(u)) return true;
+            }
+        }
+        return false;
     }
 
     static bool IsPurchaseKind(TutorialStepKind k) =>
@@ -86,6 +115,7 @@ public class TutorialDirector : MonoBehaviour
 
     LevelDefinition _lv;
     int        _step;
+    int        _pendingStepIndex = -1;   // -1 = none; else next step index held back by a wave gate
     float      _stepTimer;     // for Wait steps
     int        _freePlaced;    // for FreePlace steps
     GameObject _ghost;
@@ -105,6 +135,7 @@ public class TutorialDirector : MonoBehaviour
     string _hintMsg = "";
     TMP_FontAsset hintFont;
     int    _hintCharCount;
+    int    _hintShownPrev;
 
     // ── Dialogue delivery ───────────────────────────────────────────────────────
     int                  _dialoguePlayedStep = -1;   // which step has had its convo kicked off
@@ -184,7 +215,23 @@ public class TutorialDirector : MonoBehaviour
     {
         if (IntroDirector.Playing) return;   // wait for the entrance animation before running steps
 
-        if (!_firstStepShown) { _firstStepShown = true; ShowStep(); }
+        if (!_firstStepShown)
+        {
+            _firstStepShown = true;
+            if (IsWaveGated(_step)) _pendingStepIndex = _step;
+            else ShowStep();
+        }
+
+        // A wave-gated step is held here until the player reaches the required wave —
+        // frozen (no ghost/dialogue/hint, no per-frame completion checks below) rather
+        // than re-running the just-completed step's triggers every frame.
+        if (_pendingStepIndex >= 0)
+        {
+            if (IsWaveGated(_pendingStepIndex)) return;
+            _step = _pendingStepIndex;
+            _pendingStepIndex = -1;
+            ShowStep();
+        }
 
         var step = Cur;
 
@@ -346,7 +393,43 @@ public class TutorialDirector : MonoBehaviour
         if (step != null && step.kind == TutorialStepKind.Upgrade) Advance();
     }
 
-    void Advance() { _step++; ShowStep(); }
+    void Advance()
+    {
+        int next = _step + 1;
+        if (IsWaveGated(next))
+        {
+            // Hold at the just-completed step's index (don't touch _step) — Update()
+            // polls IsWaveGated each frame and actually advances once it opens.
+            _pendingStepIndex = next;
+            HideStepVisuals();
+            return;
+        }
+        _step = next;
+        ShowStep();
+    }
+
+    // True while `stepIndex` exists, has a requiredWave, and the player hasn't reached
+    // that wave yet (GameFlowManager.UpcomingWaveNumber is the 1-based "which wave is
+    // this" counter — see its own doc comment). No GameFlowManager / level fallback:
+    // no way to check, so don't gate.
+    bool IsWaveGated(int stepIndex)
+    {
+        var steps = _lv != null ? _lv.tutorialSteps : null;
+        if (steps == null || stepIndex < 0 || stepIndex >= steps.Count) return false;
+        var step = steps[stepIndex];
+        return step != null && step.requiredWave > 0
+            && GameFlowManager.Instance != null
+            && GameFlowManager.Instance.UpcomingWaveNumber < step.requiredWave;
+    }
+
+    // Clears whatever the just-completed step left on screen (ghost / dialogue / hint)
+    // while we wait for a wave-gated next step to open up.
+    void HideStepVisuals()
+    {
+        if (_ghost != null) { Destroy(_ghost); _ghost = null; _ghostRends.Clear(); }
+        CloseDialogue();
+        if (_hintCanvas != null) _hintCanvas.enabled = false;
+    }
 
     void ShowStep()
     {
@@ -586,7 +669,11 @@ public class TutorialDirector : MonoBehaviour
                       && !SettingsScreen.Open && !PauseMenu.Paused && !IntroDirector.Playing;
 
         _hintCanvas.enabled = show;
-        if (!show) return;
+        if (!show)
+        {
+            AudioManager.Instance?.StopTextBlip();   // guard: hint hidden (pause/step change) mid-type
+            return;
+        }
 
         // (Re)set text & typewriter clock when the step's message changes.
         if (_typedStep != _step || _hintMsg != msg)
@@ -598,6 +685,8 @@ public class TutorialDirector : MonoBehaviour
             _hintText.text = msg;
             _hintText.ForceMeshUpdate();
             _hintCharCount = _hintText.textInfo.characterCount;
+            _hintShownPrev = 0;
+            AudioManager.Instance?.StartTextBlip();   // TextBlip is one continuous segment — start once per line
         }
 
         // Keep the box ABOVE the shop's bottom letterbox bar so expanding the shop
@@ -616,6 +705,8 @@ public class TutorialDirector : MonoBehaviour
             : _hintCharCount;
         _hintText.maxVisibleCharacters = shown;
         bool typingDone = shown >= _hintCharCount;
+        if (typingDone && _hintShownPrev < _hintCharCount) AudioManager.Instance?.StopTextBlip();
+        _hintShownPrev = shown;
 
         // Continue light bar: pulse once the text is done on a click-to-continue Wait step.
         bool wantBar = typingDone && step.kind == TutorialStepKind.Wait && step.waitSeconds <= 0f;

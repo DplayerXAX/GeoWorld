@@ -27,7 +27,7 @@ MonoBehaviour:
   wavesToClear: 5
   objectives:
   - type: 1
-    target: 5
+    target: 6
     description: 
     optional: 0
   - type: 4
@@ -60,6 +60,8 @@ MonoBehaviour:
     pathLength: 0
     freeOperations: 0
     hideInCombat: 0
+    requiredWave: 0
+    unlocksOps: 
     cameraFocus: 0
     focusZoom: 0
     hint: ...More Rift Portals appear to be opening across our dimension. We need
@@ -79,6 +81,8 @@ MonoBehaviour:
     pathLength: 0
     freeOperations: 0
     hideInCombat: 0
+    requiredWave: 0
+    unlocksOps: 
     cameraFocus: 0
     focusZoom: 0
     hint: Our faith in you reaches through all blocks, bestowing strength upon you.
@@ -97,13 +101,16 @@ MonoBehaviour:
     pathLength: 0
     freeOperations: 0
     hideInCombat: 0
+    requiredWave: 0
+    unlocksOps:
+    - 6
     cameraFocus: 0
     focusZoom: 0
     hint: My Lord, place an ORANGE block where indicated to awaken the power of ABUNDANCE.
     conversation: {fileID: 0}
     speaker: {fileID: 11400000, guid: 80993e3c86b4337429c2d6273c8eedc2, type: 2}
     speakerSlot: 1
-    speakerPortrait: 
+    speakerPortrait:
   - kind: 0
     block: {fileID: 11400000, guid: a8fa6df35bf1b6c438e02427ec8409c0, type: 2}
     origin: {x: 1, y: 2, z: -1}
@@ -115,6 +122,8 @@ MonoBehaviour:
     pathLength: 0
     freeOperations: 0
     hideInCombat: 0
+    requiredWave: 0
+    unlocksOps: 
     cameraFocus: 0
     focusZoom: 0
     hint: My Lord, place an ORANGE block where indicated to awaken the power of ABUNDANCE.
@@ -133,6 +142,8 @@ MonoBehaviour:
     pathLength: 0
     freeOperations: 0
     hideInCombat: 0
+    requiredWave: 0
+    unlocksOps: 
     cameraFocus: 0
     focusZoom: 0
     hint: After a block loop is connected, Abundance is activated on this set of
@@ -152,6 +163,8 @@ MonoBehaviour:
     pathLength: 0
     freeOperations: 0
     hideInCombat: 0
+    requiredWave: 0
+    unlocksOps: 
     cameraFocus: 0
     focusZoom: 0
     hint: 'Abundance grant us resources for building up blocks periodly. '
@@ -170,6 +183,8 @@ MonoBehaviour:
     pathLength: 0
     freeOperations: 0
     hideInCombat: 0
+    requiredWave: 0
+    unlocksOps: []
     cameraFocus: 0
     focusZoom: 0
     hint: Select a block to see how the power is activated and its benefit.
@@ -188,6 +203,8 @@ MonoBehaviour:
     pathLength: 0
     freeOperations: 0
     hideInCombat: 0
+    requiredWave: 0
+    unlocksOps: 
     cameraFocus: 1
     focusZoom: 0
     hint: A new rift appears. Enemy will also appeear and attack the core. Try connecting

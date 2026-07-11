@@ -26,6 +26,10 @@ namespace AK
         static const AkUniqueID PLAY_ARP_NOTE = 2050041828U;
         static const AkUniqueID ROTATE = 1302771492U;
         static const AkUniqueID SCROLL = 454121546U;
+        static const AkUniqueID SELECT = 1432588725U;
+        static const AkUniqueID SHOP_CLOSE = 2506379688U;
+        static const AkUniqueID SHOP_OPEN = 839522188U;
+        static const AkUniqueID TEXTBLIP = 1387752797U;
         static const AkUniqueID TIMEDRAIN = 3258153068U;
     } // namespace EVENTS
 

@@ -36,6 +36,12 @@ public class LevelMapController : MonoBehaviour
     [Tooltip("How high the pawn floats above the block TOP FACE while surface-walking.")]
     public float pawnSurfaceLift = 0.5f;
 
+    [Header("Path trail")]
+    [Tooltip("Line material for the walk-path trail (e.g. PathFlowManager's laser material). Null = no trail drawn.")]
+    public Material trailMaterial;
+    public Color trailColor = new Color(1f, 0.95f, 0.75f, 0.9f);
+    [Range(0.02f, 0.3f)] public float trailWidth = 0.07f;
+
     [Header("Camera focus")]
     [Tooltip("On click, smoothly slide the camera to frame the target cell (keeps its current offset/angle).")]
     public bool  cameraFocus = true;
@@ -64,6 +70,8 @@ public class LevelMapController : MonoBehaviour
     float      _camDepth;      // forward distance from camera to its focus point
     Vector3    _camFocus;      // world point the camera frames
     bool       _camReady;
+
+    LineRenderer _trailLr;   // walk-path preview — shrinks from the start as the pawn walks it off
 
     void Start()
     {
@@ -237,7 +245,9 @@ public class LevelMapController : MonoBehaviour
         if (cellPath != null)
         {
             if (cameraFocus) FocusCameraOn(SurfaceTop(cell));   // frame the destination cell
-            StartCoroutine(WalkCells(cellPath));
+            var pts = BuildWorldPath(cellPath);
+            ShowTrail(pts);
+            StartCoroutine(WalkCells(cellPath, pts));
         }
     }
 
@@ -279,17 +289,14 @@ public class LevelMapController : MonoBehaviour
         return c;
     }
 
-    // Walk the pawn across the given surface cells at constant speed — no easing,
-    // no pause; leftover movement carries across cells so corners don't slow it.
-    IEnumerator WalkCells(List<Vector3Int> cells)
+    // Build world waypoints for a surface-cell path; when two consecutive cells differ
+    // in height, hug the shared edge: go to the boundary, climb up/down the wall, then
+    // onto the next top — so the pawn crawls over edges instead of cutting through air.
+    // Shared by the trail preview (ShowTrail) and the pawn's own walk (WalkCells) so
+    // they always trace the exact same line.
+    List<Vector3> BuildWorldPath(List<Vector3Int> cells)
     {
-        _moving = true;
-
-        // Build world waypoints; when two consecutive cells differ in height, hug
-        // the shared edge: go to the boundary, climb up/down the wall, then onto
-        // the next top — so the pawn crawls over edges instead of cutting through air.
-        var pts = new List<Vector3>();
-        pts.Add(SurfaceTop(cells[0]));
+        var pts = new List<Vector3> { SurfaceTop(cells[0]) };
         for (int i = 1; i < cells.Count; i++)
         {
             Vector3 prevTop = SurfaceTop(cells[i - 1]);
@@ -302,6 +309,14 @@ public class LevelMapController : MonoBehaviour
             }
             pts.Add(curTop);
         }
+        return pts;
+    }
+
+    // Walk the pawn across the given surface cells at constant speed — no easing,
+    // no pause; leftover movement carries across cells so corners don't slow it.
+    IEnumerator WalkCells(List<Vector3Int> cells, List<Vector3> pts)
+    {
+        _moving = true;
 
         if (pawn != null)
         {
@@ -316,10 +331,12 @@ public class LevelMapController : MonoBehaviour
                     if (d <= step) { pawn.position = target; step -= d; idx++; }
                     else           { pawn.position = Vector3.MoveTowards(pawn.position, target, step); break; }
                 }
+                UpdateTrail(pawn.position, idx, pts);   // erase the segment already walked
                 yield return null;
             }
         }
 
+        HideTrail();
         _currentCell = cells[cells.Count - 1];
         _moving      = false;
 
@@ -329,6 +346,72 @@ public class LevelMapController : MonoBehaviour
             _current = n;
             OpenPanel(n);
         }
+    }
+
+    // ── Path trail (LineRenderer) ────────────────────────────────────────────────
+    // Draws the FULL path the moment a destination is clicked, then each frame the
+    // walking coroutine redraws it from the pawn's current position onward — so the
+    // segment already walked visibly erases itself as the pawn crosses it.
+
+    void ShowTrail(List<Vector3> pts)
+    {
+        if (pts == null || pts.Count < 2) return;
+        EnsureTrail();
+        _trailLr.positionCount = pts.Count;
+        for (int i = 0; i < pts.Count; i++) _trailLr.SetPosition(i, pts[i]);
+        _trailLr.enabled = true;
+    }
+
+    void UpdateTrail(Vector3 pawnPos, int idx, List<Vector3> pts)
+    {
+        if (_trailLr == null || !_trailLr.enabled) return;
+        int remaining = Mathf.Max(0, pts.Count - idx);
+        _trailLr.positionCount = remaining + 1;
+        _trailLr.SetPosition(0, pawnPos);
+        for (int i = 0; i < remaining; i++) _trailLr.SetPosition(i + 1, pts[idx + i]);
+    }
+
+    void HideTrail()
+    {
+        if (_trailLr != null) _trailLr.enabled = false;
+    }
+
+    void EnsureTrail()
+    {
+        if (_trailLr != null) return;
+        var go = new GameObject("PawnTrail");
+        go.transform.SetParent(transform, false);
+        _trailLr = go.AddComponent<LineRenderer>();
+        var baseMat = trailMaterial != null ? trailMaterial : GetTrailFallbackMaterial();
+        if (baseMat == null) return;
+        var mat = new Material(baseMat);
+        mat.color = trailColor;   // Sprites/Default (fallback) and most unlit line shaders expose _Color via .color
+        _trailLr.material          = mat;
+        _trailLr.useWorldSpace     = true;
+        _trailLr.positionCount     = 0;
+        _trailLr.startWidth        = trailWidth;
+        _trailLr.endWidth          = trailWidth;
+        _trailLr.numCapVertices    = 6;
+        _trailLr.numCornerVertices = 6;
+        _trailLr.textureMode       = LineTextureMode.Tile;
+    }
+
+    // Lazy-built fallback so the trail draws even if `trailMaterial` isn't wired up in
+    // the Inspector — same "runtime fallback" convention as EnemyBaseManager's outline
+    // material. Assign trailMaterial (e.g. PathFlowManager's laser material) for a
+    // nicer look; this just guarantees SOMETHING renders out of the box.
+    static Material _trailFallbackMat;
+    static Material GetTrailFallbackMaterial()
+    {
+        if (_trailFallbackMat != null) return _trailFallbackMat;
+        var sh = Shader.Find("Sprites/Default") ?? Shader.Find("Unlit/Color");
+        if (sh == null)
+        {
+            Debug.LogWarning("[LevelMap] No trailMaterial assigned and no fallback shader found — path trail won't draw.");
+            return null;
+        }
+        _trailFallbackMat = new Material(sh) { name = "PawnTrail_Fallback" };
+        return _trailFallbackMat;
     }
 
     Vector3 SurfaceTop(Vector3Int c)
