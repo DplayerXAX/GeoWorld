@@ -32,6 +32,9 @@ Shader "Custom/ManifoldSkybox"
         _CombatMode    ("Combat Mode",    Range(0,1)) = 0
         // Level-clear reaction (0=normal, 1=ordered crystalline geometry) — driven by BackgroundReactor
         _ClearReact    ("Clear Reaction", Range(0,1)) = 0
+        // Kill reaction: briefly YANKS combat mode back toward calm on each enemy kill
+        // (opposite direction of the damage tint) — driven by BackgroundReactor
+        _KillReact     ("Kill Reaction",  Range(0,1)) = 0
 
         // Intro reveal: 0 = flat _IntroColor, 1 = full sky. Driven by IntroDirector.
         _IntroBlend    ("Intro Blend",    Range(0,1)) = 1
@@ -57,6 +60,7 @@ Shader "Custom/ManifoldSkybox"
             float _BeatPulse, _MusicIntensity, _ColorShift, _TypeHue, _PitchGlow;
             float _CombatMode;
             float _ClearReact;
+            float _KillReact;
             float _DamageTint;
             half4 _FlashColor;
             float _FlashAmount;
@@ -290,7 +294,11 @@ Shader "Custom/ManifoldSkybox"
             half4 frag(Varyings IN) : SV_Target
             {
                 float3 dir = normalize(IN.dir);
-                float  cm  = _CombatMode;   // 0 = calm build, 1 = intense combat
+                // 0 = calm build, 1 = intense combat. _KillReact yanks this back toward 0
+                // for an instant on every kill — the mirror of _DamageTint's push toward
+                // red/chaos on damage taken — so the fold/gradient/beat boosts below all
+                // relax together instead of needing separate per-term overrides.
+                float  cm  = saturate(_CombatMode - _KillReact);
 
                 // ── Geometric IFS fold (combat warp) ───────────────────────────
                 // Each iteration: abs-mirror the direction, sort axes (octahedral

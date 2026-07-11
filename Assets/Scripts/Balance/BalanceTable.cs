@@ -180,6 +180,9 @@ public class BalanceTable : ScriptableObject
     [Tooltip("Allow buying an entry whose cost slightly exceeds remaining budget. 1.0 = strict, 1.5 = up to 50% overshoot.")]
     [Range(1f, 2f)] public float waveAffordSlack = 1.2f;
 
+    [Tooltip("Extra enemy HP per round, ADDITIVE (not compounding) — e.g. 0.2 means R0 enemies are ×1.0, R1 ×1.2, R5 ×2.0. Applied on top of each EnemyRecord.maxHealth at spawn.")]
+    public float enemyHealthGrowthPerRound = 0.2f;
+
     // ═══════════════════════════════════════════════════════════════════════
     // 5. TURRET STATS
     // ═══════════════════════════════════════════════════════════════════════
@@ -311,6 +314,9 @@ public class BalanceTable : ScriptableObject
         float raw = waveBaseBudget + waveBudgetGrowth * Mathf.Max(0, round);
         return Mathf.Min(raw, waveBudgetMax);
     }
+
+    /// <summary>Additive (non-compounding) HP multiplier for the given round: R0 = 1.0, R1 = 1+growth, R2 = 1+2*growth, …</summary>
+    public float GetEnemyHealthMultiplier(int round) => 1f + Mathf.Max(0, round) * enemyHealthGrowthPerRound;
 
     /// <summary>Turret stat record for a given mode. Returns basicTurret for unknown modes.</summary>
     public TurretRecord GetTurretStats(TurretController.Mode mode) => mode switch

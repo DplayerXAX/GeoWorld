@@ -10,7 +10,7 @@
     "Type": "User",
     "GUID": "{FBAC0406-FA36-4CC0-8121-80F7B6376C7E}",
     "Language": "SFX",
-    "Hash": "{ABB1E1D9-AE4D-EE21-8AA6-9ACC7AE7C967}",
+    "Hash": "{1EDF29D6-776B-2B4B-95B2-729A8A1956DE}",
     "ObjectPath": "\\SoundBanks\\Default Work Unit\\GeoWorld_bank",
     "ShortName": "GeoWorld_bank",
     "Path": "GeoWorld_bank.bnk",
@@ -46,6 +46,14 @@
       "Location": "Memory",
       "ShortName": "Geo world\\Originals\\SFX\\geo fight.wav",
       "CachePath": "D3/{D3EE669F-CD4E-7327-6AA9-D72D108B615F}.wem"
+     },
+     {
+      "Id": "104523021",
+      "Language": "SFX",
+      "Streaming": "false",
+      "Location": "Memory",
+      "ShortName": "Geo world\\Originals\\SFX\\freesound_community-medium-text-blip-14855.wav",
+      "CachePath": "AF/{AFBBD0F8-9787-F038-A381-B14221E65A64}.wem"
      },
      {
       "Id": "135888558",
@@ -112,6 +120,14 @@
       "CachePath": "7A/{7A4C3AA1-D3E7-65B5-BCA8-ADF61F0AA6F5}.wem"
      },
      {
+      "Id": "349089346",
+      "Language": "SFX",
+      "Streaming": "false",
+      "Location": "Memory",
+      "ShortName": "Geo world\\Originals\\SFX\\shop open.wav",
+      "CachePath": "0D/{0DF2EE97-5D8F-018A-E60D-080756789142}.wem"
+     },
+     {
       "Id": "397057705",
       "Language": "SFX",
       "Streaming": "false",
@@ -136,6 +152,14 @@
       "CachePath": "3B/{3BA3F625-0E4B-99CD-B686-D30C81E1F10A}.wem"
      },
      {
+      "Id": "519444923",
+      "Language": "SFX",
+      "Streaming": "false",
+      "Location": "Memory",
+      "ShortName": "Geo world\\Originals\\SFX\\shop close.wav",
+      "CachePath": "72/{72206AC2-7510-60C2-3E98-90DDAB59A817}.wem"
+     },
+     {
       "Id": "529299935",
       "Language": "SFX",
       "Streaming": "false",
@@ -150,6 +174,14 @@
       "Location": "Memory",
       "ShortName": "Geo world\\Originals\\SFX\\完璧.wav",
       "CachePath": "3B/{3B77E4F8-81DB-8B8A-6735-C4CB80FC8E9C}.wem"
+     },
+     {
+      "Id": "574625576",
+      "Language": "SFX",
+      "Streaming": "false",
+      "Location": "Memory",
+      "ShortName": "Geo world\\Originals\\SFX\\select.wav",
+      "CachePath": "9D/{9D399CF8-EE15-22F5-5126-1EAACF32A447}.wem"
      },
      {
       "Id": "633751974",
@@ -348,8 +380,8 @@
       "ObjectPath": "\\Events\\Default Work Unit\\fight_start",
       "GUID": "{ECE38540-761C-4C47-94DE-38127713B664}",
       "DurationType": "OneShot",
-      "DurationMin": "2",
-      "DurationMax": "2",
+      "DurationMin": "2.125",
+      "DurationMax": "2.125",
       "MediaRefs": [
        {
         "Id": "480639662"
@@ -509,6 +541,62 @@
       ]
      },
      {
+      "Id": "1432588725",
+      "Name": "Select",
+      "ObjectPath": "\\Events\\Default Work Unit\\Select",
+      "GUID": "{1B5B7CDE-BAF8-4611-AAA9-532EB27502B4}",
+      "DurationType": "OneShot",
+      "DurationMin": "1.2277551",
+      "DurationMax": "1.2277551",
+      "MediaRefs": [
+       {
+        "Id": "574625576"
+       }
+      ]
+     },
+     {
+      "Id": "2506379688",
+      "Name": "Shop_close",
+      "ObjectPath": "\\Events\\Default Work Unit\\Shop_close",
+      "GUID": "{A67B7153-8708-4B2D-8F3D-CB7944250760}",
+      "DurationType": "OneShot",
+      "DurationMin": "1.2277551",
+      "DurationMax": "1.2277551",
+      "MediaRefs": [
+       {
+        "Id": "519444923"
+       }
+      ]
+     },
+     {
+      "Id": "839522188",
+      "Name": "Shop_open",
+      "ObjectPath": "\\Events\\Default Work Unit\\Shop_open",
+      "GUID": "{D8D4E37E-6751-48CA-9E5B-ADE35555A299}",
+      "DurationType": "OneShot",
+      "DurationMin": "1.5412245",
+      "DurationMax": "1.5412245",
+      "MediaRefs": [
+       {
+        "Id": "349089346"
+       }
+      ]
+     },
+     {
+      "Id": "1387752797",
+      "Name": "TextBlip",
+      "ObjectPath": "\\Events\\Default Work Unit\\TextBlip",
+      "GUID": "{DA006521-4F4D-4E2A-9B6E-AF0402E7BF32}",
+      "DurationType": "OneShot",
+      "DurationMin": "8.832",
+      "DurationMax": "8.832",
+      "MediaRefs": [
+       {
+        "Id": "104523021"
+       }
+      ]
+     },
+     {
       "Id": "3258153068",
       "Name": "TimeDrain",
       "ObjectPath": "\\Events\\Default Work Unit\\TimeDrain",
@@ -620,6 +708,6 @@
     ]
    }
   ],
-  "FileHash": "{B3F3D9BC-9BD6-9427-4E95-57BF0D62E258}"
+  "FileHash": "{AC2F1645-9D84-2210-BD54-C39085F2C1FE}"
  }
 }

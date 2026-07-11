@@ -156,6 +156,14 @@ public class TutorialStep
     [Tooltip("Hide & disable this step during combat (Running phase): its dialogue/hint hides, gating lifts, and it won't advance until combat ends.")]
     public bool hideInCombat = false;
 
+    [Header("Wave gating")]
+    [Tooltip("If > 0, this step won't begin (ghost/camera/dialogue/hint) until GameFlowManager.UpcomingWaveNumber reaches this value — i.e. the player has already cleared enough earlier waves. 0 = no gate, step begins as soon as the previous one completes.")]
+    [Min(0)] public int requiredWave = 0;
+
+    [Header("Unlocked operations")]
+    [Tooltip("Once the player reaches this step, these operations become permanently allowed from then on — even once a LATER step is current and teaching something else. Unlike freeOperations (which lifts ALL gating for one step), this only unlocks the listed ops, and they stay unlocked for the rest of the tutorial. E.g. put Sell here once you've taught it, so it stays usable even while a later step is teaching Upgrade.")]
+    public TutorialStepKind[] unlocksOps;
+
     [Header("Camera")]
     [Tooltip("When the step begins, glide the camera to focus on the start or end point. None = leave the camera where it is.")]
     public TutorialFocus cameraFocus = TutorialFocus.None;

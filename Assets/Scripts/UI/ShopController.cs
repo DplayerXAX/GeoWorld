@@ -227,6 +227,7 @@ public class ShopController : MonoBehaviour
     ShopItem _hovered;
 
     bool    _expanded;
+    bool    _prevExpanded;      // last frame's _expanded, for edge-detecting the open/close SFX
     float   _riftScale;         // current animated scale
     float   _riftTarget;        // target scale
     float   _expandT;           // 0=fully collapsed, 1=fully expanded (lerp'd alongside scale)
@@ -490,6 +491,15 @@ public class ShopController : MonoBehaviour
 
     void AnimateRift()
     {
+        // _expanded can flip from several call sites (toggle key, Collapse(), grab-purchase,
+        // RestoreItem, combat start/end) — edge-detect here once per frame rather than
+        // hooking every setter, so the SFX always matches what actually changed.
+        if (_expanded != _prevExpanded)
+        {
+            AudioManager.Instance?.PlayShopToggle(_expanded);
+            _prevExpanded = _expanded;
+        }
+
         // Shop can open during combat too (buy / place new pieces), so no combat gate.
         _riftTarget = letterbox ? (_expanded ? 1f : 0f)        // bars: fully out / fully hidden
                                 : (_expanded ? 0.6f : riftHintScale);

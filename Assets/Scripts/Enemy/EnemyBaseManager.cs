@@ -292,7 +292,12 @@ public class EnemyBaseManager : MonoBehaviour
         var record = LookupBalanceRecord(source);
         if (record != null)
         {
-            enemy.SetMaxHealth(record.maxHealth);
+            // Additive (not compounding) per-round HP growth — R0 ×1.0, R1 ×1.2, R5 ×2.0 —
+            // so late waves don't explode exponentially the way ×1.2^round would.
+            float hpMult = balance != null && GameFlowManager.Instance != null
+                ? balance.GetEnemyHealthMultiplier(GameFlowManager.Instance.RoundIndex)
+                : 1f;
+            enemy.SetMaxHealth(Mathf.Max(1, Mathf.RoundToInt(record.maxHealth * hpMult)));
             enemy.rewardOnKill = record.rewardOnKill;
             enemy.baseSpeedMultiplier = Mathf.Max(0.01f, record.speedMultiplier);
             enemy.targetPriority      = record.targetPriority;
@@ -420,6 +425,7 @@ public class EnemyBaseManager : MonoBehaviour
             CurrencyFlyFx.Fly(enemy.transform.position, isTurret: false, enemy.rewardOnKill);
         }
 
+        ComboManager.RegisterKill();
         RemoveEnemy(enemy, destroy: true);
     }
 
