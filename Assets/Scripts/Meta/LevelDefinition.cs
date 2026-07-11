@@ -72,6 +72,7 @@ public enum ObjectiveType
     LimitLeaks,         // let AT MOST `target` enemies reach the end (fails if exceeded)
     KeepLivesAtLeast,   // finish with AT LEAST `target` lives
     BuildPathLength,    // build an enemy path of AT LEAST `target` faces long (each block face = 1)
+    UpgradeTurretToLevel, // upgrade any turret branch to AT LEAST `target`
 }
 
 [System.Serializable]
@@ -94,6 +95,7 @@ public class LevelObjective
         ObjectiveType.LimitLeaks        => $"Let through at most {target}",
         ObjectiveType.KeepLivesAtLeast  => $"Finish with {target}+ lives",
         ObjectiveType.BuildPathLength   => $"Build a path {target}+ long",
+        ObjectiveType.UpgradeTurretToLevel => $"Upgrade a turret to level {target}",
         _                               => "",
     };
 

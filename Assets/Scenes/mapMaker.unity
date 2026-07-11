@@ -1297,7 +1297,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::LevelMapAuthor
   database: {fileID: 11400000, guid: 5fec9a2db26ea9f4d9c19242de8a9162, type: 2}
-  mapName: level_1
+  mapName: Select
 --- !u!4 &604723794
 Transform:
   m_ObjectHideFlags: 0

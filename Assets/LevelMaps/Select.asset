@@ -66,10 +66,10 @@ MonoBehaviour:
       - {x: 2, y: 2, z: 6}
       - {x: 2, y: 2, z: 5}
       - {x: 1, y: 2, z: 5}
-      color: {r: 0.4784314, g: 0.4784314, b: 0.4784314, a: 1}
+      color: {r: 0, g: 1, b: 0.06497669, a: 1}
       blockTypeName: Shadow
-      levelId: 
-      isStart: 0
+      levelId: 1-2
+      isStart: 1
       blockAssetName: 
       rotation: {x: 0, y: 0, z: 0, w: 1}
       synergyColor: 0

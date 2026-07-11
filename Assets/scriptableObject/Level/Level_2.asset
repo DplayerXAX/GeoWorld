@@ -1,0 +1,56 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 83c315048f6cbe6419d5516add01351e, type: 3}
+  m_Name: Level_2
+  m_EditorClassIdentifier: Assembly-CSharp::LevelDefinition
+  levelId: 1-2
+  displayName: 1-2
+  description: 
+  runSeed: 0
+  blocksPerTurn: 8
+  turretsPerTurn: 3
+  waves:
+  - {fileID: 0}
+  - {fileID: 0}
+  - {fileID: 0}
+  - {fileID: 0}
+  - {fileID: 0}
+  - {fileID: 0}
+  - {fileID: 0}
+  - {fileID: 0}
+  - {fileID: 0}
+  - {fileID: 0}
+  wavesToClear: 5
+  objectives:
+  - type: 0
+    target: 8
+    description: 
+    optional: 0
+  - type: 8
+    target: 3
+    description: 
+    optional: 0
+  - type: 5
+    target: 3
+    description: 
+    optional: 0
+  requireAllObjectives: 1
+  clearOnObjectivesComplete: 0
+  unlockedByDefault: 1
+  unlocks: []
+  techReward: 1
+  isTutorial: 0
+  fixedEndpoints: 0
+  startCell: {x: 0, y: 0, z: 0}
+  endCell: {x: 0, y: 0, z: 0}
+  tutorialSteps: []
+  startingLayout: {fileID: 11400000, guid: 38871691a215fd945ae711b604b680e6, type: 2}
