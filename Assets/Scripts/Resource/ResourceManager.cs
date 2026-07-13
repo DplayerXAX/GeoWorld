@@ -295,6 +295,17 @@ public class ResourceManager : MonoBehaviour
         OnBlockCurrencyChanged?.Invoke(_blockCurrency);
     }
 
+    /// <summary>Subtracts <paramref name="amount"/> from block currency, clamped at 0.
+    /// Unlike TryBuy this is a PENALTY, not a purchase — it always succeeds (no
+    /// insufficient-funds gate, no OnInsufficientFunds). Used by level hazards
+    /// (e.g. Chaos Block) that tax the player rather than sell them something.</summary>
+    public void DrainBlockCurrency(int amount)
+    {
+        if (amount <= 0) return;
+        _blockCurrency = Mathf.Max(0, _blockCurrency - amount);
+        OnBlockCurrencyChanged?.Invoke(_blockCurrency);
+    }
+
     // ── Battle-system API (other team calls these) ────────────────────────────
     /// <summary>Call each time an enemy walks over a block. Earns turret currency per BalanceTable.turretPerPassedBlock (default 1).</summary>
     public void OnEnemyPassedBlock(BlockType blockType)

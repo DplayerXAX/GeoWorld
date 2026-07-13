@@ -63,6 +63,12 @@ public class AbundanceVisualizer : SynergyVisualizer
     [Tooltip("How far flowers scatter across a cell's top face, in cell-size units.")]
     public float scatterRadius = 0.26f;
 
+    [Tooltip("Stalk height the flower head rides on, in cell-size units. Raises the whole field so it reads taller and clears the block face. 0 = flowers sit flat on the face.")]
+    [Range(0f, 1f)] public float stemHeight = 0.18f;
+
+    [Tooltip("Stalk color (the green stem under each flower head).")]
+    public Color stemColor = new Color(0.20f, 0.42f, 0.16f, 1f);
+
     [Header("Bloom timing")]
     [Tooltip("Seconds for one flower to pop open.")]
     public float bloomDuration = 0.45f;
@@ -216,6 +222,8 @@ public class AbundanceVisualizer : SynergyVisualizer
         patch.bobAmplitude   = bobAmplitude * cs;
         patch.bobSpeed       = bobSpeed;
         patch.witherDuration = witherDuration;
+        patch.stemHeight     = stemHeight * cs;
+        patch.stemColor      = stemColor;
 
         patch.Grow(tops.ToArray(), target.palette, target.center,
                    flowersPerCell, flowerSize * cs, scatterRadius * cs, maxFlowersPerPatch);

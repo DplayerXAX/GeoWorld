@@ -54,6 +54,16 @@ public class HarmonyVineVisualizer : SynergyVisualizer
     [Tooltip("Multiplies the prefab's per-segment length (>1 = longer branches). 1 = unchanged.")]
     public float lengthScale = 1f;
 
+    [Header("Lushness")]
+    [Tooltip("Leaves per vine node. 0 = keep the prefab's own value. Higher = denser canopy.")]
+    [Range(0, 8)] public int leafDensity = 5;
+
+    [Tooltip("Multiplies the prefab's leaf size range (>1 = bigger foliage).")]
+    public float leafSizeMul = 1.2f;
+
+    [Tooltip("Sprout outward vines from the block's top EDGE (on the side facing away from the cluster) instead of the top-face center, and keep coils below the top rim — so foliage frames the block without covering the walkable top face.")]
+    public bool keepOffTopFaces = true;
+
     [Header("Branch style mix")]
     [Tooltip("Fraction of vines that COIL up around their block (helix) instead of branching outward. 0 = all outward, 1 = all coil, ~0.4 = a mix. Hashed per block so each block keeps its style across reconciles.")]
     [Range(0f, 1f)] public float coilChance = 0.4f;
@@ -234,8 +244,37 @@ public class HarmonyVineVisualizer : SynergyVisualizer
         var ins = grid.GetInstanceAt(piece.cells[0]);
         if (ins == null || ins.visualObject == null) return;
 
-        Vector3 origin  = ComputeVineOrigin(piece, ins, grid);
-        Vector3 outward = origin - target.center;   // points away from the cluster; VineEffect flattens to horizontal
+        Vector3 pieceCenter = ComputePieceCenter(piece, ins, grid);
+        Vector3 outward     = pieceCenter - target.center;   // points away from the cluster; VineEffect flattens to horizontal
+
+        // Sprout point: top-face center by default; with keepOffTopFaces, bias it
+        // toward the outward side of the TOP FACE (but stay well inside the visible
+        // mesh — only ~half-way to the grid edge, since the cartoon block is inset
+        // from its cell boundary and sprouting at the true edge leaves a gap in the
+        // bevel). The branch itself then leans outward, so foliage still frames the
+        // block without the trunk detaching from it.
+        Vector3 origin;
+        if (keepOffTopFaces)
+        {
+            ComputeBlockBounds(piece, grid, out Vector3 bc, out float bhX, out float bhZ, out float bCell);
+            Vector3 dir = new Vector3(outward.x, 0f, outward.z);
+            if (dir.sqrMagnitude < 1e-4f)
+            {
+                float a = Hash01(pieceId * 379 + 11) * Mathf.PI * 2f;
+                dir = new Vector3(Mathf.Cos(a), 0f, Mathf.Sin(a));
+            }
+            dir.Normalize();
+            float tx = bhX / Mathf.Max(1e-4f, Mathf.Abs(dir.x));
+            float tz = bhZ / Mathf.Max(1e-4f, Mathf.Abs(dir.z));
+            float border = Mathf.Min(tx, tz);
+            origin = new Vector3(bc.x, pieceCenter.y, bc.z)
+                   + dir * (border * 0.5f)                 // half-way to the edge → still on the visible top
+                   + Vector3.up * (bCell * 0.5f);          // sit right on the top face
+        }
+        else
+        {
+            origin = pieceCenter + Vector3.up * (grid.cellSize * 0.5f);
+        }
 
         GameObject vine = Instantiate(vinePrefab, origin, Quaternion.identity, ins.visualObject.transform);
         _vines[pieceId] = vine;
@@ -247,6 +286,11 @@ public class HarmonyVineVisualizer : SynergyVisualizer
                 fx.segments = Mathf.Max(2, fx.segments + extraSegments);
             if (!Mathf.Approximately(lengthScale, 1f))
                 fx.segmentLength *= Mathf.Max(0.05f, lengthScale);
+
+            // Lushness: denser + bigger foliage than the prefab authored.
+            if (leafDensity > 0) fx.leavesPerNode = leafDensity;
+            if (!Mathf.Approximately(leafSizeMul, 1f))
+                fx.leafSize *= Mathf.Max(0.1f, leafSizeMul);
 
             // Per-block deterministic style: some vines coil up around the block,
             // the rest branch outward. Hashed by pieceId so a given block keeps
@@ -260,7 +304,10 @@ public class HarmonyVineVisualizer : SynergyVisualizer
                 fx.coilHalfZ      = hZ * Mathf.Max(0.1f, coilRadiusMul);
                 fx.coilSurfaceGap = cell * Mathf.Max(0f, coilSurfaceGap);
                 fx.coilTurns      = coilTurns;
-                fx.coilHeight     = cell * Mathf.Max(0.1f, coilHeightMul);
+                // Coil tops out at +0.55×coilHeight above the block center — cap it
+                // below the top rim (+0.5×cell) when the top face must stay clear.
+                float heightMul   = keepOffTopFaces ? Mathf.Min(coilHeightMul, 0.88f) : coilHeightMul;
+                fx.coilHeight     = cell * Mathf.Max(0.1f, heightMul);
                 fx.Grow(target.rootColor, target.tipColor, outward, vinePrefab, bCenter);
             }
             else
@@ -306,15 +353,14 @@ public class HarmonyVineVisualizer : SynergyVisualizer
         halfZ = (mx.z - mn.z) * 0.5f + cell * 0.5f;
     }
 
-    // Top-center of the piece's footprint, so the branch sprouts from the top
-    // face. Works for single- and multi-cell pieces.
-    private static Vector3 ComputeVineOrigin(PlacedPiece piece, PlacedBlockInstance ins, GridSystem grid)
+    // Center of the piece's footprint (cell-average). Works for single- and
+    // multi-cell pieces; SpawnVine derives the actual sprout point from this.
+    private static Vector3 ComputePieceCenter(PlacedPiece piece, PlacedBlockInstance ins, GridSystem grid)
     {
         Vector3 sum = Vector3.zero;
         int n = 0;
         for (int i = 0; i < piece.cells.Length; i++) { sum += grid.GridToWorld(piece.cells[i]); n++; }
-        Vector3 center = n > 0 ? sum / n : ins.visualObject.transform.position;
-        return center + Vector3.up * (grid.cellSize * 0.5f);
+        return n > 0 ? sum / n : ins.visualObject.transform.position;
     }
 
     // World center of every claimed cell in the cluster. Each vine leans away

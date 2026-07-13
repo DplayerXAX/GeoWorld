@@ -21,4 +21,7 @@ MonoBehaviour:
   flavorText: 
   minSide: 2
   maxSide: 4
-  perTierEffects: []
+  perTierEffects:
+  - {fileID: 11400000, guid: 5e8a3b7c1d4f4e6a9b0c2d3e4f5a6b7c, type: 2}
+  - {fileID: 11400000, guid: 6f9b4c8d2e5a4f7b0c1d3e4f5a6b7c8d, type: 2}
+  - {fileID: 11400000, guid: 7a0c5d9e3f6b4a8c1d2e3f4a5b6c7d8e, type: 2}

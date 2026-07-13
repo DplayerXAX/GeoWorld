@@ -1,4 +1,5 @@
 using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
 
 // One procedurally-grown branch/vine, drawn with a LineRenderer, with optional
@@ -32,6 +33,12 @@ public class VineEffect : MonoBehaviour
 
     [Tooltip("Extra outward drift added per node, for a curving-outward feel.")]
     public float outwardDrift = 0.04f;
+
+    [Tooltip("Downward bend accumulated per node — branches arc UP then DROOP at the tips, the single biggest 'real branch / climbing vine' cue. 0 = straight, ~0.25 = a gentle weeping arc.")]
+    public float gravityDroop = 0.22f;
+
+    [Tooltip("Winding curl: degrees each node twists around the growth axis, alternating — gives climbing-vine sinuousness instead of a straight shoot.")]
+    public float curlPerNodeDeg = 14f;
 
     [Header("Forking")]
     [Tooltip("Sprout recursive sub-branches while growing.")]
@@ -95,13 +102,25 @@ public class VineEffect : MonoBehaviour
     [Tooltip("Sprout green leaves along the vine as it grows.")]
     public bool enableLeaves = true;
     [Tooltip("How many leaves to try sprouting at each node.")]
-    [Range(0, 4)] public int leavesPerNode = 4;
+    [Range(0, 8)] public int leavesPerNode = 4;
+    [Tooltip("Extra leaves massed at each branch TIP (a canopy tuft), so foliage clusters at the ends like a real bush instead of spreading evenly. 0 = off.")]
+    [Range(0, 12)] public int tipCanopyLeaves = 6;
     [Tooltip("Leaf size range (world units, base→tip of one leaf).")]
     public Vector2 leafSize = new Vector2(0.09f, 0.17f);
     public Color leafColor    = new Color(0.27f, 0.62f, 0.20f);   // deep leaf green
     public Color leafTipColor = new Color(0.55f, 0.86f, 0.35f);   // bright new-growth green
     [Tooltip("Seconds for one leaf to scale in.")]
     public float leafGrowDuration = 0.18f;
+
+    [Header("Blossoms")]
+    [Tooltip("Sprinkle small pale blossoms among the leaves for a lush flowering-vine look.")]
+    public bool enableBlossoms = true;
+    [Range(0f, 1f)]
+    [Tooltip("Chance per node to add a blossom.")]
+    public float blossomChance = 0.22f;
+    public Color blossomColor = new Color(0.95f, 0.92f, 0.72f);   // pale cream blossom
+    [Tooltip("Blossom size (world units).")]
+    public float blossomSize = 0.06f;
 
     [Header("Timing")]
     [Tooltip("Seconds to extend ONE segment. Total grow time ~ this x (segments - 1). Smaller = faster.")]
@@ -113,9 +132,9 @@ public class VineEffect : MonoBehaviour
     private static readonly int BaseColorID = Shader.PropertyToID("_BaseColor");
     private static readonly int ColorID     = Shader.PropertyToID("_Color");
     private static MaterialPropertyBlock _mpb;
-    private static Material _lineMat;   // shared vertex-color material for all vines/forks
-    private static Material _leafMat;   // shared vertex-color material for leaves
-    private static Mesh     _leafMesh;  // shared leaf quad (pointed, vertex-coloured)
+    private static Material _lineMat;     // shared vertex-color material for all vines/forks
+    private static Material _leafMat;     // shared vertex-color material for leaves
+    private static Mesh[]   _leafMeshes;  // shared leaf quads in 3 green tones (deep / mid / bright)
 
     private LineRenderer _line;
     private Coroutine    _routine;
@@ -293,17 +312,30 @@ public class VineEffect : MonoBehaviour
         Vector3 driftDir = new Vector3(mainDir.x, 0f, mainDir.z);
         if (driftDir.sqrMagnitude > 1e-4f) driftDir.Normalize();
 
-        Vector3 current = startPos;
+        // growDir evolves node-to-node: winding curl (alternating twist around the
+        // vertical) + accumulating gravity droop, so the branch arcs up then weeps
+        // down at the tip — the core "living branch / climbing vine" read.
+        Vector3 growDir  = mainDir;
+        Vector3 lastNode = startPos;
+        Vector3 current  = startPos;
         for (int i = 1; i < segs; i++)
         {
+            // Curl: twist the horizontal heading a little, alternating each node.
+            if (curlPerNodeDeg > 0.01f)
+            {
+                float sign = (i & 1) == 0 ? 1f : -1f;
+                growDir = Quaternion.AngleAxis(curlPerNodeDeg * sign, Vector3.up) * growDir;
+            }
+            // Gravity: bend the heading downward, more toward the tip (weeping arc).
+            growDir = (growDir + Vector3.down * (gravityDroop * (i / (float)segs))).normalized;
+
             Vector3 noise = new Vector3(
                 Random.Range(-randomness, randomness),
                 Random.Range(-randomness, randomness),
                 Random.Range(-randomness, randomness));
 
-            // Curve a little more outward each node for a spreading-out feel.
             Vector3 next = current
-                         + mainDir  * (segmentLength * lengthScale)
+                         + growDir  * (segmentLength * lengthScale)
                          + driftDir * (outwardDrift * i * lengthScale)
                          + noise    * lengthScale;
 
@@ -318,9 +350,11 @@ public class VineEffect : MonoBehaviour
                 yield return null;
             }
             _line.SetPosition(i, next);
-            current = next;
+            lastNode = current;
+            current  = next;
 
-            if (enableLeaves) SpawnLeavesAt(next, mainDir, lengthScale);
+            if (enableLeaves) SpawnLeavesAt(next, growDir, lengthScale);
+            if (enableBlossoms && Random.value < blossomChance) SpawnBlossomAt(next, lengthScale);
 
             // Maybe sprout a fork at this node (not at the very base or tip).
             if (enableForking && _prefab != null
@@ -328,12 +362,30 @@ public class VineEffect : MonoBehaviour
                 && i >= 1 && i <= segs - 2
                 && Random.value < forkProbability)
             {
-                SpawnFork(rootColor, tipColor, next, mainDir, depth);
+                SpawnFork(rootColor, tipColor, next, growDir, depth);
                 _forks++;
             }
         }
 
+        // Tip canopy: mass a tuft of leaves (+ a blossom) at the branch end, so
+        // foliage clusters at the tips the way a real bush's does.
+        if (enableLeaves && tipCanopyLeaves > 0)
+        {
+            Vector3 tipDir = (current - lastNode).sqrMagnitude > 1e-5f ? (current - lastNode).normalized : growDir;
+            for (int k = 0; k < tipCanopyLeaves; k++)
+                SpawnLeaf(current, Quaternion.AngleAxis(k * 360f / tipCanopyLeaves, tipDir) * Perpendicular(tipDir),
+                          lengthScale * 1.05f);
+            if (enableBlossoms) SpawnBlossomAt(current, lengthScale * 1.1f);
+        }
+
         _routine = null;
+    }
+
+    private static Vector3 Perpendicular(Vector3 v)
+    {
+        Vector3 p = Vector3.Cross(v, Vector3.up);
+        if (p.sqrMagnitude < 1e-4f) p = Vector3.right;
+        return p.normalized;
     }
 
     private void SpawnFork(Color rootColor, Color tipColor, Vector3 atPos, Vector3 parentDir, int depth)
@@ -425,10 +477,58 @@ public class VineEffect : MonoBehaviour
             _line.SetPosition(i, next);
             prev = next;
 
-            if (enableLeaves) SpawnLeavesAt(next, (next - _coilCenter).normalized, 1f);
+            // Coil leaves lie FLAT against the block face (leaf plane ⟂ the outward
+            // normal), so the climbing vine stays glued to the surface and doesn't
+            // poke leaves out into open space.
+            if (enableLeaves)
+            {
+                Vector3 outward = new Vector3(next.x - _coilCenter.x, 0f, next.z - _coilCenter.z);
+                if (outward.sqrMagnitude < 1e-5f) outward = Vector3.up;
+                SpawnSurfaceLeavesAt(next, outward.normalized, 0.85f);
+            }
         }
 
         _routine = null;
+    }
+
+    // Leaves pressed FLAT onto a surface whose outward normal is `normal` — used
+    // by the coil (climbing-vine) mode. Each leaf lies in the face's tangent
+    // plane, pointing in a random tangential direction with a tiny outward tilt,
+    // so foliage spreads ACROSS the block face instead of standing off it.
+    private void SpawnSurfaceLeavesAt(Vector3 pos, Vector3 normal, float sizeScale)
+    {
+        if (leavesPerNode <= 0) return;
+        if (normal.sqrMagnitude < 1e-4f) normal = Vector3.up;
+        normal = normal.normalized;
+
+        // A stable up-ish tangent (project world up into the face plane).
+        Vector3 tan = Vector3.up - normal * Vector3.Dot(Vector3.up, normal);
+        if (tan.sqrMagnitude < 1e-4f) tan = Vector3.Cross(normal, Vector3.right);
+        tan.Normalize();
+
+        for (int k = 0; k < leavesPerNode; k++)
+        {
+            var go = new GameObject("VineLeaf");
+            go.transform.SetParent(transform, false);
+            go.transform.position = pos;
+
+            go.AddComponent<MeshFilter>().sharedMesh = GetLeafMeshVariant(leafColor, leafTipColor, Random.Range(0, 3));
+            var mr = go.AddComponent<MeshRenderer>();
+            mr.sharedMaterial    = GetLeafMaterial();
+            mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            mr.receiveShadows    = false;
+
+            // Leaf lies in the tangent plane: local +Z = outward normal (small tilt
+            // so it isn't perfectly flush), local +Y spins around the normal so
+            // leaves fan across the surface.
+            float roll  = Random.Range(0f, 360f);
+            Vector3 leafUp = Quaternion.AngleAxis(roll, normal) * tan;
+            Vector3 fwd    = (normal + leafUp * 0.15f).normalized;   // tiny lift off the face
+            go.transform.rotation = Quaternion.LookRotation(fwd, leafUp);
+
+            float target = Random.Range(leafSize.x, leafSize.y) * Mathf.Max(0.4f, sizeScale);
+            StartCoroutine(LeafGrow(go.transform, target));
+        }
     }
 
     // ── Leaves ───────────────────────────────────────────────────────────────
@@ -440,32 +540,60 @@ public class VineEffect : MonoBehaviour
         if (growthDir.sqrMagnitude < 1e-4f) growthDir = Vector3.up;
         growthDir = growthDir.normalized;
 
+        Vector3 side = Vector3.Cross(growthDir, Vector3.up);
+        if (side.sqrMagnitude < 1e-4f) side = Vector3.right;
+        side.Normalize();
+
         for (int k = 0; k < leavesPerNode; k++)
         {
-            var go = new GameObject("VineLeaf");
-            go.transform.SetParent(transform, false);
-            go.transform.position = pos;
-
-            var mf = go.AddComponent<MeshFilter>();
-            mf.sharedMesh = GetLeafMesh(leafColor, leafTipColor);
-            var mr = go.AddComponent<MeshRenderer>();
-            mr.sharedMaterial    = GetLeafMaterial();
-            mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-            mr.receiveShadows    = false;
-
-            // Fan out around the growth axis, tilt up + outward, random roll.
-            Vector3 side = Vector3.Cross(growthDir, Vector3.up);
-            if (side.sqrMagnitude < 1e-4f) side = Vector3.right;
-            side.Normalize();
             float fan = (k / Mathf.Max(1f, leavesPerNode - 1f) - 0.5f) * 2f;   // -1..1
             Vector3 outDir = Quaternion.AngleAxis(fan * 55f + Random.Range(-20f, 20f), growthDir) * side;
-            Vector3 up     = (outDir + Vector3.up * 0.6f + growthDir * 0.3f).normalized;
-            go.transform.rotation = Quaternion.LookRotation(Random.onUnitSphere * 0.2f + outDir, up)
-                                  * Quaternion.Euler(Random.Range(-25f, 25f), 0f, Random.Range(-20f, 20f));
-
-            float target = Random.Range(leafSize.x, leafSize.y) * Mathf.Max(0.4f, sizeScale);
-            StartCoroutine(LeafGrow(go.transform, target));
+            SpawnLeaf(pos, outDir, sizeScale);
         }
+    }
+
+    // One leaf pointing along outDir (relative to the vine), tilted up + out,
+    // random roll, scaling in. Shared by the per-node fan and the tip canopy.
+    private void SpawnLeaf(Vector3 pos, Vector3 outDir, float sizeScale)
+    {
+        if (outDir.sqrMagnitude < 1e-4f) outDir = Vector3.up;
+        outDir = outDir.normalized;
+
+        var go = new GameObject("VineLeaf");
+        go.transform.SetParent(transform, false);
+        go.transform.position = pos;
+
+        var mf = go.AddComponent<MeshFilter>();
+        mf.sharedMesh = GetLeafMeshVariant(leafColor, leafTipColor, Random.Range(0, 3));
+        var mr = go.AddComponent<MeshRenderer>();
+        mr.sharedMaterial    = GetLeafMaterial();
+        mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        mr.receiveShadows    = false;
+
+        Vector3 up = (outDir + Vector3.up * 0.6f).normalized;
+        go.transform.rotation = Quaternion.LookRotation(Random.onUnitSphere * 0.2f + outDir, up)
+                              * Quaternion.Euler(Random.Range(-25f, 25f), 0f, Random.Range(-20f, 20f));
+
+        float target = Random.Range(leafSize.x, leafSize.y) * Mathf.Max(0.4f, sizeScale);
+        StartCoroutine(LeafGrow(go.transform, target));
+    }
+
+    // A small pale blossom (a flat hex flower) nestled at a vine node.
+    private void SpawnBlossomAt(Vector3 pos, float sizeScale)
+    {
+        var go = new GameObject("VineBlossom");
+        go.transform.SetParent(transform, false);
+        go.transform.position = pos + Random.onUnitSphere * (blossomSize * 0.5f);
+        go.transform.rotation = Random.rotation;
+
+        go.AddComponent<MeshFilter>().sharedMesh = GetBlossomMesh(blossomColor);
+        var mr = go.AddComponent<MeshRenderer>();
+        mr.sharedMaterial    = GetLeafMaterial();
+        mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        mr.receiveShadows    = false;
+
+        float target = blossomSize * Mathf.Max(0.4f, sizeScale) * Random.Range(0.8f, 1.2f);
+        StartCoroutine(LeafGrow(go.transform, target));
     }
 
     private IEnumerator LeafGrow(Transform t, float target)
@@ -485,23 +613,38 @@ public class VineEffect : MonoBehaviour
     }
 
     // Pointed leaf quad (base at origin → tip at +Y), vertex-coloured base→tip so
-    // the leaf shades from deep to bright green. Shared across all leaves.
-    private static Mesh GetLeafMesh(Color baseCol, Color tipCol)
+    // the leaf shades from deep to bright green. THREE tone variants (deep shade /
+    // mid / bright new-growth) picked randomly per leaf, so a dense canopy reads
+    // as layered foliage instead of one flat green. Baked once from the first
+    // vine's colors and shared by every leaf after that.
+    private static Mesh GetLeafMeshVariant(Color baseCol, Color tipCol, int variant)
     {
-        if (_leafMesh != null) return _leafMesh;
-        _leafMesh = new Mesh { name = "VineLeaf" };
-        _leafMesh.vertices = new[]
+        if (_leafMeshes == null)
         {
-            new Vector3( 0f,   0f,  0f),    // base
-            new Vector3(-0.45f, 0.5f, 0f),  // left
-            new Vector3( 0f,   1f,  0f),    // tip
-            new Vector3( 0.45f, 0.5f, 0f),  // right
-        };
-        _leafMesh.colors = new[] { baseCol, Color.Lerp(baseCol, tipCol, 0.5f), tipCol, Color.Lerp(baseCol, tipCol, 0.5f) };
-        _leafMesh.triangles = new[] { 0, 1, 2, 0, 2, 3 };
-        _leafMesh.RecalculateNormals();
-        _leafMesh.RecalculateBounds();
-        return _leafMesh;
+            _leafMeshes = new Mesh[3];
+            for (int t = 0; t < 3; t++)
+            {
+                // 0 = deep understory, 1 = as authored, 2 = bright sunlit tip.
+                float k = t == 0 ? 0.72f : (t == 1 ? 1f : 1.22f);
+                Color b = new Color(baseCol.r * k, baseCol.g * k, baseCol.b * k * 0.92f, 1f);
+                Color p = new Color(Mathf.Min(1f, tipCol.r * k), Mathf.Min(1f, tipCol.g * k), Mathf.Min(1f, tipCol.b * k * 0.92f), 1f);
+
+                var m = new Mesh { name = $"VineLeaf_{t}" };
+                m.vertices = new[]
+                {
+                    new Vector3( 0f,   0f,  0f),    // base
+                    new Vector3(-0.45f, 0.5f, 0f),  // left
+                    new Vector3( 0f,   1f,  0f),    // tip
+                    new Vector3( 0.45f, 0.5f, 0f),  // right
+                };
+                m.colors = new[] { b, Color.Lerp(b, p, 0.5f), p, Color.Lerp(b, p, 0.5f) };
+                m.triangles = new[] { 0, 1, 2, 0, 2, 3 };
+                m.RecalculateNormals();
+                m.RecalculateBounds();
+                _leafMeshes[t] = m;
+            }
+        }
+        return _leafMeshes[Mathf.Clamp(variant, 0, 2)];
     }
 
     private static Material GetLeafMaterial()
@@ -512,6 +655,33 @@ public class VineEffect : MonoBehaviour
                  ?? Shader.Find("Universal Render Pipeline/Unlit");
         _leafMat = new Material(sh) { name = "VineLeaf (runtime, vertex color)" };
         return _leafMat;
+    }
+
+    // Flat 5-petal hex blossom (unit radius), vertex-coloured pale with a warmer
+    // center. Shared across all blossoms.
+    private static Mesh _blossomMesh;
+    private static Mesh GetBlossomMesh(Color petal)
+    {
+        if (_blossomMesh != null) return _blossomMesh;
+        const int n = 5;
+        var verts = new List<Vector3> { Vector3.zero };
+        var cols  = new List<Color>  { Color.Lerp(petal, new Color(1f, 0.85f, 0.5f), 0.6f) };
+        for (int k = 0; k < n; k++)
+        {
+            float a = k * 2f * Mathf.PI / n;
+            verts.Add(new Vector3(Mathf.Cos(a) * 0.5f, Mathf.Sin(a) * 0.5f, 0f));
+            cols.Add(petal);
+        }
+        var tris = new List<int>();
+        for (int k = 0; k < n; k++) { tris.Add(0); tris.Add(1 + k); tris.Add(1 + (k + 1) % n); }
+
+        _blossomMesh = new Mesh { name = "VineBlossom" };
+        _blossomMesh.SetVertices(verts);
+        _blossomMesh.SetColors(cols);
+        _blossomMesh.SetTriangles(tris, 0);
+        _blossomMesh.RecalculateNormals();
+        _blossomMesh.RecalculateBounds();
+        return _blossomMesh;
     }
 
     // Graceful teardown: freeze growth, wither the whole bush's width to 0, then

@@ -3576,7 +3576,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ResourceManager
   balance: {fileID: 11400000, guid: 5d6ea2d422ee8524d9d9f084e3920c53, type: 2}
-  testing: 0
+  testing: 1
   startingBlockCurrency: 120
   blockCurrencyPerRound: 22
   cellBasePrice: 10

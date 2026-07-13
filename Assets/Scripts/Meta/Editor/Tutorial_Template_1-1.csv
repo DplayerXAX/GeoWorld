@@ -1,0 +1,9 @@
+Kind,Block,OriginX,OriginY,OriginZ,RotX,RotY,RotZ,CellsOverride,WaitSeconds,Count,InputKey,PathLength,FreeOperations,HideInCombat,RequiredWave,UnlocksOps,CameraFocus,FocusZoom,Hint,Conversation,Speaker,SpeakerSlot,SpeakerPortrait
+Input,,0,0,0,0,0,0,,0,0,Mouse0,0,FALSE,FALSE,0,,None,0,"...More Rift Portals appear to be opening across our dimension. We need to prepare for what's coming.",,placeholder_char,Right,
+Input,,0,0,0,0,0,0,,0,0,Mouse0,0,FALSE,FALSE,0,,None,0,"Our faith in you reaches through all blocks, bestowing strength upon you.",,placeholder_char,Right,
+PurchaseBlock,I2,1,2,-1,0,0,0,,0,0,Mouse0,0,FALSE,FALSE,0,Purchase,None,0,"My Lord, purchase an ORANGE block from the shop to prepare for awakening ABUNDANCE.",,placeholder_char,Right,
+Place,I2,1,2,-1,0,0,0,,0,0,Mouse0,0,FALSE,FALSE,0,,None,0,"My Lord, place an ORANGE block where indicated to awaken the power of ABUNDANCE.",,placeholder_char,Right,
+Input,I2,1,2,-1,0,0,0,,0,0,Mouse0,0,FALSE,FALSE,0,,None,0,"After a block loop is connected, Abundance is activated on this set of blocks.",,placeholder_char,Right,
+Input,I2,1,2,-1,0,0,0,,0,0,Mouse0,0,FALSE,FALSE,0,,None,0,"Abundance grant us resources for building up blocks periodly.",,placeholder_char,Right,
+Select,,1,2,-1,0,0,0,,0,0,Mouse0,0,FALSE,FALSE,0,,None,0,"Select a block to see how the power is activated and its benefit.",,placeholder_char,Right,
+Input,,1,2,-1,0,0,0,,0,0,Mouse0,0,FALSE,FALSE,0,,StartPoint,0,"A new rift appears. Enemy will also appear and attack the core. Try connecting this to the path.",,placeholder_char,Right,

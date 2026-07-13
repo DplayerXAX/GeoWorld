@@ -70,6 +70,14 @@ public class GridSystem : MonoBehaviour
         occupied[pos] = true;
     }
 
+    // Counterpart to SetOccupied — for cells reserved WITHOUT a full
+    // PlacedBlockInstance (e.g. a level hazard like Chaos Block). Safe to call
+    // on a cell that was never marked occupied.
+    public void ClearOccupied(Vector3Int pos)
+    {
+        occupied.Remove(pos);
+    }
+
     public void RegisterInstance(PlacedBlockInstance instance)
     {
         foreach (var pos in instance.occupiedCells)

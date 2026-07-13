@@ -63,6 +63,43 @@ public static class CurrencyFlyFx
             go.AddComponent<CurrencyCoinRunner>().Begin(rt, hud, isTurret, i);
         }
     }
+
+    // Reverse of Fly(): spawns coins AT the currency counter and flies them OUT
+    // to a world position (e.g. a Chaos Block draining currency). The counter
+    // pulses on DEPARTURE here (money visibly leaving) instead of on arrival.
+    public static void Drain(Vector3 worldPos, bool isTurret, int amount = 1)
+    {
+        var cam = Camera.main;
+        if (cam == null) return;
+        Vector3 sp = cam.WorldToScreenPoint(worldPos);
+        if (sp.z < 0f) return;   // behind the camera — nothing sensible to draw
+        DrainToScreen(sp, isTurret, amount);
+    }
+
+    public static void DrainToScreen(Vector2 targetScreenPos, bool isTurret, int amount = 1)
+    {
+        var hud = TopLeftHUD.Instance;
+        if (hud == null) return;
+        EnsureCanvas();
+
+        if (isTurret) hud.PulseTurretCounter(); else hud.PulseBlockCounter();
+
+        int count = Mathf.Clamp(1 + amount / 8, 1, 6);
+        for (int i = 0; i < count; i++)
+        {
+            var go = new GameObject("CurrencyCoinDrain", typeof(RectTransform));
+            go.transform.SetParent(_root, false);
+            var rt = (RectTransform)go.transform;
+            rt.sizeDelta = new Vector2(20f, 20f);
+
+            var img = go.AddComponent<Image>();
+            img.sprite = UIRoundedRect.Get(10);
+            img.color = isTurret ? new Color(1f, 0.65f, 0.30f) : new Color(0.55f, 0.95f, 1.00f);
+            img.raycastTarget = false;
+
+            go.AddComponent<CurrencyDrainRunner>().Begin(rt, hud, isTurret, targetScreenPos, i);
+        }
+    }
 }
 
 // One flying coin: eases along a small arc from its spawn point to the live HUD
@@ -105,6 +142,47 @@ class CurrencyCoinRunner : MonoBehaviour
         }
 
         if (_isTurret) _hud.PulseTurretCounter(); else _hud.PulseBlockCounter();
+        Destroy(gameObject);
+    }
+}
+
+// One draining coin: eases from the live HUD counter position (re-sampled every
+// frame, like CurrencyCoinRunner) OUT to a fixed world-derived screen target,
+// growing in as it leaves (reverse of the gain coin's shrink-on-arrival), then
+// self-destructs — no counter pulse here, Drain() already pulsed on departure.
+class CurrencyDrainRunner : MonoBehaviour
+{
+    RectTransform _rt;
+    TopLeftHUD _hud;
+    bool _isTurret;
+    Vector2 _target;
+    Vector2 _arcOffset;
+    float _t;
+    float _duration;
+
+    public void Begin(RectTransform rt, TopLeftHUD hud, bool isTurret, Vector2 targetScreenPos, int index)
+    {
+        _rt = rt; _hud = hud; _isTurret = isTurret; _target = targetScreenPos;
+        _arcOffset = new Vector2(Random.Range(-40f, 40f), Random.Range(40f, 90f));
+        _duration = 0.55f + index * 0.05f;
+        StartCoroutine(Run());
+    }
+
+    IEnumerator Run()
+    {
+        while (_t < _duration)
+        {
+            _t += Time.unscaledDeltaTime;
+            float k = Mathf.Clamp01(_t / _duration);
+            float ease = 1f - Mathf.Pow(1f - k, 3f);   // ease-out cubic
+
+            Vector2 start = _isTurret ? _hud.TurretCounterScreenPos : _hud.BlockCounterScreenPos;
+            Vector2 arc = _arcOffset * Mathf.Sin(k * Mathf.PI) * (1f - ease * 0.5f);
+            _rt.position = Vector2.Lerp(start, _target, ease) + arc;
+            _rt.localScale = Vector3.one * Mathf.Lerp(0.35f, 1f, ease);
+            yield return null;
+        }
+
         Destroy(gameObject);
     }
 }

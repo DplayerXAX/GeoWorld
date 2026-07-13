@@ -35,6 +35,12 @@ public class PauseMenu : MonoBehaviour
     [Tooltip("Speed-level pip, unlit.")]
     public Sprite speedPipEmpty;
 
+    [Header("Top-right icon colors")]
+    [Tooltip("Icon tint while the shop (black letterbox bar) is open.")]
+    public Color iconColorOnShop = Color.white;
+    [Tooltip("Icon tint the rest of the time.")]
+    public Color iconColorDefault = Color.black;
+
     bool _paused;
     float _prevTimeScale = 1f;
 
@@ -127,9 +133,8 @@ public class PauseMenu : MonoBehaviour
 
     void UpdateTopRightControls()
     {
-        // White icons while the shop (black letterbox bar) is open, black otherwise.
         bool shopOpen = ShopController.Instance != null && ShopController.Instance.IsExpanded;
-        Color fg = shopOpen ? Color.white : Color.black;
+        Color fg = shopOpen ? iconColorOnShop : iconColorDefault;
 
         _pauseIconImg.sprite = _paused ? resumeIcon : pauseIcon;
         _pauseIconImg.color  = fg;

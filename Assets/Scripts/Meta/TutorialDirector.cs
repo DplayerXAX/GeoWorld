@@ -42,6 +42,13 @@ public class TutorialDirector : MonoBehaviour
 
     bool AllowOp(TutorialStepKind op, BlockData d)
     {
+        // While the NEXT step is held back by a wave gate (requiredWave), the
+        // tutorial is between steps and waiting for the player to fight more waves
+        // — so lift ALL gating. Otherwise the previous step's restrictions would
+        // block Run, the wave count could never advance, and the gated step would
+        // never appear (a deadlock).
+        if (_pendingStepIndex >= 0) return true;
+
         var step = Cur;
         if (step == null) return true;            // tutorial finished → no gating
         if (step.freeOperations) return true;     // sandbox step
@@ -512,25 +519,50 @@ public class TutorialDirector : MonoBehaviour
     // when WE stop/replace it (advancing the step), so just clear the active flag.
     void OnDialogueFinished(DialogueConversation _) => _dialogueActive = false;
 
-    // Glide the orbit camera to the start / end point when the step requests it.
+    // Glide the orbit camera to the start / end point / a live chaos block when
+    // the step requests it.
     void FocusCameraForStep(TutorialStep step)
     {
         if (step == null || step.cameraFocus == TutorialFocus.None) return;
 
-        var gfm  = GameFlowManager.Instance;
-        var grid = GridSystem.instance;
-        if (gfm == null || grid == null) return;
+        Vector3? p = step.cameraFocus == TutorialFocus.ChaosBlock
+            ? ChaosBlockFocusPoint()
+            : StartOrEndFocusPoint(step.cameraFocus);
+        if (p == null) return;   // e.g. ChaosBlock requested but none alive right now — leave the camera as-is
 
-        var cells = step.cameraFocus == TutorialFocus.StartPoint ? gfm.AllStarts : gfm.AllEnds;
-        if (cells == null || cells.Count == 0) return;
-
-        Vector3 p = grid.GridToWorld(cells[0]) + Vector3.up * (grid.cellSize * 0.5f);
         var orbit = FindFirstObjectByType<OrbitCamera>();
         if (orbit != null)
         {
-            orbit.FocusOnPoint(p, snap: false);          // smooth glide
+            orbit.FocusOnPoint(p.Value, snap: false);          // smooth glide
             if (step.focusZoom > 0f) orbit.SetZoom(step.focusZoom);   // optional zoom-in
         }
+    }
+
+    Vector3? StartOrEndFocusPoint(TutorialFocus focus)
+    {
+        var gfm  = GameFlowManager.Instance;
+        var grid = GridSystem.instance;
+        if (gfm == null || grid == null) return null;
+
+        var cells = focus == TutorialFocus.StartPoint ? gfm.AllStarts : gfm.AllEnds;
+        if (cells == null || cells.Count == 0) return null;
+
+        return grid.GridToWorld(cells[0]) + Vector3.up * (grid.cellSize * 0.5f);
+    }
+
+    // First currently-alive Chaos Block (see ChaosBlockController). Null if the
+    // mechanic isn't enabled for this level, or every block spawned so far has
+    // already been killed — the camera just stays put in that case.
+    Vector3? ChaosBlockFocusPoint()
+    {
+        var ctrl = ChaosBlockController.Instance;
+        if (ctrl == null) return null;
+
+        var alive = ctrl.Alive;
+        for (int i = 0; i < alive.Count; i++)
+            if (alive[i] != null && alive[i].CurrentHealth > 0)
+                return alive[i].transform.position;
+        return null;
     }
 
     void BuildGhost(TutorialStep step)

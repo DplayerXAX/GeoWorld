@@ -74,6 +74,9 @@ public static class SaveSystem
             if (level.unlocks != null)
                 foreach (var nxt in level.unlocks)
                     if (nxt != null) p.Unlock(nxt.levelId);
+            if (level.mapBlockRewards != null)
+                foreach (var b in level.mapBlockRewards)
+                    if (b != null) p.GrantMapBlock(b.name, 1);
         }
         Save();
     }

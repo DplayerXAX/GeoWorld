@@ -7,10 +7,17 @@ using UnityEngine;
 // by matching `a.rule.effect == this` against the live actives. (Order, Harmony
 // and Abundance all use the single-effect dispatch, and the evaluator keeps at
 // most one active per rule, so this resolves to that synergy's footprint.)
+//
+// Rules that implement ICellHighlightFilter (Enlightenment's cube, Abundance's
+// loop) claim a WIDER region than what actually "participates" — e.g. Abundance
+// locks a loop's tree-shaped tails as part of the structure but only the loop
+// itself should count. Every counting helper here respects that filter: a cell
+// only counts if the filter (when present) says ShouldHighlight, and a PIECE
+// only counts if ANY of its cells passes.
 public static class SynergyEffectUtil
 {
-    // Fills `into` with the union of every claimed cell across all active
-    // synergies whose rule.effect == effect.
+    // Fills `into` with the union of every PARTICIPATING claimed cell across all
+    // active synergies whose rule.effect == effect.
     public static void CollectClaimedCells(GameEffect effect, HashSet<Vector3Int> into)
     {
         into.Clear();
@@ -22,15 +29,23 @@ public static class SynergyEffectUtil
         {
             var a = actives[i];
             if (a?.rule == null || a.rule.effect != effect || a.claimedPieces == null) continue;
+            var filter = a.rule as ICellHighlightFilter;
             foreach (var p in a.claimedPieces)
             {
                 if (p?.cells == null) continue;
-                for (int k = 0; k < p.cells.Length; k++) into.Add(p.cells[k]);
+                for (int k = 0; k < p.cells.Length; k++)
+                {
+                    var c = p.cells[k];
+                    if (filter != null && !filter.ShouldHighlight(c)) continue;
+                    into.Add(c);
+                }
             }
         }
     }
 
-    // Total claimed PIECES (modules) across this effect's active synergies.
+    // Total PARTICIPATING pieces (modules) across this effect's active synergies
+    // — a piece counts if at least one of its cells is inside the filtered
+    // region (or always, when the rule has no filter).
     public static int CountClaimedPieces(GameEffect effect)
     {
         int n = 0;
@@ -42,13 +57,21 @@ public static class SynergyEffectUtil
         {
             var a = actives[i];
             if (a?.rule == null || a.rule.effect != effect || a.claimedPieces == null) continue;
-            n += a.claimedPieces.Count;
+            var filter = a.rule as ICellHighlightFilter;
+            foreach (var p in a.claimedPieces)
+            {
+                if (p == null) continue;
+                if (filter == null) { n++; continue; }
+                if (PieceInFilter(p, filter)) n++;
+            }
         }
         return n;
     }
 
-    // A world position on a random claimed cell of this effect's active synergy
-    // (for spawning income/harvest motes). Returns false when nothing is claimed.
+    // A world position on a random PARTICIPATING cell of this effect's active
+    // synergy (for spawning income/harvest motes) — so the mote/fx spawns on
+    // the loop itself, not a non-counting tail. Returns false when nothing
+    // participating is claimed.
     public static bool TryGetClaimedCellWorld(GameEffect effect, out Vector3 world)
     {
         world = Vector3.zero;
@@ -61,18 +84,30 @@ public static class SynergyEffectUtil
         {
             var a = actives[i];
             if (a?.rule == null || a.rule.effect != effect || a.claimedPieces == null) continue;
+            var filter = a.rule as ICellHighlightFilter;
             foreach (var p in a.claimedPieces)
             {
                 if (p?.cells == null || p.cells.Length == 0) continue;
-                var c = p.cells[Random.Range(0, p.cells.Length)];
-                world = grid.GridToWorld(c) + Vector3.up * (grid.cellSize * 0.6f);
+                if (filter == null)
+                {
+                    var c = p.cells[Random.Range(0, p.cells.Length)];
+                    world = grid.GridToWorld(c) + Vector3.up * (grid.cellSize * 0.6f);
+                    return true;
+                }
+                // Filtered: pick among just this piece's participating cells.
+                var candidates = new List<Vector3Int>(p.cells.Length);
+                for (int k = 0; k < p.cells.Length; k++)
+                    if (filter.ShouldHighlight(p.cells[k])) candidates.Add(p.cells[k]);
+                if (candidates.Count == 0) continue;
+                var cc = candidates[Random.Range(0, candidates.Count)];
+                world = grid.GridToWorld(cc) + Vector3.up * (grid.cellSize * 0.6f);
                 return true;
             }
         }
         return false;
     }
 
-    // Total claimed CELLS (cubes) across this effect's active synergies.
+    // Total PARTICIPATING cells (cubes) across this effect's active synergies.
     public static int CountClaimedCells(GameEffect effect)
     {
         int n = 0;
@@ -84,9 +119,23 @@ public static class SynergyEffectUtil
         {
             var a = actives[i];
             if (a?.rule == null || a.rule.effect != effect || a.claimedPieces == null) continue;
+            var filter = a.rule as ICellHighlightFilter;
             foreach (var p in a.claimedPieces)
-                if (p?.cells != null) n += p.cells.Length;
+            {
+                if (p?.cells == null) continue;
+                if (filter == null) { n += p.cells.Length; continue; }
+                for (int k = 0; k < p.cells.Length; k++)
+                    if (filter.ShouldHighlight(p.cells[k])) n++;
+            }
         }
         return n;
+    }
+
+    static bool PieceInFilter(PlacedPiece p, ICellHighlightFilter filter)
+    {
+        if (p.cells == null) return false;
+        for (int k = 0; k < p.cells.Length; k++)
+            if (filter.ShouldHighlight(p.cells[k])) return true;
+        return false;
     }
 }

@@ -19,6 +19,16 @@ public class LevelDefinition : ScriptableObject
     [Min(1)] public int blocksPerTurn  = 8;
     [Min(0)] public int turretsPerTurn = 3;
 
+    [Tooltip("Synergy colors allowed to roll in THIS level's shop (ColorDistribution). Fixed per level, independent of any other level's progress — replaying an earlier level always sees the same pool its designer set. Empty = no restriction (every color in ColorDistribution.weights can roll). Author later levels with a longer list to hand-tune a difficulty/variety curve, e.g. 1-1 = [Abundance], 1-2 = [Abundance, Order], ...")]
+    public BlockColor[] allowedColors;
+
+    // True if `c` can appear in this level — same "empty = unrestricted" rule
+    // ColorDistribution.BeginRound already applies to allowedColors. Also used
+    // to decide whether the turret-upgrade UI should even be shown (no point
+    // if Enlightenment can never roll this level).
+    public bool AllowsColor(BlockColor c) =>
+        allowedColors == null || allowedColors.Length == 0 || System.Array.IndexOf(allowedColors, c) >= 0;
+
     [Tooltip("Authored waves (fed into GameFlowManager.waves). Leave empty to use the procedural generator.")]
     public List<WaveDefinition> waves = new();
 
@@ -44,6 +54,9 @@ public class LevelDefinition : ScriptableObject
     [Tooltip("Tech points granted on first clear.")]
     [Min(0)] public int techReward = 1;
 
+    [Tooltip("Blocks granted (once, on first clear) that the player can place on the LevelSelect map (Build mode) to extend the walkable network toward other levels — must also appear in LevelMapController.buildableBlocks to be placeable.")]
+    public BlockData[] mapBlockRewards;
+
     [Header("Tutorial")]
     [Tooltip("Marks this level as a tutorial — TutorialDirector takes over (fixed endpoints + ghost-guided placement).")]
     public bool isTutorial;
@@ -59,6 +72,28 @@ public class LevelDefinition : ScriptableObject
            + "in any scene with a GridSystem + PlacementController (save under a level-specific map name, "
            + "then bake via GeoWorld ▸ Level Map ▸ Bake JSON → Asset).")]
     public LevelMapAsset startingLayout;
+
+    [Header("Chaos Block (per-round obstacle hazard)")]
+    [Tooltip("Enable the Chaos Block mechanic for this level: a black obstacle spawns on the build grid at the start of EVERY round, kept some distance from existing blocks so the player has to build/turret toward it. It's destructible by turrets during combat (just like an enemy); any that survive to the end of combat drain block currency — and, since a surviving one isn't removed, they accumulate round over round until killed.")]
+    public bool chaosBlockEnabled;
+
+    [Tooltip("First wave chaos blocks are allowed to start spawning (1 = from the very first round, like today). Uses the same 'which wave is this' counter as TutorialStep.requiredWave (GameFlowManager.UpcomingWaveNumber) — e.g. 3 means no chaos blocks during waves 1-2, then they start from wave 3 onward.")]
+    [Min(1)] public int chaosBlockStartWave = 1;
+
+    [Tooltip("Chaos block health (turret damage to destroy it).")]
+    [Min(1)] public int chaosBlockHealth = 20;
+
+    [Tooltip("Block currency drained EACH TIME combat ends while a given chaos block is still alive. Multiple surviving blocks each drain separately.")]
+    [Min(0)] public int chaosBlockCurrencyDrain = 5;
+
+    [Tooltip("Minimum grid-cell distance kept from the nearest existing occupied cell when picking a spawn point — the whole point is that the player must build/reach toward it, not have it spawn next to an existing turret.")]
+    [Min(1)] public int chaosBlockMinDistance = 4;
+
+    [Tooltip("How far beyond the current build's bounding box the spawn search is allowed to reach, in cells. Keep this comfortably bigger than chaosBlockMinDistance.")]
+    [Min(1)] public int chaosBlockSearchMargin = 6;
+
+    [Tooltip("Hard cap on simultaneously-alive chaos blocks, however many rounds the player lets them pile up.")]
+    [Min(1)] public int chaosBlockMaxSimultaneous = 6;
 }
 
 // ── Special objectives ──────────────────────────────────────────────────────
@@ -122,7 +157,7 @@ public enum TutorialStepKind
 }
 
 // Optional camera focus for a step — glides the orbit camera to a point of interest.
-public enum TutorialFocus { None, StartPoint, EndPoint }
+public enum TutorialFocus { None, StartPoint, EndPoint, ChaosBlock }
 
 // One tutorial step. For Place: the player must place `block` at `origin` — the
 // block's WHOLE shape is shown as a ghost. (Advanced: set `cellsOverride` to an
