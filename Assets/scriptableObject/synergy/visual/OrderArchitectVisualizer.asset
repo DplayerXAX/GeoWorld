@@ -28,4 +28,4 @@ MonoBehaviour:
   fadeInDuration: 0.5
   witherDuration: 0.3
   pulseSpeed: 2
-  pulseDepth: 0.12
+  pulseDepth: 0.09

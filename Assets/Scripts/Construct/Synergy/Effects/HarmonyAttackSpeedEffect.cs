@@ -26,6 +26,10 @@ public class HarmonyAttackSpeedEffect : GameEffect
     [Tooltip("Aura colour shown on turrets the synergy is speeding up.")]
     public Color auraColor = new Color(0.4f, 1f, 0.8f);
 
+    // Turrets currently getting the fire-rate bonus — live number for the
+    // synergy HUD (HudSidePanels).
+    public int BuffedTurretCount => _buffed.Count;
+
     readonly HashSet<Vector3Int>       _cells   = new();
     readonly HashSet<TurretController> _buffed  = new();
     readonly HashSet<TurretController> _desired = new();

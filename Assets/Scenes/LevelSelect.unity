@@ -740,7 +740,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: ed39f2b237e573f4f85990bb5d1440ac, type: 3}
   m_Name: 
   m_EditorClassIdentifier: AK.Wwise.Unity.Addressables::AK.Wwise.Unity.WwiseAddressables.InitBankHolder
-  InitBank: {fileID: 11400000, guid: 921dbaf0e79e14b4c898d5962608c29d, type: 2}
 --- !u!1001 &1003193530
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -1242,6 +1241,9 @@ MonoBehaviour:
   titleScene: Title
   pawnSpeed: 6
   pawnSurfaceLift: 0.5
+  trailMaterial: {fileID: 0}
+  trailColor: {r: 1, g: 0.95, b: 0.75, a: 0.9}
+  trailWidth: 0.07
   cameraFocus: 1
   cameraLerp: 4
   focusViewportX: 0.4
@@ -1514,6 +1516,8 @@ MonoBehaviour:
   fastForwardIcon: {fileID: 21300000, guid: 3e1f31c09da1c7a4a94d710aa2a7dcff, type: 3}
   speedPipFilled: {fileID: 10917, guid: 0000000000000000f000000000000000, type: 0}
   speedPipEmpty: {fileID: 10905, guid: 0000000000000000f000000000000000, type: 0}
+  iconColorOnShop: {r: 1, g: 1, b: 1, a: 1}
+  iconColorDefault: {r: 1, g: 1, b: 1, a: 1}
 --- !u!4 &1911354783
 Transform:
   m_ObjectHideFlags: 0

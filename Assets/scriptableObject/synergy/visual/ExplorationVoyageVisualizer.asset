@@ -1,0 +1,46 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4e2a7d91c8b5f3040a6d1e8c92b47f35, type: 3}
+  m_Name: ExplorationVoyageVisualizer
+  m_EditorClassIdentifier: Assembly-CSharp::ExplorationVoyageVisualizer
+  useThemeColor: 1
+  pennantColor: {r: 0.88, g: 0.18, b: 0.2, a: 1}
+  accentColor: {r: 0.98, g: 0.85, b: 0.2, a: 1}
+  poleColor: {r: 0.1, g: 0.09, b: 0.12, a: 1}
+  flagSpacingCells: 2
+  flagHeightFrac: 0.62
+  pennantLenFrac: 0.34
+  windSkewDeg: 30
+  flutterSpeed: 2.6
+  flutterYawDeg: 10
+  showComet: 1
+  cometSpeedCells: 1.8
+  cometPauseSec: 1.6
+  cometSizeFrac: 0.15
+  cometLiftFrac: 0.22
+  trailTime: 0.55
+  trailWidthFrac: 0.05
+  showMaterialFlow: 1
+  flowShellScale: 1.012
+  flowSpeed: 0.6
+  flowDensity: 5
+  flowSharpness: 8
+  flowGlow: 1.6
+  showCurrent: 0
+  currentMotes: 5
+  currentSpeedCells: 2.4
+  currentMoteSizeFrac: 0.07
+  currentLiftFrac: 0.05
+  currentTrailTime: 0.3
+  fadeInDuration: 0.5
+  flagStagger: 0.07
+  witherDuration: 0.3

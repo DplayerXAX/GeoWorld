@@ -19,10 +19,10 @@ MonoBehaviour:
   tipColor: {r: 0.45, g: 0.78, b: 0.32, a: 1}
   highlightClaimedOutline: 0
   outlineColor: {r: 0.35, g: 0.62, b: 0.3, a: 1}
-  extraSegments: 0
-  lengthScale: 1
+  extraSegments: 1
+  lengthScale: 1.15
   coilChance: 0.4
   coilTurns: 1.6
-  coilRadiusMul: 1.15
-  coilSurfaceGap: 0.05
+  coilRadiusMul: 1
+  coilSurfaceGap: 0.03
   coilHeightMul: 1.5

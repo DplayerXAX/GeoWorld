@@ -115,6 +115,13 @@ public class GameFlowManager : MonoBehaviour
         if (enemyBaseManager != null)
             enemyBaseManager.OnWaveCompleted += HandleWaveCompleted;
 
+        // Enlightenment's turret-upgrade gate is static/asset-backed state that
+        // otherwise survives across scene loads — clear it so a previous run
+        // that ended mid-cube doesn't leak a stale allowance (or a stuck-locked
+        // gate) into this one.
+        TowerUpgradeGate.ResetAll();
+        UnlockTowerUpgradeEffect.ResetAllHeld();
+
         RunStats.BeginRun();   // reset kill/blocks/time counters for score-keeping
         ApplyRunConfig();   // Level vs Endless setup (seed, pacing, authored waves)
         CreateFirstStage();
@@ -538,8 +545,10 @@ public class GameFlowManager : MonoBehaviour
         placement.ClearTray();                          // remove leftover tokens from last round
         PlacementController.Instance.ResetRefreshCost();
         // Refresh the synergy color pool. In mode C this samples a new subset
-        // of colors for the round; in mode B it's a no-op snapshot.
-        colorDistribution?.BeginRound(EnsureRng());
+        // of colors for the round; in mode B it's a no-op snapshot. Also re-applies
+        // the CURRENT level's fixed color pool (LevelDefinition.allowedColors) every
+        // round, so it's never stale across a level change.
+        colorDistribution?.BeginRound(EnsureRng(), RunConfig.Level != null ? RunConfig.Level.allowedColors : null);
 
         placement.SpawnRoundBlocks(blocksPerTurn, turretsPerTurn);
 

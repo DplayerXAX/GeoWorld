@@ -103,6 +103,51 @@ public class OrderArchitectVisualizer : SynergyVisualizer
     [Tooltip("Per-cog beat offset so the ticks aren't perfectly lockstep.")]
     [Range(0f, 0.5f)] public float phaseJitter = 0.15f;
 
+    [Header("Living machine")]
+    [Tooltip("Bright cross-section outline that periodically sweeps up the frame — the blueprint being re-verified layer by layer.")]
+    public bool showScan = true;
+
+    [Tooltip("Seconds between scan sweeps.")]
+    public float scanInterval = 5f;
+
+    [Tooltip("Seconds one sweep takes (bottom → top).")]
+    public float scanDuration = 0.9f;
+
+    [Tooltip("Small bright nodes tracing the base perimeter in a loop — current flowing through the structure.")]
+    public bool showRunners = true;
+
+    [Range(1, 4)] public int runnerCount = 2;
+
+    [Tooltip("Runner speed in cells per second.")]
+    public float runnerSpeed = 1.6f;
+
+    [Tooltip("Runner node size, in cell-size units.")]
+    [Range(0.02f, 0.2f)] public float runnerSizeFrac = 0.07f;
+
+    [Tooltip("Every N beats the whole clockwork reverses direction in one synchronized clunk (0 = never). Makes the ticking read as a machine cycle, not a metronome.")]
+    public int shiftEveryBeats = 8;
+
+    [Header("Hologram")]
+    [Tooltip("Render the cogs as translucent, floating, flickering holograms (additive glow) instead of solid metal.")]
+    public bool holographic = true;
+
+    [Tooltip("Base opacity of the holo cogs.")]
+    [Range(0.05f, 1f)] public float holoAlpha = 0.4f;
+
+    [Tooltip("How far cogs float OFF the block faces (cell-size units) — they ring the block, they don't hug it.")]
+    [Range(0f, 1f)] public float floatDistanceFrac = 0.35f;
+
+    [Tooltip("Ring the block on its SIDE faces only — keeps the top/bottom (the walkable road) clear of cogs.")]
+    public bool sideFacesOnly = true;
+
+    [Tooltip("Cog hover amplitude along the face normal, in cell-size units. 0 = no up/down drift (cogs stay put).")]
+    [Range(0f, 0.3f)] public float hoverAmplitudeFrac = 0f;
+
+    public float hoverSpeed = 1.1f;
+
+    [Tooltip("Holo opacity flicker amount (0 = steady, higher = more unstable projection).")]
+    [Range(0f, 0.6f)] public float flickerAmount = 0.18f;
+
     [Header("Animation")]
     [Tooltip("Seconds for a rig to assemble / snap into place.")]
     public float fadeInDuration = 0.5f;
@@ -237,6 +282,21 @@ public class OrderArchitectVisualizer : SynergyVisualizer
         rig.bracketFrac      = bracketFrac;
         rig.showTicks        = showTicks;
         rig.tickCount        = tickCount;
+        rig.showScan         = showScan;
+        rig.scanInterval     = scanInterval;
+        rig.scanDuration     = scanDuration;
+        rig.showRunners      = showRunners;
+        rig.runnerCount      = runnerCount;
+        rig.runnerSpeed      = runnerSpeed;
+        rig.runnerSizeFrac   = runnerSizeFrac;
+        rig.shiftEveryBeats  = shiftEveryBeats;
+        rig.holographic        = holographic;
+        rig.holoAlpha          = holoAlpha;
+        rig.floatDistanceFrac  = floatDistanceFrac;
+        rig.sideFacesOnly      = sideFacesOnly;
+        rig.hoverAmplitudeFrac = hoverAmplitudeFrac;
+        rig.hoverSpeed         = hoverSpeed;
+        rig.flickerAmount      = flickerAmount;
         rig.fadeInDuration   = fadeInDuration;
         rig.witherDuration   = witherDuration;
         rig.pulseSpeed       = pulseSpeed;

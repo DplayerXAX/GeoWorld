@@ -61,12 +61,23 @@ public class ColorDistribution : ScriptableObject
     // Current round's pool (== `weights` in B mode, subset in C mode).
     Entry[] _active;
 
+    // This round's LEVEL-fixed restriction (LevelDefinition.allowedColors, passed
+    // in by BeginRound) — null/empty means no restriction. Kept separate from
+    // `_active`/round-pool sampling (mode C) so the two filters compose cleanly:
+    // round-pool sampling only ever draws from colors the level allows.
+    HashSet<BlockColor> _allowedThisLevel;
+
     public IReadOnlyList<Entry> ActivePool => _active ?? weights;
 
     // Call at start of each Build phase so C mode can refresh its subset.
-    // No-op in B mode (just snapshots `weights`).
-    public void BeginRound(Xoshiro256StarStar rng)
+    // `allowedColors` is the CURRENT LEVEL's fixed pool (LevelDefinition.allowedColors) —
+    // null/empty means no restriction. Re-passed every call (not sticky) so a level
+    // change always takes effect immediately, no stale state across scenes/runs.
+    public void BeginRound(Xoshiro256StarStar rng, IReadOnlyCollection<BlockColor> allowedColors = null)
     {
+        _allowedThisLevel = (allowedColors != null && allowedColors.Count > 0)
+            ? new HashSet<BlockColor>(allowedColors) : null;
+
         if (!useRoundPool || rng == null)
         {
             _active = weights;
@@ -75,7 +86,7 @@ public class ColorDistribution : ScriptableObject
 
         var available = new List<Entry>(weights.Length);
         for (int i = 0; i < weights.Length; i++)
-            if (weights[i].weight > 0f) available.Add(weights[i]);
+            if (weights[i].weight > 0f && IsAllowed(weights[i].color)) available.Add(weights[i]);
 
         var chosen = new List<Entry>(poolSize + 1);
 
@@ -124,18 +135,29 @@ public class ColorDistribution : ScriptableObject
         var pool = _active ?? weights;
         if (pool == null || pool.Length == 0 || rng == null) return BlockColor.None;
 
+        // Colors this LEVEL doesn't allow (LevelDefinition.allowedColors, set via
+        // BeginRound) are treated as weight 0 here regardless of what's authored
+        // above — the single choke point every token color goes through.
         float total = 0f;
-        for (int i = 0; i < pool.Length; i++) total += Mathf.Max(0f, pool[i].weight);
+        for (int i = 0; i < pool.Length; i++)
+            if (IsAllowed(pool[i].color)) total += Mathf.Max(0f, pool[i].weight);
         if (total <= 0f) return BlockColor.None;
 
         float r = rng.NextFloat() * total;
         float acc = 0f;
         for (int i = 0; i < pool.Length; i++)
         {
+            if (!IsAllowed(pool[i].color)) continue;
             acc += Mathf.Max(0f, pool[i].weight);
             if (r < acc) return pool[i].color;
         }
-        return pool[pool.Length - 1].color;
+        // Fallback: last allowed entry (float rounding edge case).
+        for (int i = pool.Length - 1; i >= 0; i--)
+            if (IsAllowed(pool[i].color)) return pool[i].color;
+        return BlockColor.None;
     }
 
+    // Universal is a joker, not a themed color — never restricted by a level's pool.
+    bool IsAllowed(BlockColor c) =>
+        c == BlockColor.Universal || _allowedThisLevel == null || _allowedThisLevel.Contains(c);
 }

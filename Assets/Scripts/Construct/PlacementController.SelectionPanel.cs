@@ -19,6 +19,17 @@ public partial class PlacementController
         && UnityEngine.EventSystems.EventSystem.current != null
         && UnityEngine.EventSystems.EventSystem.current.IsPointerOverGameObject();
 
+    // False only when the current level explicitly restricts its color pool
+    // AND leaves Enlightenment out (LevelDefinition.allowedColors) — in that
+    // case Enlightenment can never roll this level, so the turret-upgrade menu
+    // (which only ever unlocks via an Enlightenment cube) is hidden entirely
+    // instead of just always showing "Locked".
+    static bool EnlightenmentAllowedThisLevel()
+    {
+        var lv = RunConfig.Level;
+        return lv == null || lv.AllowsColor(BlockColor.Enlightenment);
+    }
+
     // Drives the UGUI panel (call every frame from Update). Mirrors DrawSelectionPanel's
     // logic but pushes plain strings instead of laying out IMGUI.
     void UpdateInfoPanel()
@@ -75,14 +86,16 @@ public partial class PlacementController
         {
             BuildUpgradeButtons(ins,
                 out string upgradeAText, out bool canUpgradeA, out System.Action onUpgradeA,
-                out string upgradeBText, out bool canUpgradeB, out System.Action onUpgradeB);
+                out string upgradeBText, out bool canUpgradeB, out System.Action onUpgradeB,
+                out string enlightenmentHint);
 
             // Upgrades stay available even when locked (locking only blocks pickup/sell —
             // the point is to protect the level's fixed layout, not to freeze turret progression).
             bool hasUpgrades = !string.IsNullOrEmpty(upgradeAText) || !string.IsNullOrEmpty(upgradeBText);
-            if (hasUpgrades && !combatLocked)
+            if (hasUpgrades && !combatLocked && EnlightenmentAllowedThisLevel())
                 upgradePanel.Show(worldPos, upgradeAText, canUpgradeA, onUpgradeA,
-                                            upgradeBText, canUpgradeB, onUpgradeB);
+                                            upgradeBText, canUpgradeB, onUpgradeB,
+                                            enlightenmentHint);
             else
                 upgradePanel.Hide();
         }
@@ -141,6 +154,8 @@ public partial class PlacementController
         return sb.ToString().TrimEnd();
     }
 
+    const string EnlightenmentHint = "Activate/Upgrade Enlightenment synergy to further upgrade turret!";
+
     void BuildUpgradeButtons(
         PlacedBlockInstance ins,
         out string upgradeAText,
@@ -148,16 +163,23 @@ public partial class PlacementController
         out System.Action onUpgradeA,
         out string upgradeBText,
         out bool canUpgradeB,
-        out System.Action onUpgradeB)
+        out System.Action onUpgradeB,
+        out string enlightenmentHint)
     {
         upgradeAText = upgradeBText = null;
         canUpgradeA = canUpgradeB = false;
         onUpgradeA = onUpgradeB = null;
+        enlightenmentHint = null;
 
         var turret = ins?.visualObject != null
             ? ins.visualObject.GetComponentInChildren<TurretController>()
             : null;
         if (turret == null) return;
+
+        // Blocked by the Enlightenment allowance (not by a per-path cap like
+        // "max level") — same reason for both A and B since the allowance is
+        // turret-wide. Show the actionable hint instead of two "Locked" buttons.
+        if (turret.BlockedByEnlightenmentGate) enlightenmentHint = EnlightenmentHint;
 
         if (turret.mode == TurretController.Mode.Basic)
         {
@@ -298,8 +320,11 @@ public partial class PlacementController
         if (isTurret)
         {
             DrawTurretStats(ins);
-            DrawBasicTurretUpgrades(ins);
-            DrawAoeTurretUpgrades(ins);
+            if (EnlightenmentAllowedThisLevel())
+            {
+                DrawBasicTurretUpgrades(ins);
+                DrawAoeTurretUpgrades(ins);
+            }
         }
         else
         {

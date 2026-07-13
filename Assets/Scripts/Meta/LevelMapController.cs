@@ -1,6 +1,8 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.UI;
+using TMPro;
 
 // Drives the level-select map. Either builds the map at runtime from a saved file
 // (authored with the real placement tool — see LevelMapAuthor), or uses LevelNodes
@@ -50,6 +52,18 @@ public class LevelMapController : MonoBehaviour
     [Range(0f, 1f)] public float focusViewportX = 0.3f;
     [Range(0f, 1f)] public float focusViewportY = 0.2f;
 
+    [Header("Build mode (overworld map extension)")]
+    [Tooltip("Blocks the player can place on this map, earned via LevelDefinition.mapBlockRewards. Only blocks in THIS list are placeable, even if granted — keep it in sync with what levels can reward.")]
+    public BlockData[] buildableBlocks;
+    [Tooltip("Key that enters/exits build mode.")]
+    public KeyCode buildModeKey = KeyCode.B;
+    [Tooltip("Key that rotates the held ghost 90° around Y while placing.")]
+    public KeyCode rotateGhostKey = KeyCode.R;
+    public Color ghostValidColor   = new Color(0.35f, 1f, 0.45f, 0.55f);
+    public Color ghostInvalidColor = new Color(1f, 0.30f, 0.30f, 0.55f);
+    [Tooltip("Tint applied to a freshly player-built node so it visually reads as 'built', distinct from the authored map.")]
+    public Color playerBuiltColor = new Color(0.55f, 0.85f, 0.95f, 1f);
+
     readonly List<LevelNode> _nodes = new();
     LevelNode _current, _selected;
     bool      _moving;
@@ -73,6 +87,21 @@ public class LevelMapController : MonoBehaviour
 
     LineRenderer _trailLr;   // walk-path preview — shrinks from the start as the pawn walks it off
 
+    // ── Build mode state ──────────────────────────────────────────────────────
+    bool         _buildMode;
+    BlockData    _ghostBlock;
+    int          _ghostRotY;
+    Vector3Int   _ghostOrigin;
+    Vector3Int[] _ghostCells;
+    bool         _ghostDirty = true;
+    bool         _placementValid;
+    readonly List<GameObject> _ghostGOs = new();
+    Transform    _ghostRoot;
+
+    Canvas        _trayCanvas;
+    RectTransform _trayList;
+    TMP_Text      _trayHint;
+
     void Start()
     {
         timeLoop.Post(this.gameObject);
@@ -80,6 +109,9 @@ public class LevelMapController : MonoBehaviour
 
         if (buildFromFile) BuildMap();
         else _nodes.AddRange(FindObjectsByType<LevelNode>(FindObjectsSortMode.None));
+
+        RebuildPlacedMapBlocks();   // replay the player's own map-building from the save
+        LinkAllNodes();             // adjacency across BOTH the authored map and player-built nodes
 
         // Unlock default levels, then refresh state/colour on every node.
         var defs = new List<LevelDefinition>();
@@ -210,20 +242,86 @@ public class LevelMapController : MonoBehaviour
             if (!string.IsNullOrEmpty(node.levelId) && ln.level == null)
                 Debug.LogWarning($"[LevelMap] block tagged level '{node.levelId}' but it isn't in the Database — add it, or this block won't show a panel.");
         }
+    }
 
-        // Auto-link face-adjacent nodes (so a placed path is walkable with no manual wiring).
+    // Auto-link face-adjacent nodes (so a placed/built path is walkable with no
+    // manual wiring). Idempotent (skips pairs already linked) — safe to call again
+    // after build-mode adds a new node, instead of re-deriving the whole map.
+    void LinkAllNodes()
+    {
         for (int i = 0; i < _nodes.Count; i++)
             for (int j = i + 1; j < _nodes.Count; j++)
-                if (_nodes[i].IsAdjacentTo(_nodes[j]))
+                if (_nodes[i].IsAdjacentTo(_nodes[j]) && !_nodes[i].neighbors.Contains(_nodes[j]))
                 {
                     _nodes[i].neighbors.Add(_nodes[j]);
                     _nodes[j].neighbors.Add(_nodes[i]);
                 }
     }
 
+    // Replays every block the player has placed on this map in a previous session
+    // (SaveSystem.Profile.placedMapBlocks) so their extended network persists.
+    // Skipped silently (with a warning) if a block's asset can no longer be
+    // resolved — e.g. buildableBlocks was edited after the block was placed.
+    void RebuildPlacedMapBlocks()
+    {
+        if (gridSystem == null || cubePrefab == null) return;
+        var placed = SaveSystem.Profile.placedMapBlocks;
+        if (placed == null) return;
+
+        foreach (var p in placed)
+        {
+            if (p?.cells == null || p.cells.Length == 0) continue;
+            var bd = FindBuildableBlock(p.blockAssetName);
+            if (bd == null)
+            {
+                Debug.LogWarning($"[LevelMap] saved player-built block '{p.blockAssetName}' isn't in buildableBlocks — skipped (it stays in the save in case the block comes back).");
+                continue;
+            }
+            SpawnMapBlockNode(p.cells, p.blockAssetName);
+        }
+    }
+
+    // Instantiates a plain waypoint node (level == null — a pure connector) at the
+    // given ABSOLUTE cells, exactly like BuildMap()'s per-node loop. Shared by the
+    // save-replay path and the live build-mode commit.
+    LevelNode SpawnMapBlockNode(Vector3Int[] absCells, string blockAssetName)
+    {
+        Vector3 centroid = Vector3.zero;
+        foreach (var c in absCells) centroid += gridSystem.GridToWorld(c);
+        centroid /= absCells.Length;
+
+        var obj = new GameObject("PlayerBuilt_" + blockAssetName);
+        obj.transform.position = centroid;
+
+        var br = obj.AddComponent<BlockRenderer>();
+        br.cubePrefab = cubePrefab;
+        br.Render(Vector3Int.zero, absCells, gridSystem.cellSize, gridSystem);
+
+        var ln = obj.AddComponent<LevelNode>();
+        ln.cells      = absCells;
+        ln.level      = null;
+        ln.isStart    = false;
+        ln.themeColor = playerBuiltColor;
+        _nodes.Add(ln);
+        return ln;
+    }
+
+    BlockData FindBuildableBlock(string name)
+    {
+        if (buildableBlocks == null || string.IsNullOrEmpty(name)) return null;
+        foreach (var b in buildableBlocks)
+            if (b != null && b.name == name) return b;
+        return null;
+    }
+
     void Update()
     {
-        if (_moving || SettingsScreen.Open) return;
+        if (SettingsScreen.Open) return;
+
+        if (_buildMode) { UpdateBuildMode(); return; }
+
+        if (!_moving && Input.GetKeyDown(buildModeKey)) EnterBuildMode();
+        if (_moving) return;
         if (Input.GetMouseButtonDown(0) || VirtualCursor.ConfirmPressedThisFrame) HandleClick();
     }
 
@@ -480,6 +578,264 @@ public class LevelMapController : MonoBehaviour
         string best   = (rec != null && rec.bestWave > 0) ? $"Best wave: {rec.bestWave}" : null;
         bool   canEnter = _selected.NodeState != LevelNode.State.Locked;
         infoPanel.Show(title, lv.description, status, best, canEnter, () => EnterLevel(lv));
+    }
+
+    // ── Build mode ────────────────────────────────────────────────────────────
+    // Freeform placement (like real level building): the player earns real
+    // BlockData pieces from level clears (LevelDefinition.mapBlockRewards) and
+    // places them on THIS map to extend the walkable network toward locked
+    // levels — the overworld equivalent of gameplay's grid placement, just
+    // simplified (no shop, no cost, no synergy; just "does it fit and connect").
+
+    public void ToggleBuildMode()
+    {
+        if (_buildMode) ExitBuildMode(); else EnterBuildMode();
+    }
+
+    void EnterBuildMode()
+    {
+        if (_moving) return;   // don't interrupt a walk
+        _buildMode = true;
+        _ghostBlock = null;
+        BuildTrayUIIfNeeded();
+        RefreshTray();
+        _trayCanvas.enabled = true;
+    }
+
+    void ExitBuildMode()
+    {
+        _buildMode = false;
+        ClearGhostCubes();
+        _ghostBlock = null;
+        if (_trayCanvas != null) _trayCanvas.enabled = false;
+    }
+
+    void UpdateBuildMode()
+    {
+        if (Input.GetKeyDown(buildModeKey)) { ExitBuildMode(); return; }
+        if (Input.GetKeyDown(KeyCode.Escape))
+        {
+            if (_ghostBlock != null) { _ghostBlock = null; ClearGhostCubes(); }   // step 1: drop the held block
+            else ExitBuildMode();                                                 // step 2: leave build mode
+            return;
+        }
+        if (_ghostBlock == null) return;   // waiting on a tray pick
+
+        if (Input.GetKeyDown(rotateGhostKey)) { _ghostRotY = (_ghostRotY + 1) % 4; _ghostDirty = true; }
+
+        if (_cam == null) _cam = Camera.main;
+        if (_cam == null || gridSystem == null) return;
+        if (!Physics.Raycast(_cam.ScreenPointToRay(VirtualCursor.Position), out var hit)) return;
+
+        // Candidate origin: stack the new block on top of whatever surface cell the
+        // cursor is over — guarantees the new node is face-adjacent to the existing
+        // network (LinkAllNodes then just works, no special-case needed).
+        Vector3Int hoverCell = TopOfColumn(gridSystem.WorldToGrid(hit.collider.transform.position));
+        Vector3Int candidateOrigin = hoverCell + Vector3Int.up;
+
+        if (_ghostDirty || candidateOrigin != _ghostOrigin)
+        {
+            _ghostOrigin = candidateOrigin;
+            _ghostDirty  = false;
+            RebuildGhost();
+        }
+
+        if (Input.GetMouseButtonDown(0) && _placementValid) CommitPlacement();
+    }
+
+    void RebuildGhost()
+    {
+        ClearGhostCubes();
+        if (_ghostBlock == null || _ghostBlock.cells == null || gridSystem == null || cubePrefab == null) return;
+
+        var rotated = RotateCellsY(_ghostBlock.cells, _ghostRotY);
+        _ghostCells = new Vector3Int[rotated.Length];
+        bool valid = true;
+        for (int i = 0; i < rotated.Length; i++)
+        {
+            var c = _ghostOrigin + rotated[i];
+            _ghostCells[i] = c;
+            if (_allCells.Contains(c)) valid = false;
+        }
+        _placementValid = valid;
+
+        if (_ghostRoot == null) { _ghostRoot = new GameObject("BuildGhost").transform; _ghostRoot.SetParent(transform, false); }
+        Color tint = valid ? ghostValidColor : ghostInvalidColor;
+        for (int i = 0; i < _ghostCells.Length; i++)
+        {
+            var cube = Instantiate(cubePrefab, _ghostRoot);
+            cube.transform.position = gridSystem.GridToWorld(_ghostCells[i]);
+            var rends = cube.GetComponentsInChildren<Renderer>();
+            for (int r = 0; r < rends.Length; r++) MpbColor.Set(rends[r], tint);
+            foreach (var col in cube.GetComponentsInChildren<Collider>()) col.enabled = false;   // ghost never blocks raycasts
+            _ghostGOs.Add(cube);
+        }
+    }
+
+    void ClearGhostCubes()
+    {
+        for (int i = 0; i < _ghostGOs.Count; i++)
+            if (_ghostGOs[i] != null) Destroy(_ghostGOs[i]);
+        _ghostGOs.Clear();
+        _ghostCells = null;
+        _placementValid = false;
+    }
+
+    void CommitPlacement()
+    {
+        if (!_placementValid || _ghostBlock == null || _ghostCells == null) return;
+        if (!SaveSystem.Profile.ConsumeMapBlock(_ghostBlock.name)) { RefreshTray(); return; }   // stale count — bail safely
+
+        var absCells = _ghostCells;   // captured before ClearGhostCubes() nulls it
+        SpawnMapBlockNode(absCells, _ghostBlock.name);
+        LinkAllNodes();
+        BuildSurface();
+        foreach (var n in _nodes) n.Refresh();
+
+        SaveSystem.Profile.placedMapBlocks.Add(new PlacedMapBlock
+        {
+            cells = absCells, blockAssetName = _ghostBlock.name, rotationY = _ghostRotY
+        });
+        SaveSystem.Save();
+
+        ClearGhostCubes();
+        _ghostBlock = null;   // back to the tray — pick again for the next placement
+        RefreshTray();
+    }
+
+    static Vector3Int[] RotateCellsY(Vector3Int[] cells, int rot90)
+    {
+        if (cells == null) return System.Array.Empty<Vector3Int>();
+        var r = new Vector3Int[cells.Length];
+        var q = Quaternion.Euler(0f, 90f * rot90, 0f);
+        for (int i = 0; i < cells.Length; i++)
+            r[i] = Vector3Int.RoundToInt(q * (Vector3)cells[i]);
+        return r;
+    }
+
+    // ── Build tray (UGUI) ────────────────────────────────────────────────────
+    void BuildTrayUIIfNeeded()
+    {
+        if (_trayCanvas != null) return;
+
+        var canvasGo = new GameObject("BuildTrayCanvas", typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster));
+        canvasGo.transform.SetParent(transform, false);
+        _trayCanvas = canvasGo.GetComponent<Canvas>();
+        _trayCanvas.renderMode = RenderMode.ScreenSpaceOverlay;
+        _trayCanvas.sortingOrder = 60;
+        var sc = canvasGo.GetComponent<CanvasScaler>();
+        sc.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+        sc.referenceResolution = new Vector2(1920f, 1080f);
+        sc.matchWidthOrHeight = 0.5f;
+        BlockInfoPanel.EnsureEventSystem();
+
+        var panel = NewRect("Panel", canvasGo.transform);
+        panel.anchorMin = panel.anchorMax = new Vector2(0.5f, 0f);
+        panel.pivot = new Vector2(0.5f, 0f);
+        panel.anchoredPosition = new Vector2(0f, 20f);
+        panel.sizeDelta = new Vector2(760f, 120f);
+        var bg = panel.gameObject.AddComponent<Image>();
+        bg.color = new Color(0.05f, 0.05f, 0.07f, 0.82f);
+
+        _trayHint = NewText("Hint", panel, 16f, new Color(0.85f, 0.85f, 0.88f),
+                            TextAlignmentOptions.Top, new Vector2(0f, -8f), new Vector2(-20f, 24f));
+
+        _trayList = NewRect("List", panel);
+        _trayList.anchorMin = new Vector2(0f, 0f);
+        _trayList.anchorMax = new Vector2(1f, 1f);
+        _trayList.offsetMin = new Vector2(10f, 10f);
+        _trayList.offsetMax = new Vector2(-10f, -34f);
+        var hlg = _trayList.gameObject.AddComponent<HorizontalLayoutGroup>();
+        hlg.spacing = 8f; hlg.childAlignment = TextAnchor.MiddleLeft;
+        hlg.childControlWidth = hlg.childControlHeight = false;
+        hlg.childForceExpandWidth = hlg.childForceExpandHeight = false;
+
+        var exitBtnRt = NewRect("Exit", panel);
+        exitBtnRt.anchorMin = exitBtnRt.anchorMax = exitBtnRt.pivot = new Vector2(1f, 1f);
+        exitBtnRt.anchoredPosition = new Vector2(-8f, -8f);
+        exitBtnRt.sizeDelta = new Vector2(70f, 26f);
+        var exitImg = exitBtnRt.gameObject.AddComponent<Image>();
+        exitImg.color = new Color(0.7f, 0.2f, 0.2f, 1f);
+        var exitBtn = exitBtnRt.gameObject.AddComponent<Button>();
+        exitBtn.targetGraphic = exitImg;
+        exitBtn.onClick.AddListener(ExitBuildMode);
+        var exitLabel = NewFillText("Label", exitBtnRt, 14f, Color.white, TextAlignmentOptions.Center);
+        exitLabel.text = "Exit";
+
+        _trayCanvas.enabled = false;
+    }
+
+    void RefreshTray()
+    {
+        if (_trayList == null) return;
+        for (int i = _trayList.childCount - 1; i >= 0; i--)
+            Destroy(_trayList.GetChild(i).gameObject);
+
+        var inv = SaveSystem.Profile.mapBlockInventory;
+        bool any = false;
+        if (inv != null)
+        {
+            foreach (var g in inv)
+            {
+                if (g == null || g.count <= 0) continue;
+                var bd = FindBuildableBlock(g.blockAssetName);
+                if (bd == null) continue;
+                any = true;
+                SpawnTrayEntry(bd, g.count);
+            }
+        }
+
+        _trayHint.text = _ghostBlock != null
+            ? $"Placing {_ghostBlock.ShapeName} — click to place, {rotateGhostKey} to rotate, Esc to cancel."
+            : (any ? "Pick a block, then click the map to place it." : "No blocks earned yet — clear levels to earn map blocks.");
+    }
+
+    void SpawnTrayEntry(BlockData bd, int count)
+    {
+        var rt = NewRect("Entry", _trayList);
+        rt.sizeDelta = new Vector2(96f, 64f);
+        var img = rt.gameObject.AddComponent<Image>();
+        img.color = new Color(0.18f, 0.19f, 0.22f, 1f);
+        var btn = rt.gameObject.AddComponent<Button>();
+        btn.targetGraphic = img;
+        btn.onClick.AddListener(() => { _ghostBlock = bd; _ghostRotY = 0; _ghostDirty = true; RefreshTray(); });
+
+        var label = NewFillText("Label", rt, 16f, Color.white, TextAlignmentOptions.Center);
+        label.text = $"{bd.ShapeName}\n×{count}";
+        label.fontStyle = FontStyles.Bold;
+        label.raycastTarget = false;
+    }
+
+    RectTransform NewRect(string name, Transform parent)
+    {
+        var go = new GameObject(name, typeof(RectTransform));
+        go.transform.SetParent(parent, false);
+        return (RectTransform)go.transform;
+    }
+
+    // Top-anchored, fixed-height strip (used for the hint line).
+    TMP_Text NewText(string name, Transform parent, float size, Color color,
+                     TextAlignmentOptions align, Vector2 anchoredPos, Vector2 sizeDelta)
+    {
+        var rt = NewRect(name, parent);
+        rt.anchorMin = new Vector2(0f, 1f); rt.anchorMax = new Vector2(1f, 1f); rt.pivot = new Vector2(0.5f, 1f);
+        rt.anchoredPosition = anchoredPos;
+        rt.sizeDelta = sizeDelta;
+        var t = rt.gameObject.AddComponent<TextMeshProUGUI>();
+        t.fontSize = size; t.color = color; t.alignment = align;
+        t.raycastTarget = false;
+        return t;
+    }
+
+    // Stretches to fill its parent's whole rect (used for button/entry labels).
+    TMP_Text NewFillText(string name, Transform parent, float size, Color color, TextAlignmentOptions align)
+    {
+        var rt = NewRect(name, parent);
+        rt.anchorMin = Vector2.zero; rt.anchorMax = Vector2.one;
+        rt.offsetMin = rt.offsetMax = Vector2.zero;
+        var t = rt.gameObject.AddComponent<TextMeshProUGUI>();
+        t.fontSize = size; t.color = color; t.alignment = align;
+        return t;
     }
 
     // Wire a UGUI "← Title" button to this.

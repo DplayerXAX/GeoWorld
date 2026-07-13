@@ -18,6 +18,7 @@ MonoBehaviour:
   runSeed: 0
   blocksPerTurn: 8
   turretsPerTurn: 3
+  allowedColors: 010000000400000002000000
   waves:
   - {fileID: 0}
   - {fileID: 0}
@@ -48,6 +49,7 @@ MonoBehaviour:
   unlockedByDefault: 1
   unlocks: []
   techReward: 1
+  mapBlockRewards: []
   isTutorial: 0
   fixedEndpoints: 0
   startCell: {x: 0, y: 0, z: 0}

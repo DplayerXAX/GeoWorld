@@ -53,6 +53,21 @@ public class TurretController : MonoBehaviour
     public int AoeFirePathLevel => _aoeFirePathLevel;
     public int AoeGravityPathLevel => _aoeGravityPathLevel;
 
+    // Upgrade actions spent so far, across ALL paths/modes. Turrets start with
+    // zero allowance (see TowerUpgradeGate) — an active Enlightenment cube is
+    // the only source of AllowedUpgrades, so this stays capped at whatever the
+    // biggest currently-active cube grants (1 / 2 / 3 for tier 1/2/3).
+    public int TotalUpgradesUsed =>
+        _powerPathLevel + _burstPathLevel + _aoeFirePathLevel + _aoeGravityPathLevel;
+
+    // True whenever the turret's own upgrade actions have caught up with (or
+    // exceed) the currently-active Enlightenment allowance — the SAME check
+    // CanUpgradeBasicPath/CanUpgradeAoePath run first, exposed here as its own
+    // named condition so the UI can distinguish "blocked by Enlightenment" from
+    // "blocked because this specific path is maxed" without string-matching a
+    // `reason` message.
+    public bool BlockedByEnlightenmentGate => TotalUpgradesUsed >= TowerUpgradeGate.AllowedUpgrades;
+
     public bool AoeBurnGroundEnabled => mode == Mode.Aoe && _aoeFirePathLevel >= 1;
     public float AoeBurnGroundDuration => _aoeFirePathLevel >= 2 ? 3f : 2f;
     public float AoeBurnTickInterval => 0.75f;
@@ -156,6 +171,13 @@ public class TurretController : MonoBehaviour
     public bool CanUpgradeBasicPath(BasicTurretUpgradePath path, out string reason)
     {
         reason = null;
+        if (TotalUpgradesUsed >= TowerUpgradeGate.AllowedUpgrades)
+        {
+            reason = TowerUpgradeGate.AllowedUpgrades <= 0
+                ? "Requires an active Enlightenment cube."
+                : "No upgrades left — form a bigger Enlightenment cube.";
+            return false;
+        }
         if (mode != Mode.Basic)
         {
             reason = "Only Basic Turret can use these upgrades.";
@@ -191,6 +213,10 @@ public class TurretController : MonoBehaviour
         return true;
     }
 
+    // Restores a turret's upgrade levels (e.g. picking it up and re-placing
+    // it) — deliberately bypasses CanUpgradeBasicPath's live Enlightenment gate.
+    // These upgrades were already earned; re-placing the same turret must not
+    // silently strip them just because no cube happens to be active THIS instant.
     public void SetBasicUpgradeLevels(int powerLevel, int burstLevel)
     {
         _powerPathLevel = 0;
@@ -204,10 +230,8 @@ public class TurretController : MonoBehaviour
         if (powerLevel == 3 && burstLevel == 3)
             burstLevel = 2;
 
-        for (int i = 0; i < powerLevel; i++)
-            TryUpgradeBasicPath(BasicTurretUpgradePath.Power);
-        for (int i = 0; i < burstLevel; i++)
-            TryUpgradeBasicPath(BasicTurretUpgradePath.Burst);
+        for (int i = 1; i <= powerLevel; i++) { _powerPathLevel = i; ApplyBasicUpgrade(BasicTurretUpgradePath.Power, i); }
+        for (int i = 1; i <= burstLevel; i++) { _burstPathLevel = i; ApplyBasicUpgrade(BasicTurretUpgradePath.Burst, i); }
     }
 
     public int GetBasicPathLevel(BasicTurretUpgradePath path) =>
@@ -255,6 +279,13 @@ public class TurretController : MonoBehaviour
     public bool CanUpgradeAoePath(AoeTurretUpgradePath path, out string reason)
     {
         reason = null;
+        if (TotalUpgradesUsed >= TowerUpgradeGate.AllowedUpgrades)
+        {
+            reason = TowerUpgradeGate.AllowedUpgrades <= 0
+                ? "Requires an active Enlightenment cube."
+                : "No upgrades left — form a bigger Enlightenment cube.";
+            return false;
+        }
         if (mode != Mode.Aoe)
         {
             reason = "Only AOE Turret can use these upgrades.";
@@ -290,6 +321,7 @@ public class TurretController : MonoBehaviour
         return true;
     }
 
+    // Same restore-bypass reasoning as SetBasicUpgradeLevels — see its comment.
     public void SetAoeUpgradeLevels(int fireLevel, int gravityLevel)
     {
         _aoeFirePathLevel = 0;
@@ -301,10 +333,8 @@ public class TurretController : MonoBehaviour
         if (fireLevel == 3 && gravityLevel == 3)
             gravityLevel = 2;
 
-        for (int i = 0; i < fireLevel; i++)
-            TryUpgradeAoePath(AoeTurretUpgradePath.Fire);
-        for (int i = 0; i < gravityLevel; i++)
-            TryUpgradeAoePath(AoeTurretUpgradePath.Gravity);
+        for (int i = 1; i <= fireLevel; i++) { _aoeFirePathLevel = i; ApplyAoeUpgrade(AoeTurretUpgradePath.Fire, i); }
+        for (int i = 1; i <= gravityLevel; i++) { _aoeGravityPathLevel = i; ApplyAoeUpgrade(AoeTurretUpgradePath.Gravity, i); }
     }
 
     public int GetAoePathLevel(AoeTurretUpgradePath path) =>

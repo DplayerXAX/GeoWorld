@@ -26,6 +26,7 @@ public class WaveDefinition : ScriptableObject
     [Tooltip("Manual designer override — set this yourself if you want a specific number regardless of the auto-estimate below.")]
     public int difficulty;
 
+
     [Header("Auto-computed (recalculated whenever a field above changes — don't hand-edit)")]
     [Tooltip("Mass^0.7 × Rate^0.5, where Mass = total enemy HP and Rate = Mass / ACTIVE spawn time " +
              "(preDelay gaps between groups don't count — they're breathing room, not threat, and " +

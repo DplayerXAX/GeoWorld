@@ -24,6 +24,10 @@ public class OrderSlowEffect : GameEffect
     [Tooltip("How long the slow lingers after an enemy steps off (should be ≥ a couple of ticks).")]
     [Min(0.05f)] public float refreshDuration = 0.4f;
 
+    // Enemies currently standing on the synergy (as of the last tick) — live
+    // number for the synergy HUD (HudSidePanels).
+    public int AffectedEnemyCount { get; private set; }
+
     Coroutine        _routine;
     GameFlowManager  _runner;
     readonly HashSet<Vector3Int> _cells = new();
@@ -53,23 +57,28 @@ public class OrderSlowEffect : GameEffect
             yield return wait;
 
             // Enemies only exist during combat — skip the scan otherwise.
-            if (_runner == null || _runner.phase != GamePhase.Running) continue;
+            if (_runner == null || _runner.phase != GamePhase.Running) { AffectedEnemyCount = 0; continue; }
 
             SynergyEffectUtil.CollectClaimedCells(this, _cells);
-            if (_cells.Count == 0) continue;
+            if (_cells.Count == 0) { AffectedEnemyCount = 0; continue; }
 
             var mgr = EnemyBaseManager.Instance;
-            if (mgr == null) continue;
+            if (mgr == null) { AffectedEnemyCount = 0; continue; }
 
             var enemies = mgr.ActiveEnemies;
+            int affected = 0;
             for (int i = 0; i < enemies.Count; i++)
             {
                 var e = enemies[i];
                 if (e == null) continue;
                 var cell = e.CurrentCell;
                 if (cell.HasValue && _cells.Contains(cell.Value))
+                {
                     EnemySlowEffect.Apply(e, refreshDuration, speedMultiplier);
+                    affected++;
+                }
             }
+            AffectedEnemyCount = affected;
         }
     }
 }

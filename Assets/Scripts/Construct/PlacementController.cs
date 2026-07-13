@@ -653,6 +653,11 @@ public partial class PlacementController : MonoBehaviour
             Debug.Log("[Placement] This block is part of the level's fixed layout and can't be moved.");
             return false;
         }
+        if (FindOrphanedTurret(selectedInstance) != null)
+        {
+            ShowPlacementPopup("There's still turret on this block, try move it first");
+            return false;
+        }
 
         isPickingUpObject = true;
         lastObjectPos   = selectedInstance.visualObject.transform.position;
@@ -969,6 +974,11 @@ public partial class PlacementController : MonoBehaviour
         if (ins.locked)
         {
             Debug.Log("[Placement] This block is part of the level's fixed layout and can't be sold.");
+            return;
+        }
+        if (FindOrphanedTurret(ins) != null)
+        {
+            ShowPlacementPopup("There's still turret on this block, try move it first");
             return;
         }
         if (!TutorialDirector.CanSell()) return;   // tutorial gate
@@ -1417,6 +1427,48 @@ public partial class PlacementController : MonoBehaviour
             return PlaceFailureReason.NotAdjacent;
 
         return PlaceFailureReason.None;
+    }
+
+    // ── Turret-support check (pickup / sell guard) ────────────────────────────
+    // Mirrors Validate()'s NotAdjacent rule but in reverse: placing a block
+    // requires it to touch something existing; removing one must not leave a
+    // TURRET with nothing left to attach to. Only turrets are checked — regular
+    // blocks are allowed to end up disconnected (no such rule exists for them).
+
+    // First turret that would have zero occupied 26-neighbor cells if
+    // `toRemove` were taken off the grid — null if none. Skips `toRemove`
+    // itself (picking a turret up doesn't need to "support" itself).
+    PlacedBlockInstance FindOrphanedTurret(PlacedBlockInstance toRemove)
+    {
+        if (toRemove == null || grid == null) return null;
+
+        foreach (var other in grid.GetAllInstances())
+        {
+            if (other == null || other == toRemove || other.data == null) continue;
+            if (!TurretTypes.Is(other.data.blockType)) continue;
+            if (!HasExternalSupport(other, toRemove.occupiedCells)) return other;
+        }
+        return null;
+    }
+
+    // True if ANY cell of `instance` has a 26-neighbor occupied by something
+    // OTHER than `instance` itself or a cell in `excludeCells` (the block about
+    // to be removed) — i.e. it would still have something to attach to.
+    bool HasExternalSupport(PlacedBlockInstance instance, IList<Vector3Int> excludeCells)
+    {
+        foreach (var cell in instance.occupiedCells)
+            for (int dx = -1; dx <= 1; dx++)
+            for (int dy = -1; dy <= 1; dy++)
+            for (int dz = -1; dz <= 1; dz++)
+            {
+                if (dx == 0 && dy == 0 && dz == 0) continue;
+                var n = new Vector3Int(cell.x + dx, cell.y + dy, cell.z + dz);
+                if (!grid.IsOccupied(n)) continue;
+                if (excludeCells.Contains(n)) continue;
+                if (instance.occupiedCells.Contains(n)) continue;   // own cell — not external
+                return true;
+            }
+        return false;
     }
 
     static string ReasonToMessage(PlaceFailureReason r) => r switch

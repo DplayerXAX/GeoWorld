@@ -2013,7 +2013,7 @@
 							<PropertyList>
 								<Property Name="Volume" Type="Real64">
 									<ValueList>
-										<Value>-9</Value>
+										<Value>-7</Value>
 									</ValueList>
 								</Property>
 							</PropertyList>
@@ -2288,7 +2288,7 @@
 																				<PointList>
 																					<Point>
 																						<XPos>0</XPos>
-																						<YPos>-96.3</YPos>
+																						<YPos>-0</YPos>
 																						<Flags>5</Flags>
 																					</Point>
 																					<Point>

@@ -30,6 +30,11 @@ public class AbundanceHarvestEffect : GameEffect
     [Tooltip("Colour of the harvest mote that floats up from the loop each turn.")]
     public Color moteColor = new Color(0.95f, 0.8f, 0.3f);
 
+    // Live numbers for the synergy HUD (HudSidePanels) — last turn's payout and
+    // the unit count it was computed from. 0 until the first turn ticks.
+    public int LastUnitCount   { get; private set; }
+    public int LastPayoutAmount { get; private set; }
+
     bool _subscribed;
 
     public override void Apply(GameFlowManager game)
@@ -51,9 +56,11 @@ public class AbundanceHarvestEffect : GameEffect
         int count = countMode == CountMode.Pieces
             ? SynergyEffectUtil.CountClaimedPieces(this)
             : SynergyEffectUtil.CountClaimedCells(this);
-        if (count <= 0) return;
+        LastUnitCount = count;
+        if (count <= 0) { LastPayoutAmount = 0; return; }
 
         int amount = count * Mathf.Max(0, blockPerUnit) + Mathf.Max(0, flatBonus);
+        LastPayoutAmount = amount;
         if (amount <= 0) return;
         ResourceManager.Instance?.AddBlockCurrency(amount);
 

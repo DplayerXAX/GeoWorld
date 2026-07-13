@@ -317,9 +317,13 @@ public class HudSidePanels : MonoBehaviour
                 row.go.SetActive(true);
                 row.swatch.enabled = true;
                 row.swatch.color   = GeoPalette.Accents[n % GeoPalette.Accents.Length];
-                string nm = string.IsNullOrEmpty(a.rule.displayName) ? a.rule.name : a.rule.displayName;
+                string nm     = string.IsNullOrEmpty(a.rule.displayName) ? a.rule.name : a.rule.displayName;
+                string title  = a.tier > 1 ? $"{nm}  ·  T{a.tier}" : nm;
+                string detail = BuildSynergyDetail(a);
                 row.label.color = GeoPalette.Ink;
-                row.label.text  = a.tier > 1 ? $"{nm}  ·  T{a.tier}" : nm;
+                row.label.text  = detail != null
+                    ? $"{title}\n<size=70%><color=#7A7A7A>{detail}</color></size>"
+                    : title;
                 n++;
             }
 
@@ -336,6 +340,36 @@ public class HudSidePanels : MonoBehaviour
         for (int i = n; i < _synRows.Count; i++) _synRows[i].go.SetActive(false);
     }
 
+    // Live stat line for an active synergy — the numbers/affected units it's
+    // currently producing, read straight off its GameEffect instance. Returns
+    // null for rules with no numeric detail to show (name-only row).
+    static string BuildSynergyDetail(ActiveSynergy a)
+    {
+        if (a?.rule == null) return null;
+
+        // Enlightenment's grant is tier-scoped (see UnlockTowerUpgradeEffect /
+        // TowerUpgradeGate), not the flat `rule.effect` — key off the rule type.
+        if (a.rule is EnlightenmentRule)
+        {
+            int allowed = TowerUpgradeGate.AllowedUpgrades;
+            return $"{allowed} turret upgrade{(allowed == 1 ? "" : "s")} allowed";
+        }
+
+        switch (a.rule.effect)
+        {
+            case AbundanceHarvestEffect ah:
+                return $"{ah.LastUnitCount} piece{(ah.LastUnitCount == 1 ? "" : "s")}  ·  +{ah.LastPayoutAmount}/turn";
+            case OrderSlowEffect os:
+                int slowPct = Mathf.RoundToInt((1f - os.speedMultiplier) * 100f);
+                return $"-{slowPct}% speed  ·  {os.AffectedEnemyCount} enemy affected";
+            case HarmonyAttackSpeedEffect ha:
+                int spdPct = Mathf.RoundToInt(ha.attackSpeedBonus * 100f);
+                return $"+{spdPct}% atk spd  ·  {ha.BuffedTurretCount} turret{(ha.BuffedTurretCount == 1 ? "" : "s")}";
+            default:
+                return null;
+        }
+    }
+
     Row MakeSynRow()
     {
         var rt = NewRect("Row", _leftContent);
@@ -343,7 +377,10 @@ public class HudSidePanels : MonoBehaviour
         h.childAlignment = TextAnchor.MiddleLeft; h.spacing = 8f;
         h.childControlWidth = h.childControlHeight = true;
         h.childForceExpandWidth = false; h.childForceExpandHeight = false;
-        rt.gameObject.AddComponent<LayoutElement>().minHeight = rowSize * 1.6f;
+        // Tall enough for a two-line row (name + detail) — used uniformly so
+        // rows don't jump height depending on whether a synergy has a detail
+        // line this frame.
+        rt.gameObject.AddComponent<LayoutElement>().minHeight = rowSize * 2.8f;
 
         var sw = NewImage("Swatch", rt, Color.white, false);
         var swle = sw.gameObject.AddComponent<LayoutElement>();

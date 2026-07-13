@@ -18,6 +18,7 @@ MonoBehaviour:
   runSeed: 25
   blocksPerTurn: 5
   turretsPerTurn: 3
+  allowedColors: 01000000
   waves: []
   wavesToClear: 5
   objectives:
@@ -38,6 +39,8 @@ MonoBehaviour:
   unlockedByDefault: 1
   unlocks: []
   techReward: 1
+  mapBlockRewards:
+  - {fileID: 11400000, guid: 820a88ddf0392914889d66c41c3658a0, type: 2}
   isTutorial: 1
   fixedEndpoints: 1
   startCell: {x: 1, y: 0, z: 0}
@@ -54,6 +57,8 @@ MonoBehaviour:
     pathLength: 15
     freeOperations: 0
     hideInCombat: 0
+    requiredWave: 0
+    unlocksOps: 
     cameraFocus: 0
     focusZoom: 0
     hint: O Lord, born of our unwavering faith, you have come to save us from the
@@ -73,6 +78,8 @@ MonoBehaviour:
     pathLength: 15
     freeOperations: 0
     hideInCombat: 0
+    requiredWave: 0
+    unlocksOps: 
     cameraFocus: 1
     focusZoom: 3
     hint: An endless horde of chaotic enemies pours forth from this Rift, determined
@@ -92,6 +99,8 @@ MonoBehaviour:
     pathLength: 15
     freeOperations: 0
     hideInCombat: 0
+    requiredWave: 0
+    unlocksOps: 
     cameraFocus: 2
     focusZoom: 3
     hint: This is the heart of our realm. Please do not let the forces of chaos reach
@@ -111,6 +120,8 @@ MonoBehaviour:
     pathLength: 15
     freeOperations: 0
     hideInCombat: 0
+    requiredWave: 0
+    unlocksOps: 
     cameraFocus: 1
     focusZoom: 10
     hint: We shape the path before enemies, leading them away from our Core.
@@ -129,6 +140,8 @@ MonoBehaviour:
     pathLength: 15
     freeOperations: 0
     hideInCombat: 0
+    requiredWave: 0
+    unlocksOps: 
     cameraFocus: 0
     focusZoom: 0
     hint: With blocks, we shape their path. With turrets, we strike them down.
@@ -147,6 +160,8 @@ MonoBehaviour:
     pathLength: 15
     freeOperations: 0
     hideInCombat: 0
+    requiredWave: 0
+    unlocksOps: 
     cameraFocus: 0
     focusZoom: 0
     hint: (Press F to open the shop)
@@ -165,6 +180,8 @@ MonoBehaviour:
     pathLength: 15
     freeOperations: 0
     hideInCombat: 0
+    requiredWave: 0
+    unlocksOps: 
     cameraFocus: 0
     focusZoom: 0
     hint: (Click and purchase the L-shape block!)
@@ -183,6 +200,8 @@ MonoBehaviour:
     pathLength: 15
     freeOperations: 0
     hideInCombat: 0
+    requiredWave: 0
+    unlocksOps: 
     cameraFocus: 0
     focusZoom: 0
     hint: Please place the block on the white area, Connecting the rift and our core.
@@ -201,6 +220,8 @@ MonoBehaviour:
     pathLength: 15
     freeOperations: 0
     hideInCombat: 0
+    requiredWave: 0
+    unlocksOps: 
     cameraFocus: 0
     focusZoom: 0
     hint: Once the path is complete, the forces of chaos will march toward the Core
@@ -220,6 +241,8 @@ MonoBehaviour:
     pathLength: 15
     freeOperations: 1
     hideInCombat: 0
+    requiredWave: 0
+    unlocksOps: 
     cameraFocus: 0
     focusZoom: 0
     hint: Allow us to witness your power. Place a turret upon the battlefield.
@@ -238,6 +261,8 @@ MonoBehaviour:
     pathLength: 15
     freeOperations: 0
     hideInCombat: 0
+    requiredWave: 0
+    unlocksOps: 
     cameraFocus: 0
     focusZoom: 0
     hint: Once deployed, turrets will strike down any enemy within range.
@@ -256,6 +281,8 @@ MonoBehaviour:
     pathLength: 15
     freeOperations: 0
     hideInCombat: 0
+    requiredWave: 0
+    unlocksOps: 
     cameraFocus: 0
     focusZoom: 0
     hint: (You may click any placed items for detail)
@@ -274,6 +301,8 @@ MonoBehaviour:
     pathLength: 15
     freeOperations: 1
     hideInCombat: 0
+    requiredWave: 0
+    unlocksOps: 
     cameraFocus: 0
     focusZoom: 0
     hint: My Lord, when your preparations are complete, press Space to begin the
@@ -293,6 +322,8 @@ MonoBehaviour:
     pathLength: 15
     freeOperations: 1
     hideInCombat: 1
+    requiredWave: 0
+    unlocksOps: 
     cameraFocus: 0
     focusZoom: 0
     hint: Your wisdom guides us, My Lord.
@@ -311,6 +342,8 @@ MonoBehaviour:
     pathLength: 15
     freeOperations: 1
     hideInCombat: 0
+    requiredWave: 0
+    unlocksOps: 
     cameraFocus: 0
     focusZoom: 0
     hint: Each enemy that reaches the Core drains 1 Health. Please do not let our
@@ -330,6 +363,8 @@ MonoBehaviour:
     pathLength: 15
     freeOperations: 1
     hideInCombat: 0
+    requiredWave: 0
+    unlocksOps: 
     cameraFocus: 0
     focusZoom: 0
     hint: A short path gives the enemy an advantage. Let's reshape it to slow them
@@ -349,6 +384,8 @@ MonoBehaviour:
     pathLength: 10
     freeOperations: 1
     hideInCombat: 0
+    requiredWave: 0
+    unlocksOps: 
     cameraFocus: 0
     focusZoom: 0
     hint: (Try moving or adding  blocks to force enemies to take a path longer than
