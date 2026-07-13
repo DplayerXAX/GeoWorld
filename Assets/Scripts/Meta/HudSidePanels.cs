@@ -55,7 +55,7 @@ public class HudSidePanels : MonoBehaviour
     Canvas        _canvas;
     RectTransform _leftPanel, _rightPanel, _leftHandle, _rightHandle, _leftContent, _rightContent;
 
-    class Row { public GameObject go; public Image swatch; public TMP_Text label; }
+    class Row { public GameObject go; public RectTransform rt; public Image swatch; public TMP_Text label; public ActiveSynergy active; }
     readonly List<Row> _synRows = new();
 
     bool _autoSpawned;
@@ -89,6 +89,9 @@ public class HudSidePanels : MonoBehaviour
         BuildUI();
     }
 
+    void OnDisable() => SynergyHoverHighlight.Clear();
+    void OnDestroy() => SynergyHoverHighlight.Clear();
+
     void EnsureDefaults()
     {
         if (controls.Count > 0) return;
@@ -111,7 +114,7 @@ public class HudSidePanels : MonoBehaviour
 
         bool show = GameFlowManager.Instance != null && !SettingsScreen.Open;
         _canvas.enabled = show;
-        if (!show) { PointerOver = false; return; }
+        if (!show) { PointerOver = false; SynergyHoverHighlight.Clear(); return; }
 
         UpdateSynergies();
 
@@ -315,6 +318,7 @@ public class HudSidePanels : MonoBehaviour
                 if (a?.rule == null) continue;
                 var row = (n < _synRows.Count) ? _synRows[n] : MakeSynRow();
                 row.go.SetActive(true);
+                row.active = a;
                 row.swatch.enabled = true;
                 row.swatch.color   = GeoPalette.Accents[n % GeoPalette.Accents.Length];
                 string nm     = string.IsNullOrEmpty(a.rule.displayName) ? a.rule.name : a.rule.displayName;
@@ -331,13 +335,37 @@ public class HudSidePanels : MonoBehaviour
         {
             var row = (_synRows.Count > 0) ? _synRows[0] : MakeSynRow();
             row.go.SetActive(true);
+            row.active = null;
             row.swatch.enabled = false;
             row.label.color    = new Color(0.4f, 0.4f, 0.4f);
             row.label.text     = "No active synergies";
             n = 1;
         }
 
-        for (int i = n; i < _synRows.Count; i++) _synRows[i].go.SetActive(false);
+        for (int i = n; i < _synRows.Count; i++) { _synRows[i].go.SetActive(false); _synRows[i].active = null; }
+
+        UpdateSynergyHover();
+    }
+
+    // Highlights the claimed cells of whichever synergy row the pointer is
+    // currently over — same manual hit-test pattern as UpdatePointerOver()
+    // (rows have no raycastTarget graphic of their own, so this reuses
+    // RectTransformUtility directly instead of routing through UGUI events).
+    void UpdateSynergyHover()
+    {
+        ActiveSynergy hovered = null;
+        if (_synOpen)
+        {
+            Vector2 mp = VirtualCursor.Position;
+            for (int i = 0; i < _synRows.Count; i++)
+            {
+                var row = _synRows[i];
+                if (row.active == null || !row.go.activeSelf) continue;
+                if (Contains(row.rt, mp)) { hovered = row.active; break; }
+            }
+        }
+        SynergyHoverHighlight.SetHovered(hovered);
+        SynergyHoverHighlight.Tick();
     }
 
     // Live stat line for an active synergy — the numbers/affected units it's
@@ -389,7 +417,7 @@ public class HudSidePanels : MonoBehaviour
         var lbl = NewText("Label", rt, rowSize, GeoPalette.Ink, FontStyles.Bold, TextAlignmentOptions.MidlineLeft);
         lbl.gameObject.AddComponent<LayoutElement>().flexibleWidth = 1f;
 
-        var row = new Row { go = rt.gameObject, swatch = sw, label = lbl };
+        var row = new Row { go = rt.gameObject, rt = rt, swatch = sw, label = lbl };
         _synRows.Add(row);
         return row;
     }

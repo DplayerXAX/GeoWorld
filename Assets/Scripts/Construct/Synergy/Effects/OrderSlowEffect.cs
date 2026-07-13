@@ -2,14 +2,9 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
-// 秩序 (Order) — slows enemies that are standing ON the synergy.
-//
-// While the synergy is active, a coroutine (running on GameFlowManager) ticks
-// during combat: each tick it gathers the synergy's claimed cells and, for every
-// live enemy whose current cell is one of them, (re)applies a short EnemySlow.
-// Because the slow auto-refreshes every tick and lingers `refreshDuration`, an
-// enemy is slowed the whole time it walks across the Order structure and recovers
-// shortly after stepping off.
+// Order — slows enemies standing on the synergy's claimed cells. A coroutine
+// re-applies a short EnemySlow each tick, so the slow lingers `refreshDuration`
+// after stepping off rather than expiring mid-tick.
 [CreateAssetMenu(menuName = "GeoWorld/Synergy/Effects/Order Slow",
                  fileName = "OrderSlowEffect")]
 public class OrderSlowEffect : GameEffect

@@ -1,19 +1,10 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-// 探寻 (Exploration) — the longest uninterrupted run of same-color cells
-// along any axis (X / Y / Z) reaches `minLength`.
-//
-// "Run" is measured in CELLS, not pieces, so multi-cell pieces (I3, I4)
-// contribute their full length. The claimed set is every piece owning at
-// least one cell of the longest run — those pieces may extend beyond the
-// line and are still claimed in full (lock-wise). The visualizer only
-// decorates the IN-LINE cells via ICellHighlightFilter — overhang cells
-// stay visually plain.
-//
-// Tie-breaking: the FIRST axis/start found wins. Deterministic given the
-// underlying iteration order; rarely matters because the longest run is
-// usually unique.
+// Exploration — the longest uninterrupted run of same-color cells along any
+// axis reaches `minLength`. Measured in cells, not pieces, so multi-cell
+// pieces contribute their full length. Claimed pieces may extend beyond the
+// line; only in-line cells are decorated via ICellHighlightFilter.
 [CreateAssetMenu(menuName = "GeoWorld/Synergy/Rules/Exploration Rule",
                  fileName = "ExplorationRule")]
 public class ExplorationRule : SynergyRule, ICellHighlightFilter
@@ -29,7 +20,6 @@ public class ExplorationRule : SynergyRule, ICellHighlightFilter
         new(0, 0, 1),
     };
 
-    // ── ICellHighlightFilter state (cells of the last detected line) ──
     [System.NonSerialized] readonly HashSet<Vector3Int> _lineCells = new();
 
     void Reset()

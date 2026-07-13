@@ -29,14 +29,14 @@ public static class SynergyEffectUtil
         {
             var a = actives[i];
             if (a?.rule == null || a.rule.effect != effect || a.claimedPieces == null) continue;
-            var filter = a.rule as ICellHighlightFilter;
+            var hc = a.highlightCells;
             foreach (var p in a.claimedPieces)
             {
                 if (p?.cells == null) continue;
                 for (int k = 0; k < p.cells.Length; k++)
                 {
                     var c = p.cells[k];
-                    if (filter != null && !filter.ShouldHighlight(c)) continue;
+                    if (hc != null && !hc.Contains(c)) continue;
                     into.Add(c);
                 }
             }
@@ -57,12 +57,12 @@ public static class SynergyEffectUtil
         {
             var a = actives[i];
             if (a?.rule == null || a.rule.effect != effect || a.claimedPieces == null) continue;
-            var filter = a.rule as ICellHighlightFilter;
+            var hc = a.highlightCells;
             foreach (var p in a.claimedPieces)
             {
                 if (p == null) continue;
-                if (filter == null) { n++; continue; }
-                if (PieceInFilter(p, filter)) n++;
+                if (hc == null) { n++; continue; }
+                if (PieceInFilter(p, hc)) n++;
             }
         }
         return n;
@@ -84,11 +84,11 @@ public static class SynergyEffectUtil
         {
             var a = actives[i];
             if (a?.rule == null || a.rule.effect != effect || a.claimedPieces == null) continue;
-            var filter = a.rule as ICellHighlightFilter;
+            var hc = a.highlightCells;
             foreach (var p in a.claimedPieces)
             {
                 if (p?.cells == null || p.cells.Length == 0) continue;
-                if (filter == null)
+                if (hc == null)
                 {
                     var c = p.cells[Random.Range(0, p.cells.Length)];
                     world = grid.GridToWorld(c) + Vector3.up * (grid.cellSize * 0.6f);
@@ -97,7 +97,7 @@ public static class SynergyEffectUtil
                 // Filtered: pick among just this piece's participating cells.
                 var candidates = new List<Vector3Int>(p.cells.Length);
                 for (int k = 0; k < p.cells.Length; k++)
-                    if (filter.ShouldHighlight(p.cells[k])) candidates.Add(p.cells[k]);
+                    if (hc.Contains(p.cells[k])) candidates.Add(p.cells[k]);
                 if (candidates.Count == 0) continue;
                 var cc = candidates[Random.Range(0, candidates.Count)];
                 world = grid.GridToWorld(cc) + Vector3.up * (grid.cellSize * 0.6f);
@@ -119,23 +119,23 @@ public static class SynergyEffectUtil
         {
             var a = actives[i];
             if (a?.rule == null || a.rule.effect != effect || a.claimedPieces == null) continue;
-            var filter = a.rule as ICellHighlightFilter;
+            var hc = a.highlightCells;
             foreach (var p in a.claimedPieces)
             {
                 if (p?.cells == null) continue;
-                if (filter == null) { n += p.cells.Length; continue; }
+                if (hc == null) { n += p.cells.Length; continue; }
                 for (int k = 0; k < p.cells.Length; k++)
-                    if (filter.ShouldHighlight(p.cells[k])) n++;
+                    if (hc.Contains(p.cells[k])) n++;
             }
         }
         return n;
     }
 
-    static bool PieceInFilter(PlacedPiece p, ICellHighlightFilter filter)
+    static bool PieceInFilter(PlacedPiece p, HashSet<Vector3Int> highlightCells)
     {
         if (p.cells == null) return false;
         for (int k = 0; k < p.cells.Length; k++)
-            if (filter.ShouldHighlight(p.cells[k])) return true;
+            if (highlightCells.Contains(p.cells[k])) return true;
         return false;
     }
 }

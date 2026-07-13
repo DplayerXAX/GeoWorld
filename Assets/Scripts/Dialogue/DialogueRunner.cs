@@ -5,16 +5,15 @@ using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
 
-// Self-contained visual-novel dialogue player. Builds its whole UGUI at runtime, so
-// it drops into any project with zero scene setup:
+// Self-contained visual-novel dialogue player. Builds its whole UGUI at
+// runtime, so it drops into any project with zero scene setup:
 //
 //     DialogueRunner.Instance.Play(myConversation);
 //
-// Features: standing portraits (立绘, left/right/centre with non-speaker dimming),
-// character name box (coloured), topic header (话题), typewriter text with a blinking
-// continue indicator (继续条), and choice branches. All data lives in ScriptableObjects
-// (DialogueCharacter / DialogueConversation), and the look is field-configurable — so
-// it's portable to other games.
+// Features: standing portraits (left/right/centre with non-speaker dimming),
+// character name box, topic header, typewriter text with a blinking continue
+// indicator, and choice branches. Data lives in ScriptableObjects
+// (DialogueCharacter / DialogueConversation).
 public class DialogueRunner : MonoBehaviour
 {
     [Header("Font (leave null for TMP default)")]

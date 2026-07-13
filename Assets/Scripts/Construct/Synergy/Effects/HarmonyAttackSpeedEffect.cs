@@ -1,19 +1,9 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-// 和谐 (Harmony) — turrets touching the synergy fire faster.
-//
-// Turrets are colorless blocks (never part of a color claim), so "on the
-// synergy" means a turret block that is face-adjacent to any claimed cell —
-// sitting on top of, or right beside, the Harmony structure. While active, each
-// qualifying turret gets a reversible fire-rate multiplier; turrets that leave
-// the set (or the whole synergy on revoke) are restored to normal.
-//
-// EVENT-DRIVEN (no per-frame polling): the buffed-turret set is only reconciled
-// when something that could change it happens —
-//   • a block is (re)placed                 → PlacementController.BlockPlaced
-//   • the Harmony claim grows/shrinks/moves  → SynergyEvaluator.OnClaimChanged
-//   • the synergy activates / deactivates    → Apply / Revoke
+// Harmony — turrets face-adjacent to the synergy's claimed cells fire faster.
+// Event-driven, not polled: reconciles on block placement, claim change, and
+// Apply/Revoke.
 [CreateAssetMenu(menuName = "GeoWorld/Synergy/Effects/Harmony Attack Speed",
                  fileName = "HarmonyAttackSpeedEffect")]
 public class HarmonyAttackSpeedEffect : GameEffect

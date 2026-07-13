@@ -2,21 +2,15 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 
-// Gate for the turret-upgrade feature (启发 / Enlightenment unlock).
+// Gate for the turret-upgrade feature (Enlightenment unlock).
 //
-// Turrets start with ZERO upgrade actions allowed. An active Enlightenment
-// cube grants some via a per-tier UnlockTowerUpgradeEffect instance (2×2×2 → 1,
-// 3×3×3 → 2, 4×4×4 → 3, see EnlightenmentRule.perTierEffects). Each grant
-// contributes its own value here; AllowedUpgrades is the LARGEST currently
-// active grant (grants don't stack additively — the biggest cube you've got
-// active sets the ceiling). TurretController checks AllowedUpgrades against
-// its own TotalUpgradesUsed before allowing any upgrade click.
+// Turrets start with zero upgrade actions allowed. An active Enlightenment
+// cube grants some via a per-tier UnlockTowerUpgradeEffect (see
+// EnlightenmentRule.perTierEffects). AllowedUpgrades is the LARGEST currently
+// active grant, not a sum — the biggest active cube sets the ceiling.
 //
-// Multiset (not a plain ref-count) so the tier-up pattern — Enlightenment
-// REVOKES the old tier's effect then re-APPLIES the new one — composes
-// correctly: Release(1) drops the tier-1 grant, Acquire(2) adds the tier-2
-// one, and AllowedUpgrades recomputes to 2 without ever visibly dropping to 0
-// in between.
+// A multiset (not a plain ref-count) so tier-up — revoke old, apply new —
+// composes correctly without the allowance ever visibly dropping to 0.
 public static class TowerUpgradeGate
 {
     static readonly List<int> _active = new();
@@ -34,7 +28,7 @@ public static class TowerUpgradeGate
 
     public static bool Unlocked => AllowedUpgrades > 0;
 
-    // (newAllowedUpgrades) — fires whenever the effective allowance changes.
+    // Fires with the new AllowedUpgrades whenever it changes.
     public static event Action<int> OnChanged;
 
     public static void Acquire(int upgrades)
@@ -51,7 +45,7 @@ public static class TowerUpgradeGate
         if (AllowedUpgrades != before) OnChanged?.Invoke(AllowedUpgrades);
     }
 
-    // Hard reset (e.g. new run). Safe to call any time.
+    // Hard reset for a new run.
     public static void ResetAll()
     {
         bool changed = _active.Count > 0;

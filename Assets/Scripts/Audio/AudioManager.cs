@@ -278,6 +278,6 @@ public class AudioManager : MonoBehaviour
     public void SetChord(BlockType type)
     {
         SetChordOnObject(type, audioEmitter);
-        SetChordOnObject(type, this.gameObject);   // BGM Switch Container 也需要
+        SetChordOnObject(type, this.gameObject);   // BGM Switch Container also needs it
     }
 }

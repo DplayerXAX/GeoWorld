@@ -2,26 +2,15 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Rendering;
 
-// 探寻 (Exploration) — "expedition" visualizer.
+// Exploration — "expedition" visualizer. ExplorationRule claims a long
+// straight line of same-color blocks; this draws it as a mountaineering
+// route: roadside pennant flags, a gliding comet-dart trailing a ribbon,
+// and a subtle current of motes along the top faces.
 //
-// ExplorationRule claims a long straight LINE of same-color blocks. The visual
-// celebrates that as a mountaineering route:
-//   • PENNANT FLAGS lining the roadside along the claimed cells — each a dark
-//     pole, a golden hoist band and a fluttering two-tone pennant, all leaning
-//     with one shared wind.
-//   • A comet-dart that GLIDES the length of the route trailing a fading ribbon
-//     — the expedition forever pressing on.
-//   • A subtle CURRENT: a flowing scroll of bright motes running along a vein
-//     over the top faces, so the line itself reads as an active, energized
-//     route beneath the flags (the "material flow").
-// Poetic rather than instrumental; nothing tall in the walkable lane.
-//
-// RECONCILER (read before editing) — same contract as OrderArchitectVisualizer /
-// HarmonyVineVisualizer:
-//   • WE own each rig in a pieceId → ExplorationRig-GameObject dictionary.
-//   • OnPieceClaimed / OnPieceReleased just call Reconcile().
-//   • OnPieceClaimed returns null so the dispatcher never Destroys our rigs.
-// Rigs are FREE-STANDING world-space objects, immune to block rotation/GrowIn.
+// Same reconciler contract as OrderArchitectVisualizer / HarmonyVineVisualizer:
+// we own each rig (keyed by pieceId) via Reconcile(), OnPieceClaimed returns
+// null so the dispatcher never destroys it. Rigs are free-standing world
+// objects, immune to block rotation/GrowIn.
 [CreateAssetMenu(
     menuName = "GeoWorld/Synergy/Visualizers/Exploration Voyage",
     fileName = "ExplorationVoyageVisualizer")]
@@ -240,9 +229,8 @@ public class ExplorationVoyageVisualizer : SynergyVisualizer
 
         rig.Build(centers, cs, target.pennant, target.accent, target.pole);
 
-        // Material flow: coat the claimed block's own surface with the flowing
-        // shader (a slightly-inflated shell), theme-tinted. The block itself
-        // becomes the "flow" — this is the shader-material flow, not particles.
+        // Coat the block's own surface with the flowing shader (slightly
+        // inflated shell), theme-tinted — not particles.
         if (showMaterialFlow)
         {
             var rends = ins.visualObject.GetComponentsInChildren<MeshRenderer>();
@@ -486,11 +474,9 @@ public class ExplorationRig : MonoBehaviour
         }
     }
 
-    // ── Material flow shells ──────────────────────────────────────────────────
-    // Mirror each block renderer's mesh as a slightly-inflated shell wearing the
-    // flowing shader (theme-tinted per shell via MPB). Parented to the source
-    // renderer so it follows the block's transform / GrowIn scale. Tracked here so
-    // Clear() destroys them when the rig retires (they also die with the block).
+    // Mirror each block renderer's mesh as a slightly-inflated shell wearing
+    // the flowing shader, parented to the source renderer so it follows the
+    // block's transform / GrowIn scale.
     public void AttachFlowShells(Renderer[] srcRends, Color tint, float shellScale,
                                  float speed, float density, float sharp, float glow)
     {
@@ -611,8 +597,8 @@ public class ExplorationRig : MonoBehaviour
         float penLen  = cellSize * pennantLenFrac;
         float penDrop = penLen * 0.42f;
 
-        // Flags line the ROADSIDE: offset perpendicular to the route, alternating
-        // sides, so the walkable lane stays clear.
+        // Flags line the roadside, alternating sides, so the walkable lane
+        // stays clear.
         Vector3 routeDir = surface.Count > 1
             ? (surface[surface.Count - 1] - surface[0]).normalized : Vector3.right;
         Vector3 perp = Vector3.Cross(Vector3.up, routeDir);
@@ -785,9 +771,8 @@ public class ExplorationRig : MonoBehaviour
     static Material _flowMat;
     static Mesh _boxMesh, _nodeMesh, _pennantMesh, _hoistMesh, _dartMesh;
 
-    // Flowing coating material (GeoWorld/Synergy/ExplorationFlow). Shared, GPU-
-    // instanced; per-shell colour via MPB. Params are global so the last caller's
-    // values win — that's fine, they're the same across the whole synergy.
+    // Shared, GPU-instanced coating material; params are global so the last
+    // caller's values win (fine, same across the whole synergy).
     static Material GetFlowMaterial(float speed, float density, float sharp, float glow)
     {
         var sh = Shader.Find("GeoWorld/Synergy/ExplorationFlow");

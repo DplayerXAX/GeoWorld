@@ -23,7 +23,7 @@ MonoBehaviour:
   maxFlowersPerPatch: 18
   flowerSize: 0.28
   scatterRadius: 0.3
-  stemHeight: 0.17
+  stemHeight: 0.13
   stemColor: {r: 0.2, g: 0.42, b: 0.16, a: 1}
   bloomDuration: 0.45
   bloomStagger: 0.05

@@ -2,8 +2,8 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 
-// A speaker: display name, name colour, and a set of named portraits (立绘 / expressions).
-// Portable: pure data, no project dependencies. Create via Assets ▸ Create ▸ Dialogue ▸ Character.
+// A speaker: display name, name colour, and a set of named portraits.
+// Pure data, no project dependencies.
 [CreateAssetMenu(menuName = "Dialogue/Character", fileName = "Character")]
 public class DialogueCharacter : ScriptableObject
 {

@@ -32,6 +32,9 @@ public abstract class SynergyRule : ScriptableObject
     [Tooltip("If true, an active claim tries to grow by absorbing newly-unclaimed pieces every re-evaluation. Use for cube growth (Enlightenment) and any 'more is better' rule.")]
     public bool absorbAdditionalPieces = false;
 
+    [Tooltip("If true, multiple simultaneous non-overlapping claims of THIS rule can be active at once (e.g. two separate Abundance loops, each paying out independently). If false, only ONE claim of this rule can be active at a time — once activated it can still grow/upgrade in place (absorbAdditionalPieces), it just never spawns a second, disjoint instance. Enlightenment sets this false: it's meant to level up one cube (2³→3³→4³), not fire from two unrelated cubes on the board simultaneously.")]
+    public bool allowMultipleInstances = true;
+
     [Header("Single-tier effect")]
     [Tooltip("Default effect applied on activation. Tiered rules can ignore this and override ApplyAt/RevokeAt to dispatch per-tier effects.")]
     public GameEffect effect;

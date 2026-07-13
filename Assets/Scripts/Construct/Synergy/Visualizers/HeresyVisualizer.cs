@@ -2,23 +2,14 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Rendering;
 
-// 异端 (Heresy) — "defiance" visualizer.
+// Heresy — "defiance" visualizer. A broken halo (arc segments with gaps)
+// orbits the piece on a canted axis, spinning counter to Order's clockwork,
+// while inverted shards hover over claimed cells, drifting and glitch-
+// snapping at irregular intervals.
 //
-// Where every other synergy celebrates the grid's order, Heresy is the one that
-// bends it: a BROKEN halo — arc segments with deliberate gaps — orbits the piece
-// on a canted axis, turning the WRONG way (counter to Order's clockwork), while
-// small inverted shards (point-down pyramids) hover over the claimed cells,
-// drifting smoothly and then glitch-snapping a few degrees at irregular
-// intervals. Dark ink-purple base with a brief venom-bright flash on each
-// glitch. Deliberately sparse and slow so it unsettles without shouting.
-//
-// RECONCILER (read before editing) — same contract as OrderArchitectVisualizer /
-// ExplorationVoyageVisualizer:
-//   • WE own each rig in a pieceId → HeresyRig-GameObject dictionary.
-//   • OnPieceClaimed / OnPieceReleased just call Reconcile(), which reads the
-//     LIVE claim state and makes the world match.
-//   • OnPieceClaimed returns null so the dispatcher never Destroys our rigs.
-// Rigs are FREE-STANDING world-space objects, immune to block rotation/GrowIn.
+// Same reconciler contract as OrderArchitectVisualizer / ExplorationVoyageVisualizer:
+// we own each rig (keyed by pieceId) via Reconcile(). Rigs are free-standing
+// world objects, immune to block rotation/GrowIn.
 [CreateAssetMenu(
     menuName = "GeoWorld/Synergy/Visualizers/Heresy Defiance",
     fileName = "HeresyVisualizer")]
@@ -328,7 +319,6 @@ public class HeresyRig : MonoBehaviour
         if (!_built) Destroy(gameObject);
     }
 
-    // ── Combat-ripple replay: re-materialize in sync with the block sprout ───
     void OnEnable()  { SynergyVisualFX.OnReplayGrowIn += HandleReplay; }
     void OnDisable() { SynergyVisualFX.OnReplayGrowIn -= HandleReplay; }
 

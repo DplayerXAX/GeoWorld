@@ -1,21 +1,13 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-// 丰饶 (Abundance) — pieces of `color` (plus jokers) form a closed loop.
+// Abundance — pieces of `color` (plus jokers) form a closed loop.
 //
-// "Closed loop" = the piece adjacency graph for this color contains at
-// least one cycle. Detection: a connected component has a cycle iff its
-// edge count >= node count (forest has exactly nodes-1 edges).
-//
-// On activation, claims the ENTIRE connected component containing the
-// cycle, not just the cycle vertices — tails hanging off the loop are still
-// LOCKED as part of the structure (a piece there can't be independently
-// snatched by another rule), so the visual "the loop and its tails read as
-// one abundance" holds. But per ICellHighlightFilter, only cells that
-// actually lie ON the loop (not a tail) are reported as "participating" —
-// SynergyEffectUtil's counting helpers (which AbundanceHarvestEffect uses
-// for its per-turn payout) respect this filter, so tails claimed-but-not-
-// looped don't inflate the currency count.
+// Detection: a connected component has a cycle iff edge count >= node count.
+// Claims the entire connected component (tails included) so it's locked as
+// one structure, but ICellHighlightFilter only reports cells ON the loop —
+// AbundanceHarvestEffect's payout counting respects this so tails don't
+// inflate the currency count.
 [CreateAssetMenu(menuName = "GeoWorld/Synergy/Rules/Abundance Rule",
                  fileName = "AbundanceRule")]
 public class AbundanceRule : SynergyRule, ICellHighlightFilter
@@ -72,11 +64,8 @@ public class AbundanceRule : SynergyRule, ICellHighlightFilter
         return edges >= comp.Count;
     }
 
-    // Which pieces actually lie ON a cycle (vs. a tree-shaped tail hanging off
-    // one) — classic "peel the leaves" reduction: repeatedly strip nodes with
-    // degree ≤ 1 (dead ends) inside the component; whatever's left once no more
-    // can be peeled is exactly the union of every cycle in the graph. Returns
-    // the WORLD CELLS of those surviving pieces.
+    // "Peel the leaves": repeatedly strip nodes with degree <= 1; what's left
+    // is exactly the union of every cycle in the graph. Returns their cells.
     static HashSet<Vector3Int> ComputeLoopCells(BoardSnapshot board, HashSet<PlacedPiece> comp)
     {
         var degree = new Dictionary<PlacedPiece, int>();

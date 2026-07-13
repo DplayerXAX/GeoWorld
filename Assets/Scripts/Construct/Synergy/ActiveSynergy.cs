@@ -21,8 +21,30 @@ public sealed class ActiveSynergy
     public bool dirty;
     public int  lastVersionChecked;
 
-    public ActiveSynergy(SynergyRule rule, HashSet<PlacedPiece> pieces, int tier)
+    // Snapshot of ICellHighlightFilter.ShouldHighlight(...) results for THIS
+    // claim, taken immediately after the rule successfully evaluated it (see
+    // SynergyEvaluator.SnapshotHighlightCells). null = rule doesn't implement
+    // the filter, so every claimed cell counts/decorates (matches the old
+    // "filter == null" fallback used throughout).
+    //
+    // This snapshot exists because rules implementing ICellHighlightFilter
+    // cache their filter state (e.g. AbundanceRule._loopCells) as mutable
+    // fields on the RULE ASSET, which is a shared singleton — once multiple
+    // simultaneous ActiveSynergy instances of the same rule can exist, a
+    // later instance's TryEvaluate call would silently corrupt an earlier
+    // instance's cached filter state if consumers queried the rule live.
+    // Snapshotting right after each successful evaluate captures the
+    // correct state before the next TryEvaluate call can stomp it.
+    public HashSet<Vector3Int> highlightCells;
+
+    // Stable per-instance id (monotonic, assigned by SynergyEvaluator) — lets
+    // HUD hover-highlight target ONE specific active among several instances
+    // of the same rule.
+    public readonly int id;
+
+    public ActiveSynergy(int id, SynergyRule rule, HashSet<PlacedPiece> pieces, int tier)
     {
+        this.id            = id;
         this.rule          = rule;
         this.claimedPieces = pieces ?? new HashSet<PlacedPiece>();
         this.tier          = tier;
