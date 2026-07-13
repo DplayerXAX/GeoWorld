@@ -2,36 +2,18 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Rendering;
 
-// One "bloom patch": a small field of GEOMETRIC flowers that open on the top
-// faces of ONE claimed Abundance (丰饶) block. Spawned + owned by
-// AbundanceVisualizer — the same relationship ConstellationView has with the
-// Enlightenment visualizer.
+// One "bloom patch": a small field of geometric flowers that open on the top
+// faces of one claimed Abundance block. Spawned + owned by AbundanceVisualizer.
 //
-// WHY FREE-STANDING (not parented to the block): blocks can be ROTATED (the
-// player flips pieces with 90° Euler turns) and are SCALED 0→1 by the GrowIn
-// pop. A flower built from real upright mesh geometry would be tipped sideways
-// by a rotated parent and collapsed by a scale-0 parent. So — exactly like
-// ConstellationView — this lives on a FREE world-space GameObject whose lifetime
-// the visualizer's Reconcile owns (prune → Retire). The flowers therefore always
-// stand straight up in WORLD space, whatever the block underneath is doing.
+// Free-standing (not parented to the block): blocks can be rotated and are
+// scaled 0->1 by the GrowIn pop, which would tip/collapse real mesh geometry.
+// Lives on a free world-space GameObject whose lifetime the visualizer's
+// Reconcile owns (prune -> Retire), so flowers always stand upright.
 //
-// FLOWER CONSTRUCTION (geometric-print look, no textures, no lighting):
-// the material is UNLIT, so all "shading" is authored explicitly — every flower
-// is a stack of flat mesh layers in separately-tinted children, like layers of
-// a silkscreen print or paper-cut (剪纸):
-//   • Under   — a larger, darker, flat rosette rotated a half-step behind the
-//               main petals (silhouette depth).
-//   • PetalsA/PetalsB — the main petals are KITES FOLDED down their length
-//               axis; the two halves are separate meshes tinted light/dark, so
-//               each petal reads as a crisp origami crease (fake lighting, on
-//               purpose — the flat-art idiom).
-//   • Ring    — a thin pale annulus framing the rosette (the "registration
-//               circle" of a print), grand archetype only.
-//   • Core + CoreDot — golden hex heart with a small dark hex printed on top.
-// Three archetypes (grand 6-petal / 8-petal mandala / small 5-petal daisy) are
+// Unlit material, so shading is authored explicitly: each flower is a stack
+// of flat mesh layers (Under, PetalsA/PetalsB folded halves, Ring, Core +
+// CoreDot), like layers of a silkscreen print. Three archetypes are
 // hash-picked per flower so a field reads as a garden, not a stamp sheet.
-// Flowers pop open in a staggered wave (EaseOutBack) while UNFURLING — a small
-// extra yaw that eases out as the bloom completes — then slowly turn and sway.
 [DisallowMultipleComponent]
 public class BloomPatch : MonoBehaviour
 {
@@ -172,7 +154,6 @@ public class BloomPatch : MonoBehaviour
         if (!_built || _flowers.Count == 0) Destroy(gameObject);
     }
 
-    // ── Combat-ripple replay: re-bloom in sync with the block sprout ─────────
     void OnEnable()  { SynergyVisualFX.OnReplayGrowIn += HandleReplay; }
     void OnDisable() { SynergyVisualFX.OnReplayGrowIn -= HandleReplay; }
 

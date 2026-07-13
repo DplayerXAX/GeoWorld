@@ -2,18 +2,14 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Rendering;
 
-// One "architect rig" for a claimed Order (秩序) piece: a technical-blueprint
-// LINE drawing that frames the block(s) as a precise structure (cube-edge
-// wireframe + corner registration brackets + dimension ticks), RINGED by solid
-// METAL gear cogs of varying sizes that turn around it in time with the music.
-// Spawned + owned by OrderArchitectVisualizer.
+// One "architect rig" for a claimed Order piece: a technical-blueprint line
+// drawing (cube-edge wireframe + corner brackets + dimension ticks) ringed by
+// metal gear cogs that turn in time with the music. Spawned + owned by
+// OrderArchitectVisualizer.
 //
-// FREE-STANDING in world space (like ConstellationView), built from the grid
-// CELLS (axis-aligned), so it's immune to the block's rotation and GrowIn scale.
-// The frame is crisp unlit lines; the gears are extruded, lit, metallic meshes
-// placed around the footprint perimeter — different radii, neighbours counter-
-// rotating, bigger cogs turning proportionally slower (a meshed-clockwork read).
-// Rotation is BPM-locked (degreesPerBeat × bpm). Build() draws it; Retire() fades.
+// Free-standing in world space, built from grid cells (axis-aligned), so
+// it's immune to the block's rotation and GrowIn scale. Rotation is
+// BPM-locked (degreesPerBeat x bpm). Build() draws it; Retire() fades.
 [DisallowMultipleComponent]
 public class OrderRig : MonoBehaviour
 {
@@ -52,16 +48,7 @@ public class OrderRig : MonoBehaviour
     [Range(0.02f, 1f)] public float snapFraction = 0.22f;   // portion of the beat spent snapping
     [Range(0f, 0.5f)]  public float phaseJitter  = 0.15f;   // per-cog beat offset (un-lockstep the ticks)
 
-    // ── Living-machine behaviors ─────────────────────────────────────────────
-    // The structure isn't a static monument with gears bolted on — it's a
-    // MACHINE AT WORK. Three quiet life signs:
-    //   • Scan sweep — a bright cross-section outline periodically travels up
-    //     the frame, like a blueprint being re-verified layer by layer.
-    //   • Circuit runners — small bright nodes trace the base perimeter in a
-    //     loop, current flowing through the structure.
-    //   • Gear shift — every N beats the whole clockwork reverses direction in
-    //     one synchronized "clunk" (with the ink-stamp flash), so the ticking
-    //     reads as a deliberate machine cycle instead of a metronome.
+    // ── Living-machine behaviors: scan sweep, circuit runners, gear shift ────
     public bool  showScan       = true;
     public float scanInterval   = 5f;      // seconds between sweeps
     public float scanDuration   = 0.9f;    // seconds one sweep takes (bottom → top)
@@ -178,7 +165,6 @@ public class OrderRig : MonoBehaviour
         if (!_built) Destroy(gameObject);
     }
 
-    // ── Combat-ripple replay: re-assemble in sync with the block sprout ──────
     void OnEnable()  { SynergyVisualFX.OnReplayGrowIn += HandleReplay; }
     void OnDisable() { SynergyVisualFX.OnReplayGrowIn -= HandleReplay; }
 
@@ -372,17 +358,12 @@ public class OrderRig : MonoBehaviour
         (Vector3Int.forward, Vector3.forward), (Vector3Int.back,  Vector3.back),
     };
 
-    // ── Metal cogs bolted onto the structure's OUTER faces ───────────────────
-    // For every cell × face that isn't shared with a same-piece neighbour, a
-    // random roll attaches a varying-size cog flush on that face, spinning around
-    // the FACE NORMAL — so top cogs spin flat, side cogs spin in a vertical plane,
-    // etc. (rotation no longer lives in a single plane).
+    // For every cell x face not shared with a same-piece neighbour, a random
+    // roll attaches a varying-size cog flush on that face, spinning around
+    // the face normal (so top cogs spin flat, side cogs spin vertically).
     void BuildGears(Vector3[] cells, Vector3 center, float cellSize, float half)
     {
         Mesh gearMesh    = GetSolidGearMesh(Mathf.Clamp(gearTeeth, 6, 24));
-        // Holographic cogs: translucent additive fill (see-through, glowing) with
-        // the bright edge outline reading as the hologram's rim. The solid-metal
-        // fill is kept as the non-holo fallback.
         Material fill    = holographic ? GetHoloMaterial() : GetGearFillMaterial();
         Material outline = GetGearOutlineMaterial();
         if (outline != null)
@@ -669,11 +650,10 @@ public class OrderRig : MonoBehaviour
         return _fillMat;
     }
 
-    // Translucent ADDITIVE fill for holographic cogs: see-through, glowing, so
-    // overlapping cogs read as light rather than solid metal. Colour + alpha come
-    // per-cog from MPB (_BaseColor / _Color). Configured on URP/Unlit when we can,
-    // else Sprites/Default (already alpha-blended). Additive means alpha scales
-    // brightness → the flicker reads as an unstable projection.
+    // Translucent additive fill for holographic cogs so overlapping cogs
+    // read as light rather than solid metal. Color/alpha come per-cog from
+    // MPB. Additive means alpha scales brightness, so flicker reads as an
+    // unstable projection.
     static Material GetHoloMaterial()
     {
         if (_holoMat != null) return _holoMat;

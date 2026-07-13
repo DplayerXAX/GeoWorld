@@ -38,7 +38,7 @@ public class CellMaterialVisualizer : SynergyVisualizer
         var themeCol = BlockColorPalette.Get(active.rule.color);
         Color targetColor = useThemeColor ? themeCol : overrideColor;
 
-        var cellFilter = active.rule as ICellHighlightFilter;
+        var highlightCells = active.highlightCells;
 
         // Only strip the inverse-hull outline (slot 1) for TRANSPARENT replacements
         // (renderQueue in the transparent range), where it would otherwise fill dark
@@ -52,7 +52,7 @@ public class CellMaterialVisualizer : SynergyVisualizer
         // cube offsets its object-space raymarch by its position relative to
         // this, so the group renders as ONE continuous volume instead of a
         // self-centered copy per cube.
-        Vector3 groupCenterWorld = ComputeGroupCenter(active, cellFilter, grid, parent.position);
+        Vector3 groupCenterWorld = ComputeGroupCenter(active, highlightCells, grid, parent.position);
 
         GameObject stateTracker = new GameObject($"SynergyMaterialBackup_{active.rule.name}");
         stateTracker.transform.SetParent(parent, false);
@@ -80,7 +80,7 @@ public class CellMaterialVisualizer : SynergyVisualizer
                 });
 
                 // Core highlight logic.
-                if (cellFilter == null || cellFilter.ShouldHighlight(worldCell))
+                if (highlightCells == null || highlightCells.Contains(worldCell))
                 {
                     if (replacementMaterial != null)
                     {
@@ -178,7 +178,7 @@ public class CellMaterialVisualizer : SynergyVisualizer
     // claim (all pieces). Filtered cells (ICellHighlightFilter) are excluded so
     // the center tracks the lit region (e.g. Enlightenment's cube), not the
     // claimed overhang. Falls back to the piece root when nothing highlights.
-    static Vector3 ComputeGroupCenter(ActiveSynergy active, ICellHighlightFilter filter,
+    static Vector3 ComputeGroupCenter(ActiveSynergy active, HashSet<Vector3Int> highlightCells,
                                       GridSystem grid, Vector3 fallback)
     {
         if (active?.claimedPieces == null) return fallback;
@@ -190,7 +190,7 @@ public class CellMaterialVisualizer : SynergyVisualizer
             for (int i = 0; i < piece.cells.Length; i++)
             {
                 var c = piece.cells[i];
-                if (filter == null || filter.ShouldHighlight(c))
+                if (highlightCells == null || highlightCells.Contains(c))
                 {
                     sum += grid.GridToWorld(c);
                     n++;

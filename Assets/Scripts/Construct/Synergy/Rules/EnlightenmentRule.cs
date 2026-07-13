@@ -1,22 +1,11 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-// 启发 (Enlightenment) — pieces of `color` (plus jokers) cover an axis-
-// aligned cube of cells.
+// Enlightenment — pieces of `color` (plus jokers) cover an axis-aligned
+// cube of cells. Tier 1: 2^3, tier 2: 3^3, tier 3: 4^3.
 //
-// Tiers:
-//   • Tier 1: 2×2×2 cube  ( 8 cells)
-//   • Tier 2: 3×3×3 cube  (27 cells)
-//   • Tier 3: 4×4×4 cube  (64 cells)
-//
-// Pieces are claimed whole if any of their cells lies inside the cube —
-// they may extend beyond freely. ICellHighlightFilter exposes which cells
-// are actually in-cube so visualizers only decorate those cells; overhang
-// cells stay visually plain until absorbed into a bigger cube.
-//
-// On absorption, larger cubes upgrade the tier in place. Use tiered effects
-// (override ApplyAt/RevokeAt) if you want different rewards per tier;
-// otherwise the single `effect` fires/refires on tier change.
+// Pieces are claimed whole if any cell lies inside the cube; overhang cells
+// stay outside via ICellHighlightFilter until absorbed into a bigger cube.
 [CreateAssetMenu(menuName = "GeoWorld/Synergy/Rules/Enlightenment Rule",
                  fileName = "EnlightenmentRule")]
 public class EnlightenmentRule : SynergyRule, ICellHighlightFilter
@@ -32,20 +21,17 @@ public class EnlightenmentRule : SynergyRule, ICellHighlightFilter
     [Tooltip("Per-tier override effects. If set and length > tier-1, used instead of base `effect`. Useful for 2³ small reward, 3³ medium, 4³ big.")]
     public GameEffect[] perTierEffects;
 
-    // ── ICellHighlightFilter state (last successful cube) ──────────────
-    // Set on every successful TryEvaluate. Used by visualizers via the
-    // ICellHighlightFilter cast to decorate only cells inside the cube.
+    // Last successful cube, set on every successful TryEvaluate.
     [System.NonSerialized] Vector3Int _cubeOrigin;
     [System.NonSerialized] int        _cubeSide;
 
-    // Public read-only accessors for scene effects (e.g. center-radiate FX)
-    // that need to know where + how big the active cube is.
     public Vector3Int CurrentCubeOrigin => _cubeOrigin;
     public int        CurrentCubeSide   => _cubeSide;
 
     void Reset()
     {
         absorbAdditionalPieces = true;
+        allowMultipleInstances = false; // one cube levels up (2³→3³→4³), never two at once
         priority               = 60;   // > Order, snags cube pieces first
     }
 
@@ -101,7 +87,7 @@ public class EnlightenmentRule : SynergyRule, ICellHighlightFilter
         foreach (var p in board.PiecesUsableAs(color))
             if (pool.Contains(p)) { usable.Add(p); totalCells += p.cells.Length; }
 
-        // Try largest cube first so we prefer higher tiers.
+        // Largest cube first — prefer higher tiers.
         for (int side = maxSide; side >= minSide; side--)
         {
             int needed = side * side * side;
@@ -116,15 +102,13 @@ public class EnlightenmentRule : SynergyRule, ICellHighlightFilter
                 return true;
             }
         }
-        // No cube found — clear cached highlight zone so stale data doesn't
-        // leak into the next evaluation.
+        // No cube found — clear cached highlight so stale data doesn't leak.
         _cubeSide = 0;
         return false;
     }
 
-    // Brute-force cube search. For each cell of each pool piece, try every
-    // possible cube origin where that cell could sit. For typical board
-    // sizes (~dozens of pieces, side ≤ 4) this is well under 1ms.
+    // Brute-force: for each cell of each pool piece, try every cube origin
+    // where that cell could sit.
     static bool TryFindCube(BoardSnapshot board, HashSet<PlacedPiece> usable,
                             int side, out HashSet<PlacedPiece> matched, out Vector3Int foundOrigin)
     {
@@ -168,10 +152,8 @@ public class EnlightenmentRule : SynergyRule, ICellHighlightFilter
             matched.Add(owner);
         }
 
-        // Pieces may extend BEYOND the cube — we just need every cell inside
-        // the cube to be filled by pool pieces. The whole piece is claimed
-        // (lock-wise) but only the in-cube cells get visualizer decoration
-        // via ICellHighlightFilter.
+        // Pieces may extend beyond the cube; only in-cube cells get
+        // visualizer decoration via ICellHighlightFilter.
         return true;
     }
 }

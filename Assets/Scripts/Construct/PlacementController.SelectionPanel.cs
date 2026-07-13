@@ -12,31 +12,28 @@ public partial class PlacementController
     [Tooltip("Separate world-space UGUI upgrade panel (turret upgrade paths).")]
     public UpgradePanel upgradePanel;
 
-    Camera _hudCam;   // cached main camera for projecting the selected block to screen
+    Camera _hudCam;
 
     bool PointerOverInfoPanel()
         => infoPanel != null
         && UnityEngine.EventSystems.EventSystem.current != null
         && UnityEngine.EventSystems.EventSystem.current.IsPointerOverGameObject();
 
-    // False only when the current level explicitly restricts its color pool
-    // AND leaves Enlightenment out (LevelDefinition.allowedColors) — in that
-    // case Enlightenment can never roll this level, so the turret-upgrade menu
-    // (which only ever unlocks via an Enlightenment cube) is hidden entirely
-    // instead of just always showing "Locked".
+    // False only when the level restricts its color pool and excludes
+    // Enlightenment — then the turret-upgrade menu is hidden entirely
+    // instead of always showing "Locked".
     static bool EnlightenmentAllowedThisLevel()
     {
         var lv = RunConfig.Level;
         return lv == null || lv.AllowsColor(BlockColor.Enlightenment);
     }
 
-    // Drives the UGUI panel (call every frame from Update). Mirrors DrawSelectionPanel's
-    // logic but pushes plain strings instead of laying out IMGUI.
+    // Drives the UGUI panel every frame. Mirrors DrawSelectionPanel's logic
+    // but pushes plain strings instead of laying out IMGUI.
     void UpdateInfoPanel()
     {
         if (infoPanel == null) return;
 
-        // Clear settlement: hide the selection panel entirely (no pick-up / sell / upgrade).
         if (GameFlowManager.SettlementUp)
         {
             infoPanel.Hide();
@@ -44,7 +41,6 @@ public partial class PlacementController
             return;
         }
 
-        // Spawn-point forecast (same gate as the IMGUI start panel).
         if (mode == PlacementMode.Select && _selectedEndpoint != null && _selectedEndpointIsStart
             && (GameFlowManager.Instance == null || GameFlowManager.Instance.phase != GamePhase.Running))
         {
@@ -65,8 +61,7 @@ public partial class PlacementController
         string title    = isTurret ? TurretTypes.DisplayName(ins.data.blockType) : ins.data.DisplayName;
         string body     = BuildInfoBody(ins, isTurret);
 
-        // No editing of placed objects during combat (pick up / sell / upgrade), or
-        // ever for pre-built level furniture (LevelDefinition.startingLayout).
+        // No editing during combat, or ever for pre-built level furniture.
         bool combatLocked = GameFlowManager.Instance != null
             && GameFlowManager.Instance.phase == GamePhase.Running;
         bool canEdit = !combatLocked && !ins.locked;
@@ -74,14 +69,12 @@ public partial class PlacementController
 
         Vector3 worldPos = ins.visualObject.transform.position;
 
-        // Selection panel: title / stats / pick-up / sell.
         string lockedReason = ins.locked ? "Fixed block, locked" : "Locked during combat";
         infoPanel.Show(worldPos, title, body, canEdit, $"Sell +{refund}",
             () => _panelPickUpRequested = true,
             () => _panelSellRequested   = true,
             lockedReason);
 
-        // Separate upgrade panel.
         if (upgradePanel != null)
         {
             BuildUpgradeButtons(ins,
@@ -89,8 +82,7 @@ public partial class PlacementController
                 out string upgradeBText, out bool canUpgradeB, out System.Action onUpgradeB,
                 out string enlightenmentHint);
 
-            // Upgrades stay available even when locked (locking only blocks pickup/sell —
-            // the point is to protect the level's fixed layout, not to freeze turret progression).
+            // Upgrades stay available even when locked — locking only blocks pickup/sell.
             bool hasUpgrades = !string.IsNullOrEmpty(upgradeAText) || !string.IsNullOrEmpty(upgradeBText);
             if (hasUpgrades && !combatLocked && EnlightenmentAllowedThisLevel())
                 upgradePanel.Show(worldPos, upgradeAText, canUpgradeA, onUpgradeA,
@@ -140,7 +132,6 @@ public partial class PlacementController
             return sb.ToString().TrimEnd();
         }
 
-        // Block: synergy line (themed) + flavour description.
         if (ins.color == BlockColor.None) return "Synergy  None";
 
         bool   hasProg = TryGetSynergyProgress(ins, out string ruleName, out int cur, out int req, out bool active);
@@ -176,9 +167,8 @@ public partial class PlacementController
             : null;
         if (turret == null) return;
 
-        // Blocked by the Enlightenment allowance (not by a per-path cap like
-        // "max level") — same reason for both A and B since the allowance is
-        // turret-wide. Show the actionable hint instead of two "Locked" buttons.
+        // Blocked by the turret-wide Enlightenment allowance, not a per-path
+        // cap; show the actionable hint instead of two "Locked" buttons.
         if (turret.BlockedByEnlightenmentGate) enlightenmentHint = EnlightenmentHint;
 
         if (turret.mode == TurretController.Mode.Basic)
@@ -225,10 +215,9 @@ public partial class PlacementController
         return sb.ToString().TrimEnd();
     }
 
-    // True when the cursor is over the info panel this frame. Used in Update to
-    // swallow the click so the panel's own IMGUI buttons handle it instead of
-    // the world-selection raycast (which would deselect). Input.mousePosition is
-    // bottom-left origin; GUI rects are top-left, hence the Y flip.
+    // Used in Update to swallow clicks so IMGUI buttons handle them instead of
+    // the world-selection raycast. Input.mousePosition is bottom-left origin;
+    // GUI rects are top-left, hence the Y flip.
     bool IsPointerOverSelectionPanel()
     {
         if (_panelRect.width <= 0f || _panelRect.height <= 0f) return false;
@@ -240,9 +229,8 @@ public partial class PlacementController
     {
         if (infoPanel != null) { _panelRect = default; return; }   // UGUI panel takes over
 
-        // Spawn point ("起点") selected → show the upcoming-wave intel panel
-        // instead of block/turret stats. Hidden during combat (forecast is for
-        // the NEXT wave, which is ambiguous mid-run).
+        // Spawn point selected -> show upcoming-wave intel instead of block
+        // stats. Hidden during combat (forecast is for the next wave only).
         if (mode == PlacementMode.Select && _selectedEndpoint != null && _selectedEndpointIsStart
             && (GameFlowManager.Instance == null || GameFlowManager.Instance.phase != GamePhase.Running))
         {
@@ -259,12 +247,11 @@ public partial class PlacementController
         }
 
         float s = UiScale.Get();
-        EnsurePanelStyles();                       // FIXED reference sizes; scaled below via GUI.matrix
+        EnsurePanelStyles();
 
         bool  isTurret = TurretTypes.Is(ins.data.blockType);
-        // Everything below is in REFERENCE (unscaled) units. The whole panel is
-        // scaled by `s` with one GUI.matrix transform, so it stays perfectly
-        // proportional at any window size (no per-element font rounding drift).
+        // Reference (unscaled) units; the whole panel is scaled by `s` via one
+        // GUI.matrix transform so it stays proportional at any window size.
         float panelW = 240f;
         float panelH = (_selPanelFor == ins && _selPanelHeight > 1f)
             ? _selPanelHeight
@@ -274,9 +261,8 @@ public partial class PlacementController
         float screenW = panelW * s;                // on-screen footprint
         float screenH = panelH * s;
 
-        // Anchor the panel to the block's on-screen position so it reads as a
-        // spatial label that tracks the block as the camera moves. Falls back to
-        // the right edge if the block is off / behind the camera.
+        // Anchor to the block's on-screen position; falls back to the right
+        // edge if the block is off / behind the camera.
         if (_hudCam == null) _hudCam = Camera.main;
         float x, y;
         Vector3 sp = _hudCam != null
@@ -296,14 +282,13 @@ public partial class PlacementController
             x = Mathf.Clamp(x, margin, Screen.width  - screenW - margin);
             y = Mathf.Clamp(y, margin, Screen.height - screenH - margin);
         }
-        _panelRect = new Rect(x, y, screenW, screenH);       // hit-test in screen px
+        _panelRect = new Rect(x, y, screenW, screenH);
 
         // Pop-in bounce on selection change.
         if (_panelAnimFor != ins) { _panelAnimStart = Time.time; _panelAnimFor = ins; }
         float pt  = selectionPopDuration > 1e-4f ? (Time.time - _panelAnimStart) / selectionPopDuration : 1f;
         float pop = Mathf.Lerp(0.6f, 1f, EaseOutBack(Mathf.Clamp01(pt)));
 
-        // One uniform scale (resolution × pop) around the panel's screen centre.
         float cx = x + screenW * 0.5f, cy = y + screenH * 0.5f;
         Matrix4x4 prevGuiMatrix = GUI.matrix;
         GUIUtility.ScaleAroundPivot(new Vector2(s * pop, s * pop), new Vector2(cx, cy));
@@ -335,7 +320,7 @@ public partial class PlacementController
         DrawPanelButtons(ins, isTurret);
 
         GUILayout.EndVertical();
-        // Measure the real content height (repaint only) so next frame hugs it.
+        // Measure content height on repaint so next frame hugs it.
         if (Event.current.type == EventType.Repaint)
         {
             _selPanelHeight = GUILayoutUtility.GetLastRect().height;
@@ -345,9 +330,8 @@ public partial class PlacementController
         GUI.matrix = prevGuiMatrix;
     }
 
-    // Spawn-point intel panel: upcoming wave number, total enemy count, and the
-    // per-type breakdown ("Runner ×7"). No pick-up / sell — endpoints aren't
-    // editable. Forecast is cached per round (non-destructive to the run RNG).
+    // Spawn-point intel: wave number, enemy count, per-type breakdown.
+    // Forecast is cached per round (non-destructive to the run RNG).
     void DrawStartPanel()
     {
         float s = UiScale.Get();
@@ -412,12 +396,11 @@ public partial class PlacementController
         int header = 1;   // "Incoming" sub-header
         int lines  = (fc.valid && fc.groups != null && fc.groups.Count > 0)
             ? fc.groups.Count : 1;
-        // rows: Wave + Enemies (2) + header + per-type lines.
         return padding + title + divider + (2 + header + lines) * row + 10f;
     }
 
-    // Slightly-generous content-height estimate so the panel hugs its content
-    // (no big empty gap) without ever clipping the bottom buttons.
+    // Generous content-height estimate so the panel hugs its content without
+    // clipping the bottom buttons.
     float EstimatePanelHeight(PlacedBlockInstance ins, bool isTurret)
     {
         const float row = 26f, title = 36f, divider = 12f, button = 34f, buttonGap = 8f, padding = 30f;
@@ -472,8 +455,7 @@ public partial class PlacementController
 
         Color theme = BlockColorPalette.Get(ins.color);
 
-        // ONE line: color swatch + synergy type + activation progress (e.g.
-        // "Order  2/3"). The whole line turns the theme color once active.
+        // One line: color swatch + synergy type + activation progress.
         bool   hasProg = TryGetSynergyProgress(ins, out string ruleName, out int cur, out int req, out bool active);
         string name    = (hasProg && !string.IsNullOrEmpty(ruleName)) ? ruleName : ins.color.ToString();
         string txt     = name;
@@ -492,7 +474,6 @@ public partial class PlacementController
         GUI.contentColor = prevC;
         GUILayout.EndHorizontal();
 
-        // Flavor description.
         string desc = BlockColorPalette.Description(ins.color);
         if (!string.IsNullOrEmpty(desc))
         {
@@ -501,9 +482,8 @@ public partial class PlacementController
         }
     }
 
-    // Activation progress for the selected block's color. Returns the matching
-    // rule's display name + (current/required), and whether it's already active
-    // (this piece sits in a live claim → caller themes the text).
+    // Matching rule's display name + (current/required), and whether it's
+    // already active (piece sits in a live claim).
     bool TryGetSynergyProgress(PlacedBlockInstance ins, out string ruleName,
                                out int cur, out int req, out bool active)
     {
@@ -732,9 +712,8 @@ public partial class PlacementController
         GUILayout.Space(4f);
     }
 
-    // FIXED reference sizes — the whole panel is uniformly scaled by GUI.matrix in
-    // Draw*Panel, so styles never need per-element scaling (which caused font-rounding
-    // drift and clipping). Built once.
+    // Fixed reference sizes; the panel is uniformly scaled by GUI.matrix in
+    // Draw*Panel so styles never need per-element scaling. Built once.
     void EnsurePanelStyles()
     {
         if (_panelBox != null) return;

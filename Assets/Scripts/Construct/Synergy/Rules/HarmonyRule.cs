@@ -1,13 +1,9 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-// 和谐 (Harmony) — every piece of `color` (plus jokers usable as `color`)
-// must form a single face-connected component.
-//
-// Stronger than Order (which only needs N connected), so set `minPieces`
-// higher to avoid trivial activation. Default priority below Order so Order
-// fires first on the same color — bump above Order if you want Harmony to
-// preempt.
+// Harmony — every piece of `color` (plus usable jokers) must form a single
+// face-connected component. Stronger than Order, so default priority is
+// below Order's — bump above it if Harmony should preempt.
 [CreateAssetMenu(menuName = "GeoWorld/Synergy/Rules/Harmony Rule",
                  fileName = "HarmonyRule")]
 public class HarmonyRule : SynergyRule
@@ -44,8 +40,8 @@ public class HarmonyRule : SynergyRule
         return true;
     }
 
-    // Progress = total usable same-colour pieces toward minPieces (they also have
-    // to form ONE component to fire, but the count is the useful "how many" hint).
+    // Progress = total usable same-color pieces toward minPieces (still must
+    // form one component to fire, but the count is a useful hint).
     public override bool TryGetActivationProgress(BoardSnapshot board, PlacedPiece piece,
                                                   out int current, out int required)
     {

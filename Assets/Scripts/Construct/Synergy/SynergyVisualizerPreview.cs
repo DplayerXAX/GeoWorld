@@ -3,25 +3,18 @@ using System.Collections.Generic;
 using UnityEngine;
 
 // Dev-only preview panel — spawns a row of placeholder blocks, each fed
-// through one SynergyRule's visualizer, so you can see what every theme
-// looks like side-by-side without playing the actual game loop.
-//
-// Usage:
-//   1. Add this component to any GameObject in the scene.
-//   2. Fill `entries` with one row per theme: drag in the rule asset.
-//   3. Play, press `toggleKey` (default F4) to toggle the preview row.
-//
-// The preview bypasses SynergyEvaluator — visualizers are called directly
-// with a synthetic ActiveSynergy. Joker tint / connection lines / pulses
-// from SynergyVisualFX won't show; this is purely the rule's own visualizer.
+// through one SynergyRule's visualizer, so you can see every theme
+// side-by-side without playing the actual game loop. Press `toggleKey`
+// (default F4) to toggle. Bypasses SynergyEvaluator; only the rule's own
+// visualizer runs, no SynergyVisualFX joker tint/lines/pulses.
 public class SynergyVisualizerPreview : MonoBehaviour
 {
     [Serializable]
     public class Entry
     {
-        public string label;   // optional display name
-        public BlockColor color;   // theme color used for the placeholder cube
-        public SynergyRule rule;    // rule whose visualizer.OnPieceClaimed is invoked
+        public string label;
+        public BlockColor color;
+        public SynergyRule rule;
     }
 
     [Header("Themes to preview")]
@@ -77,7 +70,6 @@ public class SynergyVisualizerPreview : MonoBehaviour
 
     void BuildOne(Entry entry, Vector3Int cell, GridSystem grid)
     {
-        // Placeholder cube standing in for a placed block.
         var cube = GameObject.CreatePrimitive(PrimitiveType.Cube);
         cube.name = $"SynergyPreview_{entry.color}";
         cube.transform.SetParent(transform, false);
@@ -89,7 +81,6 @@ public class SynergyVisualizerPreview : MonoBehaviour
         var rend = cube.GetComponent<Renderer>();
         if (rend != null) MpbColor.Set(rend, BlockColorPalette.Get(entry.color));
 
-        // Synthetic instance + active to satisfy the visualizer's API.
         var ins = new PlacedBlockInstance
         {
             visualObject = cube,
@@ -99,11 +90,12 @@ public class SynergyVisualizerPreview : MonoBehaviour
 
         var fakePiece = new PlacedPiece(0, null, entry.color, new[] { cell });
         var fakeActive = new ActiveSynergy(
+            0,
             entry.rule,
             new HashSet<PlacedPiece> { fakePiece },
             tier: 1);
 
-        // 🎇 ✨ HACK: 强行注入判定数据，骗过形状过滤器（专为预览模式使用）
+        // HACK: inject fake filter state to fool the shape filter (preview mode only)
         if (entry.rule is EnlightenmentRule enl)
         {
             var flags = System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance;
@@ -118,7 +110,15 @@ public class SynergyVisualizerPreview : MonoBehaviour
                 cells.Add(cell);
             }
         }
-        // 🎇 ✨ 强行注入结束
+
+        // Reproduce the highlight snapshot ActiveSynergy normally gets from
+        // SynergyEvaluator so filtered visualizers preview correctly.
+        if (entry.rule is ICellHighlightFilter hf)
+        {
+            var hc = new HashSet<Vector3Int>();
+            if (hf.ShouldHighlight(cell)) hc.Add(cell);
+            fakeActive.highlightCells = hc;
+        }
 
         if (entry.rule.visualizer != null)
         {
@@ -150,8 +150,6 @@ public class SynergyVisualizerPreview : MonoBehaviour
 
     void OnDisable() => Teardown();
     void OnDestroy() => Teardown();
-
-    // ── Floating labels under each preview cube ────────────────────────
 
     GUIStyle _labelStyle;
 

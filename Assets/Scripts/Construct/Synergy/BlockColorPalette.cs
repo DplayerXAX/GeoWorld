@@ -10,13 +10,13 @@ public static class BlockColorPalette
 {
     public static Color Get(BlockColor c) => c switch
     {
-        BlockColor.Order         => new Color(0.20f, 0.85f, 0.85f),  // 秩序 — 青
-        BlockColor.Harmony       => new Color(0.20f, 0.75f, 0.30f),  // 和谐 — 翡绿
-        BlockColor.Abundance     => new Color(1.00f, 0.55f, 0.10f),  // 丰饶 — 橙
-        BlockColor.Heresy        => new Color(0.60f, 0.20f, 0.85f),  // 异端 — 紫
-        BlockColor.Enlightenment => new Color(0.20f, 0.55f, 1.00f),  // 启发 — 青蓝
-        BlockColor.Exploration   => new Color(0.88f, 0.18f, 0.20f),  // 探寻 — 朱红
-        BlockColor.Universal     => new Color(0.55f, 0.55f, 0.55f),  // 万能 — 中灰
+        BlockColor.Order         => new Color(0.20f, 0.85f, 0.85f),  // Order — cyan
+        BlockColor.Harmony       => new Color(0.20f, 0.75f, 0.30f),  // Harmony — jade green
+        BlockColor.Abundance     => new Color(1.00f, 0.55f, 0.10f),  // Abundance — orange
+        BlockColor.Heresy        => new Color(0.60f, 0.20f, 0.85f),  // Heresy — purple
+        BlockColor.Enlightenment => new Color(0.20f, 0.55f, 1.00f),  // Enlightenment — azure
+        BlockColor.Exploration   => new Color(0.88f, 0.18f, 0.20f),  // Exploration — vermilion
+        BlockColor.Universal     => new Color(0.55f, 0.55f, 0.55f),  // Universal — mid grey
         _                        => new Color(0.70f, 0.70f, 0.70f),  // None / fallback
     };
 

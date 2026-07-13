@@ -212,9 +212,7 @@ public partial class PlacementController : MonoBehaviour
 
     GUIStyle _panelBox, _panelTitle, _panelLabel, _panelValue, _panelButton, _panelProgress;
 
-    // ── Spawn-point ("起点") selection → wave-intel panel ──────────────────────
-    // When the player clicks a start endpoint we show the upcoming wave's
-    // forecast instead of the block/turret stats panel. Cached per round so the
+    // Spawn-point selection -> wave-intel panel. Cached per round so the
     // (non-destructive) forecast isn't recomputed every OnGUI pass.
     GameObject _selectedEndpoint;
     bool       _selectedEndpointIsStart;
@@ -848,13 +846,10 @@ public partial class PlacementController : MonoBehaviour
         lastHighlightedObject = target;
     }
 
-    // Walks every Renderer under `obj`, finds the slot using the cartoon
-    // outline shader (GeoWorld/BlockOutline or the legacy Custom/ObjectOutline)
-    // and overrides its `_OutlineColor` via MPB. On restore, reads the shared
-    // material's authored color back so deselect returns to black/dark.
-    //
-    // MPB is read with GetPropertyBlock before mutating so we don't clobber
-    // other per-renderer overrides (e.g. silkscreen `_BaseColor`).
+    // Finds the renderer using the cartoon outline shader and overrides its
+    // `_OutlineColor` via MPB (read first so we don't clobber other overrides
+    // like silkscreen `_BaseColor`). Restore reads the material's authored
+    // color back.
     void SetOutlineHighlight(GameObject obj, bool restoreDefault)
     {
         if (obj == null) return;
@@ -1299,12 +1294,10 @@ public partial class PlacementController : MonoBehaviour
         return res;
     }
 
-    // Direct block spawn that bypasses player input, payment, preview, and the
-    // grow animation. Used by snapshot restore. Caller is responsible for
-    // ensuring `worldCells` are unoccupied; this method does not validate.
-    //
-    // `synergyColor` defaults to None snapshot restore should serialize and
-    // pass the original BlockColor so reloaded boards keep their synergies.
+    // Direct block spawn bypassing player input, payment, preview, and grow
+    // animation. Used by snapshot restore; caller must ensure `worldCells`
+    // are unoccupied. Pass the original `synergyColor` so reloaded boards
+    // keep their synergies.
     public PlacedBlockInstance PlaceBlockDirect(
     BlockData data,
     Vector3Int[] worldCells,

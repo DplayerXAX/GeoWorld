@@ -1,15 +1,9 @@
 using UnityEngine;
 
-// 丰饶 (Abundance) — per-TURN block income that scales with the size of the
-// closed-loop structure.
-//
-// AbundanceRule claims the whole connected component that contains the cycle, so
-// "the closed-loop blocks" = that claim. Each turn (GameFlowManager.OnTurnStarted,
-// i.e. the start of every Build phase) this pays out block currency proportional
-// to the synergy's size. Subscribes on Apply, unsubscribes on Revoke.
-//
-// (Unlike the older time-based AbundanceIncomeEffect, this is turn-based and
-// size-scaled. Assign THIS to AbundanceRule.effect to use it.)
+// Abundance — per-turn block income scaling with the closed-loop structure's
+// size. Pays out on GameFlowManager.OnTurnStarted (start of each Build phase).
+// Unlike the older time-based AbundanceIncomeEffect, this is turn-based and
+// size-scaled.
 [CreateAssetMenu(menuName = "GeoWorld/Synergy/Effects/Abundance Harvest",
                  fileName = "AbundanceHarvestEffect")]
 public class AbundanceHarvestEffect : GameEffect
@@ -30,8 +24,7 @@ public class AbundanceHarvestEffect : GameEffect
     [Tooltip("Colour of the harvest mote that floats up from the loop each turn.")]
     public Color moteColor = new Color(0.95f, 0.8f, 0.3f);
 
-    // Live numbers for the synergy HUD (HudSidePanels) — last turn's payout and
-    // the unit count it was computed from. 0 until the first turn ticks.
+    // Last turn's payout + unit count, for the synergy HUD.
     public int LastUnitCount   { get; private set; }
     public int LastPayoutAmount { get; private set; }
 

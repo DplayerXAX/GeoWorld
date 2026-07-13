@@ -1,8 +1,8 @@
 using UnityEngine;
 
-// 探寻 (Exploration) — black panel + custom-colored X on each external face.
-// Reads as "marked / surveyed". All face iteration / panel logic lives in
-// FaceMaterialVisualizerBase — this subclass only draws the X strokes.
+// Exploration — black panel + custom-colored X on each external face. Face
+// iteration / panel logic lives in FaceMaterialVisualizerBase; this subclass
+// only draws the X strokes.
 [CreateAssetMenu(menuName = "GeoWorld/Synergy/Visualizers/Exploration Crossed",
                  fileName = "ExplorationCrossedVisualizer")]
 public class ExplorationCrossedVisualizer : FaceMaterialVisualizerBase

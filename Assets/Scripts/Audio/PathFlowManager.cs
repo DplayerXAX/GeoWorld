@@ -27,9 +27,9 @@ public class PathFlowManager : MonoBehaviour
         new Color(0.25f, 0.90f, 1.00f),   
         new Color(1.00f, 0.72f, 0.18f),  
         new Color(0.38f, 1.00f, 0.52f),  
-        new Color(1.00f, 0.35f, 0.72f),   // 粉红
-        new Color(0.78f, 0.46f, 1.00f),   // 紫
-        new Color(0.28f, 1.00f, 0.72f),   // 青绿
+        new Color(1.00f, 0.35f, 0.72f),   // pink
+        new Color(0.78f, 0.46f, 1.00f),   // purple
+        new Color(0.28f, 1.00f, 0.72f),   // teal
     };
 
     int _count;
@@ -171,7 +171,8 @@ public class PathFlowManager : MonoBehaviour
         return lr;
     }
 
-    // FaceNode 路径 → 世界坐标数组，在法线变化处插入拐角路径点。
+    // FaceNode path -> world-position array, inserting corner points where
+    // the normal changes.
     Vector3[] BuildPositions(List<FaceNode> path)
     {
         var   gs   = GridSystem.instance;

@@ -1,17 +1,12 @@
 using System.Collections;
 using UnityEngine;
 
-// 丰饶 (Abundance) — periodic currency drip while the synergy is active
-// AND the game is in combat (Running phase).
+// Abundance — periodic currency drip while the synergy is active and the
+// game is in combat (Running phase). Time-scaled via WaitForSeconds.
 //
-// • Combat-gated: ticks during Running only. Build phase = silent.
-// • Time-scaled: uses WaitForSeconds, so Time.timeScale (DevPanel speed
-//   buttons / future game-speed UI) speeds up the drip naturally.
-// • Multiple Apply / Revoke cycles are safe — old coroutine is killed first.
-//
-// NOTE: shared SO state. If the SAME effect asset is referenced by multiple
-// rules that activate simultaneously, only the latest coroutine survives.
-// Author one asset per rule that needs independent income (typical case).
+// Shared SO state: if the same effect asset is referenced by multiple rules
+// that activate simultaneously, only the latest coroutine survives. Author
+// one asset per rule that needs independent income.
 [CreateAssetMenu(menuName = "GeoWorld/Synergy/Effects/Abundance Income",
                  fileName = "AbundanceIncomeEffect")]
 public class AbundanceIncomeEffect : GameEffect
