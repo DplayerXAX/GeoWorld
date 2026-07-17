@@ -56,14 +56,42 @@ public static class SynergyEffectUtil
         for (int i = 0; i < actives.Count; i++)
         {
             var a = actives[i];
-            if (a?.rule == null || a.rule.effect != effect || a.claimedPieces == null) continue;
-            var hc = a.highlightCells;
-            foreach (var p in a.claimedPieces)
-            {
-                if (p == null) continue;
-                if (hc == null) { n++; continue; }
-                if (PieceInFilter(p, hc)) n++;
-            }
+            if (a?.rule == null || a.rule.effect != effect) continue;
+            n += CountParticipatingPieces(a);
+        }
+        return n;
+    }
+
+    // Same as CountClaimedPieces, but scoped to ONE ActiveSynergy instead of
+    // summing every active matching an effect — use this for per-instance HUD
+    // rows (multiple simultaneous loops of the same rule each need their OWN
+    // count, not the rule-wide total).
+    public static int CountParticipatingPieces(ActiveSynergy a)
+    {
+        if (a?.claimedPieces == null) return 0;
+        var hc = a.highlightCells;
+        int n = 0;
+        foreach (var p in a.claimedPieces)
+        {
+            if (p == null) continue;
+            if (hc == null) { n++; continue; }
+            if (PieceInFilter(p, hc)) n++;
+        }
+        return n;
+    }
+
+    // Per-instance counterpart to CountClaimedCells — see CountParticipatingPieces.
+    public static int CountParticipatingCells(ActiveSynergy a)
+    {
+        if (a?.claimedPieces == null) return 0;
+        var hc = a.highlightCells;
+        int n = 0;
+        foreach (var p in a.claimedPieces)
+        {
+            if (p?.cells == null) continue;
+            if (hc == null) { n += p.cells.Length; continue; }
+            for (int k = 0; k < p.cells.Length; k++)
+                if (hc.Contains(p.cells[k])) n++;
         }
         return n;
     }
@@ -118,15 +146,8 @@ public static class SynergyEffectUtil
         for (int i = 0; i < actives.Count; i++)
         {
             var a = actives[i];
-            if (a?.rule == null || a.rule.effect != effect || a.claimedPieces == null) continue;
-            var hc = a.highlightCells;
-            foreach (var p in a.claimedPieces)
-            {
-                if (p?.cells == null) continue;
-                if (hc == null) { n += p.cells.Length; continue; }
-                for (int k = 0; k < p.cells.Length; k++)
-                    if (hc.Contains(p.cells[k])) n++;
-            }
+            if (a?.rule == null || a.rule.effect != effect) continue;
+            n += CountParticipatingCells(a);
         }
         return n;
     }

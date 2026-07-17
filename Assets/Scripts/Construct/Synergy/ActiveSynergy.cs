@@ -42,6 +42,14 @@ public sealed class ActiveSynergy
     // of the same rule.
     public readonly int id;
 
+    // How many EnemySynergyJammers are currently standing on this claim. >0 =
+    // the effect is revoked (jammed) even though the claim itself still holds.
+    // Ref-counted because several jammers can sit on the same synergy, and the
+    // first one to leave must not un-jam it for the others.
+    // Mutated only via SynergyEvaluator.SetSuppressed.
+    public int suppressCount;
+    public bool Suppressed => suppressCount > 0;
+
     public ActiveSynergy(int id, SynergyRule rule, HashSet<PlacedPiece> pieces, int tier)
     {
         this.id            = id;

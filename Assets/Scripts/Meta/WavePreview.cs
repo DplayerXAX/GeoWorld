@@ -3,40 +3,28 @@ using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
 
-// Zoomed-in preview of the next wave, triggered by clicking a start portal
-// (PlacementController.TrySelectObject). Camera glides in close to the portal's core
-// (EndpointPortalVisual.Core); inert preview copies of the upcoming wave's enemies
-// orbit around it; a small panel lists wave/enemy info. Click again (or click empty
-// space) exits — camera restores, previews despawn. No scene setup, auto-builds its UI.
+// Next-wave intel, triggered by clicking a start portal (PlacementController.
+// TrySelectObject). Deliberately NON-modal: the camera does NOT move, so you can
+// read what's coming while you keep placing blocks — the whole point of the
+// forecast is to inform the build you're making right now.
+//
+// Shows one hologram per enemy TYPE (not per instance) floating above the portal
+// in spawn order, each tagged with its real ×count, plus a card listing each
+// type's count and what it actually does. One model + "×12" beats 5 clones of a
+// 12-enemy group: it's honest about the number and stays readable.
+//
+// Click again (or click empty space) to dismiss. No scene setup; auto-builds.
 public static class WavePreview
 {
     public static bool Active => _active;
     static bool _active;
 
-    static GameObject _root;                 // holds spawned preview enemies
-    static GameObject _panelGo;
-    static TMP_Text _panelText;
-
-    static OrbitCamera _orbit;
-    static Vector3 _savedFocus;
-    static float   _savedZoom;
-    static float   _savedDistance;
+    static GameObject _root;
 
     // ── Tuning knobs ──────────────────────────────────────────────────────────
-    // Pushing the camera INTO the core sphere clipped through the frame geometry
-    // (near-plane cutting into the cube edges) and, worse, made the whole portal
-    // shader disappear (backface-culled from inside) — losing the "3D" fresnel/
-    // depth read entirely. Staying outside the frame keeps the shader looking like
-    // an actual object, while still framing tight on the cube's inner core.
-    const float ZoomFrac         = 1.5f;    // orthoSize, relative to the cube frame's half-extent
-    const float DistanceFrac     = 2.2f;    // camera distance, relative to the cube frame's half-extent
-    const float MinZoom          = 1.0f;
-    const float MinDistance      = 1.6f;
-    const float OrbitSpeed       = 35f;     // deg/sec
-    const float BobAmplitude     = 0.12f;
-    const float BobSpeed         = 1.6f;
-    const float PreviewScale     = 0.55f;   // shrink the real enemy model down for this display-case view
-    const int   MaxPerGroup      = 5;       // cap visible instances per enemy type
+    const float HeightFrac   = 1.35f;   // row height above the portal core, × frame half-extent
+    const float PreviewScale = 0.5f;    // shrink the real enemy model for the display row
+    const float SpacingFrac  = 1.15f;   // gap between holograms, × cell size
 
     public static void Toggle(GridEndpoint startPoint, GameFlowManager.WaveForecast forecast)
     {
@@ -47,33 +35,18 @@ public static class WavePreview
     static void Enter(GridEndpoint startPoint, GameFlowManager.WaveForecast forecast)
     {
         if (startPoint == null) return;
+        if (!forecast.valid || forecast.groups == null || forecast.groups.Count == 0) return;
+
         var portal = startPoint.GetComponent<EndpointPortalVisual>();
-        var core = portal != null ? portal.Core : startPoint.transform;
-        if (core == null) core = startPoint.transform;
+        var core   = portal != null && portal.Core != null ? portal.Core : startPoint.transform;
 
-        _orbit = Object.FindFirstObjectByType<OrbitCamera>();
-        if (_orbit == null) return;
-
-        // Half-extent of the cube FRAME (not the core sphere) — the "square portal"
-        // the user means. Falls back to a core-sphere-based guess if the frame's own
-        // scale/frameScale aren't available for some reason.
-        float coreRadius = core.lossyScale.x * 0.5f;
         float frameHalfExtent = portal != null
             ? portal.transform.lossyScale.x * 0.5f * portal.frameScale
-            : coreRadius * 1.4f;
-
-        _savedFocus    = _orbit.FocusPoint;
-        _savedZoom     = _orbit.useOrthographic ? _orbit.orthoSize : _orbit.distance;
-        _savedDistance = _orbit.distance;
-
-        _orbit.FocusOnPoint(core.position, snap: false);
-        _orbit.SetZoom(Mathf.Max(MinZoom, frameHalfExtent * ZoomFrac));
-        _orbit.SetPhysicalDistance(Mathf.Max(MinDistance, frameHalfExtent * DistanceFrac));
-        OrbitCamera.InputLocked = true;   // only WavePreview.Exit() gives control back
+            : core.lossyScale.x * 0.7f;
 
         _root = new GameObject("WavePreviewRoot");
-        SpawnEnemies(core, coreRadius, frameHalfExtent, forecast);
-        BuildPanel(forecast);
+        var rig = _root.AddComponent<WavePreviewRig>();
+        rig.Build(core, frameHalfExtent * HeightFrac, forecast, PreviewScale, SpacingFrac);
 
         _active = true;
     }
@@ -82,106 +55,172 @@ public static class WavePreview
     {
         if (!_active) return;
         _active = false;
-
         if (_root != null) Object.Destroy(_root);
         _root = null;
+    }
+}
 
-        if (_panelGo != null) Object.Destroy(_panelGo);
-        _panelGo = null;
-        _panelText = null;
-
-        OrbitCamera.InputLocked = false;
-        if (_orbit != null)
-        {
-            _orbit.FocusOnPoint(_savedFocus, snap: false);
-            _orbit.SetZoom(_savedZoom);
-            _orbit.SetPhysicalDistance(_savedDistance);
-        }
-        _orbit = null;
+// Owns the floating hologram row + its screen-space labels and info card. The
+// row billboards to the camera every frame so it stays readable from any orbit
+// angle, and the labels/card track their models' projected screen positions.
+public class WavePreviewRig : MonoBehaviour
+{
+    class Entry
+    {
+        public Transform model;
+        public TMP_Text  label;
     }
 
-    // ── Enemy previews ───────────────────────────────────────────────────────
-    static void SpawnEnemies(Transform core, float coreRadius, float frameHalfExtent, GameFlowManager.WaveForecast forecast)
+    readonly List<Entry> _entries = new();
+
+    Transform     _core;
+    float         _height;
+    float         _spacing;
+    Canvas        _canvas;
+    RectTransform _card;
+    float         _phase;
+
+    public void Build(Transform core, float height, GameFlowManager.WaveForecast forecast,
+                      float previewScale, float spacingFrac)
     {
-        // Orbit radius must clear the CORE SPHERE's own radius, not just be "some
-        // fraction of the frame" — frameHalfExtent and coreRadius come from two
-        // different scale knobs (frameScale vs coreScale), so a frame-relative
-        // radius could end up smaller than the sphere itself, putting previews
-        // inside/overlapping its mesh. That's why "in front" still looked occluded:
-        // the preview was actually intersecting the sphere, not clearing it.
-        float orbitRadius = Mathf.Min(coreRadius * 1.25f, frameHalfExtent * 0.85f);
-        if (forecast.groups == null || forecast.groups.Count == 0) return;
+        _core    = core;
+        _height  = height;
+        _spacing = (GridSystem.instance != null ? GridSystem.instance.cellSize : 1f) * spacingFrac;
+        _phase   = Random.value * 6.2832f;
 
-        // Flatten to one entry per visible instance, spread evenly around the ring
-        // regardless of which group it came from.
-        var instances = new List<EnemySurfaceUnit>();
-        foreach (var g in forecast.groups)
+        BuildCanvas();
+
+        var groups = forecast.groups;
+        for (int i = 0; i < groups.Count; i++)
         {
+            var g = groups[i];
             if (g.prefab == null) continue;
-            int shown = Mathf.Min(g.count, MaxPerGroup);
-            for (int i = 0; i < shown; i++) instances.Add(g.prefab);
-        }
-        if (instances.Count == 0) return;
 
-        for (int i = 0; i < instances.Count; i++)
-        {
-            var prefab = instances[i];
-            var go = Object.Instantiate(prefab.gameObject);
-            go.SetActive(false);   // no Awake/OnEnable logic runs before we strip it
+            var go = Instantiate(g.prefab.gameObject);
+            go.SetActive(false);   // strip before any Awake/OnEnable can run
 
-            foreach (var comp in go.GetComponentsInChildren<EnemySurfaceUnit>(true)) comp.enabled = false;
-            foreach (var comp in go.GetComponentsInChildren<Collider>(true)) comp.enabled = false;
-            foreach (var comp in go.GetComponentsInChildren<Rigidbody>(true)) comp.isKinematic = true;
+            // Inert display copy: no pathing, no physics, no gameplay behaviours.
+            foreach (var c in go.GetComponentsInChildren<EnemySurfaceUnit>(true))      c.enabled = false;
+            foreach (var c in go.GetComponentsInChildren<EnemyHealerAura>(true))       c.enabled = false;
+            foreach (var c in go.GetComponentsInChildren<EnemyBlockSealer>(true))      c.enabled = false;
+            foreach (var c in go.GetComponentsInChildren<EnemyTurretSuppressor>(true)) c.enabled = false;
+            foreach (var c in go.GetComponentsInChildren<EnemySplitOnAlive>(true))     c.enabled = false;
+            foreach (var c in go.GetComponentsInChildren<EnemyAccelerator>(true))      c.enabled = false;
+            foreach (var c in go.GetComponentsInChildren<EnemySynergyJammer>(true))    c.enabled = false;
+            foreach (var c in go.GetComponentsInChildren<Collider>(true))              c.enabled = false;
+            foreach (var c in go.GetComponentsInChildren<Rigidbody>(true))             c.isKinematic = true;
 
-            go.transform.SetParent(_root.transform, false);
-            go.transform.localScale *= PreviewScale;
+            go.transform.SetParent(transform, false);
+            go.transform.localScale *= previewScale;
             go.SetActive(true);
 
-            float angle = i * (360f / instances.Count);
-            var orbiter = go.AddComponent<WavePreviewOrbiter>();
-            orbiter.Init(core, angle, orbitRadius, OrbitSpeed, BobAmplitude, BobSpeed, i * 0.37f);
+            var label = NewText("Count", _canvas.transform, 40f, GeoPalette.Paper,
+                                FontStyles.Bold, TextAlignmentOptions.Center);
+            label.text = $"×{g.count}";
+            label.rectTransform.sizeDelta = new Vector2(200f, 60f);
+
+            _entries.Add(new Entry { model = go.transform, label = label });
         }
+
+        BuildCard(forecast);
+        LateUpdate();   // place everything before the first frame renders
     }
 
-    // ── Panel ─────────────────────────────────────────────────────────────────
-    static void BuildPanel(GameFlowManager.WaveForecast forecast)
+    void BuildCanvas()
     {
-        var canvasGo = new GameObject("WavePreviewCanvas", typeof(Canvas), typeof(CanvasScaler));
-        _panelGo = canvasGo;
-        var canvas = canvasGo.GetComponent<Canvas>();
-        canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-        canvas.sortingOrder = 90;   // with the HUD, below tutorial/shop overlays
-        var sc = canvasGo.GetComponent<CanvasScaler>();
-        sc.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+        var go = new GameObject("WavePreviewCanvas", typeof(Canvas), typeof(CanvasScaler));
+        go.transform.SetParent(transform, false);
+        _canvas = go.GetComponent<Canvas>();
+        _canvas.renderMode   = RenderMode.ScreenSpaceOverlay;
+        _canvas.sortingOrder = 90;   // with the HUD, below tutorial/shop overlays
+        var sc = go.GetComponent<CanvasScaler>();
+        sc.uiScaleMode         = CanvasScaler.ScaleMode.ScaleWithScreenSize;
         sc.referenceResolution = new Vector2(1920f, 1080f);
-        sc.matchWidthOrHeight = 0.5f;
+        sc.matchWidthOrHeight  = 0.5f;
+    }
 
-        var panel = NewRect("Panel", canvasGo.transform);
-        panel.anchorMin = new Vector2(0.5f, 0f); panel.anchorMax = new Vector2(0.5f, 0f);
-        panel.pivot = new Vector2(0.5f, 0f);
-        panel.sizeDelta = new Vector2(420f, 140f);
-        panel.anchoredPosition = new Vector2(0f, 40f);
-        var bg = panel.gameObject.AddComponent<Image>();
-        bg.color = new Color(0.949f, 0.937f, 0.902f, 0.94f);
-        bg.sprite = UIRoundedRect.Get(20);
-        bg.type = Image.Type.Sliced;
+    // The card rides beside the row (tracks it in 3-D) instead of pinning to a
+    // screen corner, so the intel reads as part of the portal, not as HUD chrome.
+    void BuildCard(GameFlowManager.WaveForecast forecast)
+    {
+        _card = NewRect("Card", _canvas.transform);
+        _card.pivot     = new Vector2(0f, 0.5f);
+        _card.sizeDelta = new Vector2(430f, 40f);   // height fits to content below
 
-        var t = NewText("Body", panel, 22f, GeoPalette.Ink, FontStyles.Normal, TextAlignmentOptions.TopLeft);
+        var bg = _card.gameObject.AddComponent<Image>();
+        bg.color         = new Color(0.949f, 0.937f, 0.902f, 0.94f);
+        bg.sprite        = UIRoundedRect.Get(18);
+        bg.type          = Image.Type.Sliced;
+        bg.raycastTarget = false;
+
+        var t = NewText("Body", _card, 21f, GeoPalette.Ink, FontStyles.Normal, TextAlignmentOptions.TopLeft);
         t.textWrappingMode = TextWrappingModes.Normal;
         var trt = t.rectTransform;
         trt.anchorMin = Vector2.zero; trt.anchorMax = Vector2.one;
-        trt.offsetMin = new Vector2(20f, 14f); trt.offsetMax = new Vector2(-20f, -14f);
-        _panelText = t;
+        trt.offsetMin = new Vector2(18f, 14f); trt.offsetMax = new Vector2(-18f, -14f);
 
         var sb = new System.Text.StringBuilder();
-        sb.AppendLine($"<b>Wave {forecast.waveNumber}</b>   Enemies: {(forecast.valid ? forecast.totalCount.ToString() : "—")}");
-        if (forecast.valid && forecast.groups != null && forecast.groups.Count > 0)
-            foreach (var g in forecast.groups) sb.AppendLine($"{g.name}  ×{g.count}");
-        else
-            sb.Append("Composition unknown");
-        _panelText.text = sb.ToString().TrimEnd();
+        sb.AppendLine($"<b>WAVE {forecast.waveNumber}</b>   <size=85%>{forecast.totalCount} enemies · in spawn order</size>");
+        foreach (var g in forecast.groups)
+        {
+            if (g.prefab == null) continue;
+            sb.AppendLine();
+            sb.AppendLine($"<b>{g.name}</b>  ×{g.count}   <size=80%><color=#6A6A6A>{g.prefab.maxHealth} HP</color></size>");
+            sb.Append($"<size=80%><color=#6A6A6A>{EnemyDossier.Mechanic(g.prefab)}</color></size>");
+        }
+        t.text = sb.ToString().TrimEnd();
+
+        // Size the card to whatever the text actually needs.
+        t.ForceMeshUpdate();
+        _card.sizeDelta = new Vector2(_card.sizeDelta.x, Mathf.Max(60f, t.preferredHeight + 28f));
     }
 
+    void LateUpdate()
+    {
+        var cam = Camera.main;
+        if (_core == null || cam == null) { WavePreview.Exit(); return; }
+
+        // Billboard the whole row: local +X always runs across the screen, so the
+        // queue never gets viewed edge-on however the player orbits.
+        Vector3 flatFwd = cam.transform.forward;
+        flatFwd.y = 0f;
+        if (flatFwd.sqrMagnitude < 0.0001f) flatFwd = Vector3.forward;
+        transform.position = _core.position + Vector3.up * _height;
+        transform.rotation = Quaternion.LookRotation(flatFwd.normalized, Vector3.up);
+
+        int n = _entries.Count;
+        float bob = Mathf.Sin(Time.unscaledTime * 1.6f + _phase) * 0.06f;
+
+        for (int i = 0; i < n; i++)
+        {
+            var e = _entries[i];
+            if (e.model == null) continue;
+
+            float x = (i - (n - 1) * 0.5f) * _spacing;
+            float perBob = Mathf.Sin(Time.unscaledTime * 1.9f + i * 0.6f) * 0.05f;
+            e.model.localPosition = new Vector3(x, bob + perBob, 0f);
+            e.model.localRotation = Quaternion.Euler(0f, Time.unscaledTime * 22f + i * 40f, 0f);
+
+            // "×N" tag pinned under each hologram.
+            Vector3 sp = cam.WorldToScreenPoint(e.model.position - transform.up * (_spacing * 0.42f));
+            bool visible = sp.z > 0f;
+            e.label.gameObject.SetActive(visible);
+            if (visible) e.label.rectTransform.position = new Vector3(sp.x, sp.y, 0f);
+        }
+
+        // Card sits just past the right end of the row.
+        if (_card != null && n > 0)
+        {
+            float edge = ((n - 1) * 0.5f) * _spacing + _spacing * 0.8f;
+            Vector3 cardWorld = transform.TransformPoint(new Vector3(edge, 0f, 0f));
+            Vector3 csp = cam.WorldToScreenPoint(cardWorld);
+            bool visible = csp.z > 0f;
+            _card.gameObject.SetActive(visible);
+            if (visible) _card.position = new Vector3(csp.x, csp.y, 0f);
+        }
+    }
+
+    // ── UI primitives ────────────────────────────────────────────────────────
     static RectTransform NewRect(string name, Transform parent)
     {
         var go = new GameObject(name, typeof(RectTransform));
@@ -189,7 +228,8 @@ public static class WavePreview
         return (RectTransform)go.transform;
     }
 
-    static TMP_Text NewText(string name, Transform parent, float size, Color color, FontStyles style, TextAlignmentOptions align)
+    static TMP_Text NewText(string name, Transform parent, float size, Color color,
+                            FontStyles style, TextAlignmentOptions align)
     {
         var rt = NewRect(name, parent);
         var t = rt.gameObject.AddComponent<TextMeshProUGUI>();
@@ -199,45 +239,43 @@ public static class WavePreview
     }
 }
 
-// Restless orbit + bob + jitter around a fixed centre — purely cosmetic, no gameplay
-// hookup. Each instance gets its own random speed/jitter phase so the group doesn't
-// move as one uniform ring — reads more like agitated things circling a portal than
-// a clean mechanical orbit.
-public class WavePreviewOrbiter : MonoBehaviour
+// Derives an enemy's "what does this thing actually do" line straight from the
+// components on its prefab — so a new enemy type shows up in the wave intel the
+// moment it exists, with no parallel description table to keep in sync.
+public static class EnemyDossier
 {
-    Transform _centre;
-    float _angle, _radius, _speed, _bobAmp, _bobSpeed, _phase;
-    float _speedJitterAmp, _speedJitterFreq;   // wobbles the orbit speed over time
-    float _radiusJitterAmp, _radiusJitterFreq; // wobbles the orbit radius (skittish darting in/out)
-    float _jitterSeed;
-
-    public void Init(Transform centre, float startAngle, float radius, float speed, float bobAmp, float bobSpeed, float phase)
+    public static string Mechanic(EnemySurfaceUnit prefab)
     {
-        _centre = centre; _angle = startAngle; _radius = radius; _speed = speed;
-        _bobAmp = bobAmp; _bobSpeed = bobSpeed; _phase = phase;
+        if (prefab == null) return "";
+        var go    = prefab.gameObject;
+        var lines = new List<string>();
 
-        // Per-instance randomness so the whole ring doesn't move like one rigid body.
-        _speedJitterAmp   = _speed * Random.Range(0.35f, 0.65f);
-        _speedJitterFreq  = Random.Range(0.8f, 1.8f);
-        _radiusJitterAmp  = _radius * Random.Range(0.12f, 0.22f);
-        _radiusJitterFreq = Random.Range(1.2f, 2.4f);
-        _jitterSeed       = Random.Range(0f, 100f);
-    }
+        var healer = go.GetComponent<EnemyHealerAura>();
+        if (healer != null)
+            lines.Add($"Heals nearby enemies +{healer.healAmount} every {healer.healInterval:0.#}s");
 
-    void Update()
-    {
-        if (_centre == null) { Destroy(gameObject); return; }
+        if (go.GetComponent<EnemyBlockSealer>() != null)
+            lines.Add("Seals the first block it crosses (no moving it — sell only)");
 
-        float t = Time.unscaledTime;
-        float speedNow = _speed + Mathf.Sin(t * _speedJitterFreq + _jitterSeed) * _speedJitterAmp;
-        _angle += speedNow * Time.unscaledDeltaTime;
+        var supp = go.GetComponent<EnemyTurretSuppressor>();
+        if (supp != null)
+            lines.Add($"Nearby turrets fire {Mathf.RoundToInt((1f - supp.fireRateMultiplier) * 100f)}% slower");
 
-        float rad = _angle * Mathf.Deg2Rad;
-        float radiusNow = _radius + Mathf.Sin(t * _radiusJitterFreq + _jitterSeed * 1.7f) * _radiusJitterAmp;
-        float bob = Mathf.Sin(t * _bobSpeed + _phase) * _bobAmp
-                  + Mathf.Sin(t * _bobSpeed * 2.3f + _jitterSeed) * (_bobAmp * 0.4f);   // extra flicker
-        Vector3 ringOffset = new Vector3(Mathf.Cos(rad), 0f, Mathf.Sin(rad)) * radiusNow;
-        transform.position = _centre.position + ringOffset + Vector3.up * bob;
-        transform.rotation = Quaternion.LookRotation(-ringOffset.normalized, Vector3.up);   // face the core
+        var split = go.GetComponent<EnemySplitOnAlive>();
+        if (split != null)
+            lines.Add($"Splits into {split.childCount} when it advances");
+
+        var accel = go.GetComponent<EnemyAccelerator>();
+        if (accel != null)
+            lines.Add($"Speeds up over {accel.rampSeconds:0.#}s — up to ×{accel.maxMultiplier:0.#}");
+
+        if (go.GetComponent<EnemySynergyJammer>() != null)
+            lines.Add("Shuts down whatever synergy it stands on");
+
+        if (prefab.targetPriority > 0)                 lines.Add("Taunts turrets");
+        if (prefab.baseSpeedMultiplier >= 1.15f)       lines.Add("Fast mover");
+        else if (prefab.baseSpeedMultiplier <= 0.85f)  lines.Add("Slow mover");
+
+        return lines.Count > 0 ? string.Join("\n", lines) : "No special ability";
     }
 }

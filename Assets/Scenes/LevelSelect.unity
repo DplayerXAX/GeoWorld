@@ -1247,7 +1247,13 @@ MonoBehaviour:
   cameraFocus: 1
   cameraLerp: 4
   focusViewportX: 0.4
-  focusViewportY: 0.2
+  focusViewportY: 0.35
+  buildableBlocks: []
+  buildModeKey: 98
+  rotateGhostKey: 114
+  ghostValidColor: {r: 0.35, g: 1, b: 0.45, a: 0.55}
+  ghostInvalidColor: {r: 1, g: 0.3, b: 0.3, a: 0.55}
+  playerBuiltColor: {r: 0.55, g: 0.85, b: 0.95, a: 1}
 --- !u!114 &1293787489
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1462,7 +1468,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::OrbitCamera
   target: {fileID: 1003193535}
   distance: 10
-  speed: 120
+  speed: 150
   minPitch: -80
   maxPitch: 80
   useOrthographic: 0

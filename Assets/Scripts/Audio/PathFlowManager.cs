@@ -8,8 +8,8 @@ public class PathFlowManager : MonoBehaviour
 
     [Header("Laser line")]
     public Material laserMaterial;
-    [Range(0.02f, 0.3f)] public float lineWidth    = 0.085f;   // slightly thicker than before
-    [Range(0f,    1f)]   public float heightOffset = 0.04f;
+    [Range(0.02f, 0.3f)] public float lineWidth    = 0.15f;   // thin lines read as decoration, not as "the enemy comes THIS way"
+    [Range(0f,    1f)]   public float heightOffset = 0.05f;
 
     [Header("X-ray (hold middle mouse)")]
     [Tooltip("Mouse button that reveals every path line through walls/blocks while held (2 = middle).")]

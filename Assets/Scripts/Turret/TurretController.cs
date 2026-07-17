@@ -42,6 +42,7 @@ public class TurretController : MonoBehaviour
     EnemySurfaceUnit _target;
     float _fireTimer;
     float _synergyFireRateMult = 1f;   // reversible synergy attack-speed buff (1 = none)
+    float _debuffFireRateMult  = 1f;   // reversible enemy attack-speed debuff (1 = none)
 
     [SerializeField, Range(0, 3)] int _powerPathLevel;
     [SerializeField, Range(0, 3)] int _burstPathLevel;
@@ -87,10 +88,21 @@ public class TurretController : MonoBehaviour
         _synergyFireRateMult = Mathf.Max(0.01f, multiplier);
     }
 
-    // Current synergy fire-rate multiplier (1 = none) and the effective shots/sec
-    // after it — used by the selection panel to show the live buff.
+    // Reversible fire-rate multiplier from ENEMY debuffs (EnemyTurretSuppressor,
+    // via TurretSuppressionEffect). <1 = slower. Its own channel so a suppressor
+    // and a Harmony buff compose instead of clobbering each other's restore-to-1.
+    public void SetDebuffFireRateMultiplier(float multiplier)
+    {
+        _debuffFireRateMult = Mathf.Max(0.01f, multiplier);
+    }
+
+    public float DebuffFireRateMultiplier => _debuffFireRateMult;
+
+    // Current fire-rate multipliers (1 = none) and the effective shots/sec after
+    // them — used by the selection panel to show the live buff.
     public float SynergyFireRateMultiplier => _synergyFireRateMult;
-    public float EffectiveFireRate => fireInterval > 0.0001f ? _synergyFireRateMult / fireInterval : 0f;
+    public float FireRateMultiplier => _synergyFireRateMult * _debuffFireRateMult;
+    public float EffectiveFireRate => fireInterval > 0.0001f ? FireRateMultiplier / fireInterval : 0f;
 
     public void AddAttackSpeed(float percent)
     {
@@ -476,7 +488,7 @@ public class TurretController : MonoBehaviour
         if (_target == null) return;
 
         Fire(_target);
-        _fireTimer = fireInterval / _synergyFireRateMult;
+        _fireTimer = fireInterval / FireRateMultiplier;
     }
 
     bool InRange(EnemySurfaceUnit e)
@@ -569,14 +581,18 @@ public class TurretController : MonoBehaviour
         return bulletPrefab;
     }
 
+    // Tints ONLY the turret's own visual (this GameObject + children), never
+    // transform.parent — that's the block, which has to keep showing its synergy
+    // colour. The division of labour is: block = which synergy you're on, gun on
+    // top = which turret type it is. Tinting the parent made every turret repaint
+    // its whole block and fight the synergy palette.
     void ApplyModeColor()
     {
-        Transform root = transform.parent != null ? transform.parent : transform;
         Color color = TurretTypes.DisplayColor(mode);
 
         // MaterialPropertyBlock instead of r.material.color — the latter clones a
         // unique material per turret renderer (extra allocs, no GPU instancing).
-        foreach (var r in root.GetComponentsInChildren<Renderer>())
+        foreach (var r in GetComponentsInChildren<Renderer>())
             MpbColor.Set(r, color);
     }
 

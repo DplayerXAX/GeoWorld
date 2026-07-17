@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.UI;
 
 // The title brain. Three faces: TITLE → MAIN MENU → SAVE SELECT. It shows/hides
 // the matching UGUI panel (smooth via UIPanel) and slides the cube (TitleCube).
@@ -24,8 +25,34 @@ public class TitleFlow : MonoBehaviour
     public string levelSelectScene = "LevelSelect";
     public string gameplayScene    = "gamePlay";
 
+    [Header("Save select")]
+    [Tooltip("Level registry — used to compute each slot's completion % in the hover tooltip. Drag the same LevelDatabase the map uses.")]
+    public LevelDatabase database;
+
     void Awake() => Instance = this;
-    void Start() => GoToTitle();
+    void Start()
+    {
+        WireSaveSlots();
+        GoToTitle();
+    }
+
+    // Attach a SaveSlotButton to each save button under savePanel, in order, so
+    // hovering shows that slot's stats and clicking selects it. The buttons keep
+    // their existing onClick (LoadLevelSelect) — the slot is selected on the
+    // pointer-DOWN that precedes it.
+    void WireSaveSlots()
+    {
+        if (savePanel == null) return;
+        var buttons = savePanel.GetComponentsInChildren<Button>(true);
+        int n = Mathf.Min(buttons.Length, SaveSystem.SlotCount);
+        for (int i = 0; i < n; i++)
+        {
+            var go = buttons[i].gameObject;
+            var comp = go.GetComponent<SaveSlotButton>();
+            if (comp == null) comp = go.AddComponent<SaveSlotButton>();
+            comp.Init(i);
+        }
+    }
 
     void Update()
     {
@@ -38,8 +65,8 @@ public class TitleFlow : MonoBehaviour
     }
 
     // ── Faces (wire Back / Play buttons to these) ──────────────────────────────
-    public void GoToTitle()    { CurrentFace = Face.Title;      Apply(titlePanel);    cube?.MoveToCenter();   shaderSwap?.ApplyTitle();   }
-    public void GoToMainMenu() { CurrentFace = Face.MainMenu;   Apply(mainMenuPanel); cube?.MoveToMenuFace(); shaderSwap?.ApplySwapped(); }
+    public void GoToTitle()    { CurrentFace = Face.Title;      Apply(titlePanel);    cube?.MoveToCenter();   shaderSwap?.ApplyTitle();   SaveSlotInfoDisplay.Hide(); }
+    public void GoToMainMenu() { CurrentFace = Face.MainMenu;   Apply(mainMenuPanel); cube?.MoveToMenuFace(); shaderSwap?.ApplySwapped(); SaveSlotInfoDisplay.Hide(); }
     public void GoToSave()     { CurrentFace = Face.SaveSelect; Apply(savePanel);     cube?.MoveToSaveFace(); shaderSwap?.ApplySwapped(); }
 
     // ── Menu actions (wire the menu buttons to these) ──────────────────────────

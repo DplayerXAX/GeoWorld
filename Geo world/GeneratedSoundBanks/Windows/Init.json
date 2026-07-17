@@ -10,11 +10,21 @@
     "Type": "User",
     "GUID": "{701ECBBD-9C7B-4030-8CDB-749EE5D1C7B9}",
     "Language": "SFX",
-    "Hash": "{844414B2-2962-E159-913E-08CF3D04724B}",
+    "Hash": "{5036D0DB-C41B-B5D5-8DF1-3CFAEA47B434}",
     "ObjectPath": "Init",
     "ShortName": "Init",
     "Path": "Init.bnk",
     "Plugins": {
+     "ShareSets": [
+      {
+       "Id": "3216246379",
+       "Name": "Space_Dreaming",
+       "ObjectPath": "\\Effects\\Factory Effects\\RoomVerb\\Huge Spaces\\Space_Dreaming",
+       "GUID": "{4FF7C4B2-37B0-4DFF-8E8A-1420102AE2DD}",
+       "LibName": "Wwise RoomVerb",
+       "LibId": "7733251"
+      }
+     ],
      "AudioDevices": [
       {
        "Id": "2317455096",
@@ -40,6 +50,19 @@
       "Name": "Main Audio Bus",
       "ObjectPath": "\\Busses\\Default Work Unit\\Main Audio Bus",
       "GUID": "{1514A4D8-1DA6-412A-A17E-75CA0C2149F3}"
+     },
+     {
+      "Id": "4054672182",
+      "Name": "Spacial",
+      "ObjectPath": "\\Busses\\Default Work Unit\\Spacial",
+      "GUID": "{D8B769F3-2EC1-4A98-A650-3DFC75E52DEE}",
+      "PluginRefs": {
+       "ShareSets": [
+        {
+         "Id": "3216246379"
+        }
+       ]
+      }
      }
     ],
     "GameParameters": [
@@ -678,6 +701,6 @@
     ]
    }
   ],
-  "FileHash": "{65E7BDE9-1733-DCC7-263B-726614BBFAB6}"
+  "FileHash": "{60208976-8CA5-B4A8-F447-800D179F71B2}"
  }
 }

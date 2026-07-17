@@ -12,4 +12,4 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 9289c9e765809ec408877f7c7b8d296d, type: 3}
   m_Name: InitBank
   m_EditorClassIdentifier: AK.Wwise.Unity.Addressables::AK.Wwise.Unity.WwiseAddressables.WwiseInitBankReference
-  AddressableBank: {fileID: 11400000, guid: bffd23a86920e3b4f9fcef3ae1905c32, type: 2}
+  AddressableBank: {fileID: 11400000, guid: f92b81c3cc1400745ac6f4dd52526649, type: 2}

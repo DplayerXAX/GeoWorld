@@ -103,6 +103,7 @@ public class HudSidePanels : MonoBehaviour
         A("F", "Open / Close shop");
         A("LMB",     "Select / place");
         A("Space",   "Start wave");
+        A("R",       "Restart level");
         A("RMB drag","Rotate camera");
         A("Scroll",  "Zoom");
         A("Esc",     "Pause / settings");
@@ -386,7 +387,15 @@ public class HudSidePanels : MonoBehaviour
         switch (a.rule.effect)
         {
             case AbundanceHarvestEffect ah:
-                return $"{ah.LastUnitCount} piece{(ah.LastUnitCount == 1 ? "" : "s")}  ·  +{ah.LastPayoutAmount}/turn";
+                // Per-INSTANCE numbers, not ah.LastUnitCount/LastPayoutAmount —
+                // those are the effect-wide total across every simultaneous
+                // Abundance loop, which would show the same combined number on
+                // every loop's row. Recompute just this active's contribution.
+                int units = ah.countMode == AbundanceHarvestEffect.CountMode.Pieces
+                    ? SynergyEffectUtil.CountParticipatingPieces(a)
+                    : SynergyEffectUtil.CountParticipatingCells(a);
+                int payout = units > 0 ? units * Mathf.Max(0, ah.blockPerUnit) + Mathf.Max(0, ah.flatBonus) : 0;
+                return $"{units} piece{(units == 1 ? "" : "s")}  ·  +{payout}/turn";
             case OrderSlowEffect os:
                 int slowPct = Mathf.RoundToInt((1f - os.speedMultiplier) * 100f);
                 return $"-{slowPct}% speed  ·  {os.AffectedEnemyCount} enemy affected";

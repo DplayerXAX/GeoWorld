@@ -8,32 +8,40 @@
 						<Property Name="Channels" Type="int32">
 							<ValueList>
 								<Value Platform="Windows">4</Value>
+								<Value Platform="WebGL">4</Value>
 							</ValueList>
 						</Property>
 						<Property Name="LRMix" Type="Real64">
 							<ValueList>
 								<Value Platform="Windows">0</Value>
+								<Value Platform="WebGL">0</Value>
 							</ValueList>
 						</Property>
 						<Property Name="MaxSampleRate" Type="int32">
 							<ValueList>
 								<Value Platform="Windows">48000</Value>
+								<Value Platform="WebGL">48000</Value>
 							</ValueList>
 						</Property>
 						<Property Name="MinSampleRate" Type="int32">
 							<ValueList>
 								<Value Platform="Windows">0</Value>
+								<Value Platform="WebGL">0</Value>
 							</ValueList>
 						</Property>
 						<Property Name="SampleRate" Type="int32">
 							<ValueList>
 								<Value Platform="Windows">0</Value>
+								<Value Platform="WebGL">0</Value>
 							</ValueList>
 						</Property>
 					</PropertyList>
 					<ConversionPluginInfoList>
 						<ConversionPluginInfo Platform="Windows">
 							<ConversionPlugin Name="" ID="{D67206AD-1B8E-4FAB-AEF1-4DE4138C9F8E}" PluginName="PCM" CompanyID="0" PluginID="1"/>
+						</ConversionPluginInfo>
+						<ConversionPluginInfo Platform="WebGL">
+							<ConversionPlugin Name="" ID="{D13B7A3E-6484-440E-8171-446FFE912E67}" PluginName="PCM" CompanyID="0" PluginID="1"/>
 						</ConversionPluginInfo>
 					</ConversionPluginInfoList>
 				</Conversion>

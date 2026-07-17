@@ -7,26 +7,159 @@ using System.Text;
 using UnityEditor;
 using UnityEngine;
 
-// Editor tool: rebuild a LevelDefinition's tutorialSteps list from a CSV table
-// (author it in Excel — File ▸ Save As ▸ CSV UTF-8 — or Google Sheets ▸
-// File ▸ Download ▸ CSV) instead of clicking through the Inspector's list one
-// field at a time.
+// Editor tool: move a LevelDefinition's tutorialSteps list between the Inspector
+// and a CSV table (author it in Excel — File ▸ Save As ▸ CSV UTF-8 — or Google
+// Sheets ▸ File ▸ Download ▸ CSV) instead of clicking through the Inspector's
+// list one field at a time. Both directions, so an existing hand-authored level
+// can be pulled out to CSV and edited from there onward:
 //
-//   1. Select the target LevelDefinition asset in the Project window.
-//   2. GeoWorld ▸ Tutorial ▸ Import Steps from CSV...
-//   3. Pick your .csv file.
+//   Select the LevelDefinition asset in the Project window, then
+//     GeoWorld ▸ Tutorial ▸ Export Steps to CSV...    (asset  → csv)
+//     GeoWorld ▸ Tutorial ▸ Import Steps from CSV...  (csv → asset)
 //
-// One row = one TutorialStep. First row must be the header (column names,
-// order doesn't matter, case-insensitive). See
+// One row = one TutorialStep. First row is the header (column names,
+// order doesn't matter on import, case-insensitive). See
 // Assets/Scripts/Meta/Editor/Tutorial_Template_1-1.csv for the exact columns
 // and a filled-in example (Level_1's current tutorial, as a starting point).
 //
-// Every column except "Kind" is optional — a blank cell falls back to the
-// TutorialStep field's own default. Re-running the import REPLACES the whole
+// Every column except "Kind" is optional on import — a blank cell falls back to
+// the TutorialStep field's own default. Re-running the import REPLACES the whole
 // tutorialSteps list (it doesn't merge), so keep the CSV as the source of
 // truth once you start using it.
+//
+// Asset references (Block / Speaker / Conversation) round-trip BY ASSET NAME,
+// so the two halves stay symmetric — but renaming one of those assets breaks
+// the link on the next import (it warns and leaves the field blank).
 public static class TutorialCsvImporter
 {
+    // Canonical column order. Import looks columns up BY NAME (order/case don't
+    // matter), but export writes them in this order so a round-tripped file still
+    // matches Tutorial_Template_1-1.csv column-for-column.
+    static readonly string[] Columns =
+    {
+        "Kind", "Block", "OriginX", "OriginY", "OriginZ", "RotX", "RotY", "RotZ",
+        "CellsOverride", "WaitSeconds", "Count", "InputKey", "PathLength",
+        "FreeOperations", "HideInCombat", "RequiredWave", "UnlocksOps",
+        "CameraFocus", "FocusZoom", "Hint", "Conversation", "Speaker",
+        "SpeakerSlot", "SpeakerPortrait",
+    };
+
+    // ── Export ────────────────────────────────────────────────────────────────
+    // The inverse of ImportMenu: dump the selected LevelDefinition's existing
+    // tutorialSteps to a CSV you can edit in Excel and import straight back.
+    [MenuItem("GeoWorld/Tutorial/Export Steps to CSV...")]
+    static void ExportMenu()
+    {
+        var lv = Selection.activeObject as LevelDefinition;
+        if (lv == null)
+        {
+            EditorUtility.DisplayDialog("Export Tutorial CSV",
+                "Select a LevelDefinition asset in the Project window first, then run this again.", "OK");
+            return;
+        }
+
+        int count = lv.tutorialSteps != null ? lv.tutorialSteps.Count : 0;
+        if (count == 0)
+        {
+            EditorUtility.DisplayDialog("Export Tutorial CSV",
+                $"'{lv.name}' has no tutorial steps to export.", "OK");
+            return;
+        }
+
+        string path = EditorUtility.SaveFilePanel(
+            "Export Tutorial Steps CSV", Application.dataPath, $"Tutorial_{lv.name}", "csv");
+        if (string.IsNullOrEmpty(path)) return;
+
+        try
+        {
+            // UTF-8 *with BOM*: without it Excel reads the file as ANSI and turns
+            // any non-ASCII hint text into mojibake on open.
+            File.WriteAllText(path, Build(lv.tutorialSteps), new UTF8Encoding(true));
+            Debug.Log($"[TutorialCsvImporter] Exported {count} step(s) from '{lv.name}' to {path}");
+            EditorUtility.RevealInFinder(path);
+        }
+        catch (Exception e)
+        {
+            EditorUtility.DisplayDialog("Export Tutorial CSV", $"Failed: {e.Message}", "OK");
+            Debug.LogException(e);
+        }
+    }
+
+    public static string Build(List<TutorialStep> steps)
+    {
+        var sb = new StringBuilder();
+        sb.Append(string.Join(",", Columns)).Append('\n');
+
+        foreach (var s in steps)
+        {
+            if (s == null) continue;
+            var cells = new string[Columns.Length];
+            int i = 0;
+            cells[i++] = s.kind.ToString();
+            cells[i++] = AssetName(s.block);
+            cells[i++] = s.origin.x.ToString(CultureInfo.InvariantCulture);
+            cells[i++] = s.origin.y.ToString(CultureInfo.InvariantCulture);
+            cells[i++] = s.origin.z.ToString(CultureInfo.InvariantCulture);
+            cells[i++] = s.rotation90.x.ToString(CultureInfo.InvariantCulture);
+            cells[i++] = s.rotation90.y.ToString(CultureInfo.InvariantCulture);
+            cells[i++] = s.rotation90.z.ToString(CultureInfo.InvariantCulture);
+            cells[i++] = FormatCells(s.cellsOverride);
+            cells[i++] = s.waitSeconds.ToString(CultureInfo.InvariantCulture);
+            cells[i++] = s.count.ToString(CultureInfo.InvariantCulture);
+            cells[i++] = s.inputKey.ToString();
+            cells[i++] = s.pathLength.ToString(CultureInfo.InvariantCulture);
+            cells[i++] = s.freeOperations ? "TRUE" : "FALSE";
+            cells[i++] = s.hideInCombat   ? "TRUE" : "FALSE";
+            cells[i++] = s.requiredWave.ToString(CultureInfo.InvariantCulture);
+            cells[i++] = FormatOpsList(s.unlocksOps);
+            cells[i++] = s.cameraFocus.ToString();
+            cells[i++] = s.focusZoom.ToString(CultureInfo.InvariantCulture);
+            cells[i++] = s.hint ?? "";
+            cells[i++] = AssetName(s.conversation);
+            cells[i++] = AssetName(s.speaker);
+            cells[i++] = s.speakerSlot.ToString();
+            cells[i++] = s.speakerPortrait ?? "";
+
+            for (int c = 0; c < cells.Length; c++)
+            {
+                if (c > 0) sb.Append(',');
+                sb.Append(Escape(cells[c]));
+            }
+            sb.Append('\n');
+        }
+        return sb.ToString();
+    }
+
+    static string AssetName(UnityEngine.Object o) => o != null ? o.name : "";
+
+    static string FormatCells(Vector3Int[] cells)
+    {
+        if (cells == null || cells.Length == 0) return "";
+        var parts = new string[cells.Length];
+        for (int i = 0; i < cells.Length; i++) parts[i] = $"{cells[i].x},{cells[i].y},{cells[i].z}";
+        return string.Join("|", parts);
+    }
+
+    static string FormatOpsList(TutorialStepKind[] ops)
+    {
+        if (ops == null || ops.Length == 0) return "";
+        var parts = new string[ops.Length];
+        for (int i = 0; i < ops.Length; i++) parts[i] = ops[i].ToString();
+        return string.Join(";", parts);
+    }
+
+    // Mirrors ParseCsv: quote whenever the value contains a comma, quote or
+    // newline, doubling any embedded quotes.
+    static string Escape(string v)
+    {
+        if (string.IsNullOrEmpty(v)) return "";
+        bool needsQuotes = v.IndexOf(',') >= 0 || v.IndexOf('"') >= 0
+                        || v.IndexOf('\n') >= 0 || v.IndexOf('\r') >= 0;
+        if (!needsQuotes) return v;
+        return "\"" + v.Replace("\"", "\"\"") + "\"";
+    }
+
+    // ── Import ────────────────────────────────────────────────────────────────
     [MenuItem("GeoWorld/Tutorial/Import Steps from CSV...")]
     static void ImportMenu()
     {

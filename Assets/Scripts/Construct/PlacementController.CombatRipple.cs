@@ -122,7 +122,18 @@ public partial class PlacementController
         for (int i = 0; i < beacons.Count; i++)
             StartCoroutine(BeaconPop(beacons[i].t, delayFor(beacons[i].worldPos), beacons[i].origScale));
 
-        SynergyVisualFX.ReplayGrowIn(delayFor);
+        // Synergy FX (and seal chains) wait for the WHOLE block ripple to finish
+        // before growing, rather than following the wavefront like the beacons do.
+        // A synergy spans several blocks, so sprouting its decoration when the
+        // wave reaches one of them means it blooms over blocks that haven't
+        // popped in yet. Waiting for the last cube — path sweep plus the off-path
+        // bloom that trails it — guarantees every block a synergy is built from is
+        // already standing, and gives a clean "structure builds, then it comes
+        // alive" beat. The small per-position term just keeps them from all
+        // firing on the exact same frame.
+        float blocksDoneAt = Mathf.Max(pathSweepEnd, pathSweepEnd - cubeDur * 0.5f + 0.55f + cubeDur);
+        System.Func<Vector3, float> synergyDelayFor = wp => blocksDoneAt + Mathf.Min(0.25f, delayFor(wp) * 0.12f);
+        SynergyVisualFX.ReplayGrowIn(synergyDelayFor);
 
         // Step 5: off-path cubes bloom from their nearest path cube. Small
         // overlap with the path sweep so it doesn't feel halted.

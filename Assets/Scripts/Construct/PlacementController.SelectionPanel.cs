@@ -49,6 +49,13 @@ public partial class PlacementController
             return;
         }
 
+        if (mode == PlacementMode.Select && _selectedChaos != null)
+        {
+            infoPanel.ShowReadonly(_selectedChaos.transform.position, "Chaos Block", BuildChaosBody(_selectedChaos));
+            upgradePanel?.Hide();
+            return;
+        }
+
         var ins = selectedInstance;
         if (mode != PlacementMode.Select || ins == null || ins.visualObject == null || ins.data == null)
         {
@@ -93,9 +100,32 @@ public partial class PlacementController
         }
     }
 
+    // Read-only intel for a Chaos Block: what it's costing you every round it
+    // stays alive, and its current health so you can judge whether a turret can
+    // finish it before the next payout.
+    string BuildChaosBody(ChaosBlockUnit chaos)
+    {
+        var sb = new System.Text.StringBuilder();
+        int drain = RunConfig.Level != null ? RunConfig.Level.chaosBlockCurrencyDrain : 0;
+
+        sb.AppendLine($"<color=#E2241B><b>-{drain} block currency</b> every wave it survives</color>");
+        sb.AppendLine();
+
+        var unit = chaos.GetComponent<EnemySurfaceUnit>();
+        if (unit != null)
+            sb.AppendLine($"Health     <b>{unit.CurrentHealth}/{unit.maxHealth}</b>");
+
+        sb.Append("<size=85%><color=#6A6A6A>Destroy it with turrets during combat to stop the drain. Left alone, more will pile up.</color></size>");
+        return sb.ToString().TrimEnd();
+    }
+
+    const string SealedNote = "<color=#B44BC8><b>SEALED</b> — can't move, sell only</color>";
+
     string BuildInfoBody(PlacedBlockInstance ins, bool isTurret)
     {
         var sb = new System.Text.StringBuilder();
+
+        if (ins.sealedByEnemy) sb.AppendLine(SealedNote);
 
         if (isTurret)
         {
@@ -105,8 +135,12 @@ public partial class PlacementController
             float fireRate = t.fireInterval > 0.0001f ? 1f / t.fireInterval : 0f;
             sb.AppendLine($"Damage     <b>{t.bulletDamage}</b>");
             sb.AppendLine($"Range      <b>{t.attackRange:0.#}</b>");
-            if (t.SynergyFireRateMultiplier > 1.0001f)
-                sb.AppendLine($"Fire rate  <b>{t.EffectiveFireRate:0.0}/s</b>  <color=#7BE6B0>(+{(t.SynergyFireRateMultiplier - 1f) * 100f:0}%)</color>");
+            // Combined synergy buff × enemy-suppression debuff.
+            float rateMult = t.FireRateMultiplier;
+            if (rateMult > 1.0001f)
+                sb.AppendLine($"Fire rate  <b>{t.EffectiveFireRate:0.0}/s</b>  <color=#7BE6B0>(+{(rateMult - 1f) * 100f:0}%)</color>");
+            else if (rateMult < 0.9999f)
+                sb.AppendLine($"Fire rate  <b>{t.EffectiveFireRate:0.0}/s</b>  <color=#E2241B>(-{(1f - rateMult) * 100f:0}% suppressed)</color>");
             else
                 sb.AppendLine($"Fire rate  <b>{fireRate:0.0}/s</b>");
             sb.AppendLine($"Bullets    <b>{Mathf.Max(1, t.projectilesPerShot)}</b>");
@@ -132,7 +166,7 @@ public partial class PlacementController
             return sb.ToString().TrimEnd();
         }
 
-        if (ins.color == BlockColor.None) return "Synergy  None";
+        if (ins.color == BlockColor.None) { sb.Append("Synergy  None"); return sb.ToString().TrimEnd(); }
 
         bool   hasProg = TryGetSynergyProgress(ins, out string ruleName, out int cur, out int req, out bool active);
         string name    = (hasProg && !string.IsNullOrEmpty(ruleName)) ? ruleName : ins.color.ToString();

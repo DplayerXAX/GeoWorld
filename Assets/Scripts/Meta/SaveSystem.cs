@@ -2,39 +2,92 @@ using System.Collections.Generic;
 using System.IO;
 using UnityEngine;
 
-// The single persistent player profile (progression / tech / endless best).
-// Mirrors SnapshotManager's JsonUtility + persistentDataPath approach. Cached in
-// memory; mutators persist immediately so a crash never loses a clear/purchase.
+// Per-slot persistent player profiles. Three independent save slots, each its
+// own profile_<n>.json. The ACTIVE slot (chosen on the Title save-select) is
+// what gameplay reads/writes; PeekSlot reads any slot without selecting it, for
+// the save-select UI. Cached in memory; mutators persist immediately so a crash
+// never loses a clear/purchase.
 public static class SaveSystem
 {
-    static string FilePath => Path.Combine(Application.persistentDataPath, "profile.json");
+    public const int SlotCount = 3;
+    const string ActiveSlotKey = "geoworld_save_slot";
+
+    // Which slot gameplay reads/writes. Persisted (PlayerPrefs) so it survives
+    // scene loads and relaunches; the Title save-select sets it on pointer-down.
+    public static int ActiveSlot
+    {
+        get => Mathf.Clamp(PlayerPrefs.GetInt(ActiveSlotKey, 0), 0, SlotCount - 1);
+        private set { PlayerPrefs.SetInt(ActiveSlotKey, Mathf.Clamp(value, 0, SlotCount - 1)); PlayerPrefs.Save(); }
+    }
+
+    static string SlotPath(int slot) =>
+        Path.Combine(Application.persistentDataPath, $"profile_{Mathf.Clamp(slot, 0, SlotCount - 1)}.json");
+
+    // Pre-slot single-file save; migrated into slot 0 on first access.
+    static string LegacyPath => Path.Combine(Application.persistentDataPath, "profile.json");
 
     static ProfileData _cached;
+    static int _cachedSlot = -1;
+
     public static ProfileData Profile
     {
-        get { if (_cached == null) Load(); return _cached; }
+        get { if (_cached == null || _cachedSlot != ActiveSlot) Load(); return _cached; }
+    }
+
+    // Point gameplay at a slot. Next Profile access loads that slot's file.
+    public static void SelectSlot(int slot)
+    {
+        ActiveSlot  = slot;
+        _cached     = null;
+        _cachedSlot = -1;
     }
 
     public static ProfileData Load()
     {
+        int slot = ActiveSlot;
+        _cachedSlot = slot;
         try
         {
-            if (File.Exists(FilePath))
+            var path = SlotPath(slot);
+            // One-time migration: an old single-file profile.json becomes slot 0.
+            if (!File.Exists(path) && slot == 0 && File.Exists(LegacyPath))
+                path = LegacyPath;
+
+            if (File.Exists(path))
             {
-                var data = JsonUtility.FromJson<ProfileData>(File.ReadAllText(FilePath));
+                var data = JsonUtility.FromJson<ProfileData>(File.ReadAllText(path));
                 if (data != null) return _cached = data;
             }
         }
-        catch (System.Exception e) { Debug.LogWarning($"[SaveSystem] load failed: {e.Message}"); }
+        catch (System.Exception e) { Debug.LogWarning($"[SaveSystem] load slot {slot} failed: {e.Message}"); }
         return _cached = new ProfileData();
     }
 
     public static void Save()
     {
         if (_cached == null) return;
-        try { File.WriteAllText(FilePath, JsonUtility.ToJson(_cached, prettyPrint: true)); }
-        catch (System.Exception e) { Debug.LogWarning($"[SaveSystem] save failed: {e.Message}"); }
+        int slot = _cachedSlot < 0 ? ActiveSlot : _cachedSlot;
+        try { File.WriteAllText(SlotPath(slot), JsonUtility.ToJson(_cached, prettyPrint: true)); }
+        catch (System.Exception e) { Debug.LogWarning($"[SaveSystem] save slot {slot} failed: {e.Message}"); }
     }
+
+    // Read a slot's data WITHOUT selecting it or touching the active cache — for
+    // the save-select UI. Returns null when the slot has no save yet (empty).
+    public static ProfileData PeekSlot(int slot)
+    {
+        try
+        {
+            var path = SlotPath(slot);
+            if (!File.Exists(path) && slot == 0 && File.Exists(LegacyPath)) path = LegacyPath;
+            if (File.Exists(path))
+                return JsonUtility.FromJson<ProfileData>(File.ReadAllText(path));
+        }
+        catch (System.Exception e) { Debug.LogWarning($"[SaveSystem] peek slot {slot} failed: {e.Message}"); }
+        return null;
+    }
+
+    public static bool SlotHasData(int slot) =>
+        File.Exists(SlotPath(slot)) || (slot == 0 && File.Exists(LegacyPath));
 
     // ── Progression helpers ──────────────────────────────────────────────────
 
@@ -102,12 +155,13 @@ public static class SaveSystem
     }
 
 #if UNITY_EDITOR
-    [UnityEditor.MenuItem("GeoWorld/Save/Wipe Profile")]
+    [UnityEditor.MenuItem("GeoWorld/Save/Wipe Active Slot")]
     public static void WipeForTesting()
     {
-        _cached = new ProfileData();
+        _cached     = new ProfileData();
+        _cachedSlot = ActiveSlot;
         Save();
-        Debug.Log("[SaveSystem] profile wiped.");
+        Debug.Log($"[SaveSystem] slot {ActiveSlot} wiped.");
     }
 #endif
 }
