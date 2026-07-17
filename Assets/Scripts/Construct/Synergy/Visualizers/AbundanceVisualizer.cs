@@ -1,9 +1,9 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-// Abundance — "harvest field" visualizer. AbundanceRule has no cell filter,
-// so every claimed cell blooms. Plants geometric mesh flowers on the top
-// face of each claimed block.
+// Abundance — "harvest field" visualizer. Only cells on the loop itself
+// bloom (ActiveSynergy.highlightCells); tail cells stay bare. Plants
+// geometric mesh flowers on the top face of each claimed block.
 //
 // Same reconciler contract as HarmonyVineVisualizer: SynergyVisualFX rebuilds
 // every claimed piece's decoration on any claim-count change, so we own each
@@ -82,6 +82,7 @@ public class AbundanceVisualizer : SynergyVisualizer
     {
         public Color[] palette;
         public Color   center;
+        public HashSet<Vector3Int> highlightCells; // null = every cell blooms
     }
 
     [System.NonSerialized] private Dictionary<int, GameObject>  _patches;  // pieceId -> live patch
@@ -134,7 +135,7 @@ public class AbundanceVisualizer : SynergyVisualizer
             Color theme   = BlockColorPalette.Get(a.rule.color);
             Color baseCol = useThemeColor ? Color.Lerp(theme, Color.white, themeWhiten) : bloomColor;
 
-            var target = new PatchTarget { palette = BuildPalette(baseCol), center = accentColor };
+            var target = new PatchTarget { palette = BuildPalette(baseCol), center = accentColor, highlightCells = a.highlightCells };
             foreach (var p in a.claimedPieces)
                 if (p != null) _desired[p.id] = target;
         }
@@ -176,6 +177,7 @@ public class AbundanceVisualizer : SynergyVisualizer
         for (int i = 0; i < piece.cells.Length; i++)
         {
             var cell = piece.cells[i];
+            if (target.highlightCells != null && !target.highlightCells.Contains(cell)) continue;
             if (Hash01(CellHash(cell) ^ 0x5bd1e995) <= cellCoverChance)
                 tops.Add(grid.GridToWorld(cell) + Vector3.up * (cs * 0.5f));
         }

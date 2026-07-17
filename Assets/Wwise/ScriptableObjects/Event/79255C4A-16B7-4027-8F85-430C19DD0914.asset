@@ -15,4 +15,5 @@ MonoBehaviour:
   objectName: Chill_Event
   id: 3153557168
   guid: 79255C4A-16B7-4027-8F85-430C19DD0914
+  AutoBank: {fileID: 11400000, guid: aa64e7a93714d1d48ac51e3239fe5778, type: 2}
   IsInUserDefinedSoundBank: 0

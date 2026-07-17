@@ -219,6 +219,9 @@ public partial class PlacementController : MonoBehaviour
     GameFlowManager.WaveForecast _startForecast;
     int        _startForecastRound = int.MinValue;
 
+    // Chaos-block selection -> read-only panel showing its per-round drain.
+    ChaosBlockUnit _selectedChaos;
+
     void Awake()
     {
         Instance        = this;
@@ -415,11 +418,8 @@ public partial class PlacementController : MonoBehaviour
         if (_panelPickUpRequested)            { _panelPickUpRequested            = false; PickUpSelected(); }
         if (_panelSellRequested)              { _panelSellRequested              = false; SellSelected();   }
 
-        if (Input.GetKeyDown(KeyCode.R)) 
-        {
-            TryRefreshShop();
+        if (Input.GetKeyDown(KeyCode.R)) GameFlowManager.Instance?.RestartGame();
 
-        }
         if (Input.GetMouseButtonDown(0) || VirtualCursor.ConfirmPressedThisFrame)
         {
             if (IsPointerOverSelectionPanel() || HudSidePanels.PointerOver || PointerOverInfoPanel())
@@ -651,6 +651,11 @@ public partial class PlacementController : MonoBehaviour
             Debug.Log("[Placement] This block is part of the level's fixed layout and can't be moved.");
             return false;
         }
+        if (selectedInstance.sealedByEnemy)
+        {
+            ShowPlacementPopup("Sealed by the enemy — this block can't be moved. You can still sell it.");
+            return false;
+        }
         if (FindOrphanedTurret(selectedInstance) != null)
         {
             ShowPlacementPopup("There's still turret on this block, try move it first");
@@ -716,11 +721,25 @@ public partial class PlacementController : MonoBehaviour
             // Empty-space click — dismiss any current selection (Arknights-style).
             selectedInstance  = null;
             _selectedEndpoint = null;
+            _selectedChaos    = null;
             UpdateHighlight(null);
             _lastClickTarget = null;
             if (WavePreview.Active) WavePreview.Exit();
             return;
         }
+
+        // --- Chaos block: read-only panel explaining what it's costing you ---
+        var chaos = hit.transform.GetComponentInParent<ChaosBlockUnit>();
+        if (chaos != null)
+        {
+            selectedInstance    = null;
+            activePhysicsObject = null;
+            _selectedEndpoint   = null;
+            _selectedChaos      = chaos;
+            UpdateHighlight(chaos.gameObject);
+            return;
+        }
+        _selectedChaos = null;
 
         // --- Tray token: single click immediately grab and enter Edit ---
         var sb = hit.transform.GetComponentInParent<SelectableBlock>();
@@ -1119,8 +1138,11 @@ public partial class PlacementController : MonoBehaviour
                 visual.transform.localScale = Vector3.one*50f;
                 visual.AddComponent<TurretBeacon>();
                 visual.AddComponent<BoxCollider>();
+                // Type colour, NOT the block's synergy colour — all three turret
+                // BlockDatas share one turretPrefab, so this tint is the only
+                // thing telling Basic / Slow / AOE apart on the board.
                 foreach (var r in visual.GetComponentsInChildren<Renderer>())
-                    MpbColor.Set(r, currentColor);
+                    MpbColor.Set(r, TurretTypes.DisplayColor(currentBlock.blockType));
             }
         }
         else
@@ -1326,8 +1348,9 @@ public partial class PlacementController : MonoBehaviour
                 visual.transform.localRotation = Quaternion.identity;
                 visual.transform.localScale = Vector3.one;
 
+                // Type colour, not the block's synergy colour — see PlaceBlock().
                 foreach (var r in visual.GetComponentsInChildren<Renderer>())
-                    MpbColor.Set(r, color);
+                    MpbColor.Set(r, TurretTypes.DisplayColor(data.blockType));
             }
         }
         else
@@ -1494,6 +1517,13 @@ public partial class PlacementController : MonoBehaviour
         if (selectedInstance.locked)
         {
             Debug.Log("[Placement] This block is part of the level's fixed layout and can't be deleted.");
+            return;
+        }
+        // Sealed blocks are sell-only: delete pushes an undo record, and restoring
+        // from it would hand back an unsealed block — laundering the seal away.
+        if (selectedInstance.sealedByEnemy)
+        {
+            ShowPlacementPopup("Sealed by the enemy — this block can't be deleted. You can still sell it.");
             return;
         }
 
@@ -1671,8 +1701,9 @@ public partial class PlacementController : MonoBehaviour
                 visual.transform.localRotation = Quaternion.identity;
                 visual.transform.localScale = Vector3.one;
 
+                // Type colour, not the block's synergy colour — see PlaceBlock().
                 foreach (var r in visual.GetComponentsInChildren<Renderer>())
-                    MpbColor.Set(r, color);
+                    MpbColor.Set(r, TurretTypes.DisplayColor(data.blockType));
             }
         }
         else

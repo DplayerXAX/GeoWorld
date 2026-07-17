@@ -698,8 +698,11 @@ public class ShopController : MonoBehaviour
                 visual.transform.localRotation = Quaternion.identity;
                 visual.transform.localScale = Vector3.one * 50f;
 
-                //foreach (var r in visual.GetComponentsInChildren<Renderer>())
-                //    MpbColor.Set(r, currentColor);
+                // Tint the preview by turret TYPE — all three turret BlockDatas
+                // share one turretPrefab, so without this they're indistinguishable
+                // in the shop.
+                foreach (var r in visual.GetComponentsInChildren<Renderer>())
+                    MpbColor.Set(r, TurretTypes.DisplayColor(data.blockType));
             }
         }
 

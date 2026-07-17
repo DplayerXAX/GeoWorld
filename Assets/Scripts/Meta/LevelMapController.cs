@@ -50,7 +50,7 @@ public class LevelMapController : MonoBehaviour
     public float cameraLerp  = 4f;
     [Tooltip("Where the focused cell sits horizontally on screen. 0.5 = centre, ~0.3 = left-centre (leaves room for the right info panel).")]
     [Range(0f, 1f)] public float focusViewportX = 0.3f;
-    [Range(0f, 1f)] public float focusViewportY = 0.2f;
+    [Range(0f, 1f)] public float focusViewportY = 0.3f;
 
     [Header("Build mode (overworld map extension)")]
     [Tooltip("Blocks the player can place on this map, earned via LevelDefinition.mapBlockRewards. Only blocks in THIS list are placeable, even if granted — keep it in sync with what levels can reward.")]

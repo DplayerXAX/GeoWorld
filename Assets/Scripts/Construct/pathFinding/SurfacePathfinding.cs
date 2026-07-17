@@ -5,15 +5,35 @@ public class SurfacePathfinding
     // Faces whose normal points up are "top" faces (walking on top of a block).
     static bool IsTop(FaceNode f) => f != null && f.normal.y > 0.5f;
 
-    // Shortest path by hop count, with a tie-break that PREFERS top-surface faces:
-    // cost = hops * HOP + (number of non-top steps). HOP dominates so distance is
-    // still primary; among equal-length paths the one that stays on top wins.
+    // Faces whose normal points down — the UNDERSIDE of a block. The player is
+    // looking at the board from above and rarely orbits underneath it, so a route
+    // that crawls along here is effectively invisible: enemies vanish and reappear
+    // with no explanation of where they went.
+    static bool IsUnderside(FaceNode f) => f != null && f.normal.y < -0.5f;
+
+    // Cost per step onto `n`, in hop units. Distance is still the primary term,
+    // but VISIBILITY is now a real cost rather than a tie-break:
+    //   top       → free
+    //   side      → a nudge (only decides near-ties; sides read fine on screen)
+    //   underside → worth a multi-hop detour to avoid
+    //
+    // These are penalties, not bans: if the only way through is underneath, the
+    // path still goes there rather than failing.
+    static long StepCost(FaceNode n, long hop)
+    {
+        if (IsTop(n))       return hop;
+        if (IsUnderside(n)) return hop + hop * 3L;   // take up to a 3-hop detour to stay visible
+        return hop + hop / 8L;                       // side: 8 side-steps == 1 extra hop
+    }
+
+    // Cheapest path from start to end, weighted so the route the enemies actually
+    // take is one the player can SEE (see StepCost).
     public static List<FaceNode> FindPath(List<FaceNode> startFaces, List<FaceNode> endFaces)
     {
         if (startFaces == null || endFaces == null || startFaces.Count == 0 || endFaces.Count == 0)
             return null;
 
-        const long HOP = 1_000_000L;   // far larger than any side-step tie-break total
+        const long HOP = 1_000_000L;   // far larger than any accumulated face penalty
 
         var endSet   = new HashSet<FaceNode>(endFaces);
         var startSet = new HashSet<FaceNode>(startFaces);
@@ -43,8 +63,7 @@ public class SurfacePathfinding
             foreach (var n in current.neighbors)
             {
                 if (n == null) continue;
-                long step = HOP + (IsTop(n) ? 0L : 1L);
-                long nd   = cd + step;
+                long nd = cd + StepCost(n, HOP);
                 if (!dist.TryGetValue(n, out long old) || nd < old)
                 {
                     dist[n]     = nd;

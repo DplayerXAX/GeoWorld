@@ -116,6 +116,47 @@ public class SynergyEvaluator : MonoBehaviour
 
     public PlacedPiece GetPieceById(int id) => _byId.TryGetValue(id, out var p) ? p : null;
 
+    // ── Jamming (EnemySynergyJammer) ────────────────────────────────────────
+
+    // The active synergy claiming `cell`, or null. Used by jammer enemies to
+    // find what they're standing on.
+    public ActiveSynergy FindActiveAtCell(Vector3Int cell)
+    {
+        for (int i = 0; i < _actives.Count; i++)
+        {
+            var a = _actives[i];
+            if (a?.claimedPieces == null) continue;
+            foreach (var p in a.claimedPieces)
+            {
+                if (p?.cells == null) continue;
+                for (int k = 0; k < p.cells.Length; k++)
+                    if (p.cells[k] == cell) return a;
+            }
+        }
+        return null;
+    }
+
+    // Temporarily kill/restore an active's EFFECT without touching its claim, so
+    // the synergy stays on the board (and keeps its pieces locked) while a jammer
+    // stands on it. Ref-counted: only the first jammer revokes, only the last one
+    // to leave re-applies.
+    public void SetSuppressed(ActiveSynergy active, bool on)
+    {
+        if (active == null || active.rule == null) return;
+
+        int before = active.suppressCount;
+        active.suppressCount = Mathf.Max(0, before + (on ? 1 : -1));
+        if ((before > 0) == (active.suppressCount > 0)) return;   // no edge crossed
+
+        var game = GameFlowManager.Instance;
+        if (active.suppressCount > 0) RefRevoke(active.rule, active.tier, game);
+        else                          RefApply(active.rule, active.tier, game);
+
+        OnTierChanged?.Invoke(active.rule, active.suppressCount > 0 ? active.tier : 0,
+                                           active.suppressCount > 0 ? 0 : active.tier);
+        OnClaimChanged?.Invoke(active.rule, active);
+    }
+
     public void ResetForNewRun()
     {
         RevokeAll();
@@ -158,7 +199,10 @@ public class SynergyEvaluator : MonoBehaviour
             if (needCheck && !rule.IsStillSatisfied(_board, active.claimedPieces))
             {
                 int oldTier = active.tier;
-                RefRevoke(rule, oldTier, game);
+                // A suppressed active's effect is ALREADY revoked (a jammer is
+                // sitting on it) — revoking again would drop the shared refcount
+                // twice and silently kill a sibling instance's effect.
+                if (!active.Suppressed) RefRevoke(rule, oldTier, game);
                 _actives.RemoveAt(i);
                 // After revoke, Pass 2 should be able to re-try this rule
                 // immediately at the current version (claim just collapsed,
@@ -257,11 +301,13 @@ public class SynergyEvaluator : MonoBehaviour
         if (!grew && !leveled && !setMoved) return false;
 
         int oldTier = active.tier;
-        RefRevoke(active.rule, oldTier, game);
+        // While jammed the effect is off; just move the claim and let the jammer's
+        // release re-apply at whatever tier it ends up on.
+        if (!active.Suppressed) RefRevoke(active.rule, oldTier, game);
         active.claimedPieces = newClaim;
         active.tier          = newTier;
         SnapshotHighlightCells(active.rule, active);
-        RefApply(active.rule, newTier, game);
+        if (!active.Suppressed) RefApply(active.rule, newTier, game);
 
         if (verboseLogging)
             Debug.Log($"[Synergy] ↑ {active.rule.displayName} absorbed → tier {oldTier}→{newTier}, {newClaim.Count} pieces");

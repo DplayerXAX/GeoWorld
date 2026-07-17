@@ -251,8 +251,8 @@ MonoBehaviour:
     unlocksOps: 
     cameraFocus: 0
     focusZoom: 0
-    hint: "(If you ever find yourself unable to build path with all your currency,
-      press 'R' to restart the level\uFFFD\uFFFD.)"
+    hint: (If you ever find yourself unable to build path with all your currency,
+      press 'R' to restart the level...)
     conversation: {fileID: 0}
     speaker: {fileID: 0}
     speakerSlot: 1

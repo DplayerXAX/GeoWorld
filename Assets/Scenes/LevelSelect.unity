@@ -740,6 +740,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: ed39f2b237e573f4f85990bb5d1440ac, type: 3}
   m_Name: 
   m_EditorClassIdentifier: AK.Wwise.Unity.Addressables::AK.Wwise.Unity.WwiseAddressables.InitBankHolder
+  InitBank: {fileID: 11400000, guid: 921dbaf0e79e14b4c898d5962608c29d, type: 2}
 --- !u!1001 &1003193530
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -1247,7 +1248,13 @@ MonoBehaviour:
   cameraFocus: 1
   cameraLerp: 4
   focusViewportX: 0.4
-  focusViewportY: 0.2
+  focusViewportY: 0.3
+  buildableBlocks: []
+  buildModeKey: 98
+  rotateGhostKey: 114
+  ghostValidColor: {r: 0.35, g: 1, b: 0.45, a: 0.55}
+  ghostInvalidColor: {r: 1, g: 0.3, b: 0.3, a: 0.55}
+  playerBuiltColor: {r: 0.55, g: 0.85, b: 0.95, a: 1}
 --- !u!114 &1293787489
 MonoBehaviour:
   m_ObjectHideFlags: 0

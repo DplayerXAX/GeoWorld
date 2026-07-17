@@ -33,42 +33,42 @@ MonoBehaviour:
   enemies:
   - name: Fast
     prefab: {fileID: 1000000000000000004, guid: 8e112c6d7d9b44b29b6d28b4cf5a5401, type: 3}
-    maxHealth: 3
+    maxHealth: 4
     speedMultiplier: 2
-    rewardOnKill: 0
+    rewardOnKill: 1
     targetPriority: 0
     spawnCost: 1
     minRound: 0
     spawnWeight: 2
     groupSize: {x: 3, y: 6}
-    spawnInterval: 0.5
+    spawnInterval: 0.8
   - name: Taunt
     prefab: {fileID: 2000000000000000004, guid: 9cd11ec29906452fae87b242eaa57704, type: 3}
-    maxHealth: 5
+    maxHealth: 6
     speedMultiplier: 1.5
-    rewardOnKill: 0
+    rewardOnKill: 1
     targetPriority: 100
     spawnCost: 1
     minRound: 1
     spawnWeight: 1.5
     groupSize: {x: 6, y: 10}
-    spawnInterval: 0.25
+    spawnInterval: 0.4
   - name: Splitter
     prefab: {fileID: 3000000000000000004, guid: 7f9459c0f939e624c8b042b0ee3c0803, type: 3}
-    maxHealth: 8
+    maxHealth: 9
     speedMultiplier: 0.85
-    rewardOnKill: 0
+    rewardOnKill: 1
     targetPriority: 20
     spawnCost: 4
     minRound: 2
     spawnWeight: 0.75
     groupSize: {x: 1, y: 2}
-    spawnInterval: 0.85
+    spawnInterval: 1.0
   waveBaseBudget: 20
   waveBudgetGrowth: 7
   waveBudgetVariance: 0.15
   waveBudgetMax: 160
-  waveGroupSpacing: 1.5
+  waveGroupSpacing: 2.2
   waveAffordSlack: 1.2
   basicTurret:
     cost: 3

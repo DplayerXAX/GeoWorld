@@ -26,6 +26,12 @@ public class PlacedBlockInstance
     // sold, or deleted by the player. Checked in PlacementController's pickup/sell/
     // delete paths, same shape as the existing combat-phase lock.
     public bool locked;
+
+    // Sealed by an EnemyBlockSealer that walked over it. Blocks pickup and delete
+    // (delete is undoable, which would launder the seal away) but NOT selling —
+    // the 50% sell refund is the punishment, and it keeps a badly-placed seal from
+    // permanently wrecking a synergy loop or the only route with zero counterplay.
+    public bool sealedByEnemy;
 }
 
 public class GridSystem : MonoBehaviour
