@@ -2671,6 +2671,11 @@
 				<MusicSegment Name="textBlip" ID="{3E750EFB-1856-45B3-B940-6C1897696C56}" ShortID="567046508">
 					<PropertyList>
 						<Property Name="EndPosition" Type="Real64" Value="8832"/>
+						<Property Name="Volume" Type="Real64">
+							<ValueList>
+								<Value>2</Value>
+							</ValueList>
+						</Property>
 					</PropertyList>
 					<ReferenceList>
 						<Reference Name="Conversion">

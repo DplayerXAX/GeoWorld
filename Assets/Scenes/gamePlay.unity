@@ -422,6 +422,8 @@ MonoBehaviour:
   rangeBlockedColor: {r: 1, g: 0.18, b: 0.12, a: 0.6}
   sellRefundFraction: 0.5
   selectionPopDuration: 0.16
+  restartTapMaxSeconds: 0.25
+  restartHoldSeconds: 1.2
   infoPanel: {fileID: 23567973}
   upgradePanel: {fileID: 322883952}
 --- !u!4 &164805053
@@ -2017,8 +2019,9 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::PauseMenu
   toggleKey: 27
   titleScene: Title
+  levelSelectScene: LevelSelect
   overlayColor: {r: 0, g: 0, b: 0, a: 0.6}
-  panelWidth: 260
+  panelWidth: 320
   buttonHeight: 42
   showControls: 1
   pauseIcon: {fileID: 21300000, guid: 2f6dd4e25db6d5940b6f64a87b995189, type: 3}

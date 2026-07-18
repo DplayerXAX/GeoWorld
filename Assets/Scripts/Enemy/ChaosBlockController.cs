@@ -159,44 +159,47 @@ public class ChaosBlockController : MonoBehaviour
         Destroy(died.gameObject);
     }
 
-    // Random cell in the current build's (expanded) bounding box, preferring one
-    // at least chaosBlockMinDistance from the nearest occupied cell. Falls back
-    // to the farthest candidate tried if no attempt clears the minimum.
+    // A free cell in the RING [minDistance, maxDistance] around the build.
+    //
+    // Sampled by stepping out from a random EXISTING block rather than drawing a
+    // uniform point from the build's bounding box: that box grows with the build,
+    // its volume grows cubically, and nearly all of a big box is empty space far
+    // from anything — so late-game spawns drifted way past minDistance and ended
+    // up outside turret range, where the drain can never be stopped. Anchoring on
+    // a real block keeps the spawn tied to the build at any size.
+    //
+    // Falls back to whichever candidate came closest to the ring if nothing landed
+    // in it (e.g. the build is boxed in), so a spawn always happens.
     Vector3Int PickSpawnCell(GridSystem grid)
     {
         var occupied = new List<Vector3Int>(grid.GetGrid().Keys);
         if (occupied.Count == 0) return Vector3Int.zero;
 
-        Vector3Int min = occupied[0], max = occupied[0];
-        for (int i = 1; i < occupied.Count; i++)
-        {
-            min = Vector3Int.Min(min, occupied[i]);
-            max = Vector3Int.Max(max, occupied[i]);
-        }
+        int minDist = Mathf.Max(1, _lv.chaosBlockMinDistance);
+        int maxDist = Mathf.Max(minDist, _lv.chaosBlockMaxDistance);
+        float minSqr = (float)minDist * minDist;
+        float maxSqr = (float)maxDist * maxDist;
 
-        int margin = Mathf.Max(1, _lv.chaosBlockSearchMargin);
-        min -= Vector3Int.one * margin;
-        max += Vector3Int.one * margin;
+        Vector3Int best      = occupied[0];
+        float      bestMiss  = float.MaxValue;   // distance outside the ring
 
-        int minDist   = Mathf.Max(1, _lv.chaosBlockMinDistance);
-        float minSqr  = (float)minDist * minDist;
-
-        Vector3Int best = occupied[0];
-        float      bestNearestSqr = -1f;
-
-        const int attempts = 40;
+        const int attempts = 60;
         for (int i = 0; i < attempts; i++)
         {
-            var cand = new Vector3Int(
-                _rng.NextIntInclusive(min.x, max.x),
-                _rng.NextIntInclusive(min.y, max.y),
-                _rng.NextIntInclusive(min.z, max.z));
+            var anchor = occupied[_rng.NextIntInclusive(0, occupied.Count - 1)];
+            var cand = anchor + new Vector3Int(
+                _rng.NextIntInclusive(-maxDist, maxDist),
+                _rng.NextIntInclusive(-maxDist, maxDist),
+                _rng.NextIntInclusive(-maxDist, maxDist));
 
             if (grid.IsOccupied(cand)) continue;
 
             float nearestSqr = NearestSqrDistance(cand, occupied);
-            if (nearestSqr > bestNearestSqr) { bestNearestSqr = nearestSqr; best = cand; }
-            if (nearestSqr >= minSqr) return cand;   // good enough — stop early
+            if (nearestSqr >= minSqr && nearestSqr <= maxSqr) return cand;   // in the ring
+
+            // Track the near-miss in case the ring is unreachable this round.
+            float miss = nearestSqr < minSqr ? minSqr - nearestSqr : nearestSqr - maxSqr;
+            if (miss < bestMiss) { bestMiss = miss; best = cand; }
         }
 
         return best;

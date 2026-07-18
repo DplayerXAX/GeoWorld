@@ -15,9 +15,12 @@ public class PauseMenu : MonoBehaviour
     [Tooltip("Scene loaded by the 'Back to Title' button (must be in Build Settings).")]
     public string titleScene = "Title";
 
+    [Tooltip("Scene loaded by the 'Back to Select Level' button (must be in Build Settings).")]
+    public string levelSelectScene = "LevelSelect";
+
     [Header("Look")]
     public Color overlayColor = new Color(0f, 0f, 0f, 0.6f);
-    public float panelWidth = 340f;
+    public float panelWidth = 500f;
     public float buttonHeight = 58f;
 
     [Header("Top-right controls")]
@@ -113,6 +116,13 @@ public class PauseMenu : MonoBehaviour
         LoadingScreen.Go(titleScene);
     }
 
+    void GoToLevelSelect()
+    {
+        Time.timeScale = 1f;
+        _paused = false; Paused = false;
+        LoadingScreen.Go(levelSelectScene);
+    }
+
     void CycleSpeed()
     {
         float cur = _paused ? _prevTimeScale : Time.timeScale;
@@ -175,13 +185,13 @@ public class PauseMenu : MonoBehaviour
         // Paper panel.
         var panel = NewRect("Panel", canvasGo.transform);
         panel.anchorMin = panel.anchorMax = panel.pivot = new Vector2(0.5f, 0.5f);
-        panel.sizeDelta = new Vector2(panelWidth, 5f * (buttonHeight + 14f) + 90f);
+        panel.sizeDelta = new Vector2(panelWidth, 6f * (buttonHeight + 14f) + 90f);
         _panelGo = panel.gameObject;
 
+        // Flat, un-rounded paper rectangle — same house look as BlockInfoPanel /
+        // MultiSelectPanel (the "description panel" the player already knows).
         var bg = panel.gameObject.AddComponent<Image>();
         bg.color = GeoPalette.Paper;
-        bg.sprite = UIRoundedRect.Get(24);
-        bg.type = Image.Type.Sliced;
 
         var vlg = panel.gameObject.AddComponent<VerticalLayoutGroup>();
         vlg.padding = new RectOffset(28, 28, 26, 26);
@@ -194,16 +204,20 @@ public class PauseMenu : MonoBehaviour
         title.text = "PAUSED";
         title.gameObject.AddComponent<LayoutElement>().minHeight = 46f;
 
-        _resumeButton = BuildButton(panel, "Resume", GeoPalette.Signal, () => SetPaused(false));
-        BuildButton(panel, "Settings", GeoPalette.Blue, () => SettingsScreen.Open = true);
-        BuildButton(panel, "Restart", GeoPalette.Blue, () =>
+        // House style (matches BlockInfoPanel/MultiSelectPanel): paper panel, ink
+        // buttons with paper labels for normal actions, signal red reserved for
+        // the one destructive/exit action (Quit).
+        _resumeButton = BuildButton(panel, "Resume", GeoPalette.Ink, () => SetPaused(false));
+        BuildButton(panel, "Settings", GeoPalette.Ink, () => SettingsScreen.Open = true);
+        BuildButton(panel, "Restart", GeoPalette.Ink, () =>
         {
             Time.timeScale = 1f;
             _paused = false;
             GameFlowManager.Instance?.RestartGame();
         });
-        BuildButton(panel, "Back to Title", GeoPalette.Blue, GoToTitle);
-        BuildButton(panel, "Quit", new Color(0.86f, 0.36f, 0.32f), QuitGame);
+        BuildButton(panel, "Back to Title", GeoPalette.Ink, GoToTitle);
+        BuildButton(panel, "Back to Select Level", GeoPalette.Ink, GoToLevelSelect);
+        BuildButton(panel, "Quit", GeoPalette.Signal, QuitGame);
 
         _panelGo.SetActive(false);
 
@@ -305,17 +319,21 @@ public class PauseMenu : MonoBehaviour
         var rt = NewRect("Button", parent);
         rt.gameObject.AddComponent<LayoutElement>().minHeight = buttonHeight;
         var img = rt.gameObject.AddComponent<Image>();
-        img.sprite = UIRoundedRect.Get(16); img.type = Image.Type.Sliced;
         img.color = color;
         var btn = rt.gameObject.AddComponent<Button>();
         btn.targetGraphic = img;
-        var colors = btn.colors; colors.highlightedColor = GeoPalette.Gold; colors.pressedColor = GeoPalette.Ink; btn.colors = colors;
+        var colors = btn.colors; colors.highlightedColor = GeoPalette.Gold; colors.pressedColor = new Color(0.5f, 0.5f, 0.5f); btn.colors = colors;
         btn.onClick.AddListener(() => onClick());
 
         var t = NewText("Label", rt, 22f, GeoPalette.Paper, FontStyles.Bold, TextAlignmentOptions.Center);
+        // Auto-shrink long labels (e.g. "Back to Select Level") so they never run
+        // into the button edge, and keep a fixed horizontal inset for breathing room.
+        t.enableAutoSizing = true;
+        t.fontSizeMax = 22f;
+        t.fontSizeMin = 14f;
         t.text = label;
         var lrt = t.rectTransform; lrt.anchorMin = Vector2.zero; lrt.anchorMax = Vector2.one;
-        lrt.offsetMin = lrt.offsetMax = Vector2.zero;
+        lrt.offsetMin = new Vector2(18f, 0f); lrt.offsetMax = new Vector2(-18f, 0f);
         return btn;
     }
 

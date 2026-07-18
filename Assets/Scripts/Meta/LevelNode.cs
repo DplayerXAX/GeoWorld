@@ -55,9 +55,16 @@ public class LevelNode : MonoBehaviour
     void Awake() => _rends = GetComponentsInChildren<Renderer>();
 
     // Recompute state from the save profile and recolor the block.
+    //
+    // Every reachable node shows its EXACT synergy-palette colour — no brightness
+    // modulation. Waypoints used to render at 70% and cleared levels at 115%,
+    // which meant two blocks authored the identical palette green showed up on
+    // screen as two different greens purely because one was a path stone. Locked
+    // is the one state still worth recolouring: it's not a shade of the theme,
+    // it's "you can't go here", and it has to read at a glance.
     public void Refresh()
     {
-        if (IsWaypoint) { NodeState = State.Unlocked; Tint(Dim(themeColor, 0.7f)); return; }
+        if (IsWaypoint) { NodeState = State.Unlocked; Tint(themeColor); return; }
 
         var p   = SaveSystem.Profile;
         var rec = p.GetRecord(level.levelId);
@@ -65,12 +72,7 @@ public class LevelNode : MonoBehaviour
         else if (p.IsUnlocked(level.levelId)) NodeState = State.Unlocked;
         else                                  NodeState = State.Locked;
 
-        Tint(NodeState switch
-        {
-            State.Locked  => lockedColor,
-            State.Cleared => Dim(themeColor, 1.15f),
-            _             => themeColor,
-        });
+        Tint(NodeState == State.Locked ? lockedColor : themeColor);
     }
 
     void Tint(Color c)
@@ -79,6 +81,4 @@ public class LevelNode : MonoBehaviour
         for (int i = 0; i < _rends.Length; i++)
             if (_rends[i] != null) MpbColor.Set(_rends[i], c);
     }
-
-    static Color Dim(Color c, float m) => new Color(c.r * m, c.g * m, c.b * m, 1f);
 }

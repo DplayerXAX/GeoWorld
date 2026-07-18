@@ -29,6 +29,9 @@ public class LevelDefinition : ScriptableObject
     public bool AllowsColor(BlockColor c) =>
         allowedColors == null || allowedColors.Length == 0 || System.Array.IndexOf(allowedColors, c) >= 0;
 
+    [Tooltip("Blocks GUARANTEED in the very first build phase's shop — the rest of the slots still roll randomly, and every later round is fully random. Turret entries fill the turret row, everything else the block row; extras beyond a row's size are dropped. Use it to hand-set an opening hand (a tutorial's ORANGE block, a level that must open with an AOE turret, ...) instead of leaning on runSeed to luck into it. Empty = fully random opening shop.")]
+    public ShopEntry[] startingShop;
+
     [Tooltip("Authored waves (fed into GameFlowManager.waves). Leave empty to use the procedural generator.")]
     public List<WaveDefinition> waves = new();
 
@@ -89,7 +92,10 @@ public class LevelDefinition : ScriptableObject
     [Tooltip("Minimum grid-cell distance kept from the nearest existing occupied cell when picking a spawn point — the whole point is that the player must build/reach toward it, not have it spawn next to an existing turret.")]
     [Min(1)] public int chaosBlockMinDistance = 4;
 
-    [Tooltip("How far beyond the current build's bounding box the spawn search is allowed to reach, in cells. Keep this comfortably bigger than chaosBlockMinDistance.")]
+    [Tooltip("MAXIMUM grid-cell distance from the nearest existing occupied cell. Without an upper bound the spawn drifts further and further out as the build grows, until it's out of turret range entirely and the drain becomes unkillable. Keep it within reach of a turret placed near the build's edge.")]
+    [Min(1)] public int chaosBlockMaxDistance = 7;
+
+    [Tooltip("Legacy: how far beyond the build's bounding box the old box-sampling search could reach. Spawn points are now sampled around a random existing block instead (see ChaosBlockController.PickSpawnCell), so this is only a fallback clamp.")]
     [Min(1)] public int chaosBlockSearchMargin = 6;
 
     [Tooltip("Hard cap on simultaneously-alive chaos blocks, however many rounds the player lets them pile up.")]
@@ -157,7 +163,37 @@ public enum TutorialStepKind
 }
 
 // Optional camera focus for a step — glides the orbit camera to a point of interest.
-public enum TutorialFocus { None, StartPoint, EndPoint, ChaosBlock }
+// What TutorialStep.cameraFocus points the camera at.
+//
+// NOTE: serialized by INDEX (cameraFocus: 3 == ChaosBlock in existing level
+// assets), so only ever APPEND here — reordering silently rewrites every
+// authored tutorial step.
+//
+// StepOrigin is the general escape hatch: it aims at the step's own
+// origin/cellsOverride cells, so anything that appears at a location you can
+// author is coverable without inventing a new enum entry for it.
+// One guaranteed slot in a level's opening shop.
+[System.Serializable]
+public class ShopEntry
+{
+    [Tooltip("Block to force into the shop. Turret blocks fill the turret row; everything else fills the block row.")]
+    public BlockData block;
+
+    [Tooltip("Synergy colour to force on it. None = roll it from the level's pool like any other token (turrets normally stay None).")]
+    public BlockColor color = BlockColor.None;
+}
+
+public enum TutorialFocus
+{
+    None,
+    StartPoint,
+    EndPoint,
+    ChaosBlock,
+    StepOrigin,       // this step's `origin` (or the centre of `cellsOverride`)
+    Synergy,          // centre of a live synergy's claimed cells
+    Enemy,            // first live enemy on the board
+    LastPlacedBlock,  // the block the player most recently placed
+}
 
 // One tutorial step. For Place: the player must place `block` at `origin` — the
 // block's WHOLE shape is shown as a ghost. (Advanced: set `cellsOverride` to an

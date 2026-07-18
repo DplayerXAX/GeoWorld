@@ -38,8 +38,15 @@ public class LevelInfoPanel : MonoBehaviour
     public int   cornerRadius  = 26;
     public float fadeSpeed     = 12f;
 
+    [Header("Enemy roster")]
+    [Tooltip("Balance asset — only needed to list enemies for levels that have NO authored waves (those roll their roster from BalanceTable.enemies). Levels with authored waves read their roster straight off them.")]
+    public BalanceTable balance;
+    [Tooltip("Portrait size in the roster rows.")]
+    public float thumbSize = 46f;
+
     CanvasGroup _cg;
     TMP_Text    _title, _status, _best, _desc, _enterLabel;
+    RectTransform _roster;
     Button      _enter;
     Action      _onEnter;
     float       _target;
@@ -56,6 +63,12 @@ public class LevelInfoPanel : MonoBehaviour
 
     // ── API (called by LevelMapController) ───────────────────────────────────────
     public void Show(string title, string desc, string status, string best, bool canEnter, Action onEnter)
+        => Show(title, desc, status, best, canEnter, onEnter, null);
+
+    // `level` is optional — pass it to list the enemies and special mechanics
+    // waiting inside. Null keeps the plain title/desc panel.
+    public void Show(string title, string desc, string status, string best, bool canEnter,
+                     Action onEnter, LevelDefinition level)
     {
         _title.text  = title;
         _status.text = status;
@@ -64,8 +77,77 @@ public class LevelInfoPanel : MonoBehaviour
         _enterLabel.text   = canEnter ? "Enter" : "Locked";
         _enter.interactable = canEnter;
 
+        BuildRoster(level);
+
         _onEnter = onEnter;
         _target  = 1f;
+    }
+
+    // Rebuilt per selection rather than pooled: the panel shows one level at a
+    // time and switching is a click, not a per-frame cost.
+    void BuildRoster(LevelDefinition lv)
+    {
+        if (_roster == null) return;
+
+        for (int i = _roster.childCount - 1; i >= 0; i--) Destroy(_roster.GetChild(i).gameObject);
+        if (lv == null) { _roster.gameObject.SetActive(false); return; }
+
+        var enemies  = LevelRoster.Enemies(lv, balance);
+        var specials = LevelRoster.SpecialMechanics(lv);
+        if (enemies.Count == 0 && specials.Count == 0) { _roster.gameObject.SetActive(false); return; }
+
+        _roster.gameObject.SetActive(true);
+
+        if (enemies.Count > 0)
+        {
+            AddHeading(_roster, "THREATS");
+            foreach (var e in enemies) AddEnemyRow(_roster, e);
+        }
+
+        if (specials.Count > 0)
+        {
+            AddHeading(_roster, "MECHANICS");
+            foreach (var s in specials)
+            {
+                var t = NewText("Special", _roster, bodySize * 0.82f, bodyColor, FontStyles.Normal,
+                                TextAlignmentOptions.TopLeft, true);
+                t.text = "• " + s;
+            }
+        }
+    }
+
+    void AddHeading(RectTransform parent, string label)
+    {
+        var t = NewText("Heading", parent, bodySize * 0.8f, accentColor, FontStyles.Bold,
+                        TextAlignmentOptions.TopLeft, false);
+        t.text = label;
+        t.gameObject.AddComponent<LayoutElement>().minHeight = bodySize * 1.3f;
+    }
+
+    // [portrait] [name + what it does]
+    void AddEnemyRow(RectTransform parent, EnemySurfaceUnit prefab)
+    {
+        var row = NewRect("EnemyRow", parent);
+        var h = row.gameObject.AddComponent<HorizontalLayoutGroup>();
+        h.spacing = 10f;
+        h.childAlignment = TextAnchor.UpperLeft;
+        h.childControlWidth = h.childControlHeight = true;
+        h.childForceExpandWidth = false; h.childForceExpandHeight = false;
+        row.gameObject.AddComponent<LayoutElement>().minHeight = thumbSize;
+
+        var iconRt = NewRect("Icon", row);
+        var icon = iconRt.gameObject.AddComponent<Image>();
+        icon.color   = new Color(1f, 1f, 1f, 0f);   // stays invisible until the render lands
+        icon.enabled = false;
+        var le = iconRt.gameObject.AddComponent<LayoutElement>();
+        le.minWidth = le.preferredWidth = le.minHeight = le.preferredHeight = thumbSize;
+        EnemyThumbnail.Request(prefab, icon);
+
+        var t = NewText("Info", row, bodySize * 0.82f, bodyColor, FontStyles.Normal,
+                        TextAlignmentOptions.TopLeft, true);
+        t.text = $"<b>{prefab.name}</b>  <size=90%><color=#9A9A9A>{prefab.maxHealth} HP</color></size>\n" +
+                 $"<size=90%><color=#9A9A9A>{EnemyDossier.Mechanic(prefab)}</color></size>";
+        t.gameObject.AddComponent<LayoutElement>().flexibleWidth = 1f;
     }
 
     public void Hide() { _target = 0f; _onEnter = null; }
@@ -154,6 +236,16 @@ public class LevelInfoPanel : MonoBehaviour
         _status = NewText("Status", parent, bodySize,  accentColor, FontStyles.Bold,  TextAlignmentOptions.TopLeft, false);
         _best   = NewText("Best",   parent, bodySize,  bodyColor,  FontStyles.Normal, TextAlignmentOptions.TopLeft, false);
         _desc   = NewText("Desc",   parent, bodySize,  bodyColor,  FontStyles.Normal, TextAlignmentOptions.TopLeft, true);
+
+        // Threats / mechanics list, filled per selection by BuildRoster.
+        _roster = NewRect("Roster", parent);
+        var rv = _roster.gameObject.AddComponent<VerticalLayoutGroup>();
+        rv.spacing = 8f;
+        rv.childAlignment = TextAnchor.UpperLeft;
+        rv.childControlWidth = rv.childControlHeight = true;
+        rv.childForceExpandWidth = true; rv.childForceExpandHeight = false;
+        _roster.gameObject.AddComponent<ContentSizeFitter>().verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+        _roster.gameObject.SetActive(false);
 
         var brt = NewRect("Enter", parent);
         var img = brt.gameObject.AddComponent<Image>();
