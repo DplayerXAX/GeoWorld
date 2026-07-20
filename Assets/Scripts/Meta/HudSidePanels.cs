@@ -103,7 +103,8 @@ public class HudSidePanels : MonoBehaviour
         A("F", "Open / Close shop");
         A("LMB",     "Select / place");
         A("Space",   "Start wave");
-        A("R",       "Restart level");
+        A("R",       "Refresh shop");
+        A("Hold R",  "Restart level");
         A("RMB drag","Rotate camera");
         A("Scroll",  "Zoom");
         A("Esc",     "Pause / settings");

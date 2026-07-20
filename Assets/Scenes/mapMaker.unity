@@ -389,6 +389,8 @@ MonoBehaviour:
   rangeBlockedColor: {r: 1, g: 0.18, b: 0.12, a: 0.6}
   sellRefundFraction: 0.5
   selectionPopDuration: 0.16
+  restartTapMaxSeconds: 0.25
+  restartHoldSeconds: 1.2
   infoPanel: {fileID: 0}
   upgradePanel: {fileID: 0}
 --- !u!4 &164805053
@@ -1297,7 +1299,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::LevelMapAuthor
   database: {fileID: 11400000, guid: 5fec9a2db26ea9f4d9c19242de8a9162, type: 2}
-  mapName: Select
+  mapName: 1-3Preset
 --- !u!4 &604723794
 Transform:
   m_ObjectHideFlags: 0
@@ -1383,7 +1385,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: ed39f2b237e573f4f85990bb5d1440ac, type: 3}
   m_Name: 
   m_EditorClassIdentifier: AK.Wwise.Unity.Addressables::AK.Wwise.Unity.WwiseAddressables.InitBankHolder
-  InitBank: {fileID: 11400000, guid: 921dbaf0e79e14b4c898d5962608c29d, type: 2}
 --- !u!1 &653921579
 GameObject:
   m_ObjectHideFlags: 0

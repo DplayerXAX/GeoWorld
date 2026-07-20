@@ -176,6 +176,24 @@ public partial class PlacementController : MonoBehaviour
     public Color rangeBlockedColor = new Color(1f, 0.20f, 0.14f, 0.32f);
     [Tooltip("Fraction of a block's recomputed base price returned when sold.")]
     [Range(0f, 1f)] public float sellRefundFraction = 0.5f;
+
+    // The shared turret model (BlockData.turretPrefab → tryprism) is authored
+    // tiny, so every spawn site has to scale it up by the same amount. It used to
+    // be a bare 50 in PlaceBlock and a bare 1 in the two PlaceBlockDirect paths —
+    // meaning turrets restored from a save OR spawned as a level's starting
+    // layout came out at 1/50 size and read as "not there at all", even though
+    // they were fully functional and firing.
+    // Legacy fixed multiplier — now only a FALLBACK for a turret prefab we can't
+    // measure (no renderers / degenerate bounds). The normal path fits each turret
+    // to one grid cell by its own measured bounds instead (see SpawnTurretVisual),
+    // so prefabs of different intrinsic mesh size all read the same on the board.
+    public const float TurretVisualScale = 50f;
+
+    // How much of one grid cell a fitted turret should span (largest dimension).
+    // 1 = exactly cube-sized; drop toward ~0.85 if turrets should sit a touch
+    // smaller than a full block.
+    public const float TurretVisualCellFraction = 1f;
+
     [Tooltip("Seconds for the info panel + turret range to pop in when selected.")]
     [Range(0.01f, 0.6f)] public float selectionPopDuration = 0.16f;
 
@@ -222,6 +240,16 @@ public partial class PlacementController : MonoBehaviour
     // Chaos-block selection -> read-only panel showing its per-round drain.
     ChaosBlockUnit _selectedChaos;
 
+    [Header("R key: tap = refresh shop, hold = restart level")]
+    [Tooltip("Release before this and R counts as a TAP (refresh shop). Also how long the screen stays clear before the white wash starts, so a tap never flashes.")]
+    public float restartTapMaxSeconds = 0.25f;
+    [Tooltip("Total hold time before the level restarts. The screen reaches full white exactly here.")]
+    public float restartHoldSeconds = 1.2f;
+
+    float _rHeld;
+    bool  _rRestarting;
+    bool  _rArmed;   // a fresh key-press is required — see UpdateRestartHold
+
     void Awake()
     {
         Instance        = this;
@@ -266,6 +294,7 @@ public partial class PlacementController : MonoBehaviour
         if (GameFlowManager.SettlementUp) return;   // clear settlement — hide selection panel / popups
         DrawSelectionPanel();
         DrawPopup();
+        DrawBoxSelect();
     }
 
     void DrawPopup()
@@ -351,8 +380,59 @@ public partial class PlacementController : MonoBehaviour
         var blockColors  = RollColors(blockRow.Length,  dist, rng, isTurret: false);
         var turretColors = RollColors(turretRow.Length, dist, rng, isTurret: true);
 
+        // Opening hand: overwrite the front of each row with the level's authored
+        // entries. Done AFTER rolling (rather than instead of it) so the RNG draw
+        // order is identical whether or not a level authors a starting shop — the
+        // run RNG is shared with wave generation and upgrade offers, so skipping
+        // draws here would shift every other system's results for the same seed.
+        if (!_startingShopApplied)
+        {
+            _startingShopApplied = true;
+            ApplyStartingShop(RunConfig.Mode == GameMode.Level ? RunConfig.Level : null,
+                              blockRow, blockColors, turretRow, turretColors);
+        }
+
         ShopController.Instance.SetShopItems(
             blockRow, turretRow, blockColors, turretColors, cubePrefab, grid);
+    }
+
+    // Set once per run (a level restart reloads the scene, so this resets with it).
+    bool _startingShopApplied;
+
+    // Forces LevelDefinition.startingShop entries into the first shop. Turret
+    // entries fill the turret row, everything else the block row; anything beyond
+    // a row's size is dropped rather than resizing the shop.
+    static void ApplyStartingShop(LevelDefinition lv,
+                                  BlockData[] blockRow,  BlockColor[] blockColors,
+                                  BlockData[] turretRow, BlockColor[] turretColors)
+    {
+        if (lv?.startingShop == null || lv.startingShop.Length == 0) return;
+
+        int bi = 0, ti = 0;
+        foreach (var e in lv.startingShop)
+        {
+            if (e?.block == null) continue;
+
+            bool isTurret = TurretTypes.Is(e.block.blockType);
+            var  row      = isTurret ? turretRow    : blockRow;
+            var  colors   = isTurret ? turretColors : blockColors;
+            int  i        = isTurret ? ti : bi;
+
+            if (i >= row.Length)
+            {
+                Debug.LogWarning($"[Shop] startingShop entry '{e.block.name}' dropped — " +
+                                 $"the {(isTurret ? "turret" : "block")} row only has {row.Length} slot(s) " +
+                                 $"({(isTurret ? "turretsPerTurn" : "blocksPerTurn")}).");
+                continue;
+            }
+
+            row[i] = e.block;
+            // None = let the rolled colour stand, so an entry can pin the block
+            // but still take whatever colour the level's pool gave that slot.
+            if (e.color != BlockColor.None) colors[i] = e.color;
+
+            if (isTurret) ti = i + 1; else bi = i + 1;
+        }
     }
 
     static BlockData[] RollRow(List<BlockData> pool, int count, Xoshiro256StarStar rng)
@@ -395,6 +475,19 @@ public partial class PlacementController : MonoBehaviour
 
         HandleScroll();
         HandleMouseMove();
+
+        // Batch-move owns the whole rest of the frame while active: mode switch,
+        // single-block edit keys, undo, and normal click dispatch all assume
+        // "one currentBlock" and must not run concurrently with an N-block hold.
+        // See PlacementController.BatchEdit.cs for why this is a separate state
+        // machine instead of reusing mode==Edit.
+        if (_batchMoving)
+        {
+            UpdateBatchMove();
+            currentGridPos = baseGridPos + manualOffset;
+            return;
+        }
+
         HandleModeSwitch();
 
         if (mode == PlacementMode.Edit)
@@ -417,12 +510,15 @@ public partial class PlacementController : MonoBehaviour
         if (_panelAoeGravityUpgradeRequested) { _panelAoeGravityUpgradeRequested = false; TryUpgradeSelectedAoeTurret(AoeTurretUpgradePath.Gravity); }
         if (_panelPickUpRequested)            { _panelPickUpRequested            = false; PickUpSelected(); }
         if (_panelSellRequested)              { _panelSellRequested              = false; SellSelected();   }
+        if (_multiMoveRequested)              { _multiMoveRequested              = false; TryBeginBatchMove(); }
+        if (_multiSellRequested)              { _multiSellRequested              = false; SellAllSelected(); }
 
-        if (Input.GetKeyDown(KeyCode.R)) GameFlowManager.Instance?.RestartGame();
+        UpdateRestartHold();
 
         if (Input.GetMouseButtonDown(0) || VirtualCursor.ConfirmPressedThisFrame)
         {
-            if (IsPointerOverSelectionPanel() || HudSidePanels.PointerOver || PointerOverInfoPanel())
+            if (IsPointerOverSelectionPanel() || HudSidePanels.PointerOver || PointerOverInfoPanel()
+                || MultiSelectPanel.IsPointerOver(VirtualCursor.Position))
             {
                 // Click landed on an HUD panel (info / synergies / controls) or the
                 // UGUI selection panel — it handles the click. Skip world
@@ -436,11 +532,21 @@ public partial class PlacementController : MonoBehaviour
             {
                 // Shop viewport consumed the click don't run main-camera selection.
             }
+            else if (mode == PlacementMode.Select && Input.GetMouseButtonDown(0))
+            {
+                // Mouse only (VirtualCursor.ConfirmPressedThisFrame covers gamepad,
+                // which has no held/drag state to marquee with) — box-select only
+                // ever starts here; a click straight onto a target still resolves
+                // instantly via TryBeginBoxSelect's own target check.
+                TryBeginBoxSelect();
+            }
             else
             {
                 TrySelectObject();
             }
         }
+
+        UpdateBoxSelect();   // advances (or resolves) a drag started above, across frames
 
         // Delete cancel current hold (Edit mode) or remove selected placed block.
         if (Input.GetKeyDown(KeyCode.Delete) || GamepadInput.DeleteDown)
@@ -471,13 +577,17 @@ public partial class PlacementController : MonoBehaviour
         float s = Input.GetAxis("Mouse ScrollWheel");
         if (Mathf.Abs(s) < 0.001f) return;
 
-        if (mode == PlacementMode.Select)
+        // A group (batch) move is a "hold" just like single-block Edit, even though
+        // mode is still Select — so scroll must adjust the build plane (height/depth)
+        // to move the held group up and down, NOT zoom the camera. Only a plain
+        // Select-mode cursor (nothing held) zooms.
+        if (mode == PlacementMode.Select && !_batchMoving)
         {
             cam.AddDistance(-s * scrollSpeed * 10f);
             return;
         }
 
-        // Edit mode
+        // Edit mode (or a batch-move hold — same build-plane logic)
         if (cam != null && cam.useOrthographic)
         {
             // Ortho: scroll moves the build plane up/down. Discrete steps so
@@ -714,6 +824,8 @@ public partial class PlacementController : MonoBehaviour
 
     void TrySelectObject()
     {
+        ClearMultiSelection();   // any plain click replaces a box-selection, even one that lands on nothing
+
         Ray ray = cam.myCam.ScreenPointToRay(VirtualCursor.Position);
 
         if (!Physics.Raycast(ray, out RaycastHit hit))
@@ -968,6 +1080,46 @@ public partial class PlacementController : MonoBehaviour
         TurretUpgradeLevelReached?.Invoke(Mathf.Max(turret.AoeFirePathLevel, turret.AoeGravityPathLevel));
     }
 
+    // R is overloaded: a TAP refreshes the shop, a HOLD restarts the level with a
+    // white wash that builds while you hold. The wash is the confirmation — it's
+    // why restart needs no dialog, and why letting go early has to cleanly abort.
+    void UpdateRestartHold()
+    {
+        if (Input.GetKeyDown(KeyCode.R)) { _rHeld = 0f; _rRestarting = false; _rArmed = true; }
+
+        // Only a hold that STARTED in this scene counts. After a restart this is a
+        // brand-new controller with _rHeld back at 0, and the player is very likely
+        // still holding R from the press that caused it — without this gate the
+        // wash would immediately start climbing again and restart a second time.
+        if (_rArmed && !_rRestarting && Input.GetKey(KeyCode.R))
+        {
+            // Unscaled: restarting has to work while paused / mid-settlement.
+            _rHeld += Time.unscaledDeltaTime;
+
+            float hold = Mathf.Max(restartTapMaxSeconds + 0.01f, restartHoldSeconds);
+            HoldRestartFade.SetAlpha(Mathf.InverseLerp(restartTapMaxSeconds, hold, _rHeld));
+
+            if (_rHeld >= hold)
+            {
+                _rRestarting = true;   // latch: don't re-fire while the key is still down
+                HoldRestartFade.SetAlpha(1f);
+                GameFlowManager.Instance?.RestartGame();
+            }
+            return;
+        }
+
+        if (Input.GetKeyUp(KeyCode.R))
+        {
+            if (_rArmed && !_rRestarting)
+            {
+                if (_rHeld < restartTapMaxSeconds) TryRefreshShop();
+                HoldRestartFade.FadeOut();
+            }
+            _rHeld  = 0f;
+            _rArmed = false;
+        }
+    }
+
     // Removes the selected block and refunds part of its value to the matching
     // currency pool (turret pool for turrets, block pool otherwise). Selling is
     // final — no undo record is pushed.
@@ -1036,6 +1188,7 @@ public partial class PlacementController : MonoBehaviour
     // focusPos: if provided, camera pivots there once. Pass null to leave camera in place.
     void EnterEditMode(Vector3? focusPos)
     {
+        ClearMultiSelection();   // single choke point — edit mode and a box-selection can never coexist
         mode = PlacementMode.Edit;
         _selectedEndpoint = null;   // leaving Select hides the spawn-intel panel
         SetTrayVisible(false);  // hide tokens while placing so they don't clutter the view
@@ -1127,23 +1280,7 @@ public partial class PlacementController : MonoBehaviour
 
         if (TurretTypes.Is(currentBlock.blockType))
         {
-            if (currentBlock.turretPrefab != null)
-            {
-                GameObject visual = Instantiate(
-                    currentBlock.turretPrefab,
-                    obj.transform);
-
-                visual.transform.localPosition = Vector3.zero;
-                visual.transform.localRotation = Quaternion.identity;
-                visual.transform.localScale = Vector3.one*50f;
-                visual.AddComponent<TurretBeacon>();
-                visual.AddComponent<BoxCollider>();
-                // Type colour, NOT the block's synergy colour — all three turret
-                // BlockDatas share one turretPrefab, so this tint is the only
-                // thing telling Basic / Slow / AOE apart on the board.
-                foreach (var r in visual.GetComponentsInChildren<Renderer>())
-                    MpbColor.Set(r, TurretTypes.DisplayColor(currentBlock.blockType));
-            }
+            SpawnTurretVisual(obj, currentBlock);
         }
         else
         {
@@ -1341,17 +1478,7 @@ public partial class PlacementController : MonoBehaviour
 
         if (TurretTypes.Is(data.blockType))
         {
-            if (data.turretPrefab != null)
-            {
-                var visual = Instantiate(data.turretPrefab, obj.transform);
-                visual.transform.localPosition = Vector3.zero;
-                visual.transform.localRotation = Quaternion.identity;
-                visual.transform.localScale = Vector3.one;
-
-                // Type colour, not the block's synergy colour — see PlaceBlock().
-                foreach (var r in visual.GetComponentsInChildren<Renderer>())
-                    MpbColor.Set(r, TurretTypes.DisplayColor(data.blockType));
-            }
+            SpawnTurretVisual(obj, data);
         }
         else
         {
@@ -1693,18 +1820,7 @@ public partial class PlacementController : MonoBehaviour
 
         if (TurretTypes.Is(data.blockType))
         {
-            if (data.turretPrefab != null)
-            {
-                var visual = Instantiate(data.turretPrefab, obj.transform);
-
-                visual.transform.localPosition = Vector3.zero;
-                visual.transform.localRotation = Quaternion.identity;
-                visual.transform.localScale = Vector3.one;
-
-                // Type colour, not the block's synergy colour — see PlaceBlock().
-                foreach (var r in visual.GetComponentsInChildren<Renderer>())
-                    MpbColor.Set(r, TurretTypes.DisplayColor(data.blockType));
-            }
+            SpawnTurretVisual(obj, data);
         }
         else
         {
@@ -1870,6 +1986,62 @@ public partial class PlacementController : MonoBehaviour
     // =========================
     // UTIL
     // =========================
+
+    // Builds a turret block's visual as a child of `obj`. Shared by every spawn
+    // path (player placement, starting layout, snapshot restore) because they
+    // MUST agree: they used to each roll their own copy, and the direct paths
+    // silently dropped the beacon (so restored turrets never span) and the
+    // collider (so they couldn't be clicked or inspected at all), on top of
+    // spawning at 1/50 scale.
+    void SpawnTurretVisual(GameObject obj, BlockData data)
+    {
+        if (data?.turretPrefab == null) return;
+
+        var visual = Instantiate(data.turretPrefab, obj.transform);
+        visual.transform.localPosition = Vector3.zero;
+        visual.transform.localRotation = Quaternion.identity;
+        visual.transform.localScale    = Vector3.one;   // measure the raw prefab first
+
+        // Fit the turret to one grid cell by ITS OWN measured bounds, rather than a
+        // shared magic multiplier. The old fixed ×50 was tuned to the basic turret's
+        // tiny mesh; a prefab with a different intrinsic size (e.g. the AOE turret)
+        // sailed past one cell and read as oversized. Measuring each prefab's bounds
+        // makes every turret — and any future prefab — snap to the same cube size.
+        float target = (grid != null ? grid.cellSize : 1f) * TurretVisualCellFraction;
+        FitTurretToCell(visual, target);
+
+        visual.AddComponent<TurretBeacon>();    // idle spin + bob (rotation/pos only, doesn't touch scale)
+
+        // Type colour, NOT the block's synergy colour — turret BlockDatas share (or
+        // reuse) a prefab, so this tint is the only thing telling Basic / Slow / AOE
+        // apart on the board.
+        foreach (var r in visual.GetComponentsInChildren<Renderer>())
+            MpbColor.Set(r, TurretTypes.DisplayColor(data.blockType));
+    }
+
+    // Uniformly scales `visual` so its largest measured renderer dimension equals
+    // `targetSize` (≈ one grid cell), then adds a click-select BoxCollider matched
+    // to that fitted size. Falls back to the legacy fixed multiplier if the prefab
+    // has nothing measurable. Assumes `visual` starts at localScale 1 / localPos 0 /
+    // identity rotation (SpawnTurretVisual sets that up).
+    void FitTurretToCell(GameObject visual, float targetSize)
+    {
+        if (TurretVisualFit.Fit(visual, targetSize, out var localCenter, out var maxDim))
+        {
+            // Collider lives on `visual`, so it inherits the fitted scale: local size
+            // maxDim × that scale == targetSize in world. center scales with the mesh,
+            // so the box stays on the gun rather than drifting to origin.
+            var col = visual.AddComponent<BoxCollider>();
+            col.center = localCenter;
+            col.size   = Vector3.one * maxDim;
+            return;
+        }
+
+        // No renderers / degenerate bounds — fall back to the legacy fixed scale so
+        // the turret is at least present and clickable.
+        visual.transform.localScale = Vector3.one * TurretVisualScale;
+        visual.AddComponent<BoxCollider>().size = Vector3.one / TurretVisualScale;
+    }
 
     void RegisterPlacedBlock(PlacedBlockInstance ins)
     {

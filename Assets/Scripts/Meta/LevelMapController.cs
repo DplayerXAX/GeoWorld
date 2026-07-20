@@ -236,7 +236,15 @@ public class LevelMapController : MonoBehaviour
             ln.cells      = node.cells;
             ln.level      = database != null ? database.Find(node.levelId) : null;
             ln.isStart    = node.isStart;
-            ln.themeColor = node.color;
+            // node.color is whatever the renderer happened to be tinted with when
+            // the map was captured, so authored maps drift into near-identical
+            // shades (two greens at different brightness, etc). Pull every block
+            // onto the canonical synergy palette: use the authored synergy colour
+            // when there is one, otherwise snap the captured tint to whichever
+            // theme it's closest to.
+            ln.themeColor = node.synergyColor != BlockColor.None
+                ? BlockColorPalette.Get(node.synergyColor)
+                : BlockColorPalette.Snap(node.color);
             _nodes.Add(ln);
 
             if (!string.IsNullOrEmpty(node.levelId) && ln.level == null)
@@ -577,7 +585,7 @@ public class LevelMapController : MonoBehaviour
         };
         string best   = (rec != null && rec.bestWave > 0) ? $"Best wave: {rec.bestWave}" : null;
         bool   canEnter = _selected.NodeState != LevelNode.State.Locked;
-        infoPanel.Show(title, lv.description, status, best, canEnter, () => EnterLevel(lv));
+        infoPanel.Show(title, lv.description, status, best, canEnter, () => EnterLevel(lv), lv);
     }
 
     // ── Build mode ────────────────────────────────────────────────────────────

@@ -2065,7 +2065,7 @@
 							<ChildrenList>
 								<MusicSegment Name="geo fight" ID="{35CC08F4-5C01-4582-9379-FCEFE2EF3215}" ShortID="696153439">
 									<PropertyList>
-										<Property Name="EndPosition" Type="Real64" Value="60000"/>
+										<Property Name="EndPosition" Type="Real64" Value="113340.326340326"/>
 										<Property Name="OverrideOutput" Type="bool" Value="True"/>
 									</PropertyList>
 									<ReferenceList>
@@ -2094,11 +2094,11 @@
 												</Reference>
 											</ReferenceList>
 											<ChildrenList>
-												<AudioFileSource Name="geo fight" ID="{19F4B6B7-24E8-44A2-8063-E1037C8687A8}">
+												<AudioFileSource Name="geo fight" ID="{EBEEA97E-EA2F-4544-8A56-94BC9DA6CEE2}">
 													<Language>SFX</Language>
-													<AudioFile>Geo world\Originals\SFX\geo fight.wav</AudioFile>
+													<AudioFile>geo fight.wav</AudioFile>
 													<MediaIDList>
-														<MediaID ID="81791480"/>
+														<MediaID ID="910080498"/>
 													</MediaIDList>
 												</AudioFileSource>
 											</ChildrenList>
@@ -2107,44 +2107,13 @@
 													<MusicTrackSequence Name="" ID="{9774E56B-9CE2-4F48-98A6-EB59DAF721AD}">
 														<ObjectLists>
 															<ObjectList Name="Clips">
-																<MusicClip Name="geo fight" ID="{FC3DCAA1-FB01-41EC-9767-3C17F7E6F170}">
+																<MusicClip Name="geo fight" ID="{0A7EBBB1-DBF5-44DD-BBFC-AF4A50C153D0}">
 																	<PropertyList>
-																		<Property Name="EndTrimOffset" Type="Real64" Value="60000"/>
+																		<Property Name="EndTrimOffset" Type="Real64" Value="112000"/>
 																		<Property Name="FadeInMode" Type="int16" Value="0"/>
 																		<Property Name="FadeOutMode" Type="int16" Value="0"/>
 																	</PropertyList>
-																	<AudioSourceRef Name="geo fight" ID="{19F4B6B7-24E8-44A2-8063-E1037C8687A8}"/>
-																	<PropertyCurveList>
-																		<PropertyCurve PropertyName="Volume">
-																			<Curve Name="" ID="{DC448BB6-5ED1-49DB-901F-F5D74392903F}">
-																				<PropertyList>
-																					<Property Name="Flags" Type="int32" Value="3"/>
-																				</PropertyList>
-																				<PointList>
-																					<Point>
-																						<XPos>0</XPos>
-																						<YPos>0</YPos>
-																						<Flags>5</Flags>
-																					</Point>
-																					<Point>
-																						<XPos>0.001</XPos>
-																						<YPos>-96.3</YPos>
-																						<Flags>0</Flags>
-																					</Point>
-																					<Point>
-																						<XPos>1.00349</XPos>
-																						<YPos>0</YPos>
-																						<Flags>0</Flags>
-																					</Point>
-																					<Point>
-																						<XPos>60</XPos>
-																						<YPos>0</YPos>
-																						<Flags>37</Flags>
-																					</Point>
-																				</PointList>
-																			</Curve>
-																		</PropertyCurve>
-																	</PropertyCurveList>
+																	<AudioSourceRef Name="geo fight" ID="{EBEEA97E-EA2F-4544-8A56-94BC9DA6CEE2}"/>
 																</MusicClip>
 															</ObjectList>
 														</ObjectLists>
@@ -2159,7 +2128,7 @@
 											<MusicCue Name="Exit Cue" ID="{F4A878BC-0E27-4CC5-A0C2-289E077E5883}">
 												<PropertyList>
 													<Property Name="CueType" Type="int16" Value="1"/>
-													<Property Name="TimeMs" Type="Real64" Value="60000"/>
+													<Property Name="TimeMs" Type="Real64" Value="112000"/>
 												</PropertyList>
 											</MusicCue>
 										</ObjectList>
@@ -2671,6 +2640,11 @@
 				<MusicSegment Name="textBlip" ID="{3E750EFB-1856-45B3-B940-6C1897696C56}" ShortID="567046508">
 					<PropertyList>
 						<Property Name="EndPosition" Type="Real64" Value="8832"/>
+						<Property Name="Volume" Type="Real64">
+							<ValueList>
+								<Value>2</Value>
+							</ValueList>
+						</Property>
 					</PropertyList>
 					<ReferenceList>
 						<Reference Name="Conversion">

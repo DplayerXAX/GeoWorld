@@ -10,7 +10,7 @@
     "Type": "User",
     "GUID": "{FBAC0406-FA36-4CC0-8121-80F7B6376C7E}",
     "Language": "SFX",
-    "Hash": "{8DF2970E-8857-4BA3-2D9E-3230130D1065}",
+    "Hash": "{B732E0D0-7F54-E108-E337-03556535A7C3}",
     "ObjectPath": "\\SoundBanks\\Default Work Unit\\GeoWorld_bank",
     "ShortName": "GeoWorld_bank",
     "Path": "GeoWorld_bank.bnk",
@@ -38,14 +38,6 @@
       "Location": "Memory",
       "ShortName": "1.wav",
       "CachePath": "10/{106A5B23-34ED-F388-6F70-52AFE86A2EE4}.wem"
-     },
-     {
-      "Id": "81791480",
-      "Language": "SFX",
-      "Streaming": "false",
-      "Location": "Memory",
-      "ShortName": "Geo world\\Originals\\SFX\\geo fight.wav",
-      "CachePath": "D3/{D3EE669F-CD4E-7327-6AA9-D72D108B615F}.wem"
      },
      {
       "Id": "104523021",
@@ -200,6 +192,14 @@
       "CachePath": "19/{1911F0A7-4D8E-A328-97B7-A96A592875B7}.wem"
      },
      {
+      "Id": "910080498",
+      "Language": "SFX",
+      "Streaming": "false",
+      "Location": "Memory",
+      "ShortName": "geo fight.wav",
+      "CachePath": "04/{042A27C0-CF47-4AF7-6EBB-00183D190984}.wem"
+     },
+     {
       "Id": "969998505",
       "Language": "SFX",
       "Streaming": "false",
@@ -294,7 +294,7 @@
         },
         "MediaRefs": [
          {
-          "Id": "81791480"
+          "Id": "910080498"
          }
         ]
        }
@@ -708,6 +708,6 @@
     ]
    }
   ],
-  "FileHash": "{C6794BA7-6509-B324-55D1-58D676382E76}"
+  "FileHash": "{AE896002-EBBF-1E7E-29D9-19D747A58B53}"
  }
 }

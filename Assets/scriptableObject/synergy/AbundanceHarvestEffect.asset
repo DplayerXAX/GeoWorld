@@ -13,6 +13,6 @@ MonoBehaviour:
   m_Name: AbundanceHarvestEffect
   m_EditorClassIdentifier: Assembly-CSharp::AbundanceHarvestEffect
   countMode: 0
-  blockPerUnit: 4
+  blockPerUnit: 10
   flatBonus: 0
   moteColor: {r: 0.95, g: 0.8, b: 0.3, a: 1}

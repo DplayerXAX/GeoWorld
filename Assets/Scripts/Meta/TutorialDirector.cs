@@ -329,6 +329,10 @@ public class TutorialDirector : MonoBehaviour
 
     void OnBlockPlaced(BlockData block, Vector3Int[] worldCells)
     {
+        // Remembered for TutorialFocus.LastPlacedBlock — recorded before the
+        // step checks below, which can return early or advance the step.
+        if (worldCells != null && worldCells.Length > 0) _lastPlacedCells = worldCells;
+
         var step = Cur;
         if (step == null) return;
 
@@ -525,10 +529,19 @@ public class TutorialDirector : MonoBehaviour
     {
         if (step == null || step.cameraFocus == TutorialFocus.None) return;
 
-        Vector3? p = step.cameraFocus == TutorialFocus.ChaosBlock
-            ? ChaosBlockFocusPoint()
-            : StartOrEndFocusPoint(step.cameraFocus);
-        if (p == null) return;   // e.g. ChaosBlock requested but none alive right now — leave the camera as-is
+        // Every resolver may return null when its subject doesn't exist yet (no
+        // synergy active, no enemy alive, ...). That's not an error — the camera
+        // just stays where it is rather than snapping somewhere meaningless.
+        Vector3? p = step.cameraFocus switch
+        {
+            TutorialFocus.ChaosBlock      => ChaosBlockFocusPoint(),
+            TutorialFocus.StepOrigin      => StepOriginFocusPoint(step),
+            TutorialFocus.Synergy         => SynergyFocusPoint(),
+            TutorialFocus.Enemy           => EnemyFocusPoint(),
+            TutorialFocus.LastPlacedBlock => LastPlacedBlockFocusPoint(),
+            _                             => StartOrEndFocusPoint(step.cameraFocus),
+        };
+        if (p == null) return;
 
         var orbit = FindFirstObjectByType<OrbitCamera>();
         if (orbit != null)
@@ -536,6 +549,74 @@ public class TutorialDirector : MonoBehaviour
             orbit.FocusOnPoint(p.Value, snap: false);          // smooth glide
             if (step.focusZoom > 0f) orbit.SetZoom(step.focusZoom);   // optional zoom-in
         }
+    }
+
+    Vector3Int[] _lastPlacedCells;
+
+    // The step's own authored cells. This is the general-purpose focus: anything
+    // that shows up at a spot you can write down (a guide ghost, a block you're
+    // about to make appear, a landmark) is reachable without a bespoke enum entry.
+    Vector3? StepOriginFocusPoint(TutorialStep step)
+    {
+        var cells = step.cellsOverride != null && step.cellsOverride.Length > 0
+            ? step.cellsOverride
+            : new[] { step.origin };
+        return CellsCentre(cells);
+    }
+
+    // Centre of the first active synergy's participating cells — for "look, this
+    // is what you just formed" beats.
+    Vector3? SynergyFocusPoint()
+    {
+        var ev = SynergyEvaluator.Instance;
+        if (ev == null) return null;
+
+        var actives = ev.Actives;
+        for (int i = 0; i < actives.Count; i++)
+        {
+            var a = actives[i];
+            if (a?.claimedPieces == null) continue;
+
+            var cells = new List<Vector3Int>();
+            foreach (var p in a.claimedPieces)
+            {
+                if (p?.cells == null) continue;
+                for (int k = 0; k < p.cells.Length; k++)
+                {
+                    // Respect the rule's own filter, so this frames the actual
+                    // loop / cube rather than its inert claimed tail.
+                    if (a.highlightCells != null && !a.highlightCells.Contains(p.cells[k])) continue;
+                    cells.Add(p.cells[k]);
+                }
+            }
+            var c = CellsCentre(cells.ToArray());
+            if (c != null) return c;
+        }
+        return null;
+    }
+
+    Vector3? EnemyFocusPoint()
+    {
+        var mgr = EnemyBaseManager.Instance;
+        if (mgr == null) return null;
+
+        var enemies = mgr.ActiveEnemies;
+        for (int i = 0; i < enemies.Count; i++)
+            if (enemies[i] != null && enemies[i].CurrentHealth > 0)
+                return enemies[i].transform.position;
+        return null;
+    }
+
+    Vector3? LastPlacedBlockFocusPoint() => CellsCentre(_lastPlacedCells);
+
+    static Vector3? CellsCentre(Vector3Int[] cells)
+    {
+        var grid = GridSystem.instance;
+        if (grid == null || cells == null || cells.Length == 0) return null;
+
+        Vector3 sum = Vector3.zero;
+        for (int i = 0; i < cells.Length; i++) sum += grid.GridToWorld(cells[i]);
+        return sum / cells.Length + Vector3.up * (grid.cellSize * 0.5f);
     }
 
     Vector3? StartOrEndFocusPoint(TutorialFocus focus)

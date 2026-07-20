@@ -299,11 +299,55 @@ MonoBehaviour:
     speaker: {fileID: 11400000, guid: 80993e3c86b4337429c2d6273c8eedc2, type: 2}
     speakerSlot: 1
     speakerPortrait: 
+  - kind: 5
+    block: {fileID: 0}
+    origin: {x: 1, y: 2, z: -1}
+    rotation90: {x: 0, y: 0, z: 0}
+    cellsOverride: []
+    waitSeconds: 0
+    count: 0
+    inputKey: 323
+    pathLength: 0
+    freeOperations: 0
+    hideInCombat: 0
+    requiredWave: 3
+    unlocksOps: 
+    cameraFocus: 0
+    focusZoom: 0
+    hint: A new core endpoint shall emerge in two waves, drawing enemy forces away
+      and restoring balance. My Lord, manage our resources wisely, for every placement
+      carries weight.
+    conversation: {fileID: 0}
+    speaker: {fileID: 11400000, guid: 80993e3c86b4337429c2d6273c8eedc2, type: 2}
+    speakerSlot: 1
+    speakerPortrait: 
+  - kind: 5
+    block: {fileID: 0}
+    origin: {x: 1, y: 2, z: -1}
+    rotation90: {x: 0, y: 0, z: 0}
+    cellsOverride: []
+    waitSeconds: 0
+    count: 0
+    inputKey: 323
+    pathLength: 0
+    freeOperations: 0
+    hideInCombat: 0
+    requiredWave: 5
+    unlocksOps: 
+    cameraFocus: 0
+    focusZoom: 0
+    hint: The final trial is upon us. Our faith in you remains unwavering, My Lord.
+      Lead us to victory.
+    conversation: {fileID: 0}
+    speaker: {fileID: 11400000, guid: 80993e3c86b4337429c2d6273c8eedc2, type: 2}
+    speakerSlot: 1
+    speakerPortrait: 
   startingLayout: {fileID: 11400000, guid: ceaecea707d98794b95902fcad06060b, type: 2}
   chaosBlockEnabled: 1
   chaosBlockStartWave: 2
   chaosBlockHealth: 10
   chaosBlockCurrencyDrain: 20
   chaosBlockMinDistance: 3
+  chaosBlockMaxDistance: 6
   chaosBlockSearchMargin: 6
   chaosBlockMaxSimultaneous: 6

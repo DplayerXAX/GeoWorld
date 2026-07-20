@@ -91,6 +91,22 @@ public class OrbitCamera : MonoBehaviour
             ToggleProjection();
     }
 
+    // Regaining window focus (e.g. an external screenshot tool grabbing input for
+    // a moment, or Alt-Tab) hands back a single frame carrying a huge backlog of
+    // Input.GetAxis("Mouse X"/"Y") — Windows keeps tracking raw mouse movement
+    // even while Unity isn't focused (including any cursor jump the screenshot
+    // tool itself causes), and the legacy Input Manager flushes it all into the
+    // first polled frame after refocus. If right-mouse-look was still held across
+    // that gap (plausible: hold RMB to orbit with one hand, hit a screenshot
+    // hotkey with the other), that spike gets applied straight to yaw/pitch and
+    // reads as the camera suddenly flinging/spinning away. Swallow exactly one
+    // frame of mouse-look on refocus to eat the spike.
+    bool _suppressMouseLookOnce;
+    void OnApplicationFocus(bool hasFocus)
+    {
+        if (hasFocus) _suppressMouseLookOnce = true;
+    }
+
     public void ToggleProjection() => SetOrthographic(!useOrthographic);
 
     public void SetOrthographic(bool ortho)
@@ -223,14 +239,25 @@ public class OrbitCamera : MonoBehaviour
 
         Vector2 lookInput = InputLocked ? Vector2.zero : GamepadInput.Look;   // right stick — orbits without a button hold
 
+        // Consume the refocus guard for this frame; also clamp the raw axis reading
+        // itself (defense in depth against any other source of a one-frame delta
+        // spike, not just refocus — a stuttered frame, a driver hiccup, ...).
+        // MaxAxisPerFrame is generous for a genuinely fast intentional mouse flick
+        // but well below what a multi-frame backlog dump reports.
+        bool suppressMouse = _suppressMouseLookOnce;
+        _suppressMouseLookOnce = false;
+        const float MaxAxisPerFrame = 6f;
+        float mx = suppressMouse ? 0f : Mathf.Clamp(Input.GetAxis("Mouse X"), -MaxAxisPerFrame, MaxAxisPerFrame);
+        float my = suppressMouse ? 0f : Mathf.Clamp(Input.GetAxis("Mouse Y"), -MaxAxisPerFrame, MaxAxisPerFrame);
+
         if (!InputLocked)
         {
         if (!useOrthographic)
         {
             if (Input.GetMouseButton(1))
             {
-                yaw += Input.GetAxis("Mouse X") * speed * Time.deltaTime;
-                pitch -= Input.GetAxis("Mouse Y") * speed * Time.deltaTime;
+                yaw += mx * speed * Time.deltaTime;
+                pitch -= my * speed * Time.deltaTime;
                 pitch = Mathf.Clamp(pitch, minPitch, maxPitch);
             }
             else if (lookInput.sqrMagnitude > 0.0001f)
@@ -244,9 +271,9 @@ public class OrbitCamera : MonoBehaviour
         {
             if (Input.GetMouseButton(1))
             {
-                yaw += Input.GetAxis("Mouse X") * speed * 0.3f * Time.deltaTime;
+                yaw += mx * speed * 0.3f * Time.deltaTime;
 
-                pitch -= Input.GetAxis("Mouse Y") * speed * 0.2f * Time.deltaTime;
+                pitch -= my * speed * 0.2f * Time.deltaTime;
                 pitch = Mathf.Clamp(pitch, 10f, 80f);
             }
             else if (lookInput.sqrMagnitude > 0.0001f)

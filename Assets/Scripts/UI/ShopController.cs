@@ -68,8 +68,6 @@ public class ShopController : MonoBehaviour
     public Color turretLightColor   = new Color(0.85f, 0.94f, 1.00f, 1f);
     public float shopLightIntensity = 1.8f;
     public float shopLightRange     = 18f;
-    [Tooltip("Inner vignette strength. 0 = no darkening at edges (recommended for rectangle panel).")]
-    [Range(0f, 1f)] public float innerVignetteStrength = 0.15f;
 
     [Header("Rift Shape")]
     public RiftShapePreset shapePreset = RiftShapePreset.Crack;
@@ -83,24 +81,6 @@ public class ShopController : MonoBehaviour
     public int rtWidth  = 1280;
     [Tooltip("RenderTexture height.")]
     public int rtHeight = 288;
-
-    [Header("Rift Edge FX ")]
-    public Color riftEdgeColor  = new Color(0.92f, 0.96f, 1.00f, 0.85f);
-    public Color riftGlowColor  = new Color(0.40f, 0.55f, 0.80f, 0.06f);
-    public int   riftGlowLayers = 3;
-    [Range(0f, 5f)] public float edgePulseSpeed = 1.4f;
-
-    [Header("Cosmic Energy ")]
-    public Color energyRayColor   = new Color(0.75f, 0.85f, 1.00f, 0.15f);
-    [Range(0, 32)] public int rayCount = 0;          // 0 = no rays for the clean rect panel
-    public Vector2 rayLengthRange = new Vector2(0.40f, 0.90f);
-    [Range(0f, 2f)] public float rayPulseSpeed = 0.60f;
-    [Range(0f, 1f)] public float raySpinSpeed  = 0.05f;
-
-    public Color sparkleColor   = new Color(0.75f, 0.85f, 1.00f, 0.5f);
-    [Range(0, 80)] public int sparkleCount = 0;      // 0 = no sparkles for clean panel
-    [Range(0.5f, 2.5f)] public float sparkleRadius = 1.15f;
-    [Range(0.2f, 4f)] public float sparkleTwinkleSpeed = 1.1f;
 
     [Header("Item Hover")]
     [Range(1f, 1.5f)] public float hoverScale     = 1.08f;
@@ -259,8 +239,6 @@ public class ShopController : MonoBehaviour
 
     // GL rendering
     RenderTexture _shopRT;
-    Material      _riftMat;    
-    Material      _colorMat;   
 
     Light _blockLight;
     Light _turretLight;
@@ -354,7 +332,6 @@ public class ShopController : MonoBehaviour
             shopCam.rect          = new Rect(0, 0, 1, 1);
             // aspect auto-derived from RT dimensions do not set manually
         }
-        if (_riftMat != null) _riftMat.mainTexture = _shopRT;
     }
 
     void OnValidate()
@@ -391,8 +368,6 @@ public class ShopController : MonoBehaviour
     {
         if (shopCam != null) shopCam.targetTexture = null;
         if (_shopRT   != null) { _shopRT.Release(); Destroy(_shopRT); }
-        if (_riftMat  != null) Destroy(_riftMat);
-        if (_colorMat != null) Destroy(_colorMat);
         if (_flatMat  != null) Destroy(_flatMat);
     }
 
@@ -517,6 +492,20 @@ public class ShopController : MonoBehaviour
     void ApplyCameraTransform()
     {
         if (shopCam == null) return;
+
+        // Match the camera's projection aspect to the ON-SCREEN strip the RT is
+        // stretched onto (GUI.DrawTexture / the rift polygon UV-map 0..1 across it).
+        // The RT's own rtWidth:rtHeight is just its pixel resolution; if the camera
+        // keeps that aspect while the strip has a different one — which it does at
+        // almost every resolution, since the strip is full-width × a fraction of the
+        // height — blocks come out squashed/stretched. Deriving aspect from the strip
+        // (full-open dims, so it's stable through the open animation) keeps their real
+        // proportions. Uses the full bar height, not the animated one, so the framing
+        // doesn't warp while opening.
+        float stripW = letterbox ? Screen.width               : Screen.width  * riftWidth;
+        float stripH = letterbox ? Screen.height * barHeight   : Screen.height * riftHeight;
+        shopCam.aspect = Mathf.Clamp(stripW / Mathf.Max(1f, stripH), 0.05f, 20f);
+
         shopCam.transform.position = shopCenter + _currentOffset;
         shopCam.transform.LookAt(shopCenter);
         // Roll the camera by the rift's current total rotation (base + open
@@ -696,11 +685,15 @@ public class ShopController : MonoBehaviour
 
                 visual.transform.localPosition = Vector3.zero;
                 visual.transform.localRotation = Quaternion.identity;
-                visual.transform.localScale = Vector3.one * 50f;
+                visual.transform.localScale = Vector3.one;
+                // Fit each turret to one cell by its own bounds (same helper the board
+                // uses), so the AOE turret doesn't tower over the others here either.
+                // No collider needed — the root's SelectableBlock handles shop clicks.
+                if (!TurretVisualFit.Fit(visual, grid.cellSize, out _, out _))
+                    visual.transform.localScale = Vector3.one * 50f;
 
-                // Tint the preview by turret TYPE — all three turret BlockDatas
-                // share one turretPrefab, so without this they're indistinguishable
-                // in the shop.
+                // Tint the preview by turret TYPE — turret BlockDatas share (or reuse)
+                // a prefab, so without this they're indistinguishable in the shop.
                 foreach (var r in visual.GetComponentsInChildren<Renderer>())
                     MpbColor.Set(r, TurretTypes.DisplayColor(data.blockType));
             }
@@ -906,8 +899,6 @@ public class ShopController : MonoBehaviour
     [Tooltip("SphereCast radius for shop hover — bigger = easier to hover small items. 0 = exact raycast.")]
     public float hoverRadius = 0.35f;
 
-    [Header("Debug")]
-    public bool logHover;
 
     void UpdateHover()
     {
@@ -928,8 +919,6 @@ public class ShopController : MonoBehaviour
         {
             if (_items[i].sb != sb) continue;
             _hovered = _items[i];
-            if (logHover)
-                Debug.Log($"[Shop] hover idx={i}  name={sb.gameObject.name}  vp={vp}");
             return;
         }
     }
@@ -994,41 +983,14 @@ public class ShopController : MonoBehaviour
 
     // ── OnGUI ─────────────────────────────────────────────────────────────────
 
-    [Header("Debug")]
-    [Tooltip("Show a small RT thumbnail to the right of the rift (remove once working).")]
-    public bool debugShowRTPreview = true;
-
     void OnGUI()
     {
         if (SettingsScreen.Open || IntroDirector.Playing || GameFlowManager.SettlementUp) return;   // hidden behind settings / intro / clear settlement
         BuildStyles();
-        if (_riftScale > 0.005f) DrawRift();
         if (_riftScale > 0.5f)   DrawPriceLabels();
         if (_hovered != null && _riftScale > 0.1f) DrawTooltip(_hovered);
         DrawRiftLabel();
 
-        // ── Debug: raw RT preview ─────────────────────────────────────────────
-        if (debugShowRTPreview && _shopRT != null)
-        {
-            float pw = 120f, ph = 240f;
-            float px = riftScreenPos.x * Screen.width + Screen.height * riftHeight * 0.6f;
-            float py = riftScreenPos.y * Screen.height - ph * 0.5f;
-            GUI.color = Color.white;
-            GUI.DrawTexture(new Rect(px, py, pw, ph), _shopRT, ScaleMode.StretchToFill, false);
-            GUI.color = new Color(1, 1, 0, 0.7f);
-            GUI.DrawTexture(new Rect(px, py, pw, 1), Texture2D.whiteTexture);
-            GUI.DrawTexture(new Rect(px, py + ph - 1, pw, 1), Texture2D.whiteTexture);
-            GUI.DrawTexture(new Rect(px, py, 1, ph), Texture2D.whiteTexture);
-            GUI.DrawTexture(new Rect(px + pw - 1, py, 1, ph), Texture2D.whiteTexture);
-            GUI.color = Color.white;
-
-            if (_ttSub != null)
-            {
-                _ttSub.normal.textColor = Color.yellow;
-                GUI.Label(new Rect(px, py - 16f, 120f, 16f), "RT preview (debug)", _ttSub);
-            }
-        }
-        //if(_expanded)
         DrawRefreshButton();
         
     }
@@ -1133,265 +1095,6 @@ public class ShopController : MonoBehaviour
     }
 
     // ── GL rift rendering ─────────────────────────────────────────────────────
-
-    void DrawRift()
-    {
-        if (_shopRT == null || _screenVerts == null) return;
-        if (Event.current.type != EventType.Repaint) return;
-
-        EnsureMaterials();
-
-        // ── Letterbox: bars AND content are drawn as UGUI (UpdateLetterboxBars),
-        //    so they sit under the HUD. Nothing to draw here in IMGUI. ──
-        if (letterbox) return;
-
-        GL.PushMatrix();
-        GL.LoadPixelMatrix();
-
-        DrawGlow();
-        DrawContent();
-        DrawInnerVignette();   // dark fade toward the rift's inner edge
-        DrawEdge();
-        DrawRadialRays();
-        DrawSparkles();
-
-        GL.PopMatrix();
-    }
-
-    void EnsureMaterials()
-    {
-        // ── RT content material ───────────────────────────────────────────────
-        // URP may not include "Unlit/Texture"; try several fallbacks in order.
-        if (_riftMat == null || _riftMat.shader == null || !_riftMat.shader.isSupported)
-        {
-            if (_riftMat != null) Destroy(_riftMat);
-            Shader sh = Shader.Find("Sprites/Default")
-                     ?? Shader.Find("Unlit/Texture")
-                     ?? Shader.Find("UI/Default");
-            if (sh == null)
-            {
-                Debug.LogError("[Shop] No texture shader found for rift content (Sprites/Default / Unlit/Texture / UI/Default).");
-            }
-            else
-            {
-                _riftMat           = new Material(sh);
-                _riftMat.hideFlags = HideFlags.HideAndDontSave;
-            }
-        }
-        if (_riftMat != null && _shopRT != null) _riftMat.mainTexture = _shopRT;
-
-        // ── Colour / line material ────────────────────────────────────────────
-        if (_colorMat != null) return;
-        Shader col = Shader.Find("Hidden/Internal-Colored")
-                  ?? Shader.Find("Sprites/Default");
-        if (col == null) { Debug.LogError("[Shop] No line shader found."); return; }
-        _colorMat = new Material(col);
-        _colorMat.hideFlags = HideFlags.HideAndDontSave;
-        _colorMat.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
-        _colorMat.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
-        _colorMat.SetInt("_Cull",     (int)UnityEngine.Rendering.CullMode.Off);
-        _colorMat.SetInt("_ZWrite",   0);
-    }
-
-    // Soft outer glow: draw polygon at increasing scale with decreasing alpha.
-    void DrawGlow()
-    {
-        int n = _screenVerts.Length;
-        _colorMat.SetPass(0);
-        for (int g = riftGlowLayers; g >= 1; g--)
-        {
-            float gScale = 1f + g * 0.06f;
-            float alpha  = riftGlowColor.a * (1f - (float)(g - 1) / riftGlowLayers);
-            GL.Begin(GL.TRIANGLES);
-            GL.Color(new Color(riftGlowColor.r, riftGlowColor.g, riftGlowColor.b, alpha));
-            for (int i = 0; i < n; i++)
-            {
-                int     j  = (i + 1) % n;
-                Vector2 si = ScaleFromCenter(_screenVerts[i], gScale);
-                Vector2 sj = ScaleFromCenter(_screenVerts[j], gScale);
-                GL.Vertex3(_riftScreenCenter.x, _riftScreenCenter.y, 0);
-                GL.Vertex3(si.x, si.y, 0);
-                GL.Vertex3(sj.x, sj.y, 0);
-            }
-            GL.End();
-        }
-    }
-
-    // RT content clipped to rift polygon, fan-triangulated from centre.
-    void DrawContent()
-    {
-        if (_riftMat == null) return;
-        // Iterate the subdivided shape so the triangle fan follows the noisy
-        // crack outline. UV bounds stay from the base shape so the RT content
-        // doesn't stretch as vertices wobble.
-        var shape     = _runtimeRiftShape ?? BuiltinShape();
-        var baseShape = shape;
-        int n         = shape.Length;
-
-        float minX = float.MaxValue, maxX = float.MinValue;
-        float minY = float.MaxValue, maxY = float.MinValue;
-        foreach (var p in baseShape)
-        {
-            if (p.x < minX) minX = p.x; if (p.x > maxX) maxX = p.x;
-            if (p.y < minY) minY = p.y; if (p.y > maxY) maxY = p.y;
-        }
-        float rx = Mathf.Max(maxX - minX, 0.001f);
-        float ry = Mathf.Max(maxY - minY, 0.001f);
-
-        float scaleY = Mathf.Max(_riftScale, 0.0001f);
-        System.Func<Vector2, Vector2> toUV =
-            p =>
-            {
-                float uvx = (p.x - minX) / rx;
-                float uvy = (maxY - p.y) / ry;
-                uvy = 0.5f + (uvy - 0.5f) * scaleY;
-                return new Vector2(uvx, uvy);
-            };
-
-        Vector2 centerUV = toUV(Vector2.zero);
-
-        _riftMat.SetPass(0);
-        GL.Begin(GL.TRIANGLES);
-        GL.Color(Color.white);   // required when material uses vertex colour (Sprites/Default)
-        for (int i = 0; i < n; i++)
-        {
-            int     j   = (i + 1) % n;
-            Vector2 uvi = toUV(shape[i]);
-            Vector2 uvj = toUV(shape[j]);
-
-            GL.TexCoord2(centerUV.x, centerUV.y);
-            GL.Vertex3(_riftScreenCenter.x, _riftScreenCenter.y, 0);
-
-            GL.TexCoord2(uvi.x, uvi.y);
-            GL.Vertex3(_screenVerts[i].x, _screenVerts[i].y, 0);
-
-            GL.TexCoord2(uvj.x, uvj.y);
-            GL.Vertex3(_screenVerts[j].x, _screenVerts[j].y, 0);
-        }
-        GL.End();
-    }
-
-    // Pulsing outline + bright inner hair-line for depth.
-    void DrawEdge()
-    {
-        int   n     = _screenVerts.Length;
-        float pulse = 0.70f + 0.30f * Mathf.Sin(Time.time * edgePulseSpeed);
-
-        // Flash red briefly when the player can't afford the hovered item.
-        Color edgeCol = _cantAffordFlash > 0f
-            ? Color.Lerp(riftEdgeColor, new Color(1f, 0.18f, 0.18f, 1f),
-                         _cantAffordFlash / 0.55f)
-            : riftEdgeColor;
-
-        _colorMat.SetPass(0);
-
-        // Outer line
-        GL.Begin(GL.LINES);
-        GL.Color(new Color(edgeCol.r, edgeCol.g, edgeCol.b, edgeCol.a * pulse));
-        for (int i = 0; i < n; i++)
-        {
-            int j = (i + 1) % n;
-            GL.Vertex3(_screenVerts[i].x, _screenVerts[i].y, 0);
-            GL.Vertex3(_screenVerts[j].x, _screenVerts[j].y, 0);
-        }
-        GL.End();
-
-        // Inner bright hair-line (slight inset)
-        GL.Begin(GL.LINES);
-        GL.Color(new Color(1f, 1f, 0.75f, 0.40f * pulse));
-        for (int i = 0; i < n; i++)
-        {
-            int     j  = (i + 1) % n;
-            Vector2 si = ScaleFromCenter(_screenVerts[i], 0.96f);
-            Vector2 sj = ScaleFromCenter(_screenVerts[j], 0.96f);
-            GL.Vertex3(si.x, si.y, 0);
-            GL.Vertex3(sj.x, sj.y, 0);
-        }
-        GL.End();
-    }
-
-    // Fan with vertex-color gradient: transparent at centre, black at the
-    // polygon edge. Reads as the rift opening up into darkness.
-    void DrawInnerVignette()
-    {
-        if (innerVignetteStrength <= 0f || _screenVerts == null) return;
-        int n = _screenVerts.Length;
-
-        _colorMat.SetPass(0);
-        GL.Begin(GL.TRIANGLES);
-        Color centreCol = new Color(0f, 0f, 0f, 0f);
-        Color edgeCol   = new Color(0f, 0f, 0f, innerVignetteStrength);
-        for (int i = 0; i < n; i++)
-        {
-            int j = (i + 1) % n;
-            GL.Color(centreCol);
-            GL.Vertex3(_riftScreenCenter.x, _riftScreenCenter.y, 0);
-            GL.Color(edgeCol);
-            GL.Vertex3(_screenVerts[i].x, _screenVerts[i].y, 0);
-            GL.Vertex3(_screenVerts[j].x, _screenVerts[j].y, 0);
-        }
-        GL.End();
-    }
-
-    void DrawRadialRays()
-    {
-        if (rayCount <= 0) return;
-        _colorMat.SetPass(0);
-        GL.Begin(GL.LINES);
-
-        float t       = Time.time;
-        float baseRot = t * raySpinSpeed;
-        for (int i = 0; i < rayCount; i++)
-        {
-            float angle = (i / (float)rayCount) * Mathf.PI * 2f + baseRot;
-
-            // Each ray's length pulses independently.
-            float phase  = i * 1.713f;
-            float pulse  = 0.5f + 0.5f * Mathf.Sin(t * rayPulseSpeed + phase);
-            float len    = Mathf.Lerp(rayLengthRange.x, rayLengthRange.y, pulse)
-                           * _riftScreenSize;
-
-            // Start a bit out from center so the rays look like they emerge
-            // from the rift mouth, not a single dot.
-            Vector2 dir   = new Vector2(Mathf.Cos(angle), Mathf.Sin(angle));
-            Vector2 start = _riftScreenCenter + dir * (0.30f * _riftScreenSize);
-            Vector2 end   = _riftScreenCenter + dir * len;
-
-            // Fade: bright at start, fully transparent at tip.
-            float aBase = energyRayColor.a * (0.4f + 0.6f * pulse) * _riftScale;
-            GL.Color(new Color(energyRayColor.r, energyRayColor.g, energyRayColor.b, aBase));
-            GL.Vertex3(start.x, start.y, 0);
-            GL.Color(new Color(energyRayColor.r, energyRayColor.g, energyRayColor.b, 0f));
-            GL.Vertex3(end.x,   end.y,   0);
-        }
-        GL.End();
-    }
-    void DrawSparkles()
-    {
-        if (sparkleCount <= 0 || _riftScale < 0.02f) return;
-        _colorMat.SetPass(0);
-        GL.Begin(GL.LINES);
-
-        float t = Time.time;
-        for (int i = 0; i < sparkleCount; i++)
-        {
-            float angle  = i * 2.3998f;   
-            float radNorm = 0.65f + ((i * 31 + 17) % 100) / 100f * 0.85f;
-            float radius  = radNorm * sparkleRadius * _riftScreenSize;
-            Vector2 pos   = _riftScreenCenter + new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)) * radius;
-
-            float twink = 0.5f + 0.5f * Mathf.Sin(t * sparkleTwinkleSpeed + i * 0.91f);
-            twink = twink * twink * twink;
-            if (twink < 0.03f) continue;
-
-            float r = (1.8f + 1.6f * twink) * Mathf.Clamp01(_riftScale);
-            GL.Color(new Color(sparkleColor.r, sparkleColor.g, sparkleColor.b,
-                               sparkleColor.a * twink));
-            GL.Vertex3(pos.x - r, pos.y,     0); GL.Vertex3(pos.x + r, pos.y,     0);
-            GL.Vertex3(pos.x,     pos.y - r, 0); GL.Vertex3(pos.x,     pos.y + r, 0);
-        }
-        GL.End();
-    }
 
     // ── Rift label ────────────────────────────────────────────────────────────
 
@@ -1605,40 +1308,6 @@ public class ShopController : MonoBehaviour
         _ttSub.normal.textColor = new Color(0.65f, 0.65f, 0.65f);
 
         _hintStyle = new GUIStyle(GUI.skin.label) { fontSize = 11, fontStyle = FontStyle.Bold };
-    }
-
-    // ── GL helpers ────────────────────────────────────────────────────────────
-
-    Vector2 ScaleFromCenter(Vector2 pt, float scale) =>
-        _riftScreenCenter + (pt - _riftScreenCenter) * scale;
-
-    // Outward-facing normal at vertex i (points away from rift centre).
-    Vector2 OutwardNormal(int i)
-    {
-        int     n    = _screenVerts.Length;
-        Vector2 toPrev = (_screenVerts[i] - _screenVerts[(i - 1 + n) % n]).normalized;
-        Vector2 toNext = (_screenVerts[(i + 1) % n] - _screenVerts[i]).normalized;
-        Vector2 avg    = (toPrev + toNext).normalized;
-        Vector2 c1     = new Vector2(-avg.y,  avg.x);
-        Vector2 c2     = new Vector2( avg.y, -avg.x);
-        return Vector2.Dot(c1, _screenVerts[i] - _riftScreenCenter) >= 0 ? c1 : c2;
-    }
-
-    // Position at fraction t [0,1] around the rift perimeter.
-    Vector2 PointOnPerimeter(float[] segs, float total, float t)
-    {
-        float target = t * total;
-        float acc    = 0f;
-        int   n      = _screenVerts.Length;
-        for (int i = 0; i < n; i++)
-        {
-            int j = (i + 1) % n;
-            if (acc + segs[i] >= target)
-                return Vector2.Lerp(_screenVerts[i], _screenVerts[j],
-                                    Mathf.Clamp01((target - acc) / segs[i]));
-            acc += segs[i];
-        }
-        return _screenVerts[0];
     }
 
     // ── Shape builder ─────────────────────────────────────────────────────────

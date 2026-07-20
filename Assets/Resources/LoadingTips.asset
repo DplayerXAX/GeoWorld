@@ -1,0 +1,27 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7861fd32ae3a75a9019aba524458bf7b, type: 3}
+  m_Name: LoadingTips
+  m_EditorClassIdentifier: Assembly-CSharp::LoadingTipsData
+  tips:
+  - 'You may rotate a held block with 1 / 2 / 3. '
+  - "Turrets need a block touching them to stay powered \u2014 moving their support
+    strands them."
+  - Hold right-click and drag to orbit the camera; scroll to zoom.
+  - In Select mode, drag a box to select multiple placed blocks at once.
+  - A longer enemy path buys your turrets more time to fire.
+  - "Synergies activate when matching-color blocks form a connected shape \u2014
+    check the HUD to see which ones are close."
+  - Press F to open the shop, and Space to start the next wave.
+  - Long press R to restart the level if you get stuck.
+  - You may place new turrets and blocks during combat, but you can't edit the existed
+    ones.
