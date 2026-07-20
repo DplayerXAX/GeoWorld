@@ -13,6 +13,14 @@ public class LoadingScreen : MonoBehaviour
     bool     _active;
     GUIStyle _label;
 
+    // Tips pool — Resources/LoadingTips.asset, edited directly in the Inspector
+    // (see LoadingTipsData). Loaded once and cached; a new one is picked each
+    // time a load starts, not every frame.
+    static LoadingTipsData _tipsData;
+    static bool            _tipsLoadAttempted;
+    string   _currentTip;
+    GUIStyle _tipCaptionStyle, _tipStyle;
+
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     static void Spawn()
     {
@@ -40,12 +48,28 @@ public class LoadingScreen : MonoBehaviour
     IEnumerator Run(string scene)
     {
         _active = true;
+        PickTip();
         yield return null;                 // paint the overlay before the hitch
         var op = SceneManager.LoadSceneAsync(scene);
         while (op != null && !op.isDone) yield return null;
         float hold = 0.25f;                 // brief hold so the spinner reads on fast loads
         while (hold > 0f) { hold -= Time.unscaledDeltaTime; yield return null; }
         _active = false;
+    }
+
+    // Picks a fresh random tip for this load. Resources.Load only actually hits
+    // disk once (guarded by _tipsLoadAttempted) — an empty/missing asset just
+    // means no tip is shown, not an error.
+    void PickTip()
+    {
+        if (!_tipsLoadAttempted)
+        {
+            _tipsLoadAttempted = true;
+            _tipsData = Resources.Load<LoadingTipsData>("LoadingTips");
+        }
+        _currentTip = (_tipsData != null && _tipsData.tips != null && _tipsData.tips.Length > 0)
+            ? _tipsData.tips[Random.Range(0, _tipsData.tips.Length)]
+            : null;
     }
 
     void OnGUI()
@@ -70,6 +94,24 @@ public class LoadingScreen : MonoBehaviour
         _label.fontSize = Mathf.RoundToInt(20f * s);
         _label.normal.textColor = GeoPalette.Ink;
         GUI.Label(new Rect(Screen.width - 380f * s, cube.y, 240f * s, cz), "LOADING…", _label);
+
+        // Tip, bottom-left — same silkscreen language as the panels elsewhere
+        // (small bold signal-colored caption over an ink body line).
+        if (!string.IsNullOrEmpty(_currentTip))
+        {
+            if (_tipCaptionStyle == null) _tipCaptionStyle = new GUIStyle { fontStyle = FontStyle.Bold, alignment = TextAnchor.UpperLeft };
+            if (_tipStyle == null) _tipStyle = new GUIStyle { fontStyle = FontStyle.Italic, alignment = TextAnchor.UpperLeft, wordWrap = true };
+            _tipCaptionStyle.fontSize = Mathf.RoundToInt(14f * s);
+            _tipCaptionStyle.normal.textColor = GeoPalette.Signal;
+            _tipStyle.fontSize = Mathf.RoundToInt(19f * s);
+            _tipStyle.normal.textColor = GeoPalette.Ink;
+
+            float tipX     = 40f * s;
+            float tipY     = Screen.height - 130f * s;
+            float tipWidth = Mathf.Min(700f * s, Screen.width - 80f * s);
+            GUI.Label(new Rect(tipX, tipY, tipWidth, 22f * s), "TIP", _tipCaptionStyle);
+            GUI.Label(new Rect(tipX, tipY + 22f * s, tipWidth, 90f * s), _currentTip, _tipStyle);
+        }
     }
 
     // Muted toward paper so the cube reads like a printed mark, not four hard primaries.

@@ -183,7 +183,17 @@ public partial class PlacementController : MonoBehaviour
     // meaning turrets restored from a save OR spawned as a level's starting
     // layout came out at 1/50 size and read as "not there at all", even though
     // they were fully functional and firing.
+    // Legacy fixed multiplier — now only a FALLBACK for a turret prefab we can't
+    // measure (no renderers / degenerate bounds). The normal path fits each turret
+    // to one grid cell by its own measured bounds instead (see SpawnTurretVisual),
+    // so prefabs of different intrinsic mesh size all read the same on the board.
     public const float TurretVisualScale = 50f;
+
+    // How much of one grid cell a fitted turret should span (largest dimension).
+    // 1 = exactly cube-sized; drop toward ~0.85 if turrets should sit a touch
+    // smaller than a full block.
+    public const float TurretVisualCellFraction = 1f;
+
     [Tooltip("Seconds for the info panel + turret range to pop in when selected.")]
     [Range(0.01f, 0.6f)] public float selectionPopDuration = 0.16f;
 
@@ -1990,23 +2000,47 @@ public partial class PlacementController : MonoBehaviour
         var visual = Instantiate(data.turretPrefab, obj.transform);
         visual.transform.localPosition = Vector3.zero;
         visual.transform.localRotation = Quaternion.identity;
-        visual.transform.localScale    = Vector3.one * TurretVisualScale;
+        visual.transform.localScale    = Vector3.one;   // measure the raw prefab first
 
-        visual.AddComponent<TurretBeacon>();    // idle spin + bob
-        // Required for click-to-select raycasts. AddComponent<BoxCollider>() defaults
-        // to a 1x1x1 box with no mesh-fit — under this visual's 50x localScale that
-        // became an ~50-unit invisible hitbox, swallowing raycasts for anything near
-        // the turret (including box-select's drag-start probe, which would resolve
-        // to "clicked the turret" from many cells away and hijack the gesture into a
-        // single-select instead of starting a drag). Shrink it back down so the turret
-        // only claims roughly one grid cell, like every other placed block.
-        visual.AddComponent<BoxCollider>().size = Vector3.one / TurretVisualScale;
+        // Fit the turret to one grid cell by ITS OWN measured bounds, rather than a
+        // shared magic multiplier. The old fixed ×50 was tuned to the basic turret's
+        // tiny mesh; a prefab with a different intrinsic size (e.g. the AOE turret)
+        // sailed past one cell and read as oversized. Measuring each prefab's bounds
+        // makes every turret — and any future prefab — snap to the same cube size.
+        float target = (grid != null ? grid.cellSize : 1f) * TurretVisualCellFraction;
+        FitTurretToCell(visual, target);
 
-        // Type colour, NOT the block's synergy colour — all three turret
-        // BlockDatas share one turretPrefab, so this tint is the only thing
-        // telling Basic / Slow / AOE apart on the board.
+        visual.AddComponent<TurretBeacon>();    // idle spin + bob (rotation/pos only, doesn't touch scale)
+
+        // Type colour, NOT the block's synergy colour — turret BlockDatas share (or
+        // reuse) a prefab, so this tint is the only thing telling Basic / Slow / AOE
+        // apart on the board.
         foreach (var r in visual.GetComponentsInChildren<Renderer>())
             MpbColor.Set(r, TurretTypes.DisplayColor(data.blockType));
+    }
+
+    // Uniformly scales `visual` so its largest measured renderer dimension equals
+    // `targetSize` (≈ one grid cell), then adds a click-select BoxCollider matched
+    // to that fitted size. Falls back to the legacy fixed multiplier if the prefab
+    // has nothing measurable. Assumes `visual` starts at localScale 1 / localPos 0 /
+    // identity rotation (SpawnTurretVisual sets that up).
+    void FitTurretToCell(GameObject visual, float targetSize)
+    {
+        if (TurretVisualFit.Fit(visual, targetSize, out var localCenter, out var maxDim))
+        {
+            // Collider lives on `visual`, so it inherits the fitted scale: local size
+            // maxDim × that scale == targetSize in world. center scales with the mesh,
+            // so the box stays on the gun rather than drifting to origin.
+            var col = visual.AddComponent<BoxCollider>();
+            col.center = localCenter;
+            col.size   = Vector3.one * maxDim;
+            return;
+        }
+
+        // No renderers / degenerate bounds — fall back to the legacy fixed scale so
+        // the turret is at least present and clickable.
+        visual.transform.localScale = Vector3.one * TurretVisualScale;
+        visual.AddComponent<BoxCollider>().size = Vector3.one / TurretVisualScale;
     }
 
     void RegisterPlacedBlock(PlacedBlockInstance ins)

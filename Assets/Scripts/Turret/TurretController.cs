@@ -43,6 +43,8 @@ public class TurretController : MonoBehaviour
     float _fireTimer;
     float _synergyFireRateMult = 1f;   // reversible synergy attack-speed buff (1 = none)
     float _debuffFireRateMult  = 1f;   // reversible enemy attack-speed debuff (1 = none)
+    float _shrineFireRateMult  = 1f;   // reversible Enlightenment-shrine aura buff (1 = none)
+    float _shrineDamageMult    = 1f;   // reversible Enlightenment-shrine aura buff (1 = none)
 
     [SerializeField, Range(0, 3)] int _powerPathLevel;
     [SerializeField, Range(0, 3)] int _burstPathLevel;
@@ -98,10 +100,30 @@ public class TurretController : MonoBehaviour
 
     public float DebuffFireRateMultiplier => _debuffFireRateMult;
 
+    // Reversible aura buff from a nearby Enlightenment shrine (ShrineController).
+    // Its OWN channels so it composes with (never clobbers) the synergy buff and
+    // enemy debuff. Call SetShrineBuff(1, 1) to clear — the shrine controller
+    // re-asserts this every frame from turret↔shrine adjacency, so a turret that
+    // walks out of the aura (or whose shrine vanishes) is cleared automatically.
+    public void SetShrineBuff(float fireRateMult, float damageMult)
+    {
+        _shrineFireRateMult = Mathf.Max(0.01f, fireRateMult);
+        _shrineDamageMult   = Mathf.Max(0.01f, damageMult);
+    }
+
+    public bool  ShrineBuffActive => _shrineFireRateMult > 1.0001f || _shrineDamageMult > 1.0001f;
+    public float ShrineFireRateMultiplier => _shrineFireRateMult;
+
+    // Damage a bullet fired RIGHT NOW deals — base bulletDamage scaled by the
+    // reversible shrine channel (base is left untouched so the buff reverts cleanly).
+    // TurretBullet reads this at spawn, so removing the aura instantly stops boosting
+    // NEW shots without needing to rewind any permanent stat.
+    public int EffectiveBulletDamage => Mathf.Max(1, Mathf.RoundToInt(bulletDamage * _shrineDamageMult));
+
     // Current fire-rate multipliers (1 = none) and the effective shots/sec after
     // them — used by the selection panel to show the live buff.
     public float SynergyFireRateMultiplier => _synergyFireRateMult;
-    public float FireRateMultiplier => _synergyFireRateMult * _debuffFireRateMult;
+    public float FireRateMultiplier => _synergyFireRateMult * _debuffFireRateMult * _shrineFireRateMult;
     public float EffectiveFireRate => fireInterval > 0.0001f ? FireRateMultiplier / fireInterval : 0f;
 
     public void AddAttackSpeed(float percent)

@@ -1,0 +1,34 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f7678cd43634dbc4a94747ab56db3f70, type: 3}
+  m_Name: Wave_1-3_3
+  m_EditorClassIdentifier: Assembly-CSharp::WaveDefinition
+  displayName: 1-3 W3 The Mender
+  groups:
+  - prefab: {fileID: 2000000000000000004, guid: 9cd11ec29906452fae87b242eaa57704, type: 3}
+    count: 4
+    interval: 0.5
+    preDelay: 0
+  - prefab: {fileID: 2100000000000000004, guid: 4b8e1d6a3c9f47205ea8b13c96d7f402, type: 3}
+    count: 1
+    interval: 1
+    preDelay: 1
+  - prefab: {fileID: 3000000000000000004, guid: 7f9459c0f939e624c8b042b0ee3c0803, type: 3}
+    count: 2
+    interval: 1.5
+    preDelay: 0.5
+  - prefab: {fileID: 1000000000000000004, guid: 8e112c6d7d9b44b29b6d28b4cf5a5401, type: 3}
+    count: 8
+    interval: 0.5
+    preDelay: 2
+  difficulty: 0
+  estimatedDifficulty: 42.89

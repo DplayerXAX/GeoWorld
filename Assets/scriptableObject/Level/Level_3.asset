@@ -23,14 +23,14 @@ MonoBehaviour:
   - block: {fileID: 11400000, guid: 820a88ddf0392914889d66c41c3658a0, type: 2}
     color: 6
   waves:
-  - {fileID: 0}
-  - {fileID: 0}
-  - {fileID: 0}
-  - {fileID: 0}
-  - {fileID: 0}
-  - {fileID: 0}
-  - {fileID: 0}
-  - {fileID: 0}
+  - {fileID: 11400000, guid: 805195553d7548d7b575d4c0394cb94b, type: 2}
+  - {fileID: 11400000, guid: d54378f6fe064d08ba34d6c8e1f8ff1d, type: 2}
+  - {fileID: 11400000, guid: 936c96e931544f789d15a0b24fa27475, type: 2}
+  - {fileID: 11400000, guid: cae9dd86126f4903852f1d80889c70f0, type: 2}
+  - {fileID: 11400000, guid: 9185484143c3423681a605c7ffa0f0a9, type: 2}
+  - {fileID: 11400000, guid: c0309bbad3b84fdbb1c8db1f5eae1f71, type: 2}
+  - {fileID: 11400000, guid: 4909aa2f06894f0d92ee1b5ed050f711, type: 2}
+  - {fileID: 11400000, guid: 791d1de325334908851f289929088335, type: 2}
   wavesToClear: 8
   objectives:
   - type: 0
@@ -119,21 +119,21 @@ MonoBehaviour:
     speaker: {fileID: 11400000, guid: 80993e3c86b4337429c2d6273c8eedc2, type: 2}
     speakerSlot: 1
     speakerPortrait: 
-  - kind: 5
-    block: {fileID: 0}
-    origin: {x: 0, y: 0, z: 0}
+  - kind: 0
+    block: {fileID: 11400000, guid: 820a88ddf0392914889d66c41c3658a0, type: 2}
+    origin: {x: -3, y: 1, z: 4}
     rotation90: {x: 0, y: 0, z: 0}
     cellsOverride: []
     waitSeconds: 0
-    count: 0
+    count: 1
     inputKey: 323
     pathLength: 0
     freeOperations: 0
     hideInCombat: 0
     requiredWave: 0
-    unlocksOps: 
-    cameraFocus: 0
-    focusZoom: 0
+    unlocksOps: 06000000
+    cameraFocus: 4
+    focusZoom: 4
     hint: Place a single block here to complete an ENLIGHTMENT cube...
     conversation: {fileID: 0}
     speaker: {fileID: 11400000, guid: 80993e3c86b4337429c2d6273c8eedc2, type: 2}
@@ -151,15 +151,15 @@ MonoBehaviour:
     freeOperations: 0
     hideInCombat: 0
     requiredWave: 0
-    unlocksOps: 
-    cameraFocus: 0
-    focusZoom: 0
+    unlocksOps:
+    cameraFocus: 7
+    focusZoom: 5
     hint: The cube is awakened. We may now enhance one of our turrets.
     conversation: {fileID: 0}
     speaker: {fileID: 11400000, guid: 80993e3c86b4337429c2d6273c8eedc2, type: 2}
     speakerSlot: 1
     speakerPortrait: 
-  - kind: 5
+  - kind: 9
     block: {fileID: 0}
     origin: {x: 0, y: 0, z: 0}
     rotation90: {x: 0, y: 0, z: 0}
@@ -171,7 +171,7 @@ MonoBehaviour:
     freeOperations: 0
     hideInCombat: 0
     requiredWave: 0
-    unlocksOps: 
+    unlocksOps: 090000000c000000
     cameraFocus: 0
     focusZoom: 0
     hint: Select the prepared turret to choose its path and bestow an upgrade upon
@@ -180,7 +180,7 @@ MonoBehaviour:
     speaker: {fileID: 11400000, guid: 80993e3c86b4337429c2d6273c8eedc2, type: 2}
     speakerSlot: 1
     speakerPortrait: 
-  - kind: 5
+  - kind: 12
     block: {fileID: 0}
     origin: {x: 0, y: 0, z: 0}
     rotation90: {x: 0, y: 0, z: 0}
@@ -189,10 +189,10 @@ MonoBehaviour:
     count: 0
     inputKey: 323
     pathLength: 0
-    freeOperations: 0
+    freeOperations: 1
     hideInCombat: 0
     requiredWave: 0
-    unlocksOps: 
+    unlocksOps: 0c000000
     cameraFocus: 0
     focusZoom: 0
     hint: ENLIGHTMENT is unique, for it can itself be cultivated. A cube of length
@@ -210,10 +210,10 @@ MonoBehaviour:
     count: 0
     inputKey: 323
     pathLength: 0
-    freeOperations: 0
+    freeOperations: 1
     hideInCombat: 0
     requiredWave: 0
-    unlocksOps: 
+    unlocksOps:
     cameraFocus: 0
     focusZoom: 0
     hint: I sense that a cube of length four may be required before this battle is
@@ -231,10 +231,10 @@ MonoBehaviour:
     count: 0
     inputKey: 323
     pathLength: 0
-    freeOperations: 0
-    hideInCombat: 0
+    freeOperations: 1
+    hideInCombat: 1
     requiredWave: 0
-    unlocksOps: 
+    unlocksOps:
     cameraFocus: 0
     focusZoom: 0
     hint: Yet the choice is yours, My Lord. Our faith remains with you.
@@ -251,3 +251,8 @@ MonoBehaviour:
   chaosBlockMaxDistance: 7
   chaosBlockSearchMargin: 6
   chaosBlockMaxSimultaneous: 6
+  shrineEnabled: 1
+  shrineStartWave: 2
+  shrineMaxSimultaneous: 3
+  shrineFireRateBonus: 0.33
+  shrineDamageBonus: 0.33

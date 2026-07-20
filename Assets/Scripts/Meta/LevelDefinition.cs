@@ -100,6 +100,22 @@ public class LevelDefinition : ScriptableObject
 
     [Tooltip("Hard cap on simultaneously-alive chaos blocks, however many rounds the player lets them pile up.")]
     [Min(1)] public int chaosBlockMaxSimultaneous = 6;
+
+    [Header("Enlightenment Shrine (per-round free-upgrade aura)")]
+    [Tooltip("Enable the Shrine mechanic for this level: at the start of each round a shrine sprouts on a free cell touching the existing build — an immovable furniture piece that grants every turret in its surrounding cells a free, reversible stat buff (a 'borrowed' upgrade). Move a turret out of the aura and the buff vanishes; move the block a shrine was clinging to so nothing touches it any more and the shrine itself vanishes.")]
+    public bool shrineEnabled;
+
+    [Tooltip("First wave shrines are allowed to start sprouting. Uses the same 'which wave is this' counter as TutorialStep.requiredWave / chaosBlockStartWave (GameFlowManager.UpcomingWaveNumber).")]
+    [Min(1)] public int shrineStartWave = 1;
+
+    [Tooltip("Hard cap on simultaneously-alive shrines.")]
+    [Min(1)] public int shrineMaxSimultaneous = 3;
+
+    [Tooltip("Attack-speed bonus granted to turrets touching a shrine. 0.33 ≈ one Basic upgrade tier's worth.")]
+    [Min(0f)] public float shrineFireRateBonus = 0.33f;
+
+    [Tooltip("Damage bonus granted to turrets touching a shrine. 0.33 ≈ one Basic upgrade tier's worth.")]
+    [Min(0f)] public float shrineDamageBonus = 0.33f;
 }
 
 // ── Special objectives ──────────────────────────────────────────────────────

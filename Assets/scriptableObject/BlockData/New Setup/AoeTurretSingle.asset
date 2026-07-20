@@ -17,7 +17,7 @@ MonoBehaviour:
   blockShape: 1
   cells:
   - {x: 0, y: 0, z: 0}
-  turretPrefab: {fileID: 3219352080381510957, guid: 6a6e3a68fbf8c6b47a1a0ffde276fa3f, type: 3}
+  turretPrefab: {fileID: 2018354087651587552, guid: b9515f8fd018be1458bbb9065d86a442, type: 3}
   bulletPrefab: {fileID: 0}
   bulletScale: 0.1
   onStepEvent:
