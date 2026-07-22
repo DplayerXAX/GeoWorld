@@ -51,11 +51,20 @@ public static class LevelRoster
         var list = new List<string>();
         if (lv == null) return list;
 
-        if (lv.chaosBlockEnabled)
+        var chaos = lv.GetMechanic<ChaosBlockMechanicConfig>();
+        if (chaos != null)
         {
-            string when = lv.chaosBlockStartWave > 1 ? $" from wave {lv.chaosBlockStartWave}" : "";
+            string when = chaos.startWave > 1 ? $" from wave {chaos.startWave}" : "";
             list.Add($"<b>Chaos Block</b>{when} — spawns each round and drains " +
-                     $"{lv.chaosBlockCurrencyDrain} block currency every wave it survives. Destroy it with turrets.");
+                     $"{chaos.currencyDrain} block currency every wave it survives. Destroy it with turrets.");
+        }
+
+        var shrine = lv.GetMechanic<ShrineMechanicConfig>();
+        if (shrine != null)
+        {
+            string when = shrine.startWave > 1 ? $" from wave {shrine.startWave}" : "";
+            list.Add($"<b>Enlightenment Shrine</b>{when} — sprouts each round next to your build and grants " +
+                     $"adjacent turrets a free, reversible upgrade while they stay touching it.");
         }
 
         if (lv.allowedColors != null && lv.allowedColors.Length > 0)

@@ -2,16 +2,16 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
-// Per-level obstacle mechanic (LevelDefinition.chaosBlockEnabled): spawns one
-// black "Chaos Block" on the build grid at the start of EVERY round (Build
-// phase). It's a stationary EnemySurfaceUnit — destructible by turrets during
-// combat exactly like a normal enemy (see ChaosBlockUnit for the visual side) —
-// registered with EnemyBaseManager as a PERSISTENT target (see
-// EnemyBaseManager.RegisterPersistentTarget) so it never blocks wave
-// completion and survives CancelWave()'s per-round reset. Any chaos block
-// still alive when combat ends drains chaosBlockCurrencyDrain block currency;
-// since a survivor isn't removed, ignoring them lets the threat (and the tax)
-// pile up round over round until someone kills them.
+// Per-level obstacle mechanic (enabled by adding a ChaosBlockMechanicConfig to
+// LevelDefinition.mechanics): spawns one black "Chaos Block" on the build grid
+// at the start of EVERY round (Build phase). It's a stationary EnemySurfaceUnit
+// — destructible by turrets during combat exactly like a normal enemy (see
+// ChaosBlockUnit for the visual side) — registered with EnemyBaseManager as a
+// PERSISTENT target (see EnemyBaseManager.RegisterPersistentTarget) so it never
+// blocks wave completion and survives CancelWave()'s per-round reset. Any
+// chaos block still alive when combat ends drains currencyDrain block
+// currency; since a survivor isn't removed, ignoring them lets the threat
+// (and the tax) pile up round over round until someone kills them.
 //
 // Auto-spawns itself once per gameplay scene load — same hook pattern as
 // TutorialDirector — so no scene wiring is required.
@@ -30,7 +30,8 @@ public class ChaosBlockController : MonoBehaviour
 
     static void TrySpawn()
     {
-        if (RunConfig.Mode != GameMode.Level || RunConfig.Level == null || !RunConfig.Level.chaosBlockEnabled) return;
+        if (RunConfig.Mode != GameMode.Level || RunConfig.Level == null) return;
+        if (RunConfig.Level.GetMechanic<ChaosBlockMechanicConfig>() == null) return;   // mechanic not added to this level
         if (PlacementController.Instance == null) return;   // gameplay scene only
         if (FindFirstObjectByType<ChaosBlockController>() != null) return;
         new GameObject("ChaosBlockController").AddComponent<ChaosBlockController>();
@@ -48,6 +49,7 @@ public class ChaosBlockController : MonoBehaviour
     public IReadOnlyList<EnemySurfaceUnit> Alive => _alive;
 
     LevelDefinition _lv;
+    ChaosBlockMechanicConfig _cfg;
     readonly List<EnemySurfaceUnit> _alive = new();
     readonly Dictionary<EnemySurfaceUnit, Vector3Int> _cellOf = new();
     Xoshiro256StarStar _rng;
@@ -57,8 +59,9 @@ public class ChaosBlockController : MonoBehaviour
 
     void Start()
     {
-        _lv = RunConfig.Level;
-        if (_lv == null || !_lv.chaosBlockEnabled) { Destroy(gameObject); return; }
+        _lv  = RunConfig.Level;
+        _cfg = _lv != null ? _lv.GetMechanic<ChaosBlockMechanicConfig>() : null;
+        if (_cfg == null) { Destroy(gameObject); return; }
 
         GameFlowManager.OnTurnStarted += HandleTurnStarted;
 
@@ -92,10 +95,10 @@ public class ChaosBlockController : MonoBehaviour
         // SAME one TutorialStep.requiredWave gates on. < startWave → too early,
         // no chaos blocks yet this level.
         var gfm = GameFlowManager.Instance;
-        if (gfm != null && gfm.UpcomingWaveNumber < Mathf.Max(1, _lv.chaosBlockStartWave)) return;
+        if (gfm != null && gfm.UpcomingWaveNumber < Mathf.Max(1, _cfg.startWave)) return;
 
         _alive.RemoveAll(e => e == null);
-        if (_alive.Count >= Mathf.Max(1, _lv.chaosBlockMaxSimultaneous)) return;
+        if (_alive.Count >= Mathf.Max(1, _cfg.maxSimultaneous)) return;
         SpawnOne();
     }
 
@@ -108,11 +111,11 @@ public class ChaosBlockController : MonoBehaviour
         {
             var e = _alive[i];
             if (e == null || e.CurrentHealth <= 0) continue;
-            ResourceManager.Instance.DrainBlockCurrency(_lv.chaosBlockCurrencyDrain);
+            ResourceManager.Instance.DrainBlockCurrency(_cfg.currencyDrain);
             // Reverse of the normal kill/sell fly-fx: coins leave the currency
             // panel and fly OUT to the surviving chaos block, instead of flying
             // in from a world position.
-            CurrencyFlyFx.Drain(e.transform.position, isTurret: false, _lv.chaosBlockCurrencyDrain);
+            CurrencyFlyFx.Drain(e.transform.position, isTurret: false, _cfg.currencyDrain);
         }
     }
 
@@ -131,7 +134,7 @@ public class ChaosBlockController : MonoBehaviour
         go.transform.position = pos;
 
         if (!go.TryGetComponent(out EnemySurfaceUnit unit)) unit = go.AddComponent<EnemySurfaceUnit>();
-        unit.SetMaxHealth(Mathf.Max(1, _lv.chaosBlockHealth));
+        unit.SetMaxHealth(Mathf.Max(1, _cfg.health));
         unit.rewardOnKill = 0;   // the reward for killing it is NOT losing currency — no bonus on top
 
         if (!go.TryGetComponent<ChaosBlockUnit>(out _)) go.AddComponent<ChaosBlockUnit>();
@@ -175,8 +178,8 @@ public class ChaosBlockController : MonoBehaviour
         var occupied = new List<Vector3Int>(grid.GetGrid().Keys);
         if (occupied.Count == 0) return Vector3Int.zero;
 
-        int minDist = Mathf.Max(1, _lv.chaosBlockMinDistance);
-        int maxDist = Mathf.Max(minDist, _lv.chaosBlockMaxDistance);
+        int minDist = Mathf.Max(1, _cfg.minDistance);
+        int maxDist = Mathf.Max(minDist, _cfg.maxDistance);
         float minSqr = (float)minDist * minDist;
         float maxSqr = (float)maxDist * maxDist;
 

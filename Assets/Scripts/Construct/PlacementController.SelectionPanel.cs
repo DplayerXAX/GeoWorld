@@ -106,7 +106,8 @@ public partial class PlacementController
     string BuildChaosBody(ChaosBlockUnit chaos)
     {
         var sb = new System.Text.StringBuilder();
-        int drain = RunConfig.Level != null ? RunConfig.Level.chaosBlockCurrencyDrain : 0;
+        var cfg = RunConfig.Level != null ? RunConfig.Level.GetMechanic<ChaosBlockMechanicConfig>() : null;
+        int drain = cfg != null ? cfg.currencyDrain : 0;
 
         sb.AppendLine($"<color=#E2241B><b>-{drain} block currency</b> every wave it survives</color>");
         sb.AppendLine();

@@ -45,7 +45,8 @@ MonoBehaviour:
   unlocks:
   - {fileID: 11400000, guid: ecabc7baea398ff4caba7a43dc978c69, type: 2}
   techReward: 1
-  mapBlockRewards: []
+  mapBlockRewards:
+  - {fileID: 11400000, guid: 7d867ce72998a0f4689850dd5dd2258e, type: 2}
   isTutorial: 1
   fixedEndpoints: 1
   startCell: {x: 0, y: 2, z: 1}
@@ -343,11 +344,8 @@ MonoBehaviour:
     speakerSlot: 1
     speakerPortrait: 
   startingLayout: {fileID: 11400000, guid: ceaecea707d98794b95902fcad06060b, type: 2}
-  chaosBlockEnabled: 1
-  chaosBlockStartWave: 2
-  chaosBlockHealth: 10
-  chaosBlockCurrencyDrain: 20
-  chaosBlockMinDistance: 3
-  chaosBlockMaxDistance: 6
-  chaosBlockSearchMargin: 6
-  chaosBlockMaxSimultaneous: 6
+  overrideEndpointDistance: 0
+  endpointMinDistance: 5
+  endpointMaxDistance: 10
+  mechanics:
+  - {fileID: 11400000, guid: 49e6eb7ca9c24522886d1aeaa87d2cfa, type: 2}

@@ -50,7 +50,9 @@ MonoBehaviour:
   unlockedByDefault: 1
   unlocks: []
   techReward: 1
-  mapBlockRewards: []
+  mapBlockRewards:
+  - {fileID: 11400000, guid: a8fa6df35bf1b6c438e02427ec8409c0, type: 2}
+  - {fileID: 11400000, guid: 7d867ce72998a0f4689850dd5dd2258e, type: 2}
   isTutorial: 1
   fixedEndpoints: 1
   startCell: {x: -7, y: 0, z: 7}
@@ -151,7 +153,7 @@ MonoBehaviour:
     freeOperations: 0
     hideInCombat: 0
     requiredWave: 0
-    unlocksOps:
+    unlocksOps: 
     cameraFocus: 7
     focusZoom: 5
     hint: The cube is awakened. We may now enhance one of our turrets.
@@ -213,7 +215,7 @@ MonoBehaviour:
     freeOperations: 1
     hideInCombat: 0
     requiredWave: 0
-    unlocksOps:
+    unlocksOps: 
     cameraFocus: 0
     focusZoom: 0
     hint: I sense that a cube of length four may be required before this battle is
@@ -234,7 +236,7 @@ MonoBehaviour:
     freeOperations: 1
     hideInCombat: 1
     requiredWave: 0
-    unlocksOps:
+    unlocksOps: 
     cameraFocus: 0
     focusZoom: 0
     hint: Yet the choice is yours, My Lord. Our faith remains with you.
@@ -243,16 +245,8 @@ MonoBehaviour:
     speakerSlot: 1
     speakerPortrait: 
   startingLayout: {fileID: 11400000, guid: 9843050dd6dbe5841a144ca40094ed6a, type: 2}
-  chaosBlockEnabled: 0
-  chaosBlockStartWave: 1
-  chaosBlockHealth: 20
-  chaosBlockCurrencyDrain: 5
-  chaosBlockMinDistance: 4
-  chaosBlockMaxDistance: 7
-  chaosBlockSearchMargin: 6
-  chaosBlockMaxSimultaneous: 6
-  shrineEnabled: 1
-  shrineStartWave: 2
-  shrineMaxSimultaneous: 3
-  shrineFireRateBonus: 0.33
-  shrineDamageBonus: 0.33
+  overrideEndpointDistance: 1
+  endpointMinDistance: 8
+  endpointMaxDistance: 10
+  mechanics:
+  - {fileID: 11400000, guid: 50f13bead7d04108ad14115885ccfc41, type: 2}

@@ -11,6 +11,12 @@ public static class RunConfig
     public static LevelDefinition Level;      // null in Endless mode
     public static ulong           Seed;       // 0 = randomize at run start
 
+    // Set by GameFlowManager right after a level's FIRST clear (if it has one
+    // authored); consumed once by LevelMapController.Start() back on LevelSelect,
+    // then cleared so it never replays. Static for the same reason as the rest of
+    // this class — needs to survive the gameplay → LevelSelect scene load.
+    public static DialogueConversation PendingRewardConversation;
+
     public static void SetLevel(LevelDefinition level)
     {
         Mode  = GameMode.Level;

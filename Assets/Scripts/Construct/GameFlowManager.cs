@@ -183,6 +183,10 @@ public class GameFlowManager : MonoBehaviour
     {
         if (RunConfig.Seed != 0UL) runSeed = RunConfig.Seed;
 
+        // No level asset (Endless) → always on; a Level run reads its own flag.
+        SynergyEvaluator.Enabled = RunConfig.Mode != GameMode.Level
+            || RunConfig.Level == null || RunConfig.Level.synergyEnabled;
+
         if (RunConfig.Mode == GameMode.Level && RunConfig.Level != null)
         {
             var lv = RunConfig.Level;
@@ -277,7 +281,10 @@ public class GameFlowManager : MonoBehaviour
         int prevBest = RunConfig.Level != null ? SaveSystem.Profile.GetRecord(RunConfig.Level.levelId)?.bestScore ?? 0 : 0;
         bool isNewBest = score > prevBest;
 
-        SaveSystem.RecordClear(RunConfig.Level, wavesReached, score);
+        bool firstClear = SaveSystem.RecordClear(RunConfig.Level, wavesReached, score);
+        if (firstClear && RunConfig.Level != null && RunConfig.Level.rewardConversation != null)
+            RunConfig.PendingRewardConversation = RunConfig.Level.rewardConversation;
+
         LevelClearScreen.Show(RunConfig.Level, wavesReached, lives, maxLives, stars, score, prevBest, isNewBest, objMet, ReturnToMap);
     }
 
@@ -323,6 +330,20 @@ public class GameFlowManager : MonoBehaviour
 
     void ConfigureEndpointBounds(float extraRange = 0f)
     {
+        // Per-level override wins outright — fixed bounds for EVERY endpoint this
+        // level generates (opening pair and every later AddNextEndpoint() call
+        // alike), ignoring both the auto blocksPerTurn scaling below AND whatever
+        // the generator's own Inspector defaults are. This is what lets a level
+        // author pin down "the second start point sometimes rolls really far"
+        // instead of inheriting gameplay's global widening-per-round behavior.
+        var lv = RunConfig.Mode == GameMode.Level ? RunConfig.Level : null;
+        if (lv != null && lv.overrideEndpointDistance)
+        {
+            endpoints.minDistance = Mathf.Max(0f, lv.endpointMinDistance);
+            endpoints.maxDistance = Mathf.Max(endpoints.minDistance, lv.endpointMaxDistance);
+            return;
+        }
+
         // Respect the generator's Inspector values when auto-bounds is off.
         if (!autoEndpointBounds) return;
 

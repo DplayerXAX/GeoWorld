@@ -19,6 +19,9 @@ public class LevelDefinition : ScriptableObject
     [Min(1)] public int blocksPerTurn  = 8;
     [Min(0)] public int turretsPerTurn = 3;
 
+    [Tooltip("Whether synergies exist at all on this level. Off = placing/picking up a block never touches SynergyEvaluator: no board tracking, no rule checks, no activation FX. For an early tutorial level that hasn't introduced synergies yet, or a mechanic-focused level that deliberately doesn't use them. On by default so existing levels are unaffected.")]
+    public bool synergyEnabled = true;
+
     [Tooltip("Synergy colors allowed to roll in THIS level's shop (ColorDistribution). Fixed per level, independent of any other level's progress — replaying an earlier level always sees the same pool its designer set. Empty = no restriction (every color in ColorDistribution.weights can roll). Author later levels with a longer list to hand-tune a difficulty/variety curve, e.g. 1-1 = [Abundance], 1-2 = [Abundance, Order], ...")]
     public BlockColor[] allowedColors;
 
@@ -60,6 +63,9 @@ public class LevelDefinition : ScriptableObject
     [Tooltip("Blocks granted (once, on first clear) that the player can place on the LevelSelect map (Build mode) to extend the walkable network toward other levels — must also appear in LevelMapController.buildableBlocks to be placeable.")]
     public BlockData[] mapBlockRewards;
 
+    [Tooltip("Played once, back on LevelSelect, right after this level's FIRST clear (same one-time gate as the tech/unlock/map-block rewards above). Author it like any other DialogueConversation asset. Leave null for no conversation.")]
+    public DialogueConversation rewardConversation;
+
     [Header("Tutorial")]
     [Tooltip("Marks this level as a tutorial — TutorialDirector takes over (fixed endpoints + ghost-guided placement).")]
     public bool isTutorial;
@@ -76,46 +82,32 @@ public class LevelDefinition : ScriptableObject
            + "then bake via GeoWorld ▸ Level Map ▸ Bake JSON → Asset).")]
     public LevelMapAsset startingLayout;
 
-    [Header("Chaos Block (per-round obstacle hazard)")]
-    [Tooltip("Enable the Chaos Block mechanic for this level: a black obstacle spawns on the build grid at the start of EVERY round, kept some distance from existing blocks so the player has to build/turret toward it. It's destructible by turrets during combat (just like an enemy); any that survive to the end of combat drain block currency — and, since a surviving one isn't removed, they accumulate round over round until killed.")]
-    public bool chaosBlockEnabled;
+    [Header("Endpoint spacing (overrides GameFlowManager's defaults)")]
+    [Tooltip("ON: use this level's minDistance/maxDistance below for EVERY start/end point this level generates (the opening pair AND every later added endpoint) — overrides GameFlowManager's blocksPerTurn-derived auto bounds and the LevelEndpointGenerator's own Inspector defaults. OFF: this level behaves exactly as before (whatever GameFlowManager/the generator would otherwise use).")]
+    public bool overrideEndpointDistance;
 
-    [Tooltip("First wave chaos blocks are allowed to start spawning (1 = from the very first round, like today). Uses the same 'which wave is this' counter as TutorialStep.requiredWave (GameFlowManager.UpcomingWaveNumber) — e.g. 3 means no chaos blocks during waves 1-2, then they start from wave 3 onward.")]
-    [Min(1)] public int chaosBlockStartWave = 1;
+    [Tooltip("Minimum grid-cell distance between a new endpoint and the existing point it's anchored from.")]
+    [Min(0f)] public float endpointMinDistance = 5f;
 
-    [Tooltip("Chaos block health (turret damage to destroy it).")]
-    [Min(1)] public int chaosBlockHealth = 20;
+    [Tooltip("Maximum grid-cell distance between a new endpoint and the existing point it's anchored from.")]
+    [Min(0f)] public float endpointMaxDistance = 10f;
 
-    [Tooltip("Block currency drained EACH TIME combat ends while a given chaos block is still alive. Multiple surviving blocks each drain separately.")]
-    [Min(0)] public int chaosBlockCurrencyDrain = 5;
+    [Header("Level Mechanics")]
+    [Tooltip("Optional systemic mechanics for this level (Chaos Block, Enlightenment Shrine, ...). Add an asset instance to enable that mechanic for this level with the parameters that instance carries; remove it to disable. Each mechanic's own controller looks itself up via GetMechanic<T>() — see ChaosBlockController / ShrineController.")]
+    public List<LevelMechanicConfig> mechanics = new();
 
-    [Tooltip("Minimum grid-cell distance kept from the nearest existing occupied cell when picking a spawn point — the whole point is that the player must build/reach toward it, not have it spawn next to an existing turret.")]
-    [Min(1)] public int chaosBlockMinDistance = 4;
-
-    [Tooltip("MAXIMUM grid-cell distance from the nearest existing occupied cell. Without an upper bound the spawn drifts further and further out as the build grows, until it's out of turret range entirely and the drain becomes unkillable. Keep it within reach of a turret placed near the build's edge.")]
-    [Min(1)] public int chaosBlockMaxDistance = 7;
-
-    [Tooltip("Legacy: how far beyond the build's bounding box the old box-sampling search could reach. Spawn points are now sampled around a random existing block instead (see ChaosBlockController.PickSpawnCell), so this is only a fallback clamp.")]
-    [Min(1)] public int chaosBlockSearchMargin = 6;
-
-    [Tooltip("Hard cap on simultaneously-alive chaos blocks, however many rounds the player lets them pile up.")]
-    [Min(1)] public int chaosBlockMaxSimultaneous = 6;
-
-    [Header("Enlightenment Shrine (per-round free-upgrade aura)")]
-    [Tooltip("Enable the Shrine mechanic for this level: at the start of each round a shrine sprouts on a free cell touching the existing build — an immovable furniture piece that grants every turret in its surrounding cells a free, reversible stat buff (a 'borrowed' upgrade). Move a turret out of the aura and the buff vanishes; move the block a shrine was clinging to so nothing touches it any more and the shrine itself vanishes.")]
-    public bool shrineEnabled;
-
-    [Tooltip("First wave shrines are allowed to start sprouting. Uses the same 'which wave is this' counter as TutorialStep.requiredWave / chaosBlockStartWave (GameFlowManager.UpcomingWaveNumber).")]
-    [Min(1)] public int shrineStartWave = 1;
-
-    [Tooltip("Hard cap on simultaneously-alive shrines.")]
-    [Min(1)] public int shrineMaxSimultaneous = 3;
-
-    [Tooltip("Attack-speed bonus granted to turrets touching a shrine. 0.33 ≈ one Basic upgrade tier's worth.")]
-    [Min(0f)] public float shrineFireRateBonus = 0.33f;
-
-    [Tooltip("Damage bonus granted to turrets touching a shrine. 0.33 ≈ one Basic upgrade tier's worth.")]
-    [Min(0f)] public float shrineDamageBonus = 0.33f;
+    // First mechanic instance of type T in this level's list, or null if none is
+    // present (i.e. that mechanic is disabled for this level). A level mechanic's
+    // controller (e.g. ChaosBlockController) calls this instead of reading a
+    // level-specific bool/param field directly — that's what lets new mechanics
+    // be added without ever touching LevelDefinition again.
+    public T GetMechanic<T>() where T : LevelMechanicConfig
+    {
+        if (mechanics == null) return null;
+        for (int i = 0; i < mechanics.Count; i++)
+            if (mechanics[i] is T match) return match;
+        return null;
+    }
 }
 
 // ── Special objectives ──────────────────────────────────────────────────────

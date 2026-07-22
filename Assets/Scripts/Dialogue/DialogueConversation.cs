@@ -50,4 +50,8 @@ public class DialogueConversation : ScriptableObject
     public List<DialogueChoice> choices = new();
     [Tooltip("If there are no choices, automatically continue into this conversation.")]
     public DialogueConversation autoNext;
+
+    [Header("Skip")]
+    [Tooltip("Show a Skip button that ends this conversation outright (ignoring any remaining lines, choices, or autoNext). Leave off for anything plot- or choice-critical; on for flavor/reminder chatter the player shouldn't be forced to sit through twice. Never offered on passive (tutorial) dialogue — see DialogueRunner.")]
+    public bool skippable = false;
 }

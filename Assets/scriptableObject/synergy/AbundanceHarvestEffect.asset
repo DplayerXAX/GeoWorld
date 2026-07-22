@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: dee9e343409bcf8409d3becdce43894e, type: 3}
   m_Name: AbundanceHarvestEffect
   m_EditorClassIdentifier: Assembly-CSharp::AbundanceHarvestEffect
-  countMode: 0
-  blockPerUnit: 10
+  countMode: 1
+  blockPerUnit: 6
   flatBonus: 0
   moteColor: {r: 0.95, g: 0.8, b: 0.3, a: 1}
