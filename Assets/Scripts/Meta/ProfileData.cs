@@ -22,6 +22,12 @@ public class ProfileData
     public int          techPoints;
     public List<string> ownedTech = new();
 
+    // Shown once, the very first time the player ever lands on LevelSelect —
+    // LevelMapController.firstVisitConversation. Set the instant it plays (not
+    // after it finishes), same as every other one-time-beat gate in this class, so
+    // it can never replay even if the player quits mid-conversation.
+    public bool seenLevelSelectIntro;
+
     // ── Overworld map-building (LevelMapController build mode) ──────────────
     // Blocks earned from level clears (LevelDefinition.mapBlockRewards) but not
     // yet placed on the LevelSelect map.
@@ -58,12 +64,15 @@ public class ProfileData
         return r;
     }
 
+    // Capped at 1 in stock — reward blocks are single-use bridge pieces, not a
+    // stockpile. Two different levels can (and do) reward the same shape; the
+    // second grant is simply a no-op if the first one hasn't been placed yet.
     public void GrantMapBlock(string blockAssetName, int count = 1)
     {
         if (string.IsNullOrEmpty(blockAssetName) || count <= 0) return;
         var g = mapBlockInventory.Find(x => x.blockAssetName == blockAssetName);
         if (g == null) { g = new MapBlockGrant { blockAssetName = blockAssetName }; mapBlockInventory.Add(g); }
-        g.count += count;
+        g.count = Mathf.Min(1, g.count + count);
     }
 
     // Spends one from inventory. Returns false (no-op) if none available — callers
@@ -98,5 +107,5 @@ public class PlacedMapBlock
 {
     public Vector3Int[] cells;          // absolute grid cells (LevelSelect map's GridSystem space)
     public string       blockAssetName;
-    public int          rotationY;      // 0..3, ×90° — kept for reference; `cells` is already rotated & absolute
+    public Quaternion   rotation = Quaternion.identity;   // full 3-axis — kept for reference; `cells` is already rotated & absolute
 }

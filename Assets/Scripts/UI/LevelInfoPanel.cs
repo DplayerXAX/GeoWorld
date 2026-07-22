@@ -31,12 +31,19 @@ public class LevelInfoPanel : MonoBehaviour
     public Color buttonTextColor = new Color(0.086f, 0.086f, 0.086f);          // ink label
 
     [Header("Layout")]
-    [Tooltip("Fixed panel size (match your right-panel art). x = width, y = height.")]
+    [Tooltip("DESIRED panel size at the 1920×1080 reference. x = width, y = height. Shrunk automatically when the window can't fit it — never grown past this.")]
     public Vector2 panelSize   = new Vector2(420f, 700f);
     public float rightMargin   = 60f;
+    [Tooltip("Clear space kept above and below the panel. The panel shrinks rather than run off a short window.")]
+    public float verticalMargin = 60f;
+    [Tooltip("Hard ceiling on how much of the window's width the panel may eat, for narrow/portrait aspects.")]
+    [Range(0.2f, 0.9f)] public float maxWidthFraction = 0.5f;
     public Vector2 contentPad  = new Vector2(36f, 40f);   // inner padding (x sides, y top/bottom)
     public int   cornerRadius  = 26;
     public float fadeSpeed     = 12f;
+
+    [Tooltip("Put the hosting Canvas on ScaleWithScreenSize @1920×1080. Off only if you're driving the scaler yourself.")]
+    public bool autoScaleCanvas = true;
 
     [Header("Enemy roster")]
     [Tooltip("Balance asset — only needed to list enemies for levels that have NO authored waves (those roll their roster from BalanceTable.enemies). Levels with authored waves read their roster straight off them.")]
@@ -51,14 +58,40 @@ public class LevelInfoPanel : MonoBehaviour
     Action      _onEnter;
     float       _target;
 
+    RectTransform _panel;       // null when laying into a targetPanel you authored
+    RectTransform _canvasRect;  // the space we have to fit inside
+
     void Awake() { BuildUI(); }
 
     void Update()
     {
+        ApplyResponsiveLayout();
+
         if (_cg == null) return;
         _cg.alpha = Mathf.Lerp(_cg.alpha, _target, 1f - Mathf.Exp(-fadeSpeed * Time.unscaledDeltaTime));
         bool on = _target > 0.5f && _cg.alpha > 0.5f;
         _cg.interactable = _cg.blocksRaycasts = on;
+    }
+
+    // Fit the panel to whatever the window currently is. Run per-frame rather than
+    // once at Awake because a free-aspect Game view (and a resizable player window)
+    // changes the canvas rect at runtime, and the panel has to follow.
+    //
+    // panelSize is a CEILING, not a fixed size: at the 1920×1080 reference the
+    // clamps are inactive and you get exactly the 420×700 the panel was authored
+    // at, so this changes nothing at the ratio that already looked right. It only
+    // bites when the window genuinely can't accommodate it.
+    void ApplyResponsiveLayout()
+    {
+        if (_panel == null || _canvasRect == null) return;
+
+        float availH = _canvasRect.rect.height - verticalMargin * 2f;
+        float availW = _canvasRect.rect.width * maxWidthFraction - rightMargin;
+        if (availH <= 1f || availW <= 1f) return;   // canvas hasn't resolved yet
+
+        var size = new Vector2(Mathf.Min(panelSize.x, availW),
+                               Mathf.Min(panelSize.y, availH));
+        if (_panel.sizeDelta != size) _panel.sizeDelta = size;
     }
 
     // ── API (called by LevelMapController) ───────────────────────────────────────
@@ -163,6 +196,7 @@ public class LevelInfoPanel : MonoBehaviour
     void BuildUI()
     {
         EnsureEventSystem();
+        ConfigureCanvas();
         RectTransform content;
 
         if (targetPanel != null)
@@ -180,11 +214,12 @@ public class LevelInfoPanel : MonoBehaviour
         else
         {
             var panel = NewRect("LevelInfoPanel", transform);
+            _panel = panel;
 
             panel.anchorMin = panel.anchorMax = new Vector2(1f, 0.5f);
             panel.pivot = new Vector2(1f, 0.5f);
             panel.anchoredPosition = new Vector2(-rightMargin, 0f);
-            panel.sizeDelta = panelSize;
+            panel.sizeDelta = panelSize;   // ApplyResponsiveLayout clamps this down as needed
 
             _cg = panel.gameObject.AddComponent<CanvasGroup>();
             _cg.alpha = 0f;
@@ -266,6 +301,32 @@ public class LevelInfoPanel : MonoBehaviour
         var img = rt.gameObject.AddComponent<Image>();
         img.color = accentColor;
         rt.gameObject.AddComponent<LayoutElement>().minHeight = 4f;
+    }
+
+    // The hosting Canvas in LevelSelect.unity was left on Constant Pixel Size with
+    // the default 800×600 reference — meaning the panel was laid out in raw screen
+    // pixels and never scaled with the window at all. That's why it only read
+    // correctly at 1920×1080: at any other size the 420×700 panel stayed 420×700
+    // physical pixels, so it ballooned on small windows and shrank to a stamp on
+    // large ones.
+    //
+    // Scaled @1920×1080 with match 0.5 to line up with every other full-screen
+    // panel in the project (DialogueRunner, SettingsScreen, PauseMenu,
+    // LevelClearScreen all use exactly this), so they all scale together instead of
+    // drifting apart as the window changes.
+    void ConfigureCanvas()
+    {
+        var canvas = GetComponentInParent<Canvas>();
+        if (canvas == null) return;
+        _canvasRect = canvas.rootCanvas.transform as RectTransform;
+        if (!autoScaleCanvas) return;
+
+        var sc = canvas.rootCanvas.GetComponent<CanvasScaler>();
+        if (sc == null) return;
+        sc.uiScaleMode         = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+        sc.referenceResolution = new Vector2(1920f, 1080f);
+        sc.screenMatchMode     = CanvasScaler.ScreenMatchMode.MatchWidthOrHeight;
+        sc.matchWidthOrHeight  = 0.5f;
     }
 
     static void EnsureEventSystem()

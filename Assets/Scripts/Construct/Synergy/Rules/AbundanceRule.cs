@@ -109,23 +109,63 @@ public class AbundanceRule : SynergyRule, ICellHighlightFilter
             {
                 var map = kv.Value;                 // (u,v) → world cell for this slice's wall
                 if (map.Count < 8) continue;
-                if (!EnclosesEmpty(map.Keys)) continue;
 
-                var ring = PeelToRing(map.Keys);    // drop dangling tails → just the loop
-                if (ring.Count == 0) continue;
-
-                loopCells = new HashSet<Vector3Int>();
-                claimed   = new HashSet<PlacedPiece>();
-                foreach (var uv in ring)
+                // Split the slice's wall into 4-connected COMPONENTS first. Two
+                // separate hollow loops sitting at the same axis coordinate (very
+                // common — most builds stay on one Y level) are two disjoint wall
+                // blobs; treating the whole slice as one wall would merge both
+                // rings' cells into a single claim instead of letting each become
+                // its own ActiveSynergy (which is what made repeated activations
+                // collapse into "just the one, biggest" claim instead of stacking).
+                foreach (var comp in ConnectedComponents2D(map.Keys))
                 {
-                    var cell = map[uv];
-                    loopCells.Add(cell);
-                    claimed.Add(owner[cell]);       // a piece is claimed as a whole unit
+                    if (comp.Count < 8) continue;
+                    if (!EnclosesEmpty(comp)) continue;
+
+                    var ring = PeelToRing(comp);    // drop dangling tails → just this loop
+                    if (ring.Count == 0) continue;
+
+                    loopCells = new HashSet<Vector3Int>();
+                    claimed   = new HashSet<PlacedPiece>();
+                    foreach (var uv in ring)
+                    {
+                        var cell = map[uv];
+                        loopCells.Add(cell);
+                        claimed.Add(owner[cell]);       // a piece is claimed as a whole unit
+                    }
+                    return true;   // one ring per call — the caller's guard loop finds the rest
                 }
-                return true;
             }
         }
         return false;
+    }
+
+    // 4-adjacency flood-fill grouping in the 2D slice plane.
+    static List<HashSet<Vector2Int>> ConnectedComponents2D(IEnumerable<Vector2Int> cells)
+    {
+        var all      = cells as HashSet<Vector2Int> ?? new HashSet<Vector2Int>(cells);
+        var visited  = new HashSet<Vector2Int>();
+        var result   = new List<HashSet<Vector2Int>>();
+        var q        = new Queue<Vector2Int>();
+
+        foreach (var seed in all)
+        {
+            if (!visited.Add(seed)) continue;
+            var comp = new HashSet<Vector2Int> { seed };
+            q.Clear(); q.Enqueue(seed);
+            while (q.Count > 0)
+            {
+                var cur = q.Dequeue();
+                foreach (var d in _dir2)
+                {
+                    var n = cur + d;
+                    if (!all.Contains(n)) continue;
+                    if (visited.Add(n)) { comp.Add(n); q.Enqueue(n); }
+                }
+            }
+            result.Add(comp);
+        }
+        return result;
     }
 
     // Flood-fill the slice's bounding box (expanded by 1 so its border is all

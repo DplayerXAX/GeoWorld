@@ -71,6 +71,28 @@ public static class SaveSystem
         catch (System.Exception e) { Debug.LogWarning($"[SaveSystem] save slot {slot} failed: {e.Message}"); }
     }
 
+    // Wipes the ACTIVE slot's save file on disk and resets the in-memory cache to
+    // a blank ProfileData — for testing systems that want to start from a truly
+    // fresh profile every Play session (e.g. LevelMapController.resetSaveOnStart)
+    // without hunting down profile_<n>.json under Application.persistentDataPath
+    // by hand. Anything that runs afterward and calls Save() will happily persist
+    // into the now-blank slot — that's expected: turning a "reset on start" toggle
+    // on means you're intentionally treating that slot as disposable for this
+    // session, not that the wipe is somehow undone later.
+    public static void ResetProfile()
+    {
+        int slot = ActiveSlot;
+        try { if (File.Exists(SlotPath(slot))) File.Delete(SlotPath(slot)); }
+        catch (System.Exception e) { Debug.LogWarning($"[SaveSystem] reset slot {slot} failed: {e.Message}"); }
+        if (slot == 0)
+        {
+            try { if (File.Exists(LegacyPath)) File.Delete(LegacyPath); }
+            catch (System.Exception e) { Debug.LogWarning($"[SaveSystem] reset legacy save failed: {e.Message}"); }
+        }
+        _cached     = new ProfileData();
+        _cachedSlot = slot;
+    }
+
     // Read a slot's data WITHOUT selecting it or touching the active cache — for
     // the save-select UI. Returns null when the slot has no save yet (empty).
     public static ProfileData PeekSlot(int slot)
@@ -110,9 +132,12 @@ public static class SaveSystem
         if (changed) Save();
     }
 
-    public static void RecordClear(LevelDefinition level, int wavesReached, int score = 0)
+    // Returns true iff this call was the level's FIRST clear — callers use that to
+    // gate one-time follow-up beats (e.g. GameFlowManager queuing the level's
+    // rewardConversation to play once back on LevelSelect).
+    public static bool RecordClear(LevelDefinition level, int wavesReached, int score = 0)
     {
-        if (level == null) return;
+        if (level == null) return false;
         var p   = Profile;
         var rec = p.GetOrCreateRecord(level.levelId);
         bool firstClear = !rec.cleared;
@@ -132,6 +157,7 @@ public static class SaveSystem
                     if (b != null) p.GrantMapBlock(b.name, 1);
         }
         Save();
+        return firstClear;
     }
 
     public static void RecordEndless(int wave, int score = 0)

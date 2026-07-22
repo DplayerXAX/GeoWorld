@@ -38,6 +38,14 @@ public class SynergyEvaluator : MonoBehaviour
 {
     public static SynergyEvaluator Instance;
 
+    // Set by GameFlowManager.ApplyRunConfig from LevelDefinition.synergyEnabled
+    // (true in Endless, since there's no level asset to read). The single choke
+    // point both OnPiecePlaced/OnPieceRemoved gate on — when false, placing or
+    // picking up a block never touches the board, never runs a rule, never fires
+    // an activation. BoardSnapshot has no consumers outside this file, so there's
+    // nothing else that needs to keep tracking pieces when synergies are off.
+    public static bool Enabled = true;
+
     [Header("Rules")]
     [Tooltip("All synergy rule assets. Evaluator sorts by .priority each pass.")]
     public List<SynergyRule> rules = new();
@@ -83,6 +91,8 @@ public class SynergyEvaluator : MonoBehaviour
 
     public PlacedPiece OnPiecePlaced(BlockData data, BlockColor color, Vector3Int[] worldCells)
     {
+        if (!Enabled) return null;   // caller stores the null and hands it right back to OnPieceRemoved — harmless
+
         var piece = new PlacedPiece(_nextId++, data, color, worldCells);
         if (!_board.AddPiece(piece))
         {

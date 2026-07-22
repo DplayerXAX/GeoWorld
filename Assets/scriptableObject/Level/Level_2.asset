@@ -49,7 +49,8 @@ MonoBehaviour:
   unlockedByDefault: 1
   unlocks: []
   techReward: 1
-  mapBlockRewards: []
+  mapBlockRewards:
+  - {fileID: 11400000, guid: 6eeb6b311184fcb40be187ae07e15da1, type: 2}
   isTutorial: 0
   fixedEndpoints: 0
   startCell: {x: 0, y: 0, z: 0}

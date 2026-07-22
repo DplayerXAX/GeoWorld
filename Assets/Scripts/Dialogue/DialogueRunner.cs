@@ -40,6 +40,11 @@ public class DialogueRunner : MonoBehaviour
     [Tooltip("Opacity the passive tutorial dialogue box fades to while the shop is expanded (F).")]
     [Range(0f, 1f)] public float passiveShopDim = 0.25f;
 
+    [Header("Advance / action indicators")]
+    [Tooltip("Glyph shown instead of the light bar when the line is PASSIVE (a tutorial step waiting on a real action, not a click) — signals \"go do the thing\" rather than \"click to continue\".")]
+    public string actionGlyph = "☝";   // ☝
+    public Color  actionColor = new Color(0.910f, 0.698f, 0.227f);          // gold — distinct from the bar's accent
+
     // ── Events (for game hooks) ──────────────────────────────────────────────────
     public event Action<DialogueConversation> OnFinished;
     public event Action<string>               OnLineEvent;   // line.eventId / choice.eventId
@@ -67,7 +72,10 @@ public class DialogueRunner : MonoBehaviour
     CanvasGroup   _group;
     Image[]       _portraits;       // indexed by PortraitSlot
     Image         _nameBg;
-    TMP_Text      _nameText, _topicText, _bodyText, _continue;
+    TMP_Text      _nameText, _topicText, _bodyText;
+    Image         _continueBar;   // "光条" — glowing bar, click-to-continue is available
+    TMP_Text      _actionIcon;      // shown instead of the bar on a passive/action-required line
+    Button        _skipButton;
     RectTransform _choiceBox;
     readonly List<GameObject> _choiceButtons = new();
 
@@ -183,14 +191,52 @@ public class DialogueRunner : MonoBehaviour
             }
         }
 
-        // Blinking continue indicator (hidden while typing / choosing / passive).
-        bool showContinue = !_typing && !_choiceMode && !_passive;
-        _blink += Time.unscaledDeltaTime * 3f;
-        _continue.gameObject.SetActive(showContinue);
-        if (showContinue)
+        // Two mutually exclusive indicators, both hidden while typing or choosing:
+        //   • the light bar — a click (or advanceKey) will move to the next line
+        //   • the action icon — this line is PASSIVE; nothing you click here will
+        //     advance it, only completing whatever the game is asking for will.
+        // Showing NOTHING for passive lines (the old behaviour) read as the dialogue
+        // being stuck; the icon at least tells the player where to look next.
+        bool showBar    = !_typing && !_choiceMode && !_passive;
+        bool showAction = !_typing && !_choiceMode &&  _passive;
+        _blink += Time.unscaledDeltaTime;
+
+        // Three sine waves at incommensurate frequencies/phases, summed rather than
+        // one clean sine — a single sine reads as a metronome (which was the actual
+        // "不明显"/mechanical complaint: perfectly even, perfectly predictable). This
+        // never quite repeats on a timescale a player would notice, closer to how a
+        // candle or a firefly actually flickers than a blinking cursor does.
+        float wobble = Mathf.Sin(_blink * 2.6f)
+                      + Mathf.Sin(_blink * 4.3f + 1.7f) * 0.55f
+                      + Mathf.Sin(_blink * 1.15f + 0.4f) * 0.4f;
+        float pulse = 0.55f + 0.45f * Mathf.Clamp01(wobble * 0.36f + 0.5f);
+        // A slow, separate drift so the bar doesn't sit dead still between pulses.
+        float bobY = Mathf.Sin(_blink * 1.4f + 0.9f) * 3f;
+
+        _continueBar.gameObject.SetActive(showBar);
+        if (showBar)
         {
-            var c = _continue.color; c.a = 0.35f + 0.65f * Mathf.Abs(Mathf.Sin(_blink)); _continue.color = c;
+            PositionContinueBar(bobY);
+
+            var core = accentColor; core.a = pulse;
+            _continueBar.color = core;
+            // Ball, not a bar — width and height pulse together off the same
+            // diameter, so it stays a perfect circle at every point in the breathe.
+            float d = Mathf.Lerp(20f, 32f, pulse);
+            _continueBar.rectTransform.sizeDelta = new Vector2(d, d);
         }
+
+        _actionIcon.gameObject.SetActive(showAction);
+        if (showAction)
+        {
+            var c = actionColor; c.a = pulse; _actionIcon.color = c;
+        }
+
+        // Skip button: only for conversations the author explicitly marked skippable,
+        // and never on passive dialogue — the player has no other way back into a
+        // tutorial step's dialogue, so skipping it here would strand the step with
+        // no visible instructions and no way to reopen them.
+        _skipButton.gameObject.SetActive(IsPlaying && !_passive && _convo != null && _convo.skippable);
 
         // Advance on click / key (ignored while choices are up — buttons handle it).
         // Skip the very frame a line opened, so the click that triggered this
@@ -208,6 +254,36 @@ public class DialogueRunner : MonoBehaviour
             }
             else Advance();
         }
+    }
+
+    // Plants the light bar right after the last visible character of the body
+    // text, instead of a fixed box corner — so it shows up wherever the player's
+    // eye already is (end of the line they just finished reading) rather than
+    // somewhere they have to go looking for.
+    //
+    // ci.bottomRight is in the body text's OWN local space, and the bar is parented
+    // directly to _bodyText.rectTransform (see BuildBoxText) — so this can drive its
+    // localPosition straight from the character's local coords with no cross-object
+    // space conversion.
+    void PositionContinueBar(float bobY)
+    {
+        var ti = _bodyText.textInfo;
+        int shown = _bodyText.maxVisibleCharacters;
+        if (ti.characterCount == 0 || shown <= 0) return;
+
+        int idx = Mathf.Clamp(shown - 1, 0, ti.characterCount - 1);
+        var ci = ti.characterInfo[idx];
+        // Typed text can end on whitespace/a line break, which TMP marks not-visible
+        // and gives degenerate geometry — walk back to the last real glyph so the bar
+        // never plants itself at a stray (0,0).
+        while (idx > 0 && !ci.isVisible) { idx--; ci = ti.characterInfo[idx]; }
+        if (!ci.isVisible) return;
+
+        // Larger gap + drop than before — the bar itself got bigger, and sitting
+        // right on the baseline crowded the text it was supposed to be a footnote to.
+        const float gapX = 16f, dropY = -20f;
+        var pos = new Vector3(ci.bottomRight.x + gapX, ci.bottomRight.y + dropY + bobY, 0f);
+        _continueBar.rectTransform.localPosition = pos;
     }
 
     void Advance()
@@ -299,7 +375,9 @@ public class DialogueRunner : MonoBehaviour
     void ShowChoices()
     {
         _choiceMode = true;
-        _continue.gameObject.SetActive(false);
+        _continueBar.gameObject.SetActive(false);
+        _actionIcon.gameObject.SetActive(false);
+        _skipButton.gameObject.SetActive(false);   // choosing IS the way forward now — nothing left to skip
         ClearChoices();
 
         Button firstButton = null;
@@ -489,13 +567,54 @@ public class DialogueRunner : MonoBehaviour
         brt.anchorMin = Vector2.zero; brt.anchorMax = Vector2.one;
         brt.offsetMin = new Vector2(TextPadNormal, 28f); brt.offsetMax = new Vector2(-TextPadNormal, -58f);
 
-        // Continue indicator.
-        _continue = NewText("Continue", box, textSize, accentColor, FontStyles.Bold, TextAlignmentOptions.Center);
-        _continue.text = "▼";
-        var crt = _continue.rectTransform;
-        crt.anchorMin = new Vector2(1f, 0f); crt.anchorMax = new Vector2(1f, 0f); crt.pivot = new Vector2(1f, 0f);
-        crt.sizeDelta = new Vector2(48f, 48f); crt.anchoredPosition = new Vector2(-24f, 18f);
-        _continue.gameObject.SetActive(false);
+        // Continue light — a ball, not a bar. Parented to the BODY TEXT itself (not
+        // a fixed box corner), so PositionContinueBar() can plant it right after
+        // wherever the last visible character actually lands — bottom-right of the
+        // text, not a random corner of the box the player might not be looking at.
+        //
+        // UIRoundedRect.Get(radius) generates its texture at size = radius*2+4, so
+        // whatever radius you pass, the sprite is ALREADY a near-perfect circle (a
+        // 2px flat inset is negligible at this scale). Type.Simple (not Sliced)
+        // scales it as one whole image instead of 9-slicing borders that would
+        // otherwise get squished/uneven as the ball shrinks on the down-pulse.
+        _continueBar = NewImage("ContinueBar", _bodyText.rectTransform, accentColor, false);
+        _continueBar.sprite = UIRoundedRect.Get(16);
+        _continueBar.type   = Image.Type.Simple;
+        var crt = _continueBar.rectTransform;
+        crt.anchorMin = crt.anchorMax = Vector2.zero; crt.pivot = new Vector2(0f, 0.5f);
+        crt.sizeDelta = new Vector2(24f, 24f);
+        _continueBar.gameObject.SetActive(false);
+
+        // Action icon — same corner, mutually exclusive with the bar. Only shown on
+        // PASSIVE lines (tutorial steps waiting on a real action, not a click), so
+        // the player isn't left staring at a box with no indicator at all.
+        _actionIcon = NewText("ActionIcon", box, textSize * 1.6f, actionColor, FontStyles.Bold, TextAlignmentOptions.Center);
+        _actionIcon.text = actionGlyph;
+        var art = _actionIcon.rectTransform;
+        art.anchorMin = new Vector2(1f, 0f); art.anchorMax = new Vector2(1f, 0f); art.pivot = new Vector2(1f, 0f);
+        art.sizeDelta = new Vector2(68f, 68f); art.anchoredPosition = new Vector2(-24f, -14f);
+        _actionIcon.gameObject.SetActive(false);
+
+        // Skip — bare text, no button chrome. Opposite corner from the continue/
+        // action indicators so it never fights them for attention. Only ever shown
+        // for conversations authored skippable=true (see DialogueConversation) and
+        // never on passive dialogue. The hit target (skipImg) is fully transparent —
+        // it exists only so Button has something to raycast against, not to draw a
+        // frame around the text.
+        var skipRt = NewRect("Skip", box);
+        skipRt.anchorMin = new Vector2(1f, 0f); skipRt.anchorMax = new Vector2(1f, 0f); skipRt.pivot = new Vector2(1f, 0f);
+        skipRt.sizeDelta = new Vector2(152f, 64f); skipRt.anchoredPosition = new Vector2(-24f, 18f);
+        var skipImg = skipRt.gameObject.AddComponent<Image>();
+        skipImg.color = new Color(0f, 0f, 0f, 0f);
+        _skipButton = skipRt.gameObject.AddComponent<Button>();
+        _skipButton.targetGraphic = skipImg;
+        _skipButton.onClick.AddListener(Stop);   // Stop() = Finish(_convo): ends the WHOLE conversation, not just this line
+
+        var skipLabel = NewText("Label", skipRt, textSize * 1.1f, Color.black, FontStyles.Bold, TextAlignmentOptions.Center);
+        skipLabel.text = "skip>>";
+        StretchInto(skipLabel.rectTransform, 4f, 0f);
+
+        _skipButton.gameObject.SetActive(false);
     }
 
     void BuildChoices(RectTransform root)

@@ -2,7 +2,8 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
-// Per-level "Enlightenment Shrine" mechanic (LevelDefinition.shrineEnabled).
+// Per-level "Enlightenment Shrine" mechanic (enabled by adding a
+// ShrineMechanicConfig to LevelDefinition.mechanics).
 //
 // At the start of each round a shrine SPROUTS on a free cell touching the
 // existing build. It's immovable furniture: it occupies a grid cell but is NOT
@@ -34,7 +35,8 @@ public class ShrineController : MonoBehaviour
 
     static void TrySpawn()
     {
-        if (RunConfig.Mode != GameMode.Level || RunConfig.Level == null || !RunConfig.Level.shrineEnabled) return;
+        if (RunConfig.Mode != GameMode.Level || RunConfig.Level == null) return;
+        if (RunConfig.Level.GetMechanic<ShrineMechanicConfig>() == null) return;   // mechanic not added to this level
         if (PlacementController.Instance == null) return;   // gameplay scene only
         if (FindFirstObjectByType<ShrineController>() != null) return;
         new GameObject("ShrineController").AddComponent<ShrineController>();
@@ -48,6 +50,7 @@ public class ShrineController : MonoBehaviour
     class Shrine { public GameObject go; public Vector3Int cell; }
 
     LevelDefinition _lv;
+    ShrineMechanicConfig _cfg;
     readonly List<Shrine>        _shrines     = new();
     readonly HashSet<Vector3Int> _shrineCells = new();
     Xoshiro256StarStar _rng;
@@ -56,8 +59,9 @@ public class ShrineController : MonoBehaviour
 
     void Start()
     {
-        _lv = RunConfig.Level;
-        if (_lv == null || !_lv.shrineEnabled) { Destroy(gameObject); return; }
+        _lv  = RunConfig.Level;
+        _cfg = _lv != null ? _lv.GetMechanic<ShrineMechanicConfig>() : null;
+        if (_cfg == null) { Destroy(gameObject); return; }
 
         GameFlowManager.OnTurnStarted += HandleTurnStarted;
 
@@ -76,13 +80,13 @@ public class ShrineController : MonoBehaviour
 
     void HandleTurnStarted()
     {
-        // Same 1-based "which wave is this" counter as chaosBlockStartWave / requiredWave.
+        // Same 1-based "which wave is this" counter as ChaosBlockMechanicConfig.startWave / requiredWave.
         var gfm = GameFlowManager.Instance;
-        if (gfm != null && gfm.UpcomingWaveNumber < Mathf.Max(1, _lv.shrineStartWave)) return;
+        if (gfm != null && gfm.UpcomingWaveNumber < Mathf.Max(1, _cfg.startWave)) return;
 
         PruneDead();
         PruneUnsupported();
-        if (_shrines.Count >= Mathf.Max(1, _lv.shrineMaxSimultaneous)) return;
+        if (_shrines.Count >= Mathf.Max(1, _cfg.maxSimultaneous)) return;
         SpawnOne();
     }
 
@@ -201,8 +205,8 @@ public class ShrineController : MonoBehaviour
         var grid = GridSystem.instance;
         if (grid == null) return;
 
-        float frMult  = 1f + Mathf.Max(0f, _lv.shrineFireRateBonus);
-        float dmgMult = 1f + Mathf.Max(0f, _lv.shrineDamageBonus);
+        float frMult  = 1f + Mathf.Max(0f, _cfg.fireRateBonus);
+        float dmgMult = 1f + Mathf.Max(0f, _cfg.damageBonus);
 
         foreach (var ins in grid.GetAllInstances())
         {
