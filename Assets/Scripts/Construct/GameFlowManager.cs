@@ -275,17 +275,48 @@ public class GameFlowManager : MonoBehaviour
         int lives    = PlayerHealth.Instance != null ? PlayerHealth.Instance.CurrentLives : 0;
         int maxLives = PlayerHealth.Instance != null ? PlayerHealth.Instance.maxLives     : 0;
         bool objMet  = LevelObjectivesTracker.AllRequiredSatisfied;
-        int stars    = RunStats.ComputeStars(objMet, lives, maxLives);
+        var (objSatisfied, objTotal) = LevelObjectivesTracker.Tracking ? LevelObjectivesTracker.Progress : (0, 0);
+        int stars    = RunStats.ComputeStars(objSatisfied, objTotal, lives, maxLives);
         int score    = RunStats.ComputeScore(wavesReached, lives, stars);
 
         int prevBest = RunConfig.Level != null ? SaveSystem.Profile.GetRecord(RunConfig.Level.levelId)?.bestScore ?? 0 : 0;
         bool isNewBest = score > prevBest;
+
+        // Keepsake: the exact board this clear was won with, plus which synergy
+        // theme was flying highest at the buzzer. Written into the record BEFORE
+        // RecordClear so its own Save() call at the end persists both in the same
+        // write. Overwritten on every clear (not just the first) so it always
+        // reflects your latest winning build, not a stale first attempt.
+        if (RunConfig.Level != null)
+        {
+            var rec = SaveSystem.Profile.GetOrCreateRecord(RunConfig.Level.levelId);
+            rec.buildSnapshot       = SnapshotManager.Capture();
+            rec.clearSynergyColor   = DominantActiveSynergyColor();
+        }
 
         bool firstClear = SaveSystem.RecordClear(RunConfig.Level, wavesReached, score);
         if (firstClear && RunConfig.Level != null && RunConfig.Level.rewardConversation != null)
             RunConfig.PendingRewardConversation = RunConfig.Level.rewardConversation;
 
         LevelClearScreen.Show(RunConfig.Level, wavesReached, lives, maxLives, stars, score, prevBest, isNewBest, objMet, ReturnToMap);
+    }
+
+    // Highest-tier synergy still active the moment the level was cleared. None if
+    // nothing was active — LevelMapController treats that the same as Universal
+    // (no specific theme to celebrate), picking an arbitrary accent instead.
+    static BlockColor DominantActiveSynergyColor()
+    {
+        var actives = SynergyEvaluator.Instance?.Actives;
+        if (actives == null) return BlockColor.None;
+
+        var best = BlockColor.None;
+        int bestTier = -1;
+        foreach (var a in actives)
+        {
+            if (a?.rule == null || a.rule.color == BlockColor.Universal) continue;
+            if (a.tier > bestTier) { bestTier = a.tier; best = a.rule.color; }
+        }
+        return best;
     }
 
     public void ReturnToMap()

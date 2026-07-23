@@ -35,6 +35,52 @@ public static class UIRoundedRect
         return tex;
     }
 
+    // Hollow ring version of Get() — only a `thickness`-px band at the edge is
+    // opaque, centre stays transparent. Same 9-slicing, for a hover-frame border.
+    static readonly Dictionary<(int, int), Sprite> _frameCache = new();
+
+    public static Sprite GetFrame(int radius = 12, int thickness = 2)
+    {
+        radius    = Mathf.Max(2, radius);
+        thickness = Mathf.Clamp(thickness, 1, radius);
+        var key = (radius, thickness);
+        if (_frameCache.TryGetValue(key, out var cached) && cached != null) return cached;
+
+        int size = radius * 2 + 4;
+        var tex = new Texture2D(size, size, TextureFormat.ARGB32, false)
+        {
+            wrapMode   = TextureWrapMode.Clamp,
+            filterMode = FilterMode.Bilinear,
+            hideFlags  = HideFlags.HideAndDontSave,
+        };
+
+        var px = new Color32[size * size];
+        float half  = size * 0.5f;
+        float inset = half - radius;
+        for (int y = 0; y < size; y++)
+            for (int x = 0; x < size; x++)
+            {
+                float qx = Mathf.Abs(x + 0.5f - half) - inset;
+                float qy = Mathf.Abs(y + 0.5f - half) - inset;
+                float dx = Mathf.Max(qx, 0f), dy = Mathf.Max(qy, 0f);
+                float d  = Mathf.Sqrt(dx * dx + dy * dy) - radius;   // rounded-rect SDF (<0 inside)
+
+                float outerA = Mathf.Clamp01(0.5f - d);              // 1 inside the outer edge
+                float innerA = Mathf.Clamp01(0.5f - (d + thickness)); // 1 inside the edge pulled `thickness` further in
+                float ringA  = Mathf.Clamp01(outerA - innerA);        // ring = outer minus inner
+                px[y * size + x] = new Color32(255, 255, 255, (byte)(ringA * 255f));
+            }
+        tex.SetPixels32(px);
+        tex.Apply();
+
+        float b = radius + 1;
+        var sprite = Sprite.Create(tex, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f),
+                                   100f, 0, SpriteMeshType.FullRect, new Vector4(b, b, b, b));
+        sprite.hideFlags = HideFlags.HideAndDontSave;
+        _frameCache[key] = sprite;
+        return sprite;
+    }
+
     public static Sprite Get(int radius = 24)
     {
         radius = Mathf.Max(2, radius);

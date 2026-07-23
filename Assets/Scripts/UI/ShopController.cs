@@ -201,7 +201,16 @@ public class ShopController : MonoBehaviour
         public Vector3         basePos;       // anchor drift oscillates around this
         public Vector3         driftPhase;    // independent X/Y/Z phase offsets
         public Vector3         tumblePhase;
+        public Color           baseColor;     // tint at spawn — restored when not tutorial-highlighted
+        public Renderer[]      renderers;     // cached at spawn so the highlight pass doesn't re-walk children
     }
+
+    [Header("Tutorial purchase highlight")]
+    public Color tutorialHighlightColor = new Color(1f, 0.85f, 0.3f);
+    public float tutorialHighlightPulseSpeed = 3f;
+    [Range(0f, 1f)] public float tutorialDimAmount = 0.55f;
+    public float tutorialHighlightScale = 1.15f;
+    public float tutorialDimScale = 0.85f;
 
     readonly List<ShopItem> _items = new();
     ShopItem _hovered;
@@ -709,6 +718,8 @@ public class ShopController : MonoBehaviour
             basePos     = pos,
             driftPhase  = new Vector3(Random.Range(0f, TAU), Random.Range(0f, TAU), Random.Range(0f, TAU)),
             tumblePhase = new Vector3(Random.Range(0f, TAU), Random.Range(0f, TAU), Random.Range(0f, TAU)),
+            baseColor   = isTurret ? TurretTypes.DisplayColor(data.blockType) : col,
+            renderers   = root.GetComponentsInChildren<Renderer>(),
         });
     }
 
@@ -869,9 +880,22 @@ public class ShopController : MonoBehaviour
     {
         float t = Time.time;
         float lerpK = 1f - Mathf.Exp(-hoverLerpSpeed * Time.deltaTime);
+        bool purchaseGateActive = TutorialDirector.IsPurchaseStepActive;
         foreach (var item in _items)
         {
             if (item.root == null) continue;
+
+            // Tutorial highlight: glow the item the current step is asking for, dim the rest.
+            bool isTarget = purchaseGateActive && TutorialDirector.IsPurchaseTarget(item.sb.data);
+            Color tint = item.baseColor;
+            if (purchaseGateActive)
+            {
+                tint = isTarget
+                    ? Color.Lerp(item.baseColor, tutorialHighlightColor, 0.5f + 0.5f * Mathf.Sin(t * tutorialHighlightPulseSpeed))
+                    : Color.Lerp(item.baseColor, Color.black, tutorialDimAmount);
+            }
+            if (item.renderers != null)
+                foreach (var r in item.renderers) if (r != null) MpbColor.Set(r, tint);
 
             // Drift: bounded sin around basePos so items never escape their slot.
             Vector3 drift = new Vector3(
@@ -889,7 +913,9 @@ public class ShopController : MonoBehaviour
             item.root.transform.rotation = Quaternion.Euler(euler);
 
             // Hover feedback: pop up to hoverScale, ease back when not hovered.
+            // Tutorial gate stacks its own emphasis/dim scale on top.
             float target = (item == _hovered) ? hoverScale : 1f;
+            if (purchaseGateActive) target *= isTarget ? tutorialHighlightScale : tutorialDimScale;
             float cur    = item.root.transform.localScale.x;
             float next   = Mathf.Lerp(cur, target, lerpK);
             item.root.transform.localScale = Vector3.one * next;

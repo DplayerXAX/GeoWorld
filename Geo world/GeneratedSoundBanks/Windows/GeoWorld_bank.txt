@@ -64,7 +64,7 @@ In Memory Audio	ID	Name	Audio source file		Wwise Object Path	Notes	Data Size
 	574625576	select	.cache\9D\{9D399CF8-EE15-22F5-5126-1EAACF32A447}.wem		\Containers\Default Work Unit\select\select		216672
 	633751974	New Music Track_06	.cache\7D\{7D33FDDD-17CE-8BDA-C0FB-75D5FB7BA202}.wem		\Containers\Default Work Unit\Bdim\New Music Track_06		352896
 	799708269	New Music Track_06	.cache\19\{1911F0A7-4D8E-A328-97B7-A96A592875B7}.wem		\Containers\Default Work Unit\G\New Music Track_06		352896
-	910080498	geo fight	.cache\04\{042A27C0-CF47-4AF7-6EBB-00183D190984}.wem		\Containers\Default Work Unit\Music_BGM\Battle_BGM\geo fight\geo fight		19756896
+	910080498	geo fight	.cache\93\{9315BEBF-32E3-5C09-B5B1-CF8354B77B71}.wem		\Containers\Default Work Unit\Music_BGM\Battle_BGM\geo fight\geo fight		19756896
 	969998505	Piecing together	.cache\07\{07380261-5851-21B4-FB73-0AA3725DE03D}.wem		\Containers\Default Work Unit\Music_BGM\Piece_BGM\Piecing together\Piecing together		7091376
 	1062488858	7	.cache\6A\{6AA23FAE-6D57-D56F-8BE8-4188A088EA5D}.wem		\Containers\Default Work Unit\SC_Note\7		352896
 	1072811695	New Music Track_04	.cache\3E\{3E50F188-05FB-4E0D-B3A8-1EB2FC689910}.wem		\Containers\Default Work Unit\Dm\New Music Track_04		352896

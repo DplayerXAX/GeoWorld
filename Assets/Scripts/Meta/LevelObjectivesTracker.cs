@@ -31,6 +31,25 @@ public class LevelObjectivesTracker : MonoBehaviour
         }
     }
 
+    // Satisfied/total count across ALL objectives (including optional/bonus ones) —
+    // used to scale the level-clear star rating with how much of the level's
+    // objective list was actually completed, not just a binary pass/fail.
+    public static (int satisfied, int total) Progress
+    {
+        get
+        {
+            if (_inst == null || _inst._lv.objectives == null) return (0, 0);
+            int total = 0, satisfied = 0;
+            foreach (var o in _inst._lv.objectives)
+            {
+                if (o == null) continue;
+                total++;
+                if (_inst.Eval(o, out _, out _) == State.Done) satisfied++;
+            }
+            return (satisfied, total);
+        }
+    }
+
     [Tooltip("Optional TMP font for the objectives text (leave null for TMP default).")]
     public TMP_FontAsset font;
 

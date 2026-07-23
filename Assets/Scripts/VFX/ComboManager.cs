@@ -13,12 +13,16 @@ public static class ComboManager
 
     // Seconds since the last kill before the combo resets to 1.
     const float ComboWindow   = 2.2f;
-    // Kept very low — this drives BackgroundReactor's skybox snap-back, which blends
-    // between quite different calm/combat colour palettes, so even a small `cm` dip
-    // reads as a big colour jump. Small numbers here == a subtle twitch, not violent.
-    const float BaseReact     = 0.02f;
-    const float ReactPerStack = 0.006f;
-    const float MaxReact      = 0.1f;
+    // Kept VERY low — this drives BackgroundReactor's skybox snap-back, which
+    // subtracts from _CombatMode and so momentarily relaxes the ManifoldSkybox IFS
+    // fold (the crystalline "space fractures" warp) as well as the calm/combat
+    // colour blend. Because the fold is geometric, even a small `cm` dip visibly
+    // twists the whole sky — which read as the sky lurching on every kill. Dropped
+    // 5× from the previous 0.02/0.006/0.1 so a kill is a barely-there shimmer
+    // instead of a distortion; raise gradually if it now reads as no feedback.
+    const float BaseReact     = 0.004f;
+    const float ReactPerStack = 0.0012f;
+    const float MaxReact      = 0.02f;
 
     static float _lastKillTime = -999f;
 

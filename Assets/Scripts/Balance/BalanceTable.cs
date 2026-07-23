@@ -107,7 +107,9 @@ public class BalanceTable : ScriptableObject
     [Header("Pricing — Type multipliers")]
     public float liftTypeMult   = 1.4f;
     public float shadowTypeMult = 0.85f;
-    // Other block types use 1.0 implicitly.
+    [Tooltip("Basic turret price multiplier. A 1-cell turret is cells(1) × cellBasePrice(10) × this, so 0.8 ≈ 8 before the per-shop fluctuation roll — i.e. 2 cheaper than the flat 10 it used to be.")]
+    public float turretTypeMult = 0.8f;
+    // Other block types (Slow / AOE turrets included) use 1.0 implicitly.
 
     // ═══════════════════════════════════════════════════════════════════════
     // 2. PLAYER
@@ -245,7 +247,7 @@ public class BalanceTable : ScriptableObject
     [Serializable]
     public class TurretRecord
     {
-        [Tooltip("Cost in turret currency to deploy one.")]
+        [Tooltip("UNUSED — shop price does NOT come from here. Every block (turrets included) is priced by ComputePrice: cells × cellBasePrice × rarity × type × round × fluctuation. To change what a turret costs, edit the Type multipliers above (turretTypeMult / slowTurretTypeMult / aoeTurretTypeMult), not this field.")]
         [Min(1)] public int cost = 3;
 
         [Tooltip("Damage per shot.")]
@@ -340,6 +342,7 @@ public class BalanceTable : ScriptableObject
     {
         BlockType.Lift   => liftTypeMult,
         BlockType.Shadow => shadowTypeMult,
+        BlockType.Turret => turretTypeMult,
         _                => 1f,
     };
 

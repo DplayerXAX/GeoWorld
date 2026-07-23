@@ -29,6 +29,7 @@ MonoBehaviour:
   rareRarityMult: 1.6
   liftTypeMult: 1
   shadowTypeMult: 1
+  turretTypeMult: 0.8
   startingLives: 10
   enemies:
   - name: Fast

@@ -71,6 +71,18 @@ MonoBehaviour:
       rotation: {x: 0, y: 0, z: 0, w: 1}
       synergyColor: 0
     - cells:
+      - {x: 3, y: 0, z: 6}
+      - {x: 3, y: 0, z: 5}
+      - {x: 4, y: 0, z: 6}
+      - {x: 3, y: 1, z: 6}
+      color: {r: 0.55, g: 0.55, b: 0.55, a: 1}
+      blockTypeName: Lift
+      levelId:
+      isStart: 0
+      blockAssetName: corner
+      rotation: {x: 0, y: 0, z: 0, w: 1}
+      synergyColor: 0
+    - cells:
       - {x: 1, y: 3, z: 4}
       color: {r: 0.2, g: 0.75, b: 0.3, a: 1}
       blockTypeName: Home

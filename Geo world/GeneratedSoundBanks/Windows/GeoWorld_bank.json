@@ -10,7 +10,7 @@
     "Type": "User",
     "GUID": "{FBAC0406-FA36-4CC0-8121-80F7B6376C7E}",
     "Language": "SFX",
-    "Hash": "{B732E0D0-7F54-E108-E337-03556535A7C3}",
+    "Hash": "{7830D59E-CE64-68A2-6741-AC6AFC82024B}",
     "ObjectPath": "\\SoundBanks\\Default Work Unit\\GeoWorld_bank",
     "ShortName": "GeoWorld_bank",
     "Path": "GeoWorld_bank.bnk",
@@ -197,7 +197,7 @@
       "Streaming": "false",
       "Location": "Memory",
       "ShortName": "geo fight.wav",
-      "CachePath": "04/{042A27C0-CF47-4AF7-6EBB-00183D190984}.wem"
+      "CachePath": "93/{9315BEBF-32E3-5C09-B5B1-CF8354B77B71}.wem"
      },
      {
       "Id": "969998505",
@@ -708,6 +708,6 @@
     ]
    }
   ],
-  "FileHash": "{AE896002-EBBF-1E7E-29D9-19D747A58B53}"
+  "FileHash": "{864DE678-8A92-EB4B-7CE8-369EFEB4187D}"
  }
 }

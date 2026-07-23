@@ -317,6 +317,8 @@ MonoBehaviour:
   autoScaleCanvas: 1
   balance: {fileID: 0}
   thumbSize: 46
+  cubePrefab: {fileID: 1003193531}
+  buildThumbHeight: 210
 --- !u!225 &303145626
 CanvasGroup:
   m_ObjectHideFlags: 0
@@ -1247,6 +1249,7 @@ MonoBehaviour:
     WwiseObjectReference: {fileID: 11400000, guid: 52054f8a490aa594fbe07f471ed6fe84, type: 2}
   infoPanel: {fileID: 303145625}
   firstVisitConversation: {fileID: 11400000, guid: cc58ee9980f0af044af5f14956b7833c, type: 2}
+  harmonyVinePrefab: {fileID: 5386003392207672047, guid: 835a92ac1a661154b973e5d4184d2def, type: 3}
   gameplayScene: gamePlay
   titleScene: Title
   pawnSpeed: 6
@@ -1269,17 +1272,10 @@ MonoBehaviour:
   ghostInvalidColor: {r: 1, g: 0.3, b: 0.3, a: 0.55}
   playerBuiltColor: {r: 0.55, g: 0.85, b: 0.95, a: 1}
   pawnScale: 1.1
-  resetSaveOnStart: 1
+  resetSaveOnStart: 0
   autoFill: 0
   autoReward: 0
   editorAutoFillBlocks:
-  - cells:
-    - {x: 3, y: 0, z: 6}
-    - {x: 3, y: 0, z: 5}
-    - {x: 4, y: 0, z: 6}
-    - {x: 3, y: 1, z: 6}
-    blockAssetName: corner
-    rotation: {x: 0, y: 0, z: 0, w: 1}
   - cells:
     - {x: 3, y: 2, z: 9}
     - {x: 3, y: 2, z: 8}
@@ -1337,7 +1333,7 @@ Transform:
   m_GameObject: {fileID: 1293787487}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 1.24776, y: -0, z: 4.20732}
+  m_LocalPosition: {x: 1.24776, y: -0.1, z: 4.17}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []

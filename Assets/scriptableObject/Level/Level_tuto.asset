@@ -18,31 +18,31 @@ MonoBehaviour:
   runSeed: 25
   blocksPerTurn: 5
   turretsPerTurn: 3
+  synergyEnabled: 0
   allowedColors: 01000000
+  startingShop: []
   waves: []
-  wavesToClear: 5
+  wavesToClear: 3
   objectives:
   - type: 1
-    target: 3
-    description: 
+    target: 2
+    description:
     optional: 0
   - type: 3
     target: 10
     description: 
-    optional: 0
+    optional: 1
   - type: 7
     target: 15
     description: 
-    optional: 0
-  requireAllObjectives: 1
-  clearOnObjectivesComplete: 0
+    optional: 1
+  requireAllObjectives: 0
+  clearOnObjectivesComplete: 1
   unlockedByDefault: 1
   unlocks: []
   techReward: 1
-  mapBlockRewards:
-  - {fileID: 11400000, guid: 820a88ddf0392914889d66c41c3658a0, type: 2}
-  - {fileID: 11400000, guid: 7d867ce72998a0f4689850dd5dd2258e, type: 2}
-  rewardConversation: {fileID: 11400000, guid: d7f3117c472edc0489f5ccda3a1f1e1a, type: 2}
+  mapBlockRewards: []
+  rewardConversation: {fileID: 0}
   isTutorial: 1
   fixedEndpoints: 1
   startCell: {x: 1, y: 0, z: 0}
@@ -247,7 +247,7 @@ MonoBehaviour:
     unlocksOps: 
     cameraFocus: 0
     focusZoom: 0
-    hint: Allow us to witness your power. Place a turret upon the battlefield.
+    hint: Allow us to witness your power. Buy a turret from the shop.
     conversation: {fileID: 0}
     speaker: {fileID: 11400000, guid: 80993e3c86b4337429c2d6273c8eedc2, type: 2}
     speakerSlot: 1
@@ -264,10 +264,52 @@ MonoBehaviour:
     freeOperations: 0
     hideInCombat: 0
     requiredWave: 0
-    unlocksOps: 
+    unlocksOps:
     cameraFocus: 0
     focusZoom: 0
-    hint: Once deployed, turrets will strike down any enemy within range.
+    hint: Set it down on the marked spot, guarding where the enemy first steps onto
+      the path.
+    conversation: {fileID: 0}
+    speaker: {fileID: 11400000, guid: 80993e3c86b4337429c2d6273c8eedc2, type: 2}
+    speakerSlot: 1
+    speakerPortrait: Default
+  - kind: 8
+    block: {fileID: 0}
+    origin: {x: 0, y: 0, z: 1}
+    rotation90: {x: 1, y: 0, z: 0}
+    cellsOverride: []
+    waitSeconds: 2
+    count: 1
+    inputKey: 32
+    pathLength: 15
+    freeOperations: 1
+    hideInCombat: 0
+    requiredWave: 0
+    unlocksOps:
+    cameraFocus: 0
+    focusZoom: 0
+    hint: One tower alone cannot hold this line. Buy a second turret.
+    conversation: {fileID: 0}
+    speaker: {fileID: 11400000, guid: 80993e3c86b4337429c2d6273c8eedc2, type: 2}
+    speakerSlot: 1
+    speakerPortrait: Default
+  - kind: 0
+    block: {fileID: 11400000, guid: 3bcfeb02226d44d49a6df82d6c36a1a7, type: 2}
+    origin: {x: 4, y: 1, z: 2}
+    rotation90: {x: 0, y: 0, z: 0}
+    cellsOverride: []
+    waitSeconds: 2
+    count: 1
+    inputKey: 32
+    pathLength: 15
+    freeOperations: 0
+    hideInCombat: 0
+    requiredWave: 0
+    unlocksOps:
+    cameraFocus: 0
+    focusZoom: 0
+    hint: Place this one at the far end, so the two of them cover the whole road to
+      the Core.
     conversation: {fileID: 0}
     speaker: {fileID: 11400000, guid: 80993e3c86b4337429c2d6273c8eedc2, type: 2}
     speakerSlot: 1
@@ -397,3 +439,7 @@ MonoBehaviour:
     speakerSlot: 1
     speakerPortrait: Default
   startingLayout: {fileID: 0}
+  overrideEndpointDistance: 0
+  endpointMinDistance: 5
+  endpointMaxDistance: 10
+  mechanics: []

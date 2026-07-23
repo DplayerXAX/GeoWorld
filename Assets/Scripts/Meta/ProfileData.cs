@@ -93,6 +93,20 @@ public class LevelRecord
     public bool   cleared;
     public int    bestWave;    // furthest wave reached across attempts
     public int    bestScore;   // highest RunStats.ComputeScore across attempts
+
+    // Full board state of the run that most recently cleared this level — the
+    // same GridSnapshot format the dev save/load tool already uses (see
+    // SnapshotManager), reused as the player-facing "keepsake" instead of a
+    // baked screenshot: cheap to store, and LevelBuildThumbnail can re-render it
+    // (or a future full 3D viewer could replay it) any time art or lighting
+    // changes, instead of a stale flat image. Overwritten on every clear, not
+    // just the first, so it always reflects your latest winning build.
+    public GridSnapshot buildSnapshot;
+
+    // Which synergy theme was active (highest tier) at the moment this level was
+    // last cleared — None if nothing was active. Drives the celebratory ring on
+    // this level's LevelSelect badge (see LevelMapController.MapLevelMarker).
+    public BlockColor clearSynergyColor = BlockColor.None;
 }
 
 [Serializable]

@@ -20,24 +20,28 @@ MonoBehaviour:
     text: Clearing that level earned you a real block for this map — one you can place to push the road further.
     speakerOverride:
     eventId:
+    actionGateId:
   - character: {fileID: 11400000, guid: 80993e3c86b4337429c2d6273c8eedc2, type: 2}
     portrait: Default
     slot: 1
     text: You can edit it just like a level layout. Press F to open your blocks and start placing.
     speakerOverride:
     eventId:
+    actionGateId: ls.openbuild
   - character: {fileID: 11400000, guid: 80993e3c86b4337429c2d6273c8eedc2, type: 2}
     portrait: Default
     slot: 1
     text: Pick up the block you just earned and set it down here, joining the two broken paths.
     speakerOverride:
     eventId:
+    actionGateId: ls.place
   - character: {fileID: 11400000, guid: 80993e3c86b4337429c2d6273c8eedc2, type: 2}
     portrait: Default
     slot: 1
     text: There — connected. Watch how another level lights up now that the road reaches it.
     speakerOverride:
     eventId:
+    actionGateId:
   choices: []
   autoNext: {fileID: 0}
   skippable: 1

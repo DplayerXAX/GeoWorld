@@ -240,6 +240,9 @@ public partial class PlacementController : MonoBehaviour
     // Chaos-block selection -> read-only panel showing its per-round drain.
     ChaosBlockUnit _selectedChaos;
 
+    // Shrine selection -> read-only panel showing its aura buff. Same pattern.
+    ShrineUnit _selectedShrine;
+
     [Header("R key: tap = refresh shop, hold = restart level")]
     [Tooltip("Release before this and R counts as a TAP (refresh shop). Also how long the screen stays clear before the white wash starts, so a tap never flashes.")]
     public float restartTapMaxSeconds = 0.25f;
@@ -834,6 +837,7 @@ public partial class PlacementController : MonoBehaviour
             selectedInstance  = null;
             _selectedEndpoint = null;
             _selectedChaos    = null;
+            _selectedShrine   = null;
             UpdateHighlight(null);
             _lastClickTarget = null;
             if (WavePreview.Active) WavePreview.Exit();
@@ -847,11 +851,25 @@ public partial class PlacementController : MonoBehaviour
             selectedInstance    = null;
             activePhysicsObject = null;
             _selectedEndpoint   = null;
+            _selectedShrine     = null;
             _selectedChaos      = chaos;
             UpdateHighlight(chaos.gameObject);
             return;
         }
         _selectedChaos = null;
+
+        // --- Shrine: read-only panel explaining the aura buff it grants ---
+        var shrine = hit.transform.GetComponentInParent<ShrineUnit>();
+        if (shrine != null)
+        {
+            selectedInstance    = null;
+            activePhysicsObject = null;
+            _selectedEndpoint   = null;
+            _selectedShrine     = shrine;
+            UpdateHighlight(shrine.gameObject);
+            return;
+        }
+        _selectedShrine = null;
 
         // --- Tray token: single click immediately grab and enter Edit ---
         var sb = hit.transform.GetComponentInParent<SelectableBlock>();
@@ -1147,7 +1165,7 @@ public partial class PlacementController : MonoBehaviour
             ShowPlacementPopup("There's still turret on this block, try move it first");
             return;
         }
-        if (!TutorialDirector.CanSell()) return;   // tutorial gate
+        if (!TutorialDirector.CanSell()) { ShowPlacementPopup("Sell banned during tutorial!"); return; }   // tutorial gate
 
         int refund = ComputeSellRefund(ins);
         Vector3 soldPos = ins.visualObject != null ? ins.visualObject.transform.position : transform.position;
@@ -1694,6 +1712,12 @@ public partial class PlacementController : MonoBehaviour
 
     void TryUndo()
     {
+        if (!TutorialDirector.CanUndo())
+        {
+            Debug.Log("[Undo] Locked during the tutorial's first round.");
+            return;
+        }
+
         // No history.
         if (_undoStack.Count == 0)
         {
