@@ -35,10 +35,39 @@ public class TutorialDirector : MonoBehaviour
     // disables operations before their step and blocks wrong ones (e.g. wrong block).
     // A step flagged freeOperations lifts the gating. No tutorial → everything allowed.
     public static bool CanPurchase(BlockData d) => _active == null || _active.AllowOp(TutorialStepKind.Purchase, d);
-    public static bool CanSell()    => _active == null || _active.AllowOp(TutorialStepKind.Sell,    null);
+    public static bool CanSell()    => (_active == null || _active.AllowOp(TutorialStepKind.Sell, null)) && !IsFirstRoundLocked;
     public static bool CanRefresh() => _active == null || _active.AllowOp(TutorialStepKind.Refresh, null);
     public static bool CanUpgrade() => _active == null || _active.AllowOp(TutorialStepKind.Upgrade, null);
     public static bool CanRun()     => _active == null || _active.AllowOp(TutorialStepKind.Run,     null);
+    // Undo isn't a taught step — it's just locked outright during the tutorial's first
+    // round so players can't unwind the guided placements before they've cleared a wave.
+    public static bool CanUndo()    => !IsFirstRoundLocked;
+
+    static bool IsFirstRoundLocked =>
+        _active != null && GameFlowManager.Instance != null && GameFlowManager.Instance.WavesCleared == 0;
+
+    // Which BlockData the shop should visually highlight right now — the exact item
+    // (or item category, if the step doesn't pin one down) the current Purchase-kind
+    // step is asking for. Used by ShopController to glow the target and dim the rest.
+    public static bool IsPurchaseTarget(BlockData d)
+    {
+        if (_active == null || _active._pendingStepIndex >= 0) return false;
+        var step = _active.Cur;
+        if (step == null || step.freeOperations || !IsPurchaseKind(step.kind)) return false;
+        return PurchaseMatches(step, d);
+    }
+
+    // True while the shop should be dimming everything that isn't the current
+    // purchase target (i.e. a Purchase-kind step is actively being taught).
+    public static bool IsPurchaseStepActive
+    {
+        get
+        {
+            if (_active == null || _active._pendingStepIndex >= 0) return false;
+            var step = _active.Cur;
+            return step != null && !step.freeOperations && IsPurchaseKind(step.kind);
+        }
+    }
 
     bool AllowOp(TutorialStepKind op, BlockData d)
     {
@@ -51,6 +80,14 @@ public class TutorialDirector : MonoBehaviour
 
         var step = Cur;
         if (step == null) return true;            // tutorial finished → no gating
+
+        // Run is gated strictly, regardless of freeOperations — a step marked "free"
+        // to let the player pan the camera or otherwise poke around (e.g. a Purchase
+        // step) shouldn't also leak permission to skip straight to combat. Only the
+        // actual Run-kind step, or an explicit unlocksOps, allows it.
+        if (op == TutorialStepKind.Run)
+            return step.kind == TutorialStepKind.Run || IsOpUnlockedByPastStep(op);
+
         if (step.freeOperations) return true;     // sandbox step
         // Hidden-in-combat steps lift their gating during the wave so the tutorial
         // never blocks combat actions.

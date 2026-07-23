@@ -20,24 +20,28 @@ MonoBehaviour:
     text: Welcome. Let me show you how to get around this map.
     speakerOverride:
     eventId:
+    actionGateId:
   - character: {fileID: 11400000, guid: 80993e3c86b4337429c2d6273c8eedc2, type: 2}
     portrait: Default
     slot: 1
     text: You start out at your home block. Click any block on the map to walk toward it.
     speakerOverride:
     eventId:
+    actionGateId: ls.walk
   - character: {fileID: 11400000, guid: 80993e3c86b4337429c2d6273c8eedc2, type: 2}
     portrait: Default
     slot: 1
     text: Each turning cube marks a level. Once a road connects it back to your home block, it lights up and you can play it.
     speakerOverride:
     eventId:
+    actionGateId:
   - character: {fileID: 11400000, guid: 80993e3c86b4337429c2d6273c8eedc2, type: 2}
     portrait: Default
     slot: 1
     text: Right now only this one is connected. Let's walk over and step inside.
     speakerOverride:
     eventId:
+    actionGateId: ls.enter
   choices: []
   autoNext: {fileID: 0}
   skippable: 1

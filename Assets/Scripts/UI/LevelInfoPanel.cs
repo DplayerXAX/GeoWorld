@@ -1,12 +1,11 @@
 using System;
 using UnityEngine;
 using UnityEngine.UI;
+using UnityEngine.EventSystems;
 using TMPro;
 
-// Level-select detail panel — self-building UGUI + TextMeshPro (no manual wiring).
-// Put this component on an empty GameObject and assign it to LevelMapController.infoPanel.
-// It builds a rounded paper panel on the RIGHT, laid out with TMP: title, status,
-// best wave, description, and an Enter button. LevelMapController calls Show / Hide.
+// Level-select detail panel — self-building UGUI + TMP, no manual wiring.
+// Assign to LevelMapController.infoPanel. LevelMapController calls Show / Hide.
 public class LevelInfoPanel : MonoBehaviour
 {
     [Header("Font (leave null for TMP default)")]
@@ -16,7 +15,7 @@ public class LevelInfoPanel : MonoBehaviour
     public float buttonSize = 22f;
 
     [Header("Use your existing panel (UI Image) — drag its RectTransform here")]
-    [Tooltip("If set, the level info is laid out INTO this existing panel (its art stays; only the text fades). Leave null to auto-build a panel.")]
+    [Tooltip("If set, lays content into this panel instead of building one.")]
     public RectTransform targetPanel;
 
     [Header("Background (auto-build only; null = rounded paper)")]
@@ -31,35 +30,45 @@ public class LevelInfoPanel : MonoBehaviour
     public Color buttonTextColor = new Color(0.086f, 0.086f, 0.086f);          // ink label
 
     [Header("Layout")]
-    [Tooltip("DESIRED panel size at the 1920×1080 reference. x = width, y = height. Shrunk automatically when the window can't fit it — never grown past this.")]
+    [Tooltip("Max panel size at the 1920×1080 reference; shrinks to fit smaller windows.")]
     public Vector2 panelSize   = new Vector2(420f, 700f);
     public float rightMargin   = 60f;
-    [Tooltip("Clear space kept above and below the panel. The panel shrinks rather than run off a short window.")]
     public float verticalMargin = 60f;
-    [Tooltip("Hard ceiling on how much of the window's width the panel may eat, for narrow/portrait aspects.")]
     [Range(0.2f, 0.9f)] public float maxWidthFraction = 0.5f;
-    public Vector2 contentPad  = new Vector2(36f, 40f);   // inner padding (x sides, y top/bottom)
+    public Vector2 contentPad  = new Vector2(36f, 40f);
     public int   cornerRadius  = 26;
     public float fadeSpeed     = 12f;
 
-    [Tooltip("Put the hosting Canvas on ScaleWithScreenSize @1920×1080. Off only if you're driving the scaler yourself.")]
+    [Tooltip("Set the hosting Canvas to ScaleWithScreenSize @1920×1080.")]
     public bool autoScaleCanvas = true;
 
     [Header("Enemy roster")]
-    [Tooltip("Balance asset — only needed to list enemies for levels that have NO authored waves (those roll their roster from BalanceTable.enemies). Levels with authored waves read their roster straight off them.")]
+    [Tooltip("Only needed for levels with no authored waves (rolls from BalanceTable.enemies).")]
     public BalanceTable balance;
-    [Tooltip("Portrait size in the roster rows.")]
     public float thumbSize = 46f;
+    public float tooltipWidth = 260f;
+
+    [Header("Build keepsake")]
+    [Tooltip("Cube prefab for the keepsake thumbnail. Leave null to skip it.")]
+    public GameObject cubePrefab;
+    public float buildThumbHeight = 210f;
 
     CanvasGroup _cg;
     TMP_Text    _title, _status, _best, _desc, _enterLabel;
     RectTransform _roster;
+    Image       _buildThumb;
+    TMP_Text    _buildThumbLabel;
     Button      _enter;
     Action      _onEnter;
     float       _target;
 
-    RectTransform _panel;       // null when laying into a targetPanel you authored
-    RectTransform _canvasRect;  // the space we have to fit inside
+    RectTransform _panel;       // null when using targetPanel
+    RectTransform _canvasRect;
+
+    // Shared tooltip, reused for every mechanic/threat row.
+    RectTransform _tooltipRt;
+    TMP_Text      _tooltipText;
+    RectTransform _tooltipAnchor;   // hovered row; null = hidden
 
     void Awake() { BuildUI(); }
 
@@ -71,16 +80,16 @@ public class LevelInfoPanel : MonoBehaviour
         _cg.alpha = Mathf.Lerp(_cg.alpha, _target, 1f - Mathf.Exp(-fadeSpeed * Time.unscaledDeltaTime));
         bool on = _target > 0.5f && _cg.alpha > 0.5f;
         _cg.interactable = _cg.blocksRaycasts = on;
+
+        // Re-track every frame so panel resize/fade can't strand the tooltip.
+        if (_tooltipAnchor != null)
+        {
+            if (!on) HideTooltip(_tooltipAnchor);
+            else PositionTooltip(_tooltipAnchor);
+        }
     }
 
-    // Fit the panel to whatever the window currently is. Run per-frame rather than
-    // once at Awake because a free-aspect Game view (and a resizable player window)
-    // changes the canvas rect at runtime, and the panel has to follow.
-    //
-    // panelSize is a CEILING, not a fixed size: at the 1920×1080 reference the
-    // clamps are inactive and you get exactly the 420×700 the panel was authored
-    // at, so this changes nothing at the ratio that already looked right. It only
-    // bites when the window genuinely can't accommodate it.
+    // Per-frame so a resizable/free-aspect window keeps the panel fitted.
     void ApplyResponsiveLayout()
     {
         if (_panel == null || _canvasRect == null) return;
@@ -98,8 +107,7 @@ public class LevelInfoPanel : MonoBehaviour
     public void Show(string title, string desc, string status, string best, bool canEnter, Action onEnter)
         => Show(title, desc, status, best, canEnter, onEnter, null);
 
-    // `level` is optional — pass it to list the enemies and special mechanics
-    // waiting inside. Null keeps the plain title/desc panel.
+    // `level` is optional — pass it to show the enemy/mechanic roster.
     public void Show(string title, string desc, string status, string best, bool canEnter,
                      Action onEnter, LevelDefinition level)
     {
@@ -111,18 +119,60 @@ public class LevelInfoPanel : MonoBehaviour
         _enter.interactable = canEnter;
 
         BuildRoster(level);
+        ShowBuildThumb(level);
 
         _onEnter = onEnter;
         _target  = 1f;
     }
 
-    // Rebuilt per selection rather than pooled: the panel shows one level at a
-    // time and switching is a click, not a per-frame cost.
+    // The keepsake board from the last time this level was cleared
+    // (LevelRecord.buildSnapshot — see GameFlowManager.DoLevelClear).
+    void ShowBuildThumb(LevelDefinition lv)
+    {
+        if (_buildThumb == null) return;
+
+        var rec = lv != null ? SaveSystem.Profile.GetRecord(lv.levelId) : null;
+        var snap = rec?.buildSnapshot;
+        if (snap == null || snap.blocks == null || snap.blocks.Count == 0 || cubePrefab == null)
+        {
+            // SetActive, not Image.enabled — a disabled-but-active Image still
+            // reserves its LayoutElement height.
+            _buildThumb.gameObject.SetActive(false);
+            if (_buildThumbLabel != null) _buildThumbLabel.gameObject.SetActive(false);
+            return;
+        }
+
+        _buildThumb.gameObject.SetActive(true);
+        // Keyed on the snapshot timestamp so a re-clear invalidates the old image.
+        var sprite = LevelBuildThumbnail.GetOrCreate($"{lv.levelId}_{snap.timestamp}", snap, cubePrefab);
+        LevelBuildThumbnail.Apply(_buildThumb, sprite);
+
+        if (_buildThumbLabel != null)
+        {
+            _buildThumbLabel.gameObject.SetActive(true);
+            string when = FormatSnapshotDate(snap.timestamp);
+            _buildThumbLabel.text = string.IsNullOrEmpty(when)
+                ? $"LAST CLEAR — your build (wave {rec.bestWave})"
+                : $"LAST CLEAR — your build, {when}";
+        }
+    }
+
+    // GridSnapshot.timestamp is "yyyy-MM-dd_HH-mm-ss" — shown as just the date.
+    static string FormatSnapshotDate(string stamp)
+    {
+        if (string.IsNullOrEmpty(stamp)) return "";
+        int us = stamp.IndexOf('_');
+        return us > 0 ? stamp.Substring(0, us) : "";
+    }
+
+    // Rebuilt per selection. Threats are icon-only in a wrapping grid; mechanics
+    // show only their title — both show full detail on hover instead of inline.
     void BuildRoster(LevelDefinition lv)
     {
         if (_roster == null) return;
 
         for (int i = _roster.childCount - 1; i >= 0; i--) Destroy(_roster.GetChild(i).gameObject);
+        HideTooltip(_tooltipAnchor);   // destroyed rows don't fire OnPointerExit
         if (lv == null) { _roster.gameObject.SetActive(false); return; }
 
         var enemies  = LevelRoster.Enemies(lv, balance);
@@ -134,18 +184,13 @@ public class LevelInfoPanel : MonoBehaviour
         if (enemies.Count > 0)
         {
             AddHeading(_roster, "THREATS");
-            foreach (var e in enemies) AddEnemyRow(_roster, e);
+            BuildThreatGrid(_roster, enemies);
         }
 
         if (specials.Count > 0)
         {
             AddHeading(_roster, "MECHANICS");
-            foreach (var s in specials)
-            {
-                var t = NewText("Special", _roster, bodySize * 0.82f, bodyColor, FontStyles.Normal,
-                                TextAlignmentOptions.TopLeft, true);
-                t.text = "• " + s;
-            }
+            foreach (var m in specials) AddMechanicRow(_roster, m);
         }
     }
 
@@ -157,30 +202,145 @@ public class LevelInfoPanel : MonoBehaviour
         t.gameObject.AddComponent<LayoutElement>().minHeight = bodySize * 1.3f;
     }
 
-    // [portrait] [name + what it does]
-    void AddEnemyRow(RectTransform parent, EnemySurfaceUnit prefab)
+    // Flexible constraint wraps columns to the container width, like flex-wrap.
+    void BuildThreatGrid(RectTransform parent, System.Collections.Generic.List<EnemySurfaceUnit> enemies)
     {
-        var row = NewRect("EnemyRow", parent);
-        var h = row.gameObject.AddComponent<HorizontalLayoutGroup>();
-        h.spacing = 10f;
-        h.childAlignment = TextAnchor.UpperLeft;
-        h.childControlWidth = h.childControlHeight = true;
-        h.childForceExpandWidth = false; h.childForceExpandHeight = false;
-        row.gameObject.AddComponent<LayoutElement>().minHeight = thumbSize;
+        var grid = NewRect("ThreatGrid", parent);
+        var glg = grid.gameObject.AddComponent<GridLayoutGroup>();
+        glg.cellSize   = new Vector2(thumbSize, thumbSize);
+        glg.spacing    = new Vector2(8f, 8f);
+        glg.startAxis  = GridLayoutGroup.Axis.Horizontal;
+        glg.constraint = GridLayoutGroup.Constraint.Flexible;
+        glg.childAlignment = TextAnchor.UpperLeft;
+        grid.gameObject.AddComponent<LayoutElement>();   // lets the VerticalLayoutGroup above measure it
+        grid.gameObject.AddComponent<ContentSizeFitter>().verticalFit = ContentSizeFitter.FitMode.PreferredSize;
 
-        var iconRt = NewRect("Icon", row);
+        foreach (var e in enemies) AddThreatIcon(grid, e);
+    }
+
+    void AddThreatIcon(RectTransform parent, EnemySurfaceUnit prefab)
+    {
+        var cell = NewRect("Threat", parent);
+
+        // Own hit box, separate from the portrait Image (which starts disabled
+        // until EnemyThumbnail's render lands) so hover works immediately.
+        var hit = MakeHoverFrame(cell.gameObject, Mathf.Max(4, (int)(thumbSize * 0.14f)));
+
+        var iconRt = NewRect("Icon", cell);
+        StretchInto(iconRt, 5f, 5f);
         var icon = iconRt.gameObject.AddComponent<Image>();
-        icon.color   = new Color(1f, 1f, 1f, 0f);   // stays invisible until the render lands
+        icon.color = new Color(1f, 1f, 1f, 0f);
         icon.enabled = false;
-        var le = iconRt.gameObject.AddComponent<LayoutElement>();
-        le.minWidth = le.preferredWidth = le.minHeight = le.preferredHeight = thumbSize;
+        icon.raycastTarget = false;
         EnemyThumbnail.Request(prefab, icon);
 
-        var t = NewText("Info", row, bodySize * 0.82f, bodyColor, FontStyles.Normal,
-                        TextAlignmentOptions.TopLeft, true);
-        t.text = $"<b>{prefab.name}</b>  <size=90%><color=#9A9A9A>{prefab.maxHealth} HP</color></size>\n" +
-                 $"<size=90%><color=#9A9A9A>{EnemyDossier.Mechanic(prefab)}</color></size>";
-        t.gameObject.AddComponent<LayoutElement>().flexibleWidth = 1f;
+        string body = $"<b>{prefab.name}</b>  <size=90%><color=#9A9A9A>{prefab.maxHealth} HP</color></size>\n" +
+                      $"<size=90%><color=#9A9A9A>{EnemyDossier.Mechanic(prefab)}</color></size>";
+        var trigger = cell.gameObject.AddComponent<TooltipTrigger>();
+        trigger.Init(this, body, hit);
+    }
+
+    void AddMechanicRow(RectTransform parent, LevelRoster.MechanicEntry m)
+    {
+        var row = NewRect("Mechanic", parent);
+        var hit = MakeHoverFrame(row.gameObject, 6);
+        row.gameObject.AddComponent<LayoutElement>().minHeight = bodySize * 1.1f;
+
+        var t = NewText("Title", row, bodySize * 0.85f, bodyColor, FontStyles.Bold,
+                        TextAlignmentOptions.Left, false);
+        t.text = "• " + m.title;
+        StretchInto(t.rectTransform, 10f, 0f);
+
+        var trigger = row.gameObject.AddComponent<TooltipTrigger>();
+        trigger.Init(this, m.description, hit);
+    }
+
+    // Hollow border marking a row/icon as hoverable; also doubles as its hit box.
+    Image MakeHoverFrame(GameObject go, int radius)
+    {
+        var img = go.AddComponent<Image>();
+        img.sprite = UIRoundedRect.GetFrame(radius, 2);
+        img.type   = Image.Type.Sliced;
+        img.color  = new Color(accentColor.r, accentColor.g, accentColor.b, 0.35f);
+        return img;
+    }
+
+    // ── Hover tooltip ────────────────────────────────────────────────────────
+
+    // Tells the shared tooltip what to show/where, and brightens its own frame.
+    class TooltipTrigger : MonoBehaviour, IPointerEnterHandler, IPointerExitHandler
+    {
+        LevelInfoPanel _panel;
+        string _text;
+        Image  _frame;
+        Color  _restColor;
+
+        public void Init(LevelInfoPanel panel, string text, Image frame)
+        {
+            _panel = panel; _text = text; _frame = frame;
+            if (_frame != null) _restColor = _frame.color;
+        }
+
+        public void OnPointerEnter(PointerEventData e)
+        {
+            _panel.ShowTooltip((RectTransform)transform, _text);
+            if (_frame != null) _frame.color = new Color(_restColor.r, _restColor.g, _restColor.b, 1f);
+        }
+
+        public void OnPointerExit(PointerEventData e)
+        {
+            _panel.HideTooltip((RectTransform)transform);
+            if (_frame != null) _frame.color = _restColor;
+        }
+    }
+
+    void ShowTooltip(RectTransform anchor, string text)
+    {
+        if (_tooltipRt == null || anchor == null) return;
+        _tooltipAnchor = anchor;
+        _tooltipText.text = text;
+        _tooltipRt.gameObject.SetActive(true);
+        PositionTooltip(anchor);
+    }
+
+    // `which` guards a stale exit/enter race: only clears if it's still the
+    // tooltip's current owner, so a late exit can't yank a newer hover's tooltip.
+    void HideTooltip(RectTransform which)
+    {
+        if (_tooltipRt == null || which == null || _tooltipAnchor != which) return;
+        _tooltipAnchor = null;
+        _tooltipRt.gameObject.SetActive(false);
+    }
+
+    // X hugs the panel's left edge (fixed, regardless of which row/icon is
+    // hovered); Y follows the hovered row's centre.
+    void PositionTooltip(RectTransform anchor)
+    {
+        if (_tooltipRt == null || anchor == null) return;
+        var tooltipParent = (RectTransform)_tooltipRt.parent;
+        var canvas = tooltipParent.GetComponentInParent<Canvas>();
+        var cam = (canvas != null && canvas.renderMode != RenderMode.ScreenSpaceOverlay) ? canvas.worldCamera : null;
+
+        var panelRect = _panel != null ? _panel : targetPanel;
+        RectTransform xSource = panelRect != null ? panelRect : anchor;
+        var xr = xSource.rect;
+        Vector3 worldLeft = xSource.TransformPoint(new Vector3(xr.xMin, 0f, 0f));
+
+        var ar = anchor.rect;
+        Vector3 worldMidY = anchor.TransformPoint(new Vector3(0f, (ar.yMin + ar.yMax) * 0.5f, 0f));
+
+        // Screen space, not world, so scale/rotation differences between the
+        // panel and the row can't skew the mix.
+        Vector2 screenLeft = RectTransformUtility.WorldToScreenPoint(cam, worldLeft);
+        Vector2 screenMidY = RectTransformUtility.WorldToScreenPoint(cam, worldMidY);
+        Vector2 screenPt   = new Vector2(screenLeft.x - 10f, screenMidY.y);
+
+        // World position, not anchoredPosition — anchoredPosition offsets from the
+        // tooltip's own anchor point, but ScreenPointToLocalPointInRectangle
+        // returns a point relative to the parent's pivot; those don't match unless
+        // the pivot happens to sit at the anchor, which it doesn't here.
+        if (RectTransformUtility.ScreenPointToWorldPointInRectangle(tooltipParent, screenPt, cam, out var worldPt))
+            _tooltipRt.position = worldPt;
     }
 
     public void Hide() { _target = 0f; _onEnter = null; }
@@ -201,8 +361,6 @@ public class LevelInfoPanel : MonoBehaviour
 
         if (targetPanel != null)
         {
-            // Lay the text into your existing panel (a child container so we don't
-            // disturb the panel's own children; only this content fades).
             content = NewRect("LevelInfoContent", targetPanel);
             content.anchorMin = Vector2.zero; content.anchorMax = Vector2.one;
             content.offsetMin = new Vector2(contentPad.x, contentPad.y);
@@ -251,6 +409,42 @@ public class LevelInfoPanel : MonoBehaviour
         }
 
         BuildContent(content);
+        BuildTooltip();
+    }
+
+    // Parented to this component's own root (outside the panel's layout group)
+    // so it can float free and draw on top; built last for draw order.
+    void BuildTooltip()
+    {
+        var rt = NewRect("Tooltip", transform);
+        _tooltipRt = rt;
+        rt.anchorMin = rt.anchorMax = new Vector2(0f, 0.5f);
+        rt.pivot = new Vector2(1f, 0.5f);   // grows left from its anchor
+        rt.sizeDelta = new Vector2(tooltipWidth, 0f);
+
+        var bg = rt.gameObject.AddComponent<Image>();
+        bg.sprite = UIRoundedRect.Get(Mathf.Max(4, cornerRadius / 2));
+        bg.type = Image.Type.Sliced;
+        bg.color = panelColor;
+        bg.raycastTarget = false;
+
+        var vlg = rt.gameObject.AddComponent<VerticalLayoutGroup>();
+        vlg.padding = new RectOffset(14, 14, 10, 10);
+        vlg.childControlWidth = true; vlg.childControlHeight = true;
+        vlg.childForceExpandWidth = true; vlg.childForceExpandHeight = false;
+        rt.gameObject.AddComponent<ContentSizeFitter>().verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+
+        _tooltipText = NewText("Text", rt, bodySize * 0.8f, bodyColor, FontStyles.Normal,
+                               TextAlignmentOptions.TopLeft, true);
+        _tooltipText.raycastTarget = false;
+
+        rt.gameObject.SetActive(false);
+    }
+
+    static void StretchInto(RectTransform rt, float padX, float padY)
+    {
+        rt.anchorMin = Vector2.zero; rt.anchorMax = Vector2.one;
+        rt.offsetMin = new Vector2(padX, padY); rt.offsetMax = new Vector2(-padX, -padY);
     }
 
     void AddLayout(RectTransform parent, int padX, int padY = -1)
@@ -270,9 +464,20 @@ public class LevelInfoPanel : MonoBehaviour
         AddRule(parent);
         _status = NewText("Status", parent, bodySize,  accentColor, FontStyles.Bold,  TextAlignmentOptions.TopLeft, false);
         _best   = NewText("Best",   parent, bodySize,  bodyColor,  FontStyles.Normal, TextAlignmentOptions.TopLeft, false);
+
+        // Keepsake caption + thumbnail; ShowBuildThumb() turns them on if cleared.
+        _buildThumbLabel = NewText("BuildThumbLabel", parent, bodySize * 0.8f, accentColor,
+                                   FontStyles.Bold, TextAlignmentOptions.TopLeft, false);
+        _buildThumbLabel.gameObject.AddComponent<LayoutElement>().minHeight = bodySize * 1.3f;
+        _buildThumbLabel.gameObject.SetActive(false);
+
+        var thumbRt = NewRect("BuildThumb", parent);
+        _buildThumb = thumbRt.gameObject.AddComponent<Image>();
+        thumbRt.gameObject.AddComponent<LayoutElement>().preferredHeight = buildThumbHeight;
+        thumbRt.gameObject.SetActive(false);
+
         _desc   = NewText("Desc",   parent, bodySize,  bodyColor,  FontStyles.Normal, TextAlignmentOptions.TopLeft, true);
 
-        // Threats / mechanics list, filled per selection by BuildRoster.
         _roster = NewRect("Roster", parent);
         var rv = _roster.gameObject.AddComponent<VerticalLayoutGroup>();
         rv.spacing = 8f;
@@ -303,17 +508,8 @@ public class LevelInfoPanel : MonoBehaviour
         rt.gameObject.AddComponent<LayoutElement>().minHeight = 4f;
     }
 
-    // The hosting Canvas in LevelSelect.unity was left on Constant Pixel Size with
-    // the default 800×600 reference — meaning the panel was laid out in raw screen
-    // pixels and never scaled with the window at all. That's why it only read
-    // correctly at 1920×1080: at any other size the 420×700 panel stayed 420×700
-    // physical pixels, so it ballooned on small windows and shrank to a stamp on
-    // large ones.
-    //
-    // Scaled @1920×1080 with match 0.5 to line up with every other full-screen
-    // panel in the project (DialogueRunner, SettingsScreen, PauseMenu,
-    // LevelClearScreen all use exactly this), so they all scale together instead of
-    // drifting apart as the window changes.
+    // Matches every other full-screen panel's scaler (DialogueRunner, SettingsScreen,
+    // PauseMenu, LevelClearScreen), so they all scale together.
     void ConfigureCanvas()
     {
         var canvas = GetComponentInParent<Canvas>();

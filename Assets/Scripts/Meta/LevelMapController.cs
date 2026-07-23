@@ -30,6 +30,8 @@ public partial class LevelMapController : MonoBehaviour
     public LevelInfoPanel infoPanel;
     [Tooltip("Played once, the very first time the player ever lands on this scene (SaveSystem.Profile.seenLevelSelectIntro). Author it like any other DialogueConversation asset. Leave null for no intro.")]
     public DialogueConversation firstVisitConversation;
+    [Tooltip("Same VinePrefab gameplay's HarmonyVineVisualizer grows on a claimed Harmony piece — reused here so a Harmony-cleared level's badge actually sprouts real vines instead of a generic ring. Leave null to fall back to the ring for every theme.")]
+    public GameObject harmonyVinePrefab;
 
     [Header("Scenes (must be in Build Settings)")]
     public string gameplayScene = "gamePlay";
@@ -61,6 +63,8 @@ public partial class LevelMapController : MonoBehaviour
     public KeyCode buildModeKey = KeyCode.F;
     [Tooltip("Ghost rotation ease speed — same formula/feel as PlacementController's HandleRotate.")]
     public float rotateSpeed = 10f;
+    [Tooltip("How fast the held ghost GLIDES toward its snapped grid target. Purely visual — placement still lands on the exact snapped cell — but easing the render position (instead of hard-snapping cell to cell) is what makes moving a held block feel fluid instead of jumpy. Higher = snappier.")]
+    public float ghostFollowSpeed = 16f;
     public Color ghostValidColor   = new Color(0.35f, 1f, 0.45f, 0.55f);
     public Color ghostInvalidColor = new Color(1f, 0.30f, 0.30f, 0.55f);
     [Tooltip("Tint applied to a freshly player-built node so it visually reads as 'built', distinct from the authored map.")]
@@ -122,6 +126,13 @@ public partial class LevelMapController : MonoBehaviour
     bool         _placementValid;
     readonly List<GameObject> _ghostGOs = new();
     Transform    _ghostRoot;
+
+    // Eased render anchor: cells snap to the grid, cubes draw offset from this so
+    // moves glide instead of pop. Snap flag skips the glide on a fresh hold.
+    Vector3 _ghostVisualAnchor;
+    bool    _ghostAnchorSnap;
+    // Last surface height the cursor crossed, for gliding past the built edge.
+    int     _ghostPlaneY;
 
     // True when the held ghost was SPENT from inventory at grab time (a fresh tray
     // pick). Cancelling refunds it; committing just keeps it spent. A re-picked
@@ -223,6 +234,20 @@ public partial class LevelMapController : MonoBehaviour
         //      LevelDefinition.rewardConversation, queued by GameFlowManager right
         //      after that level's FIRST clear. Consumed immediately so it can never
         //      replay (re-entering this scene later, reloading a stale RunConfig, …).
+        // Hands-on tutorial gating: DialogueRunner tells us (via OnLineEvent) the
+        // instant a line demanding a real action shows, so we know which one
+        // operation to allow until the player actually does it — see
+        // HandleTutorialGateEvent / CanOpenBuildPanel / CanEnterLevel, and the
+        // CompleteGate(...) calls in WalkCells / EnterBuildMode / CommitPlacement /
+        // EnterLevel. Subscribed once per scene load (DialogueRunner is scene-
+        // scoped, not DontDestroyOnLoad, so both ends die together on unload —
+        // nothing to explicitly unsubscribe).
+        if (DialogueRunner.Instance != null)
+        {
+            DialogueRunner.Instance.OnLineEvent += HandleTutorialGateEvent;
+            DialogueRunner.Instance.OnFinished  += HandleTutorialConvoFinished;
+        }
+
         if (!SaveSystem.Profile.seenLevelSelectIntro && firstVisitConversation != null)
         {
             SaveSystem.Profile.seenLevelSelectIntro = true;
@@ -236,6 +261,37 @@ public partial class LevelMapController : MonoBehaviour
             DialogueRunner.Instance.Play(convo);
         }
     }
+
+    // ── Hands-on tutorial gate ───────────────────────────────────────────────
+    // Non-null while a DialogueLine.actionGateId is currently on screen waiting
+    // for CompleteGate — the one operation whose id matches is allowed, every
+    // other gated operation is refused (with a toast) until it's this one's turn.
+    // null = no tutorial gate active → everything allowed, same "no tutorial →
+    // unrestricted" default TutorialDirector uses in gameplay.
+    string _tutorialGate;
+
+    static class TutorialGateIds
+    {
+        public const string Walk       = "ls.walk";       // T_levelSelect: click a block and arrive
+        public const string EnterLevel = "ls.enter";       // T_levelSelect: click Enter on a level's panel
+        public const string OpenBuild  = "ls.openbuild";   // T_rewardBlock: press F
+        public const string Place      = "ls.place";       // T_rewardBlock: successfully place the earned block
+    }
+
+    void HandleTutorialGateEvent(string id)
+    {
+        if (id == TutorialGateIds.Walk || id == TutorialGateIds.EnterLevel
+            || id == TutorialGateIds.OpenBuild || id == TutorialGateIds.Place)
+            _tutorialGate = id;
+    }
+
+    // Fires on skip AND natural completion alike (DialogueRunner.Finish is the
+    // common tail for both), so a skipped tutorial can never leave an operation
+    // stuck locked with no dialogue left on screen to explain why.
+    void HandleTutorialConvoFinished(DialogueConversation _) => _tutorialGate = null;
+
+    bool CanOpenBuildPanel() => string.IsNullOrEmpty(_tutorialGate) || _tutorialGate == TutorialGateIds.OpenBuild;
+    bool CanEnterLevel()     => string.IsNullOrEmpty(_tutorialGate) || _tutorialGate == TutorialGateIds.EnterLevel;
 
     // The loop was Post()'d against this GameObject — Wwise doesn't stop it on its own
     // just because the scene unloads, so stop it explicitly or it bleeds into gameplay.
@@ -472,21 +528,36 @@ public partial class LevelMapController : MonoBehaviour
         var mr = diamond.GetComponent<MeshRenderer>();
         mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
 
+        // Sibling of the badge, not a child — the synergy effect grows out of the
+        // block and stays put instead of riding the badge's spin/bob.
+        var celeb = new GameObject("Celebration");
+        celeb.transform.SetParent(node.transform, worldPositionStays: false);
+        celeb.transform.position = worldPos;
+        celeb.transform.rotation = Quaternion.identity;   // node rotation would tip the vine/flowers over
+
+        // Top faces this level's block exposes — where an Abundance field plants.
+        // BlockTop (no pawnSurfaceLift), not SurfaceTop, or flowers float above the block.
+        var tops = new List<Vector3>();
+        foreach (var c in node.cells)
+            if (_surface.Contains(c)) tops.Add(BlockTop(c));
+        if (tops.Count == 0) tops.Add(BlockTop(TopCellOf(node)));
+
+        // Fallback ring for themes with no bespoke effect. Built once, hidden until Cleared.
+        var ring = MakeSquareFrame(celeb.transform, "ClearRing", cs * 0.52f, cs * 0.03f, GeoPalette.Gold);
+        ring.localPosition = Vector3.up * (cs * 0.04f);   // rest just above the surface, not clipping into it
+        ring.gameObject.SetActive(false);
+        var ringRends = ring.GetComponentsInChildren<Renderer>();
+
         var m = root.AddComponent<MapLevelMarker>();
         m.Bind(mr, diamond.transform, node.themeColor, node.lockedColor,
                0f,           // rise: 0 = same resting height as the pawn (SurfaceTop) — they float in sync
-               cs * 0.09f);  // grounded: well below its own half-height, so a dead badge visibly sinks/lies low
+               cs * 0.09f,   // grounded: well below its own half-height, so a dead badge visibly sinks/lies low
+               celeb.transform, ring, ringRends, harmonyVinePrefab, tops.ToArray(), cs);
         _markers[node] = m;
     }
 
-    // A level badge's whole state machine, expressed physically rather than with a
-    // legend: an unreachable level's badge lies DEAD ON THE BLOCK — settled flat on
-    // a face, grey, motionless. The moment a road connects it, the badge lifts off,
-    // tips back up onto its point, and starts turning.
-    //
-    // That's the read we want: the levels you've opened up are visibly alive, and
-    // "connect this one" is a thing you can see is undone from across the map,
-    // without clicking anything.
+    // Unreachable = badge lies dead flat on the block, grey. Connected = it lifts
+    // off, tips onto its point, and spins — no legend needed to tell them apart.
     class MapLevelMarker : MonoBehaviour
     {
         Vector3    _base;          // resting spot ON the block, captured on first frame
@@ -500,7 +571,28 @@ public partial class LevelMapController : MonoBehaviour
         float      _t;             // 0 = fully dead, 1 = fully alive; eased, so changes read as a transition
         float      _spin;          // accumulated Y rotation — driven, not integrated onto the transform
 
-        public void Bind(Renderer rend, Transform badge, Color lit, Color dark, float rise, float grounded)
+        // Celebration effect — plays once the level is Cleared, themed to whatever
+        // synergy was winning at the buzzer (BlockColor.None or Universal picks a
+        // random theme instead, once, cached so it doesn't flicker between
+        // refreshes). Harmony gets the REAL thing — gameplay's own vine growth,
+        // reused verbatim — since a generic ring can't read as "vines" no matter
+        // how it's tinted. Every other theme falls back to a ring in that theme's
+        // colour until it earns its own bespoke treatment.
+        Transform    _celebRoot;   // stable, on the block surface — where the effect actually lives
+        Transform    _ring;
+        Renderer[]   _ringRends;
+        GameObject   _vinePrefab;
+        Vector3[]    _cellTops;    // this block's top faces — where an Abundance field plants
+        float        _cellSize;
+        bool         _cleared;
+        Color        _themeColor;
+        bool         _themePicked;
+        bool         _effectGrown; // a bespoke effect (vine / bloom) took over — suppress the fallback ring
+        float        _ringT;
+
+        public void Bind(Renderer rend, Transform badge, Color lit, Color dark, float rise, float grounded,
+                         Transform celebRoot, Transform ring, Renderer[] ringRends, GameObject vinePrefab,
+                         Vector3[] cellTops, float cellSize)
         {
             _rend  = rend;
             _badge = badge;
@@ -508,10 +600,107 @@ public partial class LevelMapController : MonoBehaviour
             _dark  = dark; _dark.a = 1f;
             _rise  = rise;
             _grounded = grounded;
+            _celebRoot   = celebRoot;
+            _ring        = ring;
+            _ringRends   = ringRends;
+            _vinePrefab  = vinePrefab;
+            _cellTops    = cellTops;
+            _cellSize    = cellSize;
             _t = 1f;   // assume alive; RebuildWindLinks corrects it before the first frame renders
         }
 
         public void SetPowered(bool on) => _powered = on;
+
+        // `color` is the synergy theme active at the moment this level was last
+        // cleared (LevelRecord.clearSynergyColor). Resolved once, the first time
+        // `cleared` goes true:
+        //   • A real theme → that theme's own effect, reusing gameplay's actual
+        //     visualizer geometry: Harmony grows vines (VineEffect), Abundance
+        //     blooms a flower field (BloomPatch). Themes without a bespoke effect
+        //     authored yet fall back to the ring tinted in their colour.
+        //   • Universal / None → the plain original GOLD frame, no theme colour and
+        //     no bespoke effect — "you cleared it, but not under any one banner".
+        public void SetCleared(bool cleared, BlockColor color)
+        {
+            _cleared = cleared;
+            if (!cleared || _themePicked) return;
+            _themePicked = true;
+
+            if (color == BlockColor.None || color == BlockColor.Universal)
+            {
+                _themeColor = GeoPalette.Gold;   // original frame, unchanged
+                return;                          // ring only — never a bespoke effect
+            }
+
+            _themeColor = BlockColorPalette.Get(color);
+            if      (color == BlockColor.Harmony && _vinePrefab != null) GrowVine();
+            else if (color == BlockColor.Abundance)                      GrowBloom();
+        }
+
+        // Abundance — the same BloomPatch flower field gameplay plants on a claimed
+        // Abundance block, driven straight off this level block's own top faces.
+        // BloomPatch positions itself at the centre of the tops it's given, so the
+        // field lands on the block regardless of where _celebRoot sits.
+        void GrowBloom()
+        {
+            if (_effectGrown || _cellTops == null || _cellTops.Length == 0) return;
+            _effectGrown = true;
+
+            var go = new GameObject("AbundanceBloom");
+            go.transform.SetParent(_celebRoot, worldPositionStays: true);
+
+            var patch = go.AddComponent<BloomPatch>();
+            patch.stemHeight   = _cellSize * 0.18f;
+            patch.bobAmplitude = _cellSize * 0.03f;
+            patch.Grow(_cellTops,
+                       PetalPalette(_themeColor),
+                       new Color(0.98f, 0.80f, 0.30f, 1f),   // golden heart, same accent the visualizer uses
+                       maxFlowersPerCell: 2,
+                       flowerSizeWorld:   _cellSize * 0.34f,
+                       scatterWorld:      _cellSize * 0.26f,
+                       maxFlowers:        18);
+        }
+
+        // Four analogous petal tints around the theme hue (from AbundanceVisualizer.BuildPalette).
+        static Color[] PetalPalette(Color baseCol)
+        {
+            Color.RGBToHSV(baseCol, out float h, out float s, out float v);
+            s = Mathf.Clamp(s, 0.45f, 0.92f);
+            v = Mathf.Clamp(v, 0.70f, 1f);
+            const float sp = 0.08f;
+            return new[]
+            {
+                Color.HSVToRGB(Mathf.Repeat(h,          1f), s,                        v),
+                Color.HSVToRGB(Mathf.Repeat(h + sp,     1f), Mathf.Clamp01(s * 0.88f), Mathf.Clamp01(v * 1.03f)),
+                Color.HSVToRGB(Mathf.Repeat(h - sp,     1f), s,                        Mathf.Clamp01(v * 0.94f)),
+                Color.HSVToRGB(Mathf.Repeat(h + sp * 2f, 1f), Mathf.Clamp01(s * 0.78f), v),
+            };
+        }
+
+        // One-shot (VineEffect grows itself then sits still), planted under
+        // _celebRoot so it grows out of the block, not this spinning/bobbing marker.
+        void GrowVine()
+        {
+            if (_effectGrown || _celebRoot == null) return;
+            _effectGrown = true;
+
+            var vine = Instantiate(_vinePrefab, _celebRoot);
+            vine.transform.localPosition = Vector3.zero;
+            if (vine.TryGetComponent<VineEffect>(out var fx))
+            {
+                var root = _themeColor;
+                var tip  = Color.Lerp(root, Color.white, 0.5f);
+                // Stable per-node direction so vines don't all sprout the same way.
+                var outward = Quaternion.Euler(0f, Hash01(GetInstanceID()) * 360f, 0f) * Vector3.forward;
+                fx.Grow(root, tip, outward, _vinePrefab);
+            }
+        }
+
+        static float Hash01(int h)
+        {
+            unchecked { h = (h ^ 61) ^ (h >> 16); h += h << 3; h ^= h >> 4; h *= 0x27d4eb2d; h ^= h >> 15; }
+            return (h & 0x7fffffff) / (float)0x7fffffff;
+        }
 
         void Update()
         {
@@ -537,6 +726,33 @@ public partial class LevelMapController : MonoBehaviour
             transform.localScale = Vector3.one * Mathf.Lerp(0.8f, 1f, _t);
 
             if (_rend != null) MpbColor.Set(_rend, Color.Lerp(_dark, _lit, _t));
+
+            UpdateRing();
+        }
+
+        // Frame effect: a slow spin + a smooth breathing pulse (sine, NOT a sawtooth
+        // — no snap-back at the loop point). Shows the moment the level is Cleared
+        // and stays, since clearing is permanent (independent of whether the road is
+        // currently connected). Only for themes without a bespoke effect — Harmony
+        // grows a real vine instead (GrowVine) and never shows this ring.
+        void UpdateRing()
+        {
+            if (_ring == null || _effectGrown) return;
+
+            if (_ring.gameObject.activeSelf != _cleared) _ring.gameObject.SetActive(_cleared);
+            if (!_cleared) return;
+
+            const float period = 1.8f;
+            _ringT += Time.deltaTime;
+            float scale = Mathf.Lerp(0.9f, 1.15f, 0.5f + 0.5f * Mathf.Sin(_ringT * (Mathf.PI * 2f / period)));
+            _ring.localScale = Vector3.one * scale;
+            _ring.localRotation = Quaternion.Euler(0f, _ringT * 22f, 0f);   // slow ceremonial turn
+
+            if (_ringRends != null)
+            {
+                var c = _themeColor; c.a = 1f;
+                foreach (var r in _ringRends) if (r != null) MpbColor.Set(r, c);
+            }
         }
     }
 
@@ -796,6 +1012,11 @@ public partial class LevelMapController : MonoBehaviour
         HideTrail();
         _currentCell = cells[cells.Count - 1];
         _moving      = false;
+        // Every arrival counts as "the player walked somewhere" for the tutorial
+        // gate — CompleteGate no-ops unless this exact id is what's pending, so
+        // it's safe to fire unconditionally rather than only when a tutorial is
+        // suspected to be running.
+        DialogueRunner.Instance?.CompleteGate(TutorialGateIds.Walk);
 
         // Arrived: if this cell belongs to a level block, surface its panel.
         if (_cellToNode.TryGetValue(_currentCell, out var n))
@@ -873,6 +1094,11 @@ public partial class LevelMapController : MonoBehaviour
 
     Vector3 SurfaceTop(Vector3Int c)
         => gridSystem.GridToWorld(c) + Vector3.up * (gridSystem.cellSize * 0.5f + pawnSurfaceLift);
+
+    // Actual top face, no pawnSurfaceLift — for anything that sits ON the block
+    // (flowers, decoration) rather than floating where the pawn walks.
+    Vector3 BlockTop(Vector3Int c)
+        => gridSystem.GridToWorld(c) + Vector3.up * (gridSystem.cellSize * 0.5f);
 
     // BFS across the surface: from a top cell, step to each 4-neighbour COLUMN's
     // top-exposed cell at ANY height — the pawn climbs the shared edge to get there.
@@ -959,10 +1185,12 @@ public partial class LevelMapController : MonoBehaviour
     void EnterBuildMode()
     {
         if (_moving) return;   // don't interrupt a walk
+        if (!CanOpenBuildPanel()) { ShowToast("Finish the current tutorial step first."); return; }
         _buildMode = true;
         BuildTrayUIIfNeeded();
         RefreshTray();
         _trayTargetScale = 1f;   // bars ease open — see UpdateTrayAnim
+        DialogueRunner.Instance?.CompleteGate(TutorialGateIds.OpenBuild);
     }
 
     void ExitBuildMode()
@@ -1048,22 +1276,47 @@ public partial class LevelMapController : MonoBehaviour
         HandleGhostKeyboardOffset();   // WASDQE nudge, same convention as gameplay's HandleKeyboardOffset
         HandleGhostScroll();           // wheel = push the held block forward / back, like gameplay's edit-mode scroll
 
-        if (gridSystem != null && Physics.Raycast(_cam.ScreenPointToRay(VirtualCursor.Position), out var hit))
-        {
-            // Candidate origin: stack the new block on top of whatever surface cell
-            // the cursor is over — guarantees the new node is face-adjacent to the
-            // existing network (LinkAllNodes then just works, no special-case needed).
-            // The WASDQE nudge is layered on top, same as gameplay's baseGridPos + manualOffset.
-            Vector3Int hoverCell = TopOfColumn(gridSystem.WorldToGrid(hit.collider.transform.position));
-            _ghostOrigin = hoverCell + Vector3Int.up + _ghostManualOffset;
-            // Never let a placement stack directly on top of the column the pawn is
-            // standing on right now — it would bury/trap the pawn under the new piece.
-            _ghostHoveringPawnColumn = hoverCell == _currentCell;
-        }
+        TrackGhostOrigin();
 
         UpdateGhostPreview();   // every frame (not just on change) so the rotation ease actually animates
 
         if (Input.GetMouseButtonDown(0) && _placementValid) CommitPlacement();
+    }
+
+    // Tracks the held block's target cell continuously from hit.point (not the
+    // block's pivot, which teleported between cube centres). Off the geometry,
+    // falls back to a build plane at the last surface height crossed (mirrors
+    // gameplay's HandleMouseMove) so the ghost can glide past the built edge.
+    void TrackGhostOrigin()
+    {
+        if (gridSystem == null || _cam == null) return;
+        float cs = gridSystem.cellSize;
+        Ray ray = _cam.ScreenPointToRay(VirtualCursor.Position);
+
+        Vector3Int hoverColumn;
+        if (Physics.Raycast(ray, out var hit))
+        {
+            // Nudge slightly INTO the surface so a hit right on a face boundary
+            // resolves to the block, not the empty cell beyond it.
+            hoverColumn = TopOfColumn(gridSystem.WorldToGrid(hit.point - ray.direction * (cs * 0.05f)));
+            _ghostPlaneY = hoverColumn.y + 1;   // remember this layer for empty-space gliding
+        }
+        else
+        {
+            // Empty space: intersect the ray with the build plane at the remembered
+            // layer's centre. Its own cell IS the placement layer (no +up).
+            float planeY = _ghostPlaneY * cs + cs * 0.5f;
+            if (Mathf.Abs(ray.direction.y) < 1e-4f) return;   // ray parallel to plane — keep last origin
+            float t = (planeY - ray.origin.y) / ray.direction.y;
+            if (t <= 0f) return;                              // plane is behind the camera — keep last origin
+            var cell = gridSystem.WorldToGrid(ray.origin + ray.direction * t);
+            hoverColumn = new Vector3Int(cell.x, _ghostPlaneY - 1, cell.z);   // -1 so the +up below lands on _ghostPlaneY
+        }
+
+        _ghostOrigin = hoverColumn + Vector3Int.up + _ghostManualOffset;
+        // Never let a placement stack directly on the column the pawn is standing
+        // on right now — it would bury/trap the pawn under the new piece.
+        _ghostHoveringPawnColumn = hoverColumn.x == _currentCell.x && hoverColumn.z == _currentCell.z;
     }
 
     // Same WASDQE convention as gameplay's HandleKeyboardOffset: A/D shift relative
@@ -1148,6 +1401,7 @@ public partial class LevelMapController : MonoBehaviour
         _pickedOrigCells       = origCells;
         _pickedOrigRotation    = rotation;
         _ghostFromInventory    = false;      // already paid for on its first placement
+        _ghostAnchorSnap       = true;       // appear at the cursor, don't fly in from the last hold's spot
         _trayTargetScale       = 0f;         // tuck the bars away while placing
     }
 
@@ -1210,13 +1464,21 @@ public partial class LevelMapController : MonoBehaviour
             _ghostGOs.Add(cube);
         }
 
+        // Cells stay snapped (for validity + CommitPlacement); the cubes are drawn
+        // offset from an eased anchor so a one-cell move slides instead of popping.
+        Vector3 targetAnchor = gridSystem.GridToWorld(_ghostOrigin);
+        if (_ghostAnchorSnap) { _ghostVisualAnchor = targetAnchor; _ghostAnchorSnap = false; }
+        else _ghostVisualAnchor = Vector3.Lerp(_ghostVisualAnchor, targetAnchor,
+                                               1f - Mathf.Exp(-ghostFollowSpeed * Time.deltaTime));
+
         Color tint = valid ? ghostValidColor : ghostInvalidColor;
         for (int i = 0; i < _ghostGOs.Count; i++)
         {
             bool active = i < _ghostCells.Length;
             _ghostGOs[i].SetActive(active);
             if (!active) continue;
-            _ghostGOs[i].transform.position = gridSystem.GridToWorld(_ghostCells[i]);
+            _ghostGOs[i].transform.position =
+                _ghostVisualAnchor + (gridSystem.GridToWorld(_ghostCells[i]) - targetAnchor);
             var rends = _ghostGOs[i].GetComponentsInChildren<Renderer>();
             for (int r = 0; r < rends.Length; r++) MpbColor.Set(rends[r], tint);
         }
@@ -1263,6 +1525,8 @@ public partial class LevelMapController : MonoBehaviour
         _ghostBlock         = null;
         _pickedOrigCells    = null;
         _ghostFromInventory = false;
+
+        DialogueRunner.Instance?.CompleteGate(TutorialGateIds.Place);
 
         // Placing exits build mode outright — a placed piece is no longer something
         // a stray click can grab. The only way back into a piece is deliberately
@@ -1413,6 +1677,7 @@ public partial class LevelMapController : MonoBehaviour
             _ghostBlock = bd;
             _ghostTargetRotation = _ghostCurrentRotation = Quaternion.identity;
             _ghostManualOffset = Vector3Int.zero;
+            _ghostAnchorSnap = true;   // appear at the cursor, don't glide in from wherever the last hold sat
             RefreshTray();
             _trayTargetScale = 0f;   // tuck the bars away so the map is fully visible while placing
         });
@@ -1468,6 +1733,8 @@ public partial class LevelMapController : MonoBehaviour
     {
         if (_selected != null && _selected.level == lv &&
             _selected.NodeState == LevelNode.State.Locked) return;
+        if (!CanEnterLevel()) { ShowToast("Finish the current tutorial step first."); return; }
+        DialogueRunner.Instance?.CompleteGate(TutorialGateIds.EnterLevel);
         RunConfig.SetLevel(lv);
         LoadScene(gameplayScene);
     }

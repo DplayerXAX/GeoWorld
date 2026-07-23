@@ -8,6 +8,13 @@
   "CacheRoot": "../../../../Geo world/.cache",
   "Platforms": [
    {
+    "Name": "Mac",
+    "GUID": "{ED5F1940-8AC1-42FF-9004-366BFC0CB488}",
+    "BasePlatform": "Mac",
+    "BasePlatformGUID": "{9C6217D5-DD11-4795-87C1-6CE02853C540}",
+    "Path": "../../../../Geo world/GeneratedSoundBanks/Mac"
+   },
+   {
     "Name": "WebGL",
     "GUID": "{002D6252-FC54-4FE3-A96D-CBA1A8A7D2F1}",
     "BasePlatform": "Web",
@@ -31,6 +38,6 @@
     "UseAsStandIn": "true"
    }
   ],
-  "FileHash": "{E9F6FB2C-EC9B-CB34-A674-9AD43B44EE23}"
+  "FileHash": "{2382430B-BA20-CCD8-3264-CC08464D8AB4}"
  }
 }

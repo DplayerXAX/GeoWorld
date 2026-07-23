@@ -121,6 +121,7 @@ public partial class PlacementController
         selectedInstance  = null;
         _selectedEndpoint = null;
         _selectedChaos    = null;
+        _selectedShrine   = null;
         UpdateHighlight(null);
 
         Rect box = ScreenRectFromPoints(startScreen, endScreen);
@@ -220,7 +221,7 @@ public partial class PlacementController
             ShowPlacementPopup("Selling is locked during combat.");
             return;
         }
-        if (!TutorialDirector.CanSell()) return;   // tutorial gate, same as single sell
+        if (!TutorialDirector.CanSell()) { ShowPlacementPopup("Sell banned during tutorial!"); return; }   // tutorial gate, same as single sell
 
         // Locked (level-fixed) blocks were never sellable individually either —
         // skip them rather than vetoing the whole batch over something that was

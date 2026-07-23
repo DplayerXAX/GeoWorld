@@ -1,27 +1,11 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-// The overworld's "is this thing on?" layer.
-//
-// LevelSelect used to communicate a level's state with nothing but a block tint,
-// which is close to invisible on a map already made of coloured blocks. Two
-// additions, both in the house constructivist/silkscreen language rather than
-// gameplay's sci-fi one — the map is the MENU layer, so it borrows gameplay's
-// ideas but not its chrome:
-//
-//   • START MONUMENT — a flat-plated marker built from the same vocabulary as the
-//     title screen and the level badges: hard geometry, GeoPalette flats, no
-//     spheres and no gradients. Counter-rotating square frames around a gold
-//     spire, capped with the same tilted diamond the level badges use.
-//   • WIND LINES — a bundle of thin drifting filaments (Custom/WindFlow) traced
-//     along the ACTUAL walkable road from the start to every activated level.
-//     Build a bridge and the wind starts drifting out to the level; pick the
-//     bridge back up and it dies away. The connectivity rule, made visible
-//     instead of explained.
-//
-// The wind is a different SHAPE from gameplay's PathLaser, not just a dimmer one:
-// laser = one solid beam of constant width (a route you must follow), wind = many
-// tapered strands weaving past each other (a current that happens to run there).
+// The overworld's "is this thing on?" layer: a start monument (flat-plated,
+// constructivist — GeoPalette, no spheres/gradients) and wind links (thin
+// drifting filaments, Custom/WindFlow) traced along the actual walkable road
+// from start to each activated level. Building a bridge makes the wind drift
+// out to that level; picking it back up lets it die away.
 public partial class LevelMapController : MonoBehaviour
 {
     [Header("Start monument")]
@@ -31,24 +15,21 @@ public partial class LevelMapController : MonoBehaviour
     [Range(0.4f, 2f)] public float monumentScale = 1f;
     [Tooltip("Warm gold point light under the apex, matching the shrine's. 0 = off.")]
     [Range(0f, 4f)] public float monumentLight = 1.6f;
-    [Tooltip("Sinks the whole monument this far below the block's surface top, as a fraction of one cell — settles it INTO the block instead of perching on top.")]
+    [Tooltip("Sinks the monument below the block's surface top (fraction of a cell) so it sits IN the block, not on top.")]
     [Range(0f, 0.6f)] public float monumentSink = 0.25f;
 
     [Header("Wind links (start → activated levels)")]
     [Tooltip("Optional override. Left empty, the Custom/WindFlow shader is used — that's the intended look.")]
     public Material windMaterial;
     public Color windColor = new(0.910f, 0.698f, 0.227f, 1f);   // GeoPalette.Gold
-    // Wider than a laser would be on purpose: the strands spread across the ribbon's
-    // width, so this is the bundle's diameter, not a line thickness.
-    [Range(0.02f, 0.8f)] public float windWidth = 0.30f;
+    [Range(0.02f, 0.8f)] public float windWidth = 0.30f;   // bundle diameter, not a line thickness
     [Tooltip("Height above the road surface the ribbon floats at.")]
     public float windLift = 0.08f;
     [Tooltip("How fast a link fades in when its level powers up (and out when it goes dark).")]
     public float windFadeSpeed = 2.5f;
 
-    // Filled by MarkConnectivity: surface cell -> the cell the flood arrived FROM.
-    // Walking this back from any lit cell yields the actual road home, which is what
-    // the ribbons are drawn along.
+    // Filled by MarkConnectivity: surface cell -> cell the flood arrived from.
+    // Walking it back from any lit cell gives the actual road home.
     readonly Dictionary<Vector3Int, Vector3Int> _reachedFrom = new();
     LevelNode _startNode;
 
@@ -63,9 +44,8 @@ public partial class LevelMapController : MonoBehaviour
 
     // ── Wind links ───────────────────────────────────────────────────────────
 
-    // Rebuild every link from scratch. Called from RefreshNodes, i.e. once per real
-    // map change (load, place, pick up) — never per frame, so tracing paths here is
-    // cheap regardless of map size.
+    // Rebuilds every link from scratch. Called from RefreshNodes (once per map
+    // change), never per frame.
     void RebuildWindLinks()
     {
         EnsureWindRoot();
@@ -77,7 +57,17 @@ public partial class LevelMapController : MonoBehaviour
 
             // Badges track power for EVERY level, lit or not.
             if (_markers.TryGetValue(n, out var marker) && marker != null)
+            {
                 marker.SetPowered(n.connectedToStart && n.NodeState != LevelNode.State.Locked);
+
+                // Keys off the save record's `cleared` flag, not NodeState — clearing
+                // is permanent even if the road later gets picked up.
+                if (n.level != null)
+                {
+                    var rec = SaveSystem.Profile.GetRecord(n.level.levelId);
+                    if (rec != null && rec.cleared) marker.SetCleared(true, rec.clearSynergyColor);
+                }
+            }
 
             if (n.level == null || n == _startNode || !n.connectedToStart) continue;
 
@@ -92,39 +82,41 @@ public partial class LevelMapController : MonoBehaviour
             used++;
         }
 
-        // Retire the leftovers by fading them out rather than snapping them off —
-        // picking a bridge up should look like the wind dying, not like a cut wire.
-        // UpdateWind disables them once they've actually reached zero.
+        // Fade leftovers out (picking up a bridge should read as the wind dying,
+        // not a cut wire) — UpdateWind disables them once they hit zero.
         for (int i = used; i < _links.Count; i++) _linkTarget[i] = 0f;
 
         UpdateMonument();
     }
 
-    // Walk _reachedFrom back from the node's nearest lit cell to a start seed,
-    // converting to world points on the way. Returns start→node order so the wind
-    // reads as drifting OUT of the monument.
+    // Walks _reachedFrom back to a start seed, then hands the cell path to
+    // BuildWorldPath (same wall-hugging conversion as the pawn's walk/trail) so
+    // the ribbon crawls the block's silhouette instead of cutting through it.
     List<Vector3> TraceRoadHome(LevelNode node)
     {
         if (node.cells == null) return null;
 
-        // Enter at whichever of the node's cells the flood actually reached; prefer
-        // the highest so the ribbon lands where the pawn would stand.
+        // Enter at whichever cell the flood reached; prefer the highest.
         Vector3Int entry = default;
         bool found = false;
         foreach (var c in node.cells)
             if (_reachedFrom.ContainsKey(c) && (!found || c.y > entry.y)) { entry = c; found = true; }
         if (!found) return null;
 
-        var pts  = new List<Vector3>();
-        var seen = new HashSet<Vector3Int>();
-        var cur  = entry;
+        var cells = new List<Vector3Int>();
+        var seen  = new HashSet<Vector3Int>();
+        var cur   = entry;
         while (seen.Add(cur))
         {
-            pts.Add(SurfaceTop(cur) + Vector3.up * windLift);
+            cells.Add(cur);
             if (!_reachedFrom.TryGetValue(cur, out var prev) || prev == cur) break;   // seed maps to itself
             cur = prev;
         }
-        pts.Reverse();
+        cells.Reverse();
+        if (cells.Count < 2) return null;   // BuildWorldPath needs at least a start + one step
+
+        var pts = BuildWorldPath(cells);
+        for (int i = 0; i < pts.Count; i++) pts[i] += Vector3.up * windLift;
         return pts;
     }
 
@@ -142,11 +134,10 @@ public partial class LevelMapController : MonoBehaviour
             lr.endWidth          = windWidth;
             lr.numCapVertices    = 4;
             lr.numCornerVertices = 4;
-            // Stretch, not Tile: the shader wants UV.x to run 0→1 over the WHOLE
-            // ribbon so its end-fade lands on the real endpoints. Tiling would
-            // restart the fade at every world unit and read as a dashed line.
+            // Stretch (not Tile): UV.x runs 0→1 over the whole ribbon so the
+            // shader's end-fade lands on the real endpoints, not every world unit.
             lr.textureMode       = LineTextureMode.Stretch;
-            lr.alignment         = LineAlignment.View;   // ribbon always faces the camera — no edge-on disappearing
+            lr.alignment         = LineAlignment.View;   // always faces camera
             lr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
             lr.receiveShadows    = false;
             lr.enabled           = false;
@@ -167,8 +158,7 @@ public partial class LevelMapController : MonoBehaviour
             var sh = Shader.Find("Custom/WindFlow");
             if (sh == null)
             {
-                // Shader stripped from the build / not found — fall back to the trail's
-                // unlit material so the links still draw, just without the drift.
+                // Fall back to the trail's unlit material — links still draw, no drift.
                 var fb = GetTrailFallbackMaterial();
                 if (fb == null) return null;
                 _windMat = new Material(fb);
@@ -189,9 +179,7 @@ public partial class LevelMapController : MonoBehaviour
         _windRoot = go.transform;
     }
 
-    // Ease each link's alpha toward its target. The DRIFT is the shader's job — all
-    // C# does here is fade links in and out as roads light up and go dark. Vertex
-    // colour is what carries it, which WindFlow multiplies into its output.
+    // Eases each link's alpha toward its target; the drift itself is the shader's job.
     void UpdateWind()
     {
         if (_links.Count == 0) return;
@@ -215,15 +203,16 @@ public partial class LevelMapController : MonoBehaviour
 
     // ── Start monument ───────────────────────────────────────────────────────
 
-    // Built from flat plates and hard edges — the same constructivist grammar as
-    // the title screen and the level badges. Reads as a landmark you navigate BY,
-    // which is what a start point on a map is for.
+    // Flat plates, hard edges — same constructivist grammar as the title screen
+    // and the level badges.
     //
-    //   apex diamond  ◆   ← same tilted cube as every level badge, in Signal red
-    //   spire         │   ← thin gold column
-    //   frame B       ▱   ← tilted square outline, counter-rotating
-    //   frame A       ▭   ← larger square outline, rotating
-    //   plinth        ▬   ← flat ink slab grounding the whole thing
+    //   apex diamond  ◆   same tilted cube as a level badge, Blue, floating free
+    //   frame B       ▱   tilted square outline, counter-rotating
+    //   frame A       ▭   larger square outline, rotating
+    //   plinth        ▬   flat ink slab
+    //
+    // Blue not Signal red — Exploration's vermilion (BlockColorPalette) sits too
+    // close to GeoPalette.Signal, so a red start would misread as an Exploration clear.
     void BuildStartMonument()
     {
         if (_monument != null || _startNode == null) return;
@@ -234,33 +223,24 @@ public partial class LevelMapController : MonoBehaviour
         root.transform.SetParent(transform, false);
         _monument = root.transform;
 
-        // Plinth — reads as "this is a built thing standing on the block".
         var plinth = MakePlate(root.transform, "Plinth",
                                new Vector3(0.78f, 0.07f, 0.78f) * cs,
                                Vector3.up * (cs * 0.035f),
                                Quaternion.identity, GeoPalette.Ink);
 
-        // Two square outlines at different heights, sizes and tilts. Counter-rotation
-        // is what sells "powered" without any glow — pure motion parallax.
-        var frameA = MakeSquareFrame(root.transform, "FrameA", cs * 0.62f, cs * 0.045f, GeoPalette.Signal);
+        // Counter-rotating outlines sell "powered" without any glow.
+        var frameA = MakeSquareFrame(root.transform, "FrameA", cs * 0.62f, cs * 0.045f, GeoPalette.Blue);
         frameA.localPosition = Vector3.up * (cs * 0.30f);
 
         var frameB = MakeSquareFrame(root.transform, "FrameB", cs * 0.42f, cs * 0.038f, GeoPalette.Gold);
         frameB.localPosition = Vector3.up * (cs * 0.56f);
         frameB.localRotation = Quaternion.Euler(28f, 45f, 0f);
 
-        // Spire — the vertical anchor that makes it legible from across the map.
-        MakePlate(root.transform, "Spire",
-                  new Vector3(0.10f, 0.62f, 0.10f) * cs,
-                  Vector3.up * (cs * 0.40f),
-                  Quaternion.identity, GeoPalette.Gold);
-
-        // Apex diamond — deliberately the SAME shape as a level badge. The map then
-        // reads as one family of markers: "here is a place that matters".
+        // Same shape as a level badge, floating free — one family of markers.
         var apex = MakePlate(root.transform, "Apex",
                              Vector3.one * (cs * 0.26f),
-                             Vector3.up * (cs * 0.86f),
-                             Quaternion.Euler(45f, 0f, 45f), GeoPalette.Signal);
+                             Vector3.up * (cs * 0.72f),
+                             Quaternion.Euler(45f, 0f, 45f), GeoPalette.Blue);
 
         if (monumentLight > 0.01f)
         {
@@ -277,9 +257,7 @@ public partial class LevelMapController : MonoBehaviour
         root.AddComponent<MonumentSpin>().Init(frameA, frameB, apex, plinth);
     }
 
-    // One flat box plate. Everything in the monument is one of these — keeping it to
-    // a single primitive is what makes the silhouette read as designed rather than
-    // assembled out of whatever primitives were handy.
+    // One flat box plate — everything in the monument is one of these.
     Transform MakePlate(Transform parent, string name, Vector3 scale, Vector3 localPos,
                         Quaternion localRot, Color color)
     {
@@ -298,8 +276,7 @@ public partial class LevelMapController : MonoBehaviour
         return go.transform;
     }
 
-    // Four plates laid out as a square OUTLINE (not a filled quad) — the negative
-    // space in the middle is the point; a solid square would just look like a lid.
+    // Four plates as a square OUTLINE — a filled square would just look like a lid.
     Transform MakeSquareFrame(Transform parent, string name, float half, float thick, Color color)
     {
         var frame = new GameObject(name);
@@ -318,8 +295,7 @@ public partial class LevelMapController : MonoBehaviour
     {
         if (monumentMaterial != null) return monumentMaterial;
         if (_monumentMat != null) return _monumentMat;
-        // Same lookup chain ShrineController uses, so the map and the shrine share a
-        // surface treatment instead of drifting apart.
+        // Same lookup chain as ShrineController, so surfaces stay consistent.
         var sh = Shader.Find("GeoWorld/SilkscreenFlat")
               ?? Shader.Find("Universal Render Pipeline/Lit")
               ?? Shader.Find("Standard");
@@ -327,8 +303,7 @@ public partial class LevelMapController : MonoBehaviour
         return _monumentMat;
     }
 
-    // Park the monument on top of the start block. Re-run on every rebuild because
-    // the start block's surface height can change if the player stacks onto it.
+    // Re-run on every rebuild — the start block's surface height can change.
     void UpdateMonument()
     {
         if (_startNode == null) return;
@@ -338,10 +313,8 @@ public partial class LevelMapController : MonoBehaviour
         _monument.position = SurfaceTop(TopCellOf(_startNode)) - Vector3.up * (cs * monumentSink);
     }
 
-    // All the life in the monument comes from differential rotation — two frames
-    // turning against each other at unrelated speeds, plus the apex bobbing on the
-    // same sine the level badges and the pawn use, so the whole screen breathes
-    // together.
+    // Differential rotation between the frames + apex bob on the same sine as
+    // the level badges/pawn, so the whole screen breathes together.
     class MonumentSpin : MonoBehaviour
     {
         Transform _a, _b, _apex, _plinth;

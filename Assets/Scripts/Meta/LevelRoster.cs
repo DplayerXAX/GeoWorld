@@ -44,38 +44,47 @@ public static class LevelRoster
         return list;
     }
 
+    // Short title for the collapsed row + full text shown on hover.
+    public readonly struct MechanicEntry
+    {
+        public readonly string title;
+        public readonly string description;
+        public MechanicEntry(string title, string description) { this.title = title; this.description = description; }
+    }
+
     // Level-wide hazards that aren't an enemy type — the things a player would
     // want warned about before entering.
-    public static List<string> SpecialMechanics(LevelDefinition lv)
+    public static List<MechanicEntry> SpecialMechanics(LevelDefinition lv)
     {
-        var list = new List<string>();
+        var list = new List<MechanicEntry>();
         if (lv == null) return list;
 
         var chaos = lv.GetMechanic<ChaosBlockMechanicConfig>();
         if (chaos != null)
         {
             string when = chaos.startWave > 1 ? $" from wave {chaos.startWave}" : "";
-            list.Add($"<b>Chaos Block</b>{when} — spawns each round and drains " +
-                     $"{chaos.currencyDrain} block currency every wave it survives. Destroy it with turrets.");
+            list.Add(new MechanicEntry("Chaos Block",
+                $"Spawns each round{when} and drains {chaos.currencyDrain} block currency every wave it survives. Destroy it with turrets."));
         }
 
         var shrine = lv.GetMechanic<ShrineMechanicConfig>();
         if (shrine != null)
         {
             string when = shrine.startWave > 1 ? $" from wave {shrine.startWave}" : "";
-            list.Add($"<b>Enlightenment Shrine</b>{when} — sprouts each round next to your build and grants " +
-                     $"adjacent turrets a free, reversible upgrade while they stay touching it.");
+            list.Add(new MechanicEntry("Enlightenment Shrine",
+                $"Sprouts each round{when} next to your build and grants adjacent turrets a free, reversible upgrade while they stay touching it."));
         }
 
         if (lv.allowedColors != null && lv.allowedColors.Length > 0)
         {
             var names = new string[lv.allowedColors.Length];
             for (int i = 0; i < lv.allowedColors.Length; i++) names[i] = lv.allowedColors[i].ToString();
-            list.Add($"<b>Synergies</b> — only {string.Join(" / ", names)} blocks appear here.");
+            list.Add(new MechanicEntry("Synergies",
+                $"Only {string.Join(" / ", names)} blocks appear here."));
         }
 
         if (lv.fixedEndpoints)
-            list.Add("<b>Fixed route</b> — the start and end points are preset.");
+            list.Add(new MechanicEntry("Fixed Route", "The start and end points are preset."));
 
         return list;
     }

@@ -2065,7 +2065,7 @@
 							<ChildrenList>
 								<MusicSegment Name="geo fight" ID="{35CC08F4-5C01-4582-9379-FCEFE2EF3215}" ShortID="696153439">
 									<PropertyList>
-										<Property Name="EndPosition" Type="Real64" Value="113340.326340326"/>
+										<Property Name="EndPosition" Type="Real64" Value="124645.687645688"/>
 										<Property Name="OverrideOutput" Type="bool" Value="True"/>
 									</PropertyList>
 									<ReferenceList>
@@ -2094,7 +2094,7 @@
 												</Reference>
 											</ReferenceList>
 											<ChildrenList>
-												<AudioFileSource Name="geo fight" ID="{EBEEA97E-EA2F-4544-8A56-94BC9DA6CEE2}">
+												<AudioFileSource Name="geo fight" ID="{76AC05C1-7F16-4157-95E4-F1190BE26533}">
 													<Language>SFX</Language>
 													<AudioFile>geo fight.wav</AudioFile>
 													<MediaIDList>
@@ -2107,13 +2107,13 @@
 													<MusicTrackSequence Name="" ID="{9774E56B-9CE2-4F48-98A6-EB59DAF721AD}">
 														<ObjectLists>
 															<ObjectList Name="Clips">
-																<MusicClip Name="geo fight" ID="{0A7EBBB1-DBF5-44DD-BBFC-AF4A50C153D0}">
+																<MusicClip Name="geo fight" ID="{84637E9F-FC6E-4FDA-95A4-A23D050DD49F}">
 																	<PropertyList>
 																		<Property Name="EndTrimOffset" Type="Real64" Value="112000"/>
 																		<Property Name="FadeInMode" Type="int16" Value="0"/>
 																		<Property Name="FadeOutMode" Type="int16" Value="0"/>
 																	</PropertyList>
-																	<AudioSourceRef Name="geo fight" ID="{EBEEA97E-EA2F-4544-8A56-94BC9DA6CEE2}"/>
+																	<AudioSourceRef Name="geo fight" ID="{76AC05C1-7F16-4157-95E4-F1190BE26533}"/>
 																</MusicClip>
 															</ObjectList>
 														</ObjectLists>

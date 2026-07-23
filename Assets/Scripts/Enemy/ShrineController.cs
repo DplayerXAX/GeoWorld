@@ -245,56 +245,164 @@ public class ShrineController : MonoBehaviour
         }
     }
 
-    // ── Runtime fallback visual — a bright gold obelisk with a soft glow, so the
-    // mechanic reads with zero art. Deliberately unlike ChaosBlock's black cube:
-    // this is the boon, not the hazard. ──────────────────────────────────────
+    // ── Runtime fallback visual — a small stone ALTAR, not a spinning trophy.
+    // The old version was a tall obelisk spinning at 40°/s on its own vertical
+    // axis, which read as a collectible more than a place. A shrine is somewhere
+    // you approach: a low, grounded dais the player can walk up to and click on,
+    // with exactly one moving/glowing part (same "one accent, not a machine"
+    // restraint as the LevelSelect start monument) — a slow-turning gold rim
+    // cradling a Custom/SacredMarker glow orb. The dais and altar top themselves
+    // never move. ─────────────────────────────────────────────────────────────
     static Material _fallbackMat;
     GameObject BuildFallbackVisual(float cellSize)
     {
         var root = new GameObject("ShrineVisual");
 
-        var obelisk = GameObject.CreatePrimitive(PrimitiveType.Cube);
-        obelisk.transform.SetParent(root.transform, false);
-        obelisk.transform.localScale    = new Vector3(0.34f, 1.1f, 0.34f) * cellSize;
-        obelisk.transform.localPosition = Vector3.up * cellSize * 0.2f;
-        if (obelisk.TryGetComponent<Collider>(out var col)) Destroy(col);
+        // Dais — wide and short, the footing the altar reads as standing ON.
+        MakePlate(root.transform, "Dais",
+                  new Vector3(0.62f, 0.10f, 0.62f) * cellSize,
+                  Vector3.up * (cellSize * 0.05f),
+                  Quaternion.identity, GeoPalette.Ink);
 
-        if (_fallbackMat == null)
-        {
-            var sh = Shader.Find("GeoWorld/SilkscreenFlat")
-                  ?? Shader.Find("Universal Render Pipeline/Lit")
-                  ?? Shader.Find("Standard");
-            _fallbackMat = new Material(sh) { hideFlags = HideFlags.DontSave };
-        }
-        var mr = obelisk.GetComponent<MeshRenderer>();
-        mr.sharedMaterial     = _fallbackMat;
-        mr.shadowCastingMode  = UnityEngine.Rendering.ShadowCastingMode.Off;
-        MpbColor.Set(mr, GeoPalette.Gold);
+        // Altar top — smaller, stepped up — the "surface" an offering/upgrade
+        // would sit on. Gold, since this is the boon-granting mechanic (Shrine),
+        // deliberately distinct from ChaosBlock's near-black hazard palette.
+        MakePlate(root.transform, "AltarTop",
+                  new Vector3(0.36f, 0.10f, 0.36f) * cellSize,
+                  Vector3.up * (cellSize * 0.18f),
+                  Quaternion.identity, GeoPalette.Gold);
 
-        var lightGo = new GameObject("ShrineLight");
-        lightGo.transform.SetParent(root.transform, false);
-        lightGo.transform.localPosition = Vector3.up * cellSize;
-        var light = lightGo.AddComponent<Light>();
-        light.type      = LightType.Point;
-        light.color     = GeoPalette.Gold;
-        light.range     = cellSize * 4.5f;
-        light.intensity = 2.2f;
+        // Rim — thin gold square OUTLINE resting just above the altar top. The
+        // one moving part; slow enough to read as ceremonial, not mechanical.
+        var rim = MakeSquareFrame(root.transform, "Rim", cellSize * 0.22f, cellSize * 0.02f, GeoPalette.Gold);
+        rim.localPosition = Vector3.up * (cellSize * 0.30f);
 
-        root.AddComponent<ShrineBob>();
+        // Glow orb — Custom/SacredMarker, same shader the LevelSelect start
+        // monument uses, so "this is a sacred/special point" reads consistently
+        // across the menu and gameplay layers. Soft aerogel haze + a tight bright
+        // core, tuned not to blow out the way the old raw point-light did.
+        var orb = MakeGlowOrb(root.transform, cellSize * 0.30f, cellSize * 0.46f);
+
+        // Collider so the shrine is clickable (see ShrineUnit) — sized to the
+        // dais footprint, one cell tall, so it doesn't poke into neighbours.
+        var hitBox = root.AddComponent<BoxCollider>();
+        hitBox.center = Vector3.up * (cellSize * 0.35f);
+        hitBox.size   = new Vector3(cellSize * 0.9f, cellSize * 0.9f, cellSize * 0.9f);
+
+        root.AddComponent<ShrineUnit>();
+        root.AddComponent<ShrineBob>().Init(rim, orb);
         return root;
     }
 
-    // Gentle idle spin + bob so the shrine reads as "alive". Purely cosmetic; the
-    // grid cell it occupies is fixed regardless of the visual's bob.
+    // One flat box plate — same "single primitive, keeps the silhouette
+    // designed" convention the LevelSelect start monument uses.
+    Transform MakePlate(Transform parent, string name, Vector3 scale, Vector3 localPos,
+                        Quaternion localRot, Color color)
+    {
+        var go = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        go.name = name;
+        if (go.TryGetComponent<Collider>(out var col)) Destroy(col);   // the root's own BoxCollider handles clicks
+        go.transform.SetParent(parent, false);
+        go.transform.localPosition = localPos;
+        go.transform.localRotation = localRot;
+        go.transform.localScale    = scale;
+
+        var mr = go.GetComponent<MeshRenderer>();
+        mr.sharedMaterial    = FallbackMaterial();
+        mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        MpbColor.Set(mr, color);
+        return go.transform;
+    }
+
+    // Four plates as a square OUTLINE, not a filled quad — the negative space in
+    // the middle is the point, matching the start monument's frames.
+    Transform MakeSquareFrame(Transform parent, string name, float half, float thick, Color color)
+    {
+        var frame = new GameObject(name);
+        frame.transform.SetParent(parent, false);
+
+        float len = half * 2f + thick;
+        MakePlate(frame.transform, "N", new Vector3(len,   thick, thick), new Vector3(0f, 0f,  half), Quaternion.identity, color);
+        MakePlate(frame.transform, "S", new Vector3(len,   thick, thick), new Vector3(0f, 0f, -half), Quaternion.identity, color);
+        MakePlate(frame.transform, "E", new Vector3(thick, thick, len),   new Vector3( half, 0f, 0f), Quaternion.identity, color);
+        MakePlate(frame.transform, "W", new Vector3(thick, thick, len),   new Vector3(-half, 0f, 0f), Quaternion.identity, color);
+        return frame.transform;
+    }
+
+    static Material _glowMat;
+    Transform MakeGlowOrb(Transform parent, float diameter, float localHeight)
+    {
+        var go = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+        go.name = "Glow";
+        if (go.TryGetComponent<Collider>(out var col)) Destroy(col);
+        go.transform.SetParent(parent, false);
+        go.transform.localPosition = Vector3.up * localHeight;
+        go.transform.localScale    = Vector3.one * diameter;
+
+        if (_glowMat == null)
+        {
+            var sh = Shader.Find("Custom/SacredMarker");
+            _glowMat = sh != null ? new Material(sh) { hideFlags = HideFlags.DontSave } : null;
+        }
+
+        var mr = go.GetComponent<MeshRenderer>();
+        mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        mr.receiveShadows    = false;
+        if (_glowMat != null)
+        {
+            var inst = new Material(_glowMat);
+            inst.SetColor("_HazeColor", new Color(1.00f, 0.86f, 0.55f));
+            inst.SetColor("_CoreColor", new Color(1.00f, 0.96f, 0.82f));
+            mr.sharedMaterial = inst;
+        }
+        else
+        {
+            mr.sharedMaterial = FallbackMaterial();   // shader missing from the build — still shows SOMETHING
+            MpbColor.Set(mr, GeoPalette.Gold);
+        }
+        return go.transform;
+    }
+
+    Material FallbackMaterial()
+    {
+        if (_fallbackMat != null) return _fallbackMat;
+        var sh = Shader.Find("GeoWorld/SilkscreenFlat")
+              ?? Shader.Find("Universal Render Pipeline/Lit")
+              ?? Shader.Find("Standard");
+        _fallbackMat = new Material(sh) { hideFlags = HideFlags.DontSave };
+        return _fallbackMat;
+    }
+
+    // Rim turns slowly, orb bobs + breathes (SacredMarker's own shader pulse
+    // carries most of the glow animation — this only handles motion). The dais
+    // and altar top are NEVER touched here — they stay put, which is what makes
+    // this read as a fixed shrine rather than a spinning pickup.
     class ShrineBob : MonoBehaviour
     {
-        Vector3 _base;
-        bool    _captured;
+        Transform _rim, _orb;
+        Vector3   _orbBase;
+
+        public void Init(Transform rim, Transform orb)
+        {
+            _rim = rim; _orb = orb;
+            if (_orb != null) _orbBase = _orb.localPosition;
+        }
+
         void Update()
         {
-            if (!_captured) { _base = transform.position; _captured = true; }   // capture AFTER SpawnOne positions us
-            transform.Rotate(Vector3.up, 40f * Time.deltaTime, Space.World);
-            transform.position = _base + Vector3.up * (Mathf.Sin(Time.time * 1.5f) * 0.08f);
+            if (_rim != null) _rim.Rotate(0f, 16f * Time.deltaTime, 0f, Space.Self);
+            if (_orb != null)
+                _orb.localPosition = _orbBase + Vector3.up * (Mathf.Sin(Time.time * 1.3f) * 0.05f);
         }
     }
+}
+
+// Click-to-inspect identity marker — mirrors ChaosBlockUnit's role for the
+// read-only selection panel (see PlacementController.TrySelectObject /
+// BuildShrineBody), but carries no state of its own: every shrine grants the
+// same aura off the same ShrineMechanicConfig, so there's nothing per-instance
+// to show.
+[DisallowMultipleComponent]
+public class ShrineUnit : MonoBehaviour
+{
 }

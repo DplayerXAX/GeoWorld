@@ -56,6 +56,13 @@ public partial class PlacementController
             return;
         }
 
+        if (mode == PlacementMode.Select && _selectedShrine != null)
+        {
+            infoPanel.ShowReadonly(_selectedShrine.transform.position, "Enlightenment Shrine", BuildShrineBody());
+            upgradePanel?.Hide();
+            return;
+        }
+
         var ins = selectedInstance;
         if (mode != PlacementMode.Select || ins == null || ins.visualObject == null || ins.data == null)
         {
@@ -117,6 +124,25 @@ public partial class PlacementController
             sb.AppendLine($"Health     <b>{unit.CurrentHealth}/{unit.maxHealth}</b>");
 
         sb.Append("<size=85%><color=#6A6A6A>Destroy it with turrets during combat to stop the drain. Left alone, more will pile up.</color></size>");
+        return sb.ToString().TrimEnd();
+    }
+
+    // Read-only intel for a Shrine: the free buff it grants every turret touching
+    // it (26-neighbour, same reach ShrineController.ApplyAura uses), plus how
+    // many can be alive at once — the numbers matter here, since it's a boon the
+    // player didn't build and might not realize is reversible/limited.
+    string BuildShrineBody()
+    {
+        var sb = new System.Text.StringBuilder();
+        var cfg = RunConfig.Level != null ? RunConfig.Level.GetMechanic<ShrineMechanicConfig>() : null;
+
+        int firePct = cfg != null ? Mathf.RoundToInt(cfg.fireRateBonus * 100f) : 0;
+        int dmgPct  = cfg != null ? Mathf.RoundToInt(cfg.damageBonus   * 100f) : 0;
+
+        sb.AppendLine($"<color=#E8B23A><b>+{firePct}% attack speed, +{dmgPct}% damage</b></color>");
+        sb.AppendLine("to every turret touching it");
+        sb.AppendLine();
+        sb.Append("<size=85%><color=#6A6A6A>Free while it stays adjacent — moving every touching block away lets it vanish, and the buff drops the instant a turret leaves its side. Nothing is upgraded for real.</color></size>");
         return sb.ToString().TrimEnd();
     }
 

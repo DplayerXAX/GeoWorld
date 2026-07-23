@@ -29,13 +29,19 @@ public static class RunStats
     static void OnKill(EnemySurfaceUnit _) => Kills++;
     static void OnBlockPlaced(BlockData _, Vector3Int[] __) => BlocksPlaced++;
 
-    // Stars: cleared = 1, + bonus objectives met, + flawless (no lives lost).
-    public static int ComputeStars(bool objectivesMet, int lives, int maxLives)
+    // Stars scale with how many of the level's objectives got satisfied (including
+    // optional/bonus ones), out of 3. Levels with no authored objectives fall back
+    // to a flawless-clear bonus instead, since there's nothing to count.
+    public static int ComputeStars(int objectivesSatisfied, int objectivesTotal, int lives, int maxLives)
     {
-        int stars = 1;
-        if (objectivesMet) stars++;
-        if (maxLives > 0 && lives >= maxLives) stars++;
-        return Mathf.Clamp(stars, 1, 3);
+        if (objectivesTotal <= 0)
+        {
+            int stars = 1;
+            if (maxLives > 0 && lives >= maxLives) stars++;
+            return Mathf.Clamp(stars, 1, 3);
+        }
+        float frac = objectivesSatisfied / (float)objectivesTotal;
+        return Mathf.Clamp(Mathf.CeilToInt(frac * 3f), 1, 3);
     }
 
     // Shared score formula. Waves/lives/stars carry the base, kills reward active

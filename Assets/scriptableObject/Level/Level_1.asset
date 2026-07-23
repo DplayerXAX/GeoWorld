@@ -47,6 +47,7 @@ MonoBehaviour:
   techReward: 1
   mapBlockRewards:
   - {fileID: 11400000, guid: 7d867ce72998a0f4689850dd5dd2258e, type: 2}
+  rewardConversation: {fileID: 11400000, guid: d7f3117c472edc0489f5ccda3a1f1e1a, type: 2}
   isTutorial: 1
   fixedEndpoints: 1
   startCell: {x: 0, y: 2, z: 1}

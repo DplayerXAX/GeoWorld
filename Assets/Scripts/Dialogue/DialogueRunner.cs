@@ -86,6 +86,15 @@ public class DialogueRunner : MonoBehaviour
     float   _typed, _alphaTarget, _blink;
     int     _lineFrame = -1;   // frame a line was shown — ignore the click that opened it
     bool    _passive;          // display-only (tutorial): no click-advance, no input block
+    bool    _lineGated;        // THIS LINE (line.actionGateId set) waits for CompleteGate, even in an otherwise-normal conversation
+
+    // Effective passive-ness for the CURRENT line: either the whole conversation
+    // was started passive (gameplay's TutorialDirector), or just this one line
+    // demands a real action (DialogueLine.actionGateId — e.g. a LevelSelect
+    // hands-on tutorial mixed into an otherwise click-through conversation).
+    // Everything that used to key off `_passive` alone (input pass-through, the
+    // action icon, the skip button, click-to-advance) now keys off this instead.
+    bool Gated => _passive || _lineGated;
 
     void Awake()
     {
@@ -166,15 +175,17 @@ public class DialogueRunner : MonoBehaviour
         // the opaque letterbox bars (rendered above this canvas) don't fight it for
         // attention — same box, same position, just lower opacity.
         float dimMul = 1f;
-        if (_passive && ShopController.Instance != null && ShopController.Instance.IsExpanded)
+        if (Gated && ShopController.Instance != null && ShopController.Instance.IsExpanded)
             dimMul = passiveShopDim;
 
         float targetAlpha = _alphaTarget * dimMul;
         _group.alpha = Mathf.MoveTowards(_group.alpha, targetAlpha, fadeSpeed * Time.unscaledDeltaTime);
 
-        // Passive (tutorial) dialogue must NOT block the game — the player needs to
-        // interact to complete the step that advances it.
-        _group.blocksRaycasts = _group.interactable = !_passive && _alphaTarget > 0.5f;
+        // Gated dialogue must NOT block the game — the player needs to interact
+        // with the real world (click a block, press F, ...) to complete the step
+        // that advances it, and the dialogue box can't be sitting there eating
+        // that click.
+        _group.blocksRaycasts = _group.interactable = !Gated && _alphaTarget > 0.5f;
 
         if (!IsPlaying) return;
 
@@ -197,8 +208,8 @@ public class DialogueRunner : MonoBehaviour
         //     advance it, only completing whatever the game is asking for will.
         // Showing NOTHING for passive lines (the old behaviour) read as the dialogue
         // being stuck; the icon at least tells the player where to look next.
-        bool showBar    = !_typing && !_choiceMode && !_passive;
-        bool showAction = !_typing && !_choiceMode &&  _passive;
+        bool showBar    = !_typing && !_choiceMode && !Gated;
+        bool showAction = !_typing && !_choiceMode &&  Gated;
         _blink += Time.unscaledDeltaTime;
 
         // Three sine waves at incommensurate frequencies/phases, summed rather than
@@ -233,16 +244,19 @@ public class DialogueRunner : MonoBehaviour
         }
 
         // Skip button: only for conversations the author explicitly marked skippable,
-        // and never on passive dialogue — the player has no other way back into a
+        // and never on gated dialogue — the player has no other way back into a
         // tutorial step's dialogue, so skipping it here would strand the step with
-        // no visible instructions and no way to reopen them.
-        _skipButton.gameObject.SetActive(IsPlaying && !_passive && _convo != null && _convo.skippable);
+        // no visible instructions and no way to reopen them. (Skipping is still
+        // safe in the sense that it won't leave operations permanently locked —
+        // Stop()/Finish() clears the pending gate the same as finishing normally —
+        // but it WOULD desync "you skipped past a step you never actually did".)
+        _skipButton.gameObject.SetActive(IsPlaying && !Gated && _convo != null && _convo.skippable);
 
         // Advance on click / key (ignored while choices are up — buttons handle it).
         // Skip the very frame a line opened, so the click that triggered this
         // conversation (e.g. a tutorial Input step's Mouse0) doesn't instantly
         // advance/dismiss the line it just brought up.
-        if (!_passive && !_choiceMode && Time.frameCount != _lineFrame
+        if (!Gated && !_choiceMode && Time.frameCount != _lineFrame
             && (Input.GetMouseButtonDown(0) || (advanceKey != KeyCode.None && Input.GetKeyDown(advanceKey))
                 || GamepadInput.ConfirmDown))
         {
@@ -369,7 +383,35 @@ public class DialogueRunner : MonoBehaviour
         AudioManager.Instance?.StartTextBlip();
         _lineFrame = Time.frameCount;   // ignore the click that opened this line
 
-        if (!string.IsNullOrEmpty(line.eventId)) OnLineEvent?.Invoke(line.eventId);
+        // This one line waits for CompleteGate(actionGateId) instead of a click —
+        // see the Gated property. Recomputed per line, so a single conversation can
+        // freely mix normal click-through narration with hands-on steps.
+        _lineGated = !string.IsNullOrEmpty(line.actionGateId);
+
+        if (!string.IsNullOrEmpty(line.actionGateId)) OnLineEvent?.Invoke(line.actionGateId);
+        if (!string.IsNullOrEmpty(line.eventId))      OnLineEvent?.Invoke(line.eventId);
+    }
+
+    // Called by whatever system actually performed the real-world action a gated
+    // line (DialogueLine.actionGateId) is asking for — e.g. LevelMapController
+    // after a walk completes, a build panel opens, or a block gets placed. A
+    // mismatched or stale id (nothing gated right now, or gated on something
+    // else) is just a silent no-op — callers are expected to fire this
+    // unconditionally on every occurrence of the action, not just when they
+    // suspect a tutorial is watching.
+    public void CompleteGate(string id)
+    {
+        if (!IsPlaying || _choiceMode || string.IsNullOrEmpty(id)) return;
+        if (_convo == null || _line < 0 || _line >= _convo.lines.Count) return;
+        if (_convo.lines[_line].actionGateId != id) return;
+
+        if (_typing)
+        {
+            _typing = false;
+            _bodyText.maxVisibleCharacters = _bodyText.textInfo.characterCount;
+            AudioManager.Instance?.StopTextBlip();
+        }
+        Advance();
     }
 
     void ShowChoices()
