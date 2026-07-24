@@ -12,6 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 6f3639484a6a67f49b2152d31c0be746, type: 3}
   m_Name: OrderSlowEffect
   m_EditorClassIdentifier: Assembly-CSharp::OrderSlowEffect
-  speedMultiplier: 0.5
+  slowPerBlock: 0.07
+  maxSlowFraction: 0.5
   tickInterval: 0.15
   refreshDuration: 0.4

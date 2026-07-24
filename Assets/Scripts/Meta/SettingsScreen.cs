@@ -83,7 +83,7 @@ public class SettingsScreen : MonoBehaviour
 
     // ── Live-refresh widgets from GameSettings (called on open + after Reset) ──
     Slider _masterSlider, _musicSlider, _sfxSlider, _panSlider, _lookSlider;
-    Toggle _fullscreenToggle, _vsyncToggle;
+    Toggle _fullscreenToggle, _vsyncToggle, _smoothEditToggle;
     TMP_Text _qualityLabel, _frameCapLabel;
     int _qualityIndex, _frameCapIndex;
 
@@ -96,6 +96,7 @@ public class SettingsScreen : MonoBehaviour
         _lookSlider.SetValueWithoutNotify(GameSettings.LookSensitivity);
         _fullscreenToggle.SetIsOnWithoutNotify(GameSettings.Fullscreen);
         _vsyncToggle.SetIsOnWithoutNotify(GameSettings.VSync);
+        _smoothEditToggle.SetIsOnWithoutNotify(GameSettings.SmoothBlockEditing);
 
         _qualityIndex = Mathf.Clamp(GameSettings.QualityLevel, 0, QualitySettings.names.Length - 1);
         _qualityLabel.text = QualitySettings.names.Length > 0 ? QualitySettings.names[_qualityIndex] : "-";
@@ -251,6 +252,7 @@ public class SettingsScreen : MonoBehaviour
 
         _panSlider  = BuildSliderRow(root, "Camera pan speed", 2f, 20f,  v => { GameSettings.CameraPanSpeed  = v; GameSettings.ApplyInput(); GameSettings.Save(); });
         _lookSlider = BuildSliderRow(root, "Look sensitivity", 40f, 300f, v => { GameSettings.LookSensitivity = v; GameSettings.ApplyInput(); GameSettings.Save(); });
+        _smoothEditToggle = BuildToggleRow(root, "Smooth block editing", v => { GameSettings.SmoothBlockEditing = v; GameSettings.Save(); });
 
         _firstControlControls = _panSlider.gameObject;
         return root.gameObject;

@@ -24,6 +24,7 @@ public class TitleFlow : MonoBehaviour
     [Header("Scenes (Build Settings)")]
     public string levelSelectScene = "LevelSelect";
     public string gameplayScene    = "gamePlay";
+    public string galleryScene     = "Gallery";
 
     [Header("Save select")]
     [Tooltip("Level registry — used to compute each slot's completion % in the hover tooltip. Drag the same LevelDatabase the map uses.")]
@@ -73,6 +74,7 @@ public class TitleFlow : MonoBehaviour
     public void PlayEndless()    { RunConfig.SetEndless(); LoadingScreen.Go(gameplayScene); }
     public void OpenSettings()   { SettingsScreen.Open = true; }
     public void LoadLevelSelect(){ LoadingScreen.Go(levelSelectScene); }   // save slots → world select
+    public void GoToGallery()    { LoadingScreen.Go(galleryScene); }       // its own scene, not a Face
     public void Quit()
     {
 #if UNITY_EDITOR

@@ -40,7 +40,7 @@ MonoBehaviour:
       rotation: {x: 0.50000024, y: 0.50000024, z: -0.49999976, w: -0.49999976}
       synergyColor: 6
     - cells:
-      - {x: -4, y: 2, z: 4}
+      - {x: -5, y: 0, z: 4}
       color: {r: 1, g: 0.41999996, b: 0.17999998, a: 1}
       blockTypeName: AoeTurret
       levelId: 

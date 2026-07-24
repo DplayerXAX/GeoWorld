@@ -46,12 +46,12 @@ public class LevelInfoPanel : MonoBehaviour
     [Tooltip("Only needed for levels with no authored waves (rolls from BalanceTable.enemies).")]
     public BalanceTable balance;
     public float thumbSize = 46f;
-    public float tooltipWidth = 260f;
+    public float tooltipWidth = 340f;
 
     [Header("Build keepsake")]
     [Tooltip("Cube prefab for the keepsake thumbnail. Leave null to skip it.")]
     public GameObject cubePrefab;
-    public float buildThumbHeight = 210f;
+    public float buildThumbHeight = 330f;
 
     CanvasGroup _cg;
     TMP_Text    _title, _status, _best, _desc, _enterLabel;
@@ -429,12 +429,12 @@ public class LevelInfoPanel : MonoBehaviour
         bg.raycastTarget = false;
 
         var vlg = rt.gameObject.AddComponent<VerticalLayoutGroup>();
-        vlg.padding = new RectOffset(14, 14, 10, 10);
+        vlg.padding = new RectOffset(18, 18, 14, 14);
         vlg.childControlWidth = true; vlg.childControlHeight = true;
         vlg.childForceExpandWidth = true; vlg.childForceExpandHeight = false;
         rt.gameObject.AddComponent<ContentSizeFitter>().verticalFit = ContentSizeFitter.FitMode.PreferredSize;
 
-        _tooltipText = NewText("Text", rt, bodySize * 0.8f, bodyColor, FontStyles.Normal,
+        _tooltipText = NewText("Text", rt, bodySize, bodyColor, FontStyles.Normal,
                                TextAlignmentOptions.TopLeft, true);
         _tooltipText.raycastTarget = false;
 

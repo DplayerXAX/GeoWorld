@@ -23,7 +23,9 @@ public class PlacementHintBar : MonoBehaviour
 
     static void TrySpawn()
     {
-        if (PlacementController.Instance == null) return;   // gameplay scene only
+        // Gameplay scene (PlacementController) or LevelSelect's map editor (LevelMapController) —
+        // same prompt bar, whichever one is holding a block.
+        if (PlacementController.Instance == null && LevelMapController.Instance == null) return;
         if (FindFirstObjectByType<PlacementHintBar>() != null) return;
         new GameObject("PlacementHintBar").AddComponent<PlacementHintBar>();
     }
@@ -52,10 +54,12 @@ public class PlacementHintBar : MonoBehaviour
 
     void Update()
     {
-        var pc = PlacementController.Instance;
-        if (pc == null) { if (_canvasRt != null) _canvasRt.gameObject.SetActive(false); return; }
+        var pc  = PlacementController.Instance;
+        var map = LevelMapController.Instance;
+        if (pc == null && map == null) { if (_canvasRt != null) _canvasRt.gameObject.SetActive(false); return; }
 
-        bool show = pc.mode == PlacementMode.Edit && pc.currentBlock != null;
+        bool show = (pc != null && pc.mode == PlacementMode.Edit && pc.currentBlock != null)
+                 || (map != null && map.IsEditingBlock);
 
         if (!_built)
         {
@@ -118,6 +122,7 @@ public class PlacementHintBar : MonoBehaviour
         AddPrompt(bar, adjustIcon, "WASDQE Adjust");
         AddPrompt(bar, zoomIcon,   "Scroll Set Dis");
         AddPrompt(bar, rotateIcon, rotateLabel);
+        AddPrompt(bar, rotateIcon, "Tap Cancel");
     }
 
     void AddPrompt(RectTransform parent, Sprite icon, string label)

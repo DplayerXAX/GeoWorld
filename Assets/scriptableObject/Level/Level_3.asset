@@ -18,6 +18,7 @@ MonoBehaviour:
   runSeed: 67
   blocksPerTurn: 4
   turretsPerTurn: 3
+  synergyEnabled: 1
   allowedColors: 01000000040000000200000006000000
   startingShop:
   - block: {fileID: 11400000, guid: 820a88ddf0392914889d66c41c3658a0, type: 2}
@@ -53,6 +54,7 @@ MonoBehaviour:
   mapBlockRewards:
   - {fileID: 11400000, guid: a8fa6df35bf1b6c438e02427ec8409c0, type: 2}
   - {fileID: 11400000, guid: 7d867ce72998a0f4689850dd5dd2258e, type: 2}
+  rewardConversation: {fileID: 0}
   isTutorial: 1
   fixedEndpoints: 1
   startCell: {x: -7, y: 0, z: 7}
@@ -94,7 +96,7 @@ MonoBehaviour:
     unlocksOps: 
     cameraFocus: 0
     focusZoom: 0
-    hint: The Divine grants us ENLIGHTMENT, allowing us to grow through what we see
+    hint: The Divine grants us ENLIGHTENMENT, allowing us to grow through what we see
       and what we can reach...
     conversation: {fileID: 0}
     speaker: {fileID: 11400000, guid: 80993e3c86b4337429c2d6273c8eedc2, type: 2}
@@ -115,7 +117,7 @@ MonoBehaviour:
     unlocksOps: 
     cameraFocus: 0
     focusZoom: 0
-    hint: Once ENLIGHTMENT is awakened, we may spend turret currency to strengthen
+    hint: Once ENLIGHTENMENT is awakened, we may spend turret currency to strengthen
       our turrets.
     conversation: {fileID: 0}
     speaker: {fileID: 11400000, guid: 80993e3c86b4337429c2d6273c8eedc2, type: 2}
@@ -136,7 +138,7 @@ MonoBehaviour:
     unlocksOps: 06000000
     cameraFocus: 4
     focusZoom: 4
-    hint: Place a single block here to complete an ENLIGHTMENT cube...
+    hint: Place a single BLUE block here to complete an ENLIGHTENMENT cube...
     conversation: {fileID: 0}
     speaker: {fileID: 11400000, guid: 80993e3c86b4337429c2d6273c8eedc2, type: 2}
     speakerSlot: 1
@@ -197,7 +199,7 @@ MonoBehaviour:
     unlocksOps: 0c000000
     cameraFocus: 0
     focusZoom: 0
-    hint: ENLIGHTMENT is unique, for it can itself be cultivated. A cube of length
+    hint: ENLIGHTENMENT is unique, for it can itself be cultivated. A cube of length
       two grants one upgrade, a length three cube grants two, and so forth...
     conversation: {fileID: 0}
     speaker: {fileID: 11400000, guid: 80993e3c86b4337429c2d6273c8eedc2, type: 2}
@@ -205,7 +207,7 @@ MonoBehaviour:
     speakerPortrait: 
   - kind: 5
     block: {fileID: 0}
-    origin: {x: 0, y: 0, z: 0}
+    origin: {x: -2, y: 1, z: 5}
     rotation90: {x: 0, y: 0, z: 0}
     cellsOverride: []
     waitSeconds: 0
@@ -215,11 +217,16 @@ MonoBehaviour:
     freeOperations: 1
     hideInCombat: 0
     requiredWave: 0
-    unlocksOps: 
-    cameraFocus: 0
-    focusZoom: 0
-    hint: I sense that a cube of length four may be required before this battle is
-      won...
+    unlocksOps:
+    cameraFocus: 4
+    focusZoom: 9
+    hint: Buy more BLUE blocks and build outward from this cube — a cube of length
+      four may be required before this battle is won...
+    suggestCubeSide: 4
+    suggestOrigin: {x: -4, y: 0, z: 4}
+    suggestCubeSide2: 3
+    suggestOrigin2: {x: -4, y: 0, z: 4}
+    asideText: I mark up an suggested area for you to form enlightment.....
     conversation: {fileID: 0}
     speaker: {fileID: 11400000, guid: 80993e3c86b4337429c2d6273c8eedc2, type: 2}
     speakerSlot: 1
@@ -243,7 +250,35 @@ MonoBehaviour:
     conversation: {fileID: 0}
     speaker: {fileID: 11400000, guid: 80993e3c86b4337429c2d6273c8eedc2, type: 2}
     speakerSlot: 1
-    speakerPortrait: 
+    speakerPortrait:
+  - kind: 5
+    block: {fileID: 0}
+    origin: {x: 0, y: 0, z: 0}
+    rotation90: {x: 0, y: 0, z: 0}
+    cellsOverride: []
+    waitSeconds: 0
+    count: 0
+    inputKey: 323
+    pathLength: 0
+    freeOperations: 1
+    hideInCombat: 0
+    requiredWave: 2
+    unlocksOps:
+    cameraFocus: 0
+    focusZoom: 0
+    hint: A Shrine has taken root beside our works, My Lord. Any turret whose foundation
+      touches it borrows its blessing — swifter fire, harder strikes. Move the turret
+      away, and the gift withdraws; it is loaned, not given. A new Shrine will rise
+      with each round that follows — build where its light can reach.
+    suggestCubeSide: 0
+    suggestOrigin: {x: 0, y: 0, z: 0}
+    suggestCubeSide2: 0
+    suggestOrigin2: {x: 0, y: 0, z: 0}
+    asideText:
+    conversation: {fileID: 0}
+    speaker: {fileID: 11400000, guid: 80993e3c86b4337429c2d6273c8eedc2, type: 2}
+    speakerSlot: 1
+    speakerPortrait:
   startingLayout: {fileID: 11400000, guid: 9843050dd6dbe5841a144ca40094ed6a, type: 2}
   overrideEndpointDistance: 1
   endpointMinDistance: 8

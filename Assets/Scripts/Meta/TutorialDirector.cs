@@ -80,14 +80,9 @@ public class TutorialDirector : MonoBehaviour
 
         var step = Cur;
         if (step == null) return true;            // tutorial finished → no gating
-
-        // Run is gated strictly, regardless of freeOperations — a step marked "free"
-        // to let the player pan the camera or otherwise poke around (e.g. a Purchase
-        // step) shouldn't also leak permission to skip straight to combat. Only the
-        // actual Run-kind step, or an explicit unlocksOps, allows it.
-        if (op == TutorialStepKind.Run)
-            return step.kind == TutorialStepKind.Run || IsOpUnlockedByPastStep(op);
-
+        // freeOperations means "no restrictions at all" (a true sandbox/review step) —
+        // if a step wants to restrict WHAT can be bought/run, it must not set this;
+        // see the two PurchaseTurret steps in Level_tuto for the intended pattern.
         if (step.freeOperations) return true;     // sandbox step
         // Hidden-in-combat steps lift their gating during the wave so the tutorial
         // never blocks combat actions.
@@ -165,6 +160,13 @@ public class TutorialDirector : MonoBehaviour
     GameObject _ghost;
     Material   _ghostMat;
     readonly List<Renderer> _ghostRends = new();
+
+    [Tooltip("Suggestion box tint — a non-binding hint (see TutorialStep.suggestCubeSide), distinct from ghostColor's binding-placement look.")]
+    public Color suggestColor = new Color(0.25f, 0.55f, 1f, 0.35f);
+    [Tooltip("Tint for the optional second, layered suggestion box (see TutorialStep.suggestCubeSide2).")]
+    public Color suggestColor2 = new Color(0.95f, 0.75f, 0.25f, 0.3f);
+    GameObject _suggestBox, _suggestBox2;
+    Renderer   _suggestRend, _suggestRend2;
 
     // ── Hint UI (UGUI) ────────────────────────────────────────────────────────
     Canvas        _hintCanvas;
@@ -247,6 +249,8 @@ public class TutorialDirector : MonoBehaviour
         if (pc != null && pc.placementConstraint == (System.Func<BlockData, Vector3Int[], bool>)MatchesStep)
             pc.placementConstraint = null;
         if (_ghost != null) Destroy(_ghost);
+        if (_suggestBox != null) Destroy(_suggestBox);
+        if (_suggestBox2 != null) Destroy(_suggestBox2);
         if (_runner != null) _runner.OnFinished -= OnDialogueFinished;
         if (_runtimeConvo != null) Destroy(_runtimeConvo);
     }
@@ -345,6 +349,19 @@ public class TutorialDirector : MonoBehaviour
             var c = new Color(ghostColor.r, ghostColor.g, ghostColor.b, a);
             for (int i = 0; i < _ghostRends.Count; i++)
                 if (_ghostRends[i] != null) MpbColor.Set(_ghostRends[i], c);
+        }
+
+        if (_suggestRend != null)
+        {
+            float a = suggestColor.a * (0.5f + 0.5f * Mathf.PingPong(Time.time * 0.8f, 1f));
+            MpbColor.Set(_suggestRend, new Color(suggestColor.r, suggestColor.g, suggestColor.b, a));
+        }
+        if (_suggestRend2 != null)
+        {
+            // Slightly out of phase with the first box so the two tiers read as
+            // distinct layers rather than pulsing in lockstep.
+            float a = suggestColor2.a * (0.5f + 0.5f * Mathf.PingPong(Time.time * 0.8f + 0.5f, 1f));
+            MpbColor.Set(_suggestRend2, new Color(suggestColor2.r, suggestColor2.g, suggestColor2.b, a));
         }
 
         UpdateHint();
@@ -475,6 +492,8 @@ public class TutorialDirector : MonoBehaviour
     void HideStepVisuals()
     {
         if (_ghost != null) { Destroy(_ghost); _ghost = null; _ghostRends.Clear(); }
+        // Suggestion box is intentionally NOT cleared here — it's a standing hint,
+        // not tied to any one step's lifecycle (see ShowStep()).
         CloseDialogue();
         if (_hintCanvas != null) _hintCanvas.enabled = false;
     }
@@ -497,6 +516,12 @@ public class TutorialDirector : MonoBehaviour
 
         if (pc != null) pc.placementConstraint = MatchesStep;   // re-arm (Place restricts; others pass)
         if (step.kind == TutorialStepKind.Place) BuildGhost(step);
+        if (step.suggestCubeSide > 0 && _suggestBox == null)
+            _suggestRend = BuildSuggestBox(step.suggestOrigin, step.suggestCubeSide, suggestColor, out _suggestBox);
+        if (step.suggestCubeSide2 > 0 && _suggestBox2 == null)
+            _suggestRend2 = BuildSuggestBox(step.suggestOrigin2, step.suggestCubeSide2, suggestColor2, out _suggestBox2);
+        if (!string.IsNullOrEmpty(step.asideText))
+            AsideBubble.Show(step.speaker, step.speakerPortrait, step.asideText);
 
         FocusCameraForStep(step);
 
@@ -709,6 +734,34 @@ public class TutorialDirector : MonoBehaviour
             MpbColor.Set(r, ghostColor);
             _ghostRends.Add(r);
         }
+    }
+
+    // A single translucent box spanning an N×N×N region — a non-binding suggestion,
+    // not a placement requirement (unlike BuildGhost's per-cell Place-step ghost).
+    // Persists once built regardless of step changes — see ShowStep()/HideStepVisuals().
+    // Two of these can be layered (e.g. a 3³ tier nested inside a 4³ tier) — see
+    // suggestCubeSide/suggestCubeSide2 in ShowStep().
+    Renderer BuildSuggestBox(Vector3Int origin, int side, Color tint, out GameObject box)
+    {
+        box = null;
+        var grid = GridSystem.instance;
+        if (grid == null) return null;
+
+        side = Mathf.Max(1, side);
+        float cs = grid.cellSize;
+        Vector3 min = grid.GridToWorld(origin) - Vector3.one * (cs * 0.5f);
+        Vector3 center = min + Vector3.one * (cs * side * 0.5f);
+
+        box = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        box.name = "TutorialSuggestBox";
+        box.transform.position   = center;
+        box.transform.localScale = Vector3.one * cs * side;
+        var col = box.GetComponent<Collider>(); if (col != null) Destroy(col);
+        var rend = box.GetComponent<Renderer>();
+        rend.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        rend.sharedMaterial    = GhostMat();
+        MpbColor.Set(rend, tint);
+        return rend;
     }
 
     Material GhostMat()
