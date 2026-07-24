@@ -22,6 +22,9 @@ public class TitleCubeShowcase : MonoBehaviour
     [Tooltip("Random order instead of sequential (avoids immediate repeats).")]
     public bool shuffle;
 
+    [Tooltip("When false, the cube stops auto-cycling materials (still spins). Set an exact material with ShowIndex().")]
+    public bool autoAdvance = true;
+
     [Header("Motion")]
     [Tooltip("Constant slow spin, deg/sec (x, y, z).")]
     public Vector3 spinDegPerSec = new Vector3(8f, 18f, 0f);
@@ -37,6 +40,9 @@ public class TitleCubeShowcase : MonoBehaviour
     float    _punchT;
     bool     _punching;
 
+    // Which material is currently showing — read by GalleryScreen to label it.
+    public int CurrentIndex => _index;
+
     void Awake()
     {
         _rend      = GetComponent<Renderer>();
@@ -48,8 +54,11 @@ public class TitleCubeShowcase : MonoBehaviour
     {
         transform.Rotate(spinDegPerSec * Time.deltaTime, Space.Self);
 
-        _timer += Time.deltaTime;
-        if (_timer >= swapInterval) { _timer = 0f; Next(); }
+        if (autoAdvance)
+        {
+            _timer += Time.deltaTime;
+            if (_timer >= swapInterval) { _timer = 0f; Next(); }
+        }
 
         if (_punching)
         {
@@ -74,6 +83,18 @@ public class TitleCubeShowcase : MonoBehaviour
         else _index = (_index + 1) % materials.Count;
 
         if (materials[_index] != null) _rend.sharedMaterial = materials[_index];
+        _punchT   = 0f;
+        _punching = swapPunch > 0f;
+    }
+
+    // Pin an exact material (used by the Gallery detail view's prev/next). Punches
+    // on change, same as an auto-swap.
+    public void ShowIndex(int i)
+    {
+        if (_rend == null || materials == null || materials.Count == 0) return;
+        _index = Mathf.Clamp(i, 0, materials.Count - 1);
+        if (materials[_index] != null) _rend.sharedMaterial = materials[_index];
+        _timer    = 0f;
         _punchT   = 0f;
         _punching = swapPunch > 0f;
     }

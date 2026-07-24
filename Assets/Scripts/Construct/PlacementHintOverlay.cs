@@ -1,16 +1,14 @@
 using System.Collections.Generic;
 using UnityEngine;
-using TMPro;
 
 // Edit-mode placement helper overlay. Visible only while PlacementController
-// is in Edit mode with a held block. Three layers, all bbox-aware, all real
-// 3D world-space objects (no OnGUI/UGUI — labels are world-space TextMeshPro
-// billboards so they read as part of the scene, not a screen overlay):
+// is in Edit mode with a held block. Two layers, both bbox-aware, real 3D
+// world-space objects — no OnGUI/UGUI, no text labels (those live in the
+// fixed screen prompt bar instead — see PlacementHintBar):
 //
 //   1. XYZ axis dashed lines through cursor cell (world axes, R/G/B)
-//   2. 6 movement arrows hugging the block's outer faces (WASDQE labels)
-//   3. 3 rotation rings encircling the block, colored per-axis (1/2/3 legend
-//      lives in the fixed screen prompt bar instead — see PlacementHintBar)
+//   2. 6 movement arrows hugging the block's outer faces
+//   3. 3 rotation rings encircling the block, colored per-axis
 //
 // Block-shape aware:
 //   • Arrow positions adapt to the rotated block bbox each frame, so they
@@ -37,8 +35,6 @@ public class PlacementHintOverlay : MonoBehaviour
 
     [Header("Movement arrows (WASDQE)")]
     public bool showMovementArrows = true;
-    [Tooltip("If false, the WASDQE letter labels are hidden (arrows still draw if showMovementArrows is true).")]
-    public bool showMovementLabels = false;
     [Tooltip("Gap between the arrow and the block's outer face, in cells.")]
     [Min(0.1f)] public float arrowGap   = 0.65f;
     [Min(0.05f)] public float arrowSize = 0.20f;
@@ -75,16 +71,6 @@ public class PlacementHintOverlay : MonoBehaviour
     [Tooltip("Seconds for the whole overlay to fade in when entering Edit mode.")]
     [Min(0f)] public float fadeInDuration = 0.25f;
 
-    [Header("World-space labels (TextMeshPro)")]
-    [Tooltip("Optional TMP font for the labels (leave null for TMP default).")]
-    public TMP_FontAsset labelFont;
-    [Min(0.01f)] public float labelWorldSize = 0.22f;
-    public Color labelColor = Color.white;
-    [Tooltip("Wrap the label letter in brackets, e.g. [W] — looks less rigid than bare W.")]
-    public bool labelBrackets = true;
-    [Tooltip("Extra push outward from the arrow tip / ring rim, in cell-units, so labels clear the geometry.")]
-    [Min(0f)] public float labelPushCells = 0.35f;
-
     // ── State ────────────────────────────────────────────────────────────
 
     sealed class Arrow
@@ -98,7 +84,6 @@ public class PlacementHintOverlay : MonoBehaviour
         public KeyCode    key;
         public float      lastPressTime;
         public float      bobPhase;          // 0..2π for desync
-        public TextMeshPro labelTmp;
     }
 
     sealed class Ring
@@ -216,21 +201,6 @@ public class PlacementHintOverlay : MonoBehaviour
             var c   = Color.Lerp(arrowFlashColor, arrowColor, t);
             c.a    *= fadeAlpha;
             if (a.renderer != null) MpbColor.Set(a.renderer, c);
-
-            // 6) Label: sits just beyond the arrow tip, always facing camera.
-            if (a.labelTmp != null)
-            {
-                bool labelShow = showMovementLabels;
-                if (a.labelTmp.gameObject.activeSelf != labelShow) a.labelTmp.gameObject.SetActive(labelShow);
-                if (labelShow)
-                {
-                    a.labelTmp.transform.position = a.obj.transform.position + a.direction * (labelPushCells * cell);
-                    if (mainCam != null)
-                        a.labelTmp.transform.rotation = Quaternion.LookRotation(a.labelTmp.transform.position - mainCam.transform.position, Vector3.up);
-                    var lc = c; lc.a = fadeAlpha;
-                    a.labelTmp.color = lc;
-                }
-            }
         }
 
         // 4) Update ring center, axis, radius + slow spin.
@@ -457,7 +427,6 @@ public class PlacementHintOverlay : MonoBehaviour
                 key             = d.k,
                 lastPressTime   = -999f,
                 bobPhase        = i * 1.04f,
-                labelTmp        = BuildWorldLabel($"Label_{d.lbl}", FormatLabel(d.lbl)),
             };
         }
     }
@@ -554,25 +523,6 @@ public class PlacementHintOverlay : MonoBehaviour
             r.segments[s].SetPosition(0, p0);
             r.segments[s].SetPosition(1, p1);
         }
-    }
-
-    string FormatLabel(string letter) => labelBrackets ? $"[{letter}]" : letter;
-
-    // A real 3D TextMeshPro (not UGUI, not OnGUI) — lives in the scene, billboards
-    // to face the camera each frame from Update(). Genuinely world-space.
-    TextMeshPro BuildWorldLabel(string name, string text)
-    {
-        var go = new GameObject(name);
-        go.transform.SetParent(_root.transform, false);
-        var tmp = go.AddComponent<TextMeshPro>();
-        if (labelFont != null) tmp.font = labelFont;
-        tmp.text = text;
-        tmp.fontSize = labelWorldSize * 40f;   // TextMeshPro world units ≈ fontSize/40 world-space height
-        tmp.color = labelColor;
-        tmp.fontStyle = FontStyles.Bold;
-        tmp.alignment = TextAlignmentOptions.Center;
-        tmp.raycastTarget = false;
-        return tmp;
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────

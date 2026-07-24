@@ -398,7 +398,8 @@ public class HudSidePanels : MonoBehaviour
                 int payout = units > 0 ? units * Mathf.Max(0, ah.blockPerUnit) + Mathf.Max(0, ah.flatBonus) : 0;
                 return $"{units} piece{(units == 1 ? "" : "s")}  ·  +{payout}/turn";
             case OrderSlowEffect os:
-                int slowPct = Mathf.RoundToInt((1f - os.speedMultiplier) * 100f);
+                int blocks  = SynergyEffectUtil.CountParticipatingPieces(a);
+                int slowPct = Mathf.RoundToInt(os.SlowFractionFor(blocks) * 100f);
                 return $"-{slowPct}% speed  ·  {os.AffectedEnemyCount} enemy affected";
             case HarmonyAttackSpeedEffect ha:
                 int spdPct = Mathf.RoundToInt(ha.attackSpeedBonus * 100f);

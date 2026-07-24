@@ -251,6 +251,18 @@ public class TutorialStep
 
     [TextArea] public string hint;
 
+    [Header("Suggestion highlight + aside (optional)")]
+    [Tooltip("If > 0, shows a translucent suggestion box (side³ cells, minimum corner at suggestOrigin) when this step begins — a non-binding hint, not a placement requirement. 0 = no box.")]
+    public int suggestCubeSide = 0;
+    [Tooltip("Grid cell at the suggestion box's minimum corner.")]
+    public Vector3Int suggestOrigin;
+    [Tooltip("Optional second suggestion box, layered with the first (e.g. a 3³ tier nested inside a 4³ tier — same idea, different size). 0 = no second box.")]
+    public int suggestCubeSide2 = 0;
+    [Tooltip("Grid cell at the second suggestion box's minimum corner.")]
+    public Vector3Int suggestOrigin2;
+    [Tooltip("If set, pops a small AsideBubble (using `speaker`) when this step begins — separate from the main hint box.")]
+    [TextArea] public string asideText;
+
     [Header("Dialogue (optional — delivers the hint as a conversation instead of the hint box)")]
     [Tooltip("Full conversation played when the step begins. Overrides `speaker` + `hint`.")]
     public DialogueConversation conversation;

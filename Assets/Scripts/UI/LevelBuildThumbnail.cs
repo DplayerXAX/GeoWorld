@@ -105,7 +105,10 @@ public static class LevelBuildThumbnail
             halfW = Mathf.Max(halfW, Mathf.Abs(local.x));
             halfH = Mathf.Max(halfH, Mathf.Abs(local.y));
         }
-        cam.orthographicSize = Mathf.Max(0.5f, Mathf.Max(halfH, halfW) * 1.06f);   // 1.06 = thin margin
+        // Margin scales with build size: a small build sits back with breathing room
+        // (1.06), a big one crops in tighter (0.95) so it still fills the frame.
+        float margin = Mathf.Lerp(1.06f, 0.95f, Mathf.InverseLerp(4f, 40f, cellCount));
+        cam.orthographicSize = Mathf.Max(0.5f, Mathf.Max(halfH, halfW) * margin);
 
         var rt = new RenderTexture(Size, Size, 16, RenderTextureFormat.ARGB32) { useMipMap = false };
         cam.targetTexture = rt;

@@ -232,12 +232,19 @@ public partial class PlacementController
         // cap; show the actionable hint instead of two "Locked" buttons.
         if (turret.BlockedByEnlightenmentGate) enlightenmentHint = EnlightenmentHint;
 
+        // Upgrades cost turret currency equal to the turret's own price; can't
+        // afford → buttons read as disabled (and TryUpgrade* re-checks on click).
+        int cost      = ComputeUpgradeCost(ins);
+        bool canAfford = ResourceManager.Instance == null
+                      || ResourceManager.Instance.CanAfford(cost, ins.data.blockType);
+        string tag = $"  ({cost}¤)";
+
         if (turret.mode == TurretController.Mode.Basic)
         {
-            canUpgradeA = turret.CanUpgradeBasicPath(BasicTurretUpgradePath.Power, out _);
-            canUpgradeB = turret.CanUpgradeBasicPath(BasicTurretUpgradePath.Burst, out _);
-            upgradeAText = $"Power: {turret.NextBasicUpgradeDescription(BasicTurretUpgradePath.Power)}";
-            upgradeBText = $"Burst: {turret.NextBasicUpgradeDescription(BasicTurretUpgradePath.Burst)}";
+            canUpgradeA = canAfford && turret.CanUpgradeBasicPath(BasicTurretUpgradePath.Power, out _);
+            canUpgradeB = canAfford && turret.CanUpgradeBasicPath(BasicTurretUpgradePath.Burst, out _);
+            upgradeAText = $"Power: {turret.NextBasicUpgradeDescription(BasicTurretUpgradePath.Power)}{tag}";
+            upgradeBText = $"Burst: {turret.NextBasicUpgradeDescription(BasicTurretUpgradePath.Burst)}{tag}";
             onUpgradeA = () => _panelPowerUpgradeRequested = true;
             onUpgradeB = () => _panelBurstUpgradeRequested = true;
             return;
@@ -245,10 +252,10 @@ public partial class PlacementController
 
         if (turret.mode == TurretController.Mode.Aoe)
         {
-            canUpgradeA = turret.CanUpgradeAoePath(AoeTurretUpgradePath.Fire, out _);
-            canUpgradeB = turret.CanUpgradeAoePath(AoeTurretUpgradePath.Gravity, out _);
-            upgradeAText = $"Fire: {turret.NextAoeUpgradeDescription(AoeTurretUpgradePath.Fire)}";
-            upgradeBText = $"Gravity: {turret.NextAoeUpgradeDescription(AoeTurretUpgradePath.Gravity)}";
+            canUpgradeA = canAfford && turret.CanUpgradeAoePath(AoeTurretUpgradePath.Fire, out _);
+            canUpgradeB = canAfford && turret.CanUpgradeAoePath(AoeTurretUpgradePath.Gravity, out _);
+            upgradeAText = $"Fire: {turret.NextAoeUpgradeDescription(AoeTurretUpgradePath.Fire)}{tag}";
+            upgradeBText = $"Gravity: {turret.NextAoeUpgradeDescription(AoeTurretUpgradePath.Gravity)}{tag}";
             onUpgradeA = () => _panelAoeFireUpgradeRequested = true;
             onUpgradeB = () => _panelAoeGravityUpgradeRequested = true;
         }

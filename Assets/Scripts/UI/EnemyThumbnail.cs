@@ -33,16 +33,24 @@ public class EnemyThumbnail : MonoBehaviour
     // frame if it's already cached). Safe to call for many rows at once.
     public static void Request(EnemySurfaceUnit prefab, Image target)
     {
-        if (prefab == null || target == null) return;
+        if (target == null) return;
+        Request(prefab, s => Apply(target, s));
+    }
+
+    // Sprite-callback overload — for world-space SpriteRenderers or anything that
+    // isn't a UGUI Image. `onReady` fires immediately if cached, else once rendered.
+    public static void Request(EnemySurfaceUnit prefab, System.Action<Sprite> onReady)
+    {
+        if (prefab == null || onReady == null) return;
 
         if (_cache.TryGetValue(prefab, out var cached) && cached != null)
         {
-            Apply(target, cached);
+            onReady(cached);
             return;
         }
 
         Ensure();
-        _inst.StartCoroutine(_inst.Shoot(prefab, target));
+        _inst.StartCoroutine(_inst.Shoot(prefab, onReady));
     }
 
     static void Apply(Image target, Sprite s)
@@ -54,7 +62,7 @@ public class EnemyThumbnail : MonoBehaviour
         target.enabled        = true;
     }
 
-    IEnumerator Shoot(EnemySurfaceUnit prefab, Image target)
+    IEnumerator Shoot(EnemySurfaceUnit prefab, System.Action<Sprite> deliver)
     {
         // Park each subject at its own spot so two concurrent requests can't
         // photobomb each other.
@@ -86,7 +94,7 @@ public class EnemyThumbnail : MonoBehaviour
         // Frame whatever the prefab actually built, so big and small enemies each
         // fill the portrait instead of being sized by a guessed constant.
         float radius = MeasureRadius(go.transform, spot);
-        cam.orthographicSize = Mathf.Max(0.15f, radius * 1.25f);
+        cam.orthographicSize = Mathf.Max(0.15f, radius * 0.95f);   // tighter crop — fills more of the frame
         camGo.transform.position = spot + new Vector3(0f, radius * 0.35f, -5f);
         camGo.transform.LookAt(spot);
 
@@ -111,7 +119,7 @@ public class EnemyThumbnail : MonoBehaviour
         sprite.hideFlags = HideFlags.DontSave;
         _cache[prefab] = sprite;
 
-        Apply(target, sprite);   // target may have been destroyed — Apply null-checks
+        deliver?.Invoke(sprite);
     }
 
     // Radius of the built visual around `centre`, from renderer bounds.

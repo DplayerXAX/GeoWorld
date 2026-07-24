@@ -317,8 +317,9 @@ MonoBehaviour:
   autoScaleCanvas: 1
   balance: {fileID: 0}
   thumbSize: 46
+  tooltipWidth: 260
   cubePrefab: {fileID: 1003193531}
-  buildThumbHeight: 210
+  buildThumbHeight: 330
 --- !u!225 &303145626
 CanvasGroup:
   m_ObjectHideFlags: 0
@@ -1268,6 +1269,7 @@ MonoBehaviour:
   - {fileID: 11400000, guid: 820a88ddf0392914889d66c41c3658a0, type: 2}
   buildModeKey: 102
   rotateSpeed: 10
+  ghostFollowSpeed: 16
   ghostValidColor: {r: 0.35, g: 1, b: 0.45, a: 0.55}
   ghostInvalidColor: {r: 1, g: 0.3, b: 0.3, a: 0.55}
   playerBuiltColor: {r: 0.55, g: 0.85, b: 0.95, a: 1}
@@ -1301,6 +1303,7 @@ MonoBehaviour:
     blockAssetName: corner
     rotation: {x: 0, y: 0, z: 0, w: 1}
   trayExpandSpeed: 9
+  defaultCharacter: {fileID: 11400000, guid: 80993e3c86b4337429c2d6273c8eedc2, type: 2}
   monumentMaterial: {fileID: 0}
   monumentScale: 1
   monumentLight: 1.6

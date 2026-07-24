@@ -19,6 +19,9 @@ public static class GameSettings
     // ── Controls ──
     public static float CameraPanSpeed  = 8f;        // → PlacementController.panSpeed
     public static float LookSensitivity = 120f;      // → OrbitCamera.speed
+    // On: held-block ghosts glide between cells (both PlacementController in gameplay
+    // and LevelMapController in LevelSelect). Off: both snap instantly, cell to cell.
+    public static bool SmoothBlockEditing = true;
 
     public static readonly int[] FrameCaps = { 0, 30, 60, 120, 144 };
 
@@ -44,6 +47,7 @@ public static class GameSettings
 
         CameraPanSpeed  = PlayerPrefs.GetFloat("set.panspeed", CameraPanSpeed);
         LookSensitivity = PlayerPrefs.GetFloat("set.looksens", LookSensitivity);
+        SmoothBlockEditing = PlayerPrefs.GetInt("set.smoothedit", SmoothBlockEditing ? 1 : 0) == 1;
     }
 
     public static void Save()
@@ -57,6 +61,7 @@ public static class GameSettings
         PlayerPrefs.SetInt("set.framecap",   FrameCap);
         PlayerPrefs.SetFloat("set.panspeed", CameraPanSpeed);
         PlayerPrefs.SetFloat("set.looksens", LookSensitivity);
+        PlayerPrefs.SetInt("set.smoothedit", SmoothBlockEditing ? 1 : 0);
         PlayerPrefs.Save();
     }
 
@@ -96,6 +101,7 @@ public static class GameSettings
         Fullscreen = true; VSync = true;
         QualityLevel = QualitySettings.GetQualityLevel(); FrameCap = 0;
         CameraPanSpeed = 8f; LookSensitivity = 120f;
+        SmoothBlockEditing = true;
         Save(); ApplyAll();
     }
 }

@@ -165,12 +165,24 @@ public partial class LevelMapController : MonoBehaviour
     TMP_Text    _toastText;
     float       _toastHideAt;
 
+    public static LevelMapController Instance;
+    // True while a block is being held/edited on the map — same shape of question as
+    // PlacementController.mode==Edit, so shared UI (PlacementHintBar) can show for both.
+    public bool IsEditingBlock => _buildMode && _ghostBlock != null;
+
+    [Header("Aside test")]
+    public DialogueCharacter defaultCharacter;
+
+    void Awake() => Instance = this;
+
     void Start()
     {
         // Must run before ANYTHING else touches SaveSystem.Profile this session —
         // including RebuildPlacedMapBlocks below and LevelNode.Refresh's unlock
         // checks — so a fresh profile is what every system sees from frame one.
         if (resetSaveOnStart) SaveSystem.ResetProfile();
+
+        AsideBubble.Show(defaultCharacter, "default", "Welcome back");
 
         timeLoop.Post(this.gameObject);
         _cam = Camera.main;
@@ -616,8 +628,9 @@ public partial class LevelMapController : MonoBehaviour
         // `cleared` goes true:
         //   • A real theme → that theme's own effect, reusing gameplay's actual
         //     visualizer geometry: Harmony grows vines (VineEffect), Abundance
-        //     blooms a flower field (BloomPatch). Themes without a bespoke effect
-        //     authored yet fall back to the ring tinted in their colour.
+        //     blooms a flower field (BloomPatch), Enlightenment hangs a star-sphere
+        //     (ConstellationView). Themes without a bespoke effect authored yet fall
+        //     back to the ring tinted in their colour.
         //   • Universal / None → the plain original GOLD frame, no theme colour and
         //     no bespoke effect — "you cleared it, but not under any one banner".
         public void SetCleared(bool cleared, BlockColor color)
@@ -635,6 +648,79 @@ public partial class LevelMapController : MonoBehaviour
             _themeColor = BlockColorPalette.Get(color);
             if      (color == BlockColor.Harmony && _vinePrefab != null) GrowVine();
             else if (color == BlockColor.Abundance)                      GrowBloom();
+            else if (color == BlockColor.Enlightenment)                  GrowStars();
+        }
+
+        // Enlightenment — the SAME ConstellationView star-sphere gameplay's
+        // EnlightenmentConstellationVisualizer orbits around a claimed cube, rebuilt
+        // here with the visualizer's own defaults (fibonacci sphere, nearest-neighbour
+        // mesh, theme×white stars with additive glow, twinkle + slow tumble) so the
+        // celebration reads identically to the in-game synergy.
+        void GrowStars()
+        {
+            if (_effectGrown || _cellTops == null || _cellTops.Length == 0) return;
+            _effectGrown = true;
+
+            // Sphere wraps the block's footprint. Bounds from the top faces →
+            // circumscribed radius = side·√3/2·radiusMul, matching the visualizer.
+            Vector3 mn = _cellTops[0], mx = _cellTops[0];
+            foreach (var p in _cellTops) { mn = Vector3.Min(mn, p); mx = Vector3.Max(mx, p); }
+            Vector3 center = (mn + mx) * 0.5f + Vector3.up * (_cellSize * 0.5f);
+            float side   = Mathf.Max(mx.x - mn.x, mx.z - mn.z) + _cellSize;
+            float radius = side * 0.5f * 1.7320508f * 1.15f;
+
+            const int N = 24;
+            const float GA = 2.399963229728653f;   // golden angle
+            var stars = new Vector3[N];
+            for (int i = 0; i < N; i++)
+            {
+                float t   = (i + 0.5f) / N;
+                float y   = 1f - 2f * t;
+                float r   = Mathf.Sqrt(Mathf.Max(0f, 1f - y * y));
+                float phi = GA * i;
+                stars[i] = center + new Vector3(Mathf.Cos(phi) * r, y, Mathf.Sin(phi) * r) * radius;
+            }
+            var edges = NearestLinks(stars, 3);
+
+            // Colours + brightness copied from EnlightenmentConstellationVisualizer.
+            Color starCol = Color.Lerp(_themeColor, Color.white, 0.5f) * 2f;  starCol.a = 1f;
+            Color lineCol = _themeColor * 1.2f;                                lineCol.a = 0.5f;
+
+            var go = new GameObject("EnlightenmentStarSphere");
+            go.transform.SetParent(_celebRoot, worldPositionStays: true);
+            var view = go.AddComponent<ConstellationView>();
+            view.twinkleSpeed = 3f; view.twinkleDepth = 0.5f;
+            view.spinSpeed = 24f;   view.tiltSpeed = 6f;
+            view.fadeInDuration = 0.6f;
+            view.Build(center, stars, edges, starCol, lineCol, 0.35f * _cellSize);
+        }
+
+        // Each star linked to its k nearest neighbours (deduped) — the same faceted
+        // sphere mesh EnlightenmentConstellationVisualizer.BuildSphereLinks makes.
+        static List<Vector2Int> NearestLinks(Vector3[] pts, int k)
+        {
+            var edges = new List<Vector2Int>();
+            int n = pts.Length;
+            if (n < 2) return edges;
+            k = Mathf.Clamp(k, 1, n - 1);
+            var have  = new HashSet<long>();
+            var order = new int[n];
+            var dist  = new float[n];
+            for (int i = 0; i < n; i++)
+            {
+                for (int j = 0; j < n; j++) { order[j] = j; dist[j] = (pts[j] - pts[i]).sqrMagnitude; }
+                System.Array.Sort(order, (x, y) => dist[x].CompareTo(dist[y]));
+                int added = 0;
+                for (int m = 0; m < n && added < k; m++)
+                {
+                    int j = order[m];
+                    if (j == i) continue;
+                    long key = i < j ? ((long)i << 32) | (uint)j : ((long)j << 32) | (uint)i;
+                    if (have.Add(key)) edges.Add(new Vector2Int(i, j));
+                    added++;
+                }
+            }
+            return edges;
         }
 
         // Abundance — the same BloomPatch flower field gameplay plants on a claimed
@@ -928,6 +1014,7 @@ public partial class LevelMapController : MonoBehaviour
                 {
                     var col = new Vector2Int(cur.x + h.x, cur.z + h.y);
                     if (!_columnTop.TryGetValue(col, out var nc)) continue;
+                    if (!ClimbClear(cur, nc)) continue;   // same rule as the pawn walk, so reachability matches
                     if (_reachedFrom.TryAdd(nc, cur)) q.Enqueue(nc);   // remember who lit it
                 }
             }
@@ -1100,8 +1187,29 @@ public partial class LevelMapController : MonoBehaviour
     Vector3 BlockTop(Vector3Int c)
         => gridSystem.GridToWorld(c) + Vector3.up * (gridSystem.cellSize * 0.5f);
 
+    // A step between adjacent columns' tops is only walkable if the wall being
+    // climbed is SOLID between the two heights — no empty cell in the middle.
+    // Height itself is unlimited (you can scale a tall contiguous stack); it's the
+    // gap that's forbidden. Ascending checks the taller TARGET column, descending
+    // checks the taller SOURCE column.
+    bool ClimbClear(Vector3Int from, Vector3Int to)
+    {
+        if (to.y == from.y) return true;
+        if (to.y > from.y)
+        {
+            for (int y = from.y + 1; y <= to.y; y++)
+                if (!_allCells.Contains(new Vector3Int(to.x, y, to.z))) return false;
+        }
+        else
+        {
+            for (int y = to.y + 1; y <= from.y; y++)
+                if (!_allCells.Contains(new Vector3Int(from.x, y, from.z))) return false;
+        }
+        return true;
+    }
+
     // BFS across the surface: from a top cell, step to each 4-neighbour COLUMN's
-    // top-exposed cell at ANY height — the pawn climbs the shared edge to get there.
+    // top-exposed cell — climbing the shared edge, provided ClimbClear allows it.
     List<Vector3Int> SurfaceBfs(Vector3Int start, HashSet<Vector3Int> goals, HashSet<Vector3Int> surface)
     {
         if (!surface.Contains(start)) return null;
@@ -1123,6 +1231,7 @@ public partial class LevelMapController : MonoBehaviour
             {
                 var col = new Vector2Int(cur.x + h.x, cur.z + h.y);
                 if (!_columnTop.TryGetValue(col, out var nc)) continue;
+                if (!ClimbClear(cur, nc)) continue;   // no empty cell in the wall being climbed
                 if (!seen.Contains(nc))
                 {
                     seen.Add(nc);
@@ -1467,7 +1576,7 @@ public partial class LevelMapController : MonoBehaviour
         // Cells stay snapped (for validity + CommitPlacement); the cubes are drawn
         // offset from an eased anchor so a one-cell move slides instead of popping.
         Vector3 targetAnchor = gridSystem.GridToWorld(_ghostOrigin);
-        if (_ghostAnchorSnap) { _ghostVisualAnchor = targetAnchor; _ghostAnchorSnap = false; }
+        if (!GameSettings.SmoothBlockEditing || _ghostAnchorSnap) { _ghostVisualAnchor = targetAnchor; _ghostAnchorSnap = false; }
         else _ghostVisualAnchor = Vector3.Lerp(_ghostVisualAnchor, targetAnchor,
                                                1f - Mathf.Exp(-ghostFollowSpeed * Time.deltaTime));
 

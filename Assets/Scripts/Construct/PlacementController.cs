@@ -89,6 +89,11 @@ public partial class PlacementController : MonoBehaviour
 
     private Vector3Int baseGridPos, currentGridPos, manualOffset;
     private float _depth = 10f;
+
+    [Tooltip("Ghost glide speed when GameSettings.SmoothBlockEditing is on — matches LevelMapController's ghostFollowSpeed.")]
+    public float ghostFollowSpeed = 16f;
+    Vector3 _ghostVisualAnchor;
+    bool    _ghostAnchorSnap = true;   // true = next UpdatePreview() snaps instantly instead of gliding in
     [Header("Ortho placement")]
     [Tooltip("Current build-plane Y in cells when camera is orthographic. Scroll wheel changes it.")]
     public int _buildY = 0;
@@ -885,6 +890,7 @@ public partial class PlacementController : MonoBehaviour
 
             currentBlock        = sb.data;
             currentSynergyColor = sb.color;
+            _ghostAnchorSnap    = true;   // appear at the cursor, don't glide in from the last hold
             // Derive the visual tint directly from the synergy color so the
             // placed block matches the palette exactly, instead of round-
             // tripping through the shop renderer (which has different
@@ -957,6 +963,7 @@ public partial class PlacementController : MonoBehaviour
             BlockSelected?.Invoke(instance.data);
             currentBlock        = instance.data;
             currentSynergyColor = instance.color;
+            _ghostAnchorSnap    = true;   // appear at the cursor, don't glide in from the last hold
             // Re-derive tint from synergy color when present keeps placed
             // block visuals exactly on-palette across pickup→replace cycles.
             currentColor        = instance.color != BlockColor.None
@@ -1048,6 +1055,14 @@ public partial class PlacementController : MonoBehaviour
         return Mathf.Max(1, Mathf.RoundToInt(basePrice * sellRefundFraction));
     }
 
+    // Upgrading a turret costs turret currency equal to the turret's own price
+    // (fluctuation-free base). Fixed per turret type — doesn't climb with level.
+    int ComputeUpgradeCost(PlacedBlockInstance ins)
+    {
+        if (ins?.data == null || ResourceManager.Instance == null) return 0;
+        return Mathf.Max(1, ResourceManager.Instance.ComputePrice(ins.data, 1f));
+    }
+
     void TryUpgradeSelectedBasicTurret(BasicTurretUpgradePath path)
     {
         if (!TutorialDirector.CanUpgrade()) return;   // tutorial gate
@@ -1057,6 +1072,15 @@ public partial class PlacementController : MonoBehaviour
             : null;
         if (ins == null || turret == null) return;
 
+        // Costs turret currency equal to the turret's own price; gate before touching state.
+        int cost = ComputeUpgradeCost(ins);
+        var rm   = ResourceManager.Instance;
+        if (rm != null && !rm.CanAfford(cost, ins.data.blockType))
+        {
+            ShowPlacementPopup($"Need {cost} turret currency to upgrade");
+            return;
+        }
+
         if (!turret.TryUpgradeBasicPath(path))
         {
             if (!turret.CanUpgradeBasicPath(path, out string reason))
@@ -1064,13 +1088,19 @@ public partial class PlacementController : MonoBehaviour
             return;
         }
 
+        rm?.TryBuy(cost, ins.data.blockType);   // charge only after a successful upgrade
+
         ins.basicPowerUpgradeLevel = turret.PowerPathLevel;
         ins.basicBurstUpgradeLevel = turret.BurstPathLevel;
 
         string branch = path == BasicTurretUpgradePath.Power ? "Power" : "Burst";
-        ShowPlacementPopup($"{branch} upgraded");
+        ShowPlacementPopup($"{branch} upgraded (-{cost})");
         TurretUpgraded?.Invoke();
         TurretUpgradeLevelReached?.Invoke(Mathf.Max(turret.PowerPathLevel, turret.BurstPathLevel));
+
+        selectedInstance = null;   // collapse the detail/upgrade panels instead of re-showing every frame
+        UpdateHighlight(null);
+        HideRangeIndicator();
     }
 
     void TryUpgradeSelectedAoeTurret(AoeTurretUpgradePath path)
@@ -1082,6 +1112,15 @@ public partial class PlacementController : MonoBehaviour
             : null;
         if (ins == null || turret == null) return;
 
+        // Costs turret currency equal to the turret's own price; gate before touching state.
+        int cost = ComputeUpgradeCost(ins);
+        var rm   = ResourceManager.Instance;
+        if (rm != null && !rm.CanAfford(cost, ins.data.blockType))
+        {
+            ShowPlacementPopup($"Need {cost} turret currency to upgrade");
+            return;
+        }
+
         if (!turret.TryUpgradeAoePath(path))
         {
             if (!turret.CanUpgradeAoePath(path, out string reason))
@@ -1089,13 +1128,19 @@ public partial class PlacementController : MonoBehaviour
             return;
         }
 
+        rm?.TryBuy(cost, ins.data.blockType);   // charge only after a successful upgrade
+
         ins.aoeFireUpgradeLevel = turret.AoeFirePathLevel;
         ins.aoeGravityUpgradeLevel = turret.AoeGravityPathLevel;
 
         string branch = path == AoeTurretUpgradePath.Fire ? "Fire" : "Gravity";
-        ShowPlacementPopup($"{branch} upgraded");
+        ShowPlacementPopup($"{branch} upgraded (-{cost})");
         TurretUpgraded?.Invoke();
         TurretUpgradeLevelReached?.Invoke(Mathf.Max(turret.AoeFirePathLevel, turret.AoeGravityPathLevel));
+
+        selectedInstance = null;   // collapse the detail/upgrade panels instead of re-showing every frame
+        UpdateHighlight(null);
+        HideRangeIndicator();
     }
 
     // R is overloaded: a TAP refreshes the shop, a HOLD restarts the level with a
@@ -1452,10 +1497,25 @@ public partial class PlacementController : MonoBehaviour
             ? new Color(0.25f, 1.00f, 0.35f, 0.55f)
             : new Color(1.00f, 0.20f, 0.20f, 0.45f);
 
+        // Cells stay snapped (for validity + TryPlace); cubes draw offset from an
+        // eased anchor so a one-cell move slides instead of popping — same technique
+        // as LevelMapController's build ghost. Toggle: GameSettings.SmoothBlockEditing.
+        Vector3 targetAnchor = grid.GridToWorld(currentGridPos);
+        if (!GameSettings.SmoothBlockEditing || _ghostAnchorSnap)
+        {
+            _ghostVisualAnchor = targetAnchor;
+            _ghostAnchorSnap   = false;
+        }
+        else
+        {
+            _ghostVisualAnchor = Vector3.Lerp(_ghostVisualAnchor, targetAnchor,
+                                               1f - Mathf.Exp(-ghostFollowSpeed * Time.deltaTime));
+        }
+
         for (int i = 0; i < cells.Length; i++)
         {
             previewCubes[i].transform.position =
-                grid.GridToWorld(currentGridPos + cells[i]);
+                _ghostVisualAnchor + (grid.GridToWorld(currentGridPos + cells[i]) - targetAnchor);
             previewCubes[i].GetComponent<Renderer>().material.color = tint;
         }
     }
@@ -1908,6 +1968,7 @@ public partial class PlacementController : MonoBehaviour
         BlockPurchased?.Invoke(sb.data);
         currentBlock        = sb.data;
         currentSynergyColor = sb.color;
+        _ghostAnchorSnap    = true;   // appear at the cursor, don't glide in from the last hold
         currentColor        = sb.color != BlockColor.None
             ? BlockColorPalette.Get(sb.color)
             : MpbColor.Get(sb.GetComponentInChildren<Renderer>());
