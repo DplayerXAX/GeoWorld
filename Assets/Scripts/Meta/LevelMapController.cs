@@ -177,6 +177,12 @@ public partial class LevelMapController : MonoBehaviour
 
     void Start()
     {
+        // Ambient source is Skybox with a PROCEDURAL skybox and no baked GI. The
+        // editor recomputes the ambient probe from it live, but a standalone build
+        // does NOT — leaving ambient at a dark default (the whole map looked dimmer
+        // than in-editor). Force the refresh once, same as TitleShaderSwap does.
+        DynamicGI.UpdateEnvironment();
+
         // Must run before ANYTHING else touches SaveSystem.Profile this session —
         // including RebuildPlacedMapBlocks below and LevelNode.Refresh's unlock
         // checks — so a fresh profile is what every system sees from frame one.
@@ -522,6 +528,21 @@ public partial class LevelMapController : MonoBehaviour
         }
     }
 
+    // Runtime CreatePrimitive cubes get the built-in default material, whose shader
+    // is stripped from standalone builds (renders magenta there while fine in the
+    // editor). Reuse the map block's OWN material — proven to render in the build,
+    // since the blocks do — with a URP Lit fallback. MpbColor still drives colour.
+    static Material _badgeMat;
+    Material BadgeMaterial()
+    {
+        if (_badgeMat != null) return _badgeMat;
+        var src = cubePrefab != null ? cubePrefab.GetComponentInChildren<Renderer>() : null;
+        if (src != null && src.sharedMaterial != null) { _badgeMat = src.sharedMaterial; return _badgeMat; }
+        var sh = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard");
+        _badgeMat = new Material(sh) { hideFlags = HideFlags.DontSave };
+        return _badgeMat;
+    }
+
     void BuildLevelMarker(LevelNode node, Vector3 worldPos)
     {
         float cs = gridSystem != null ? gridSystem.cellSize : 1f;
@@ -538,6 +559,7 @@ public partial class LevelMapController : MonoBehaviour
         diamond.transform.localRotation = Quaternion.Euler(45f, 0f, 45f);
         if (diamond.TryGetComponent<Collider>(out var col)) Destroy(col);   // never blocks map raycasts
         var mr = diamond.GetComponent<MeshRenderer>();
+        mr.sharedMaterial    = BadgeMaterial();   // build-safe — see BadgeMaterial()
         mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
 
         // Sibling of the badge, not a child — the synergy effect grows out of the
@@ -1706,7 +1728,7 @@ public partial class LevelMapController : MonoBehaviour
                             TextAlignmentOptions.Top, new Vector2(0f, -10f), new Vector2(-40f, 30f));
         _trayHint.rectTransform.anchorMin = new Vector2(0f, 1f);
         _trayHint.rectTransform.anchorMax = new Vector2(1f, 1f);
-        _trayHint.enableWordWrapping = true;
+        _trayHint.textWrappingMode = TMPro.TextWrappingModes.Normal;
 
         // Stretch the strip across the bar instead of pinning it to a fixed 1500px.
         // At the 1920×1080 reference those are the same thing, which is why this only

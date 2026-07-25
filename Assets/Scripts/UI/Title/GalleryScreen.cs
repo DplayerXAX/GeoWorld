@@ -309,7 +309,9 @@ public class GalleryScreen : MonoBehaviour
         desk.transform.position   = new Vector3(0f, -0.15f, 0.4f);
         desk.transform.localScale = new Vector3(9f, 0.3f, 4f);
         var col = desk.GetComponent<Collider>(); if (col != null) Destroy(col);
-        MpbColor.Set(desk.GetComponent<Renderer>(), deskColor);
+        var deskRend = desk.GetComponent<Renderer>();
+        deskRend.sharedMaterial = SolidMaterial();
+        MpbColor.Set(deskRend, deskColor);
 
         var floor = GameObject.CreatePrimitive(PrimitiveType.Cube);
         floor.name = "GalleryFloor";
@@ -317,7 +319,9 @@ public class GalleryScreen : MonoBehaviour
         floor.transform.position = new Vector3(0f, -0.38f, 1.4f);
         floor.transform.localScale = new Vector3(15f, 0.08f, 9f);
         var floorCol = floor.GetComponent<Collider>(); if (floorCol != null) Destroy(floorCol);
-        MpbColor.Set(floor.GetComponent<Renderer>(), GeoPalette.WithAlpha(GeoPalette.Ink, 0.96f));
+        var floorRend = floor.GetComponent<Renderer>();
+        floorRend.sharedMaterial = SolidMaterial();
+        MpbColor.Set(floorRend, GeoPalette.WithAlpha(GeoPalette.Ink, 0.96f));
 
         // A thin horizon beam gives the studio a depth cue without needing a backdrop texture.
         var horizon = CreatePrimitive("HorizonBeam", PrimitiveType.Cube, _galleryRig,
@@ -334,12 +338,16 @@ public class GalleryScreen : MonoBehaviour
         _recordObj.transform.position   = recordPos;
         _recordObj.transform.localScale = new Vector3(1.5f, 0.06f, 1.5f);
         _recordObj.transform.rotation   = Quaternion.Euler(0f, 0f, 0f);
-        MpbColor.Set(_recordObj.GetComponent<Renderer>(), new Color(0.09f, 0.09f, 0.1f));
+        var recRend = _recordObj.GetComponent<Renderer>();
+        recRend.sharedMaterial = SolidMaterial();
+        MpbColor.Set(recRend, new Color(0.09f, 0.09f, 0.1f));
         var label = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
         label.transform.SetParent(_recordObj.transform, false);
         label.transform.localScale = new Vector3(0.34f, 1.05f, 0.34f);
         var lcol = label.GetComponent<Collider>(); if (lcol != null) Destroy(lcol);
-        MpbColor.Set(label.GetComponent<Renderer>(), GeoPalette.Signal);
+        var labelRend = label.GetComponent<Renderer>();
+        labelRend.sharedMaterial = SolidMaterial();
+        MpbColor.Set(labelRend, GeoPalette.Signal);
         var recordPick = MakePickable(_recordObj, Cat.Music);
         _pickLabels[recordPick] = AddWorldLabel(_galleryRig, recordPos + Vector3.down * 0.9f, "MUSIC");
         BuildExhibitBase(recordPos, GeoPalette.Signal, "01");
@@ -427,8 +435,22 @@ public class GalleryScreen : MonoBehaviour
         go.transform.localPosition = position;
         go.transform.localScale = scale;
         var col = go.GetComponent<Collider>(); if (col != null) Destroy(col);
-        MpbColor.Set(go.GetComponent<Renderer>(), color);
+        var rend = go.GetComponent<Renderer>();
+        rend.sharedMaterial = SolidMaterial();   // build-safe — see SolidMaterial()
+        MpbColor.Set(rend, color);
         return go.transform;
+    }
+
+    // Runtime CreatePrimitive cubes get the built-in default material, whose shader
+    // is stripped from standalone builds (renders magenta). Assign an explicit URP
+    // Lit material instead — always present in a URP build. MpbColor drives colour.
+    static Material _solidMat;
+    static Material SolidMaterial()
+    {
+        if (_solidMat != null) return _solidMat;
+        var sh = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard");
+        _solidMat = new Material(sh) { name = "GallerySolid" };
+        return _solidMat;
     }
 
     void ApplyMonsterSprite(Sprite s)
