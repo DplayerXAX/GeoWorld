@@ -183,6 +183,11 @@ public partial class LevelMapController : MonoBehaviour
         // than in-editor). Force the refresh once, same as TitleShaderSwap does.
         DynamicGI.UpdateEnvironment();
 
+        // LevelSelect has no AudioManager and plays its BGM directly — push the saved
+        // volumes to Wwise here so the settings sliders actually affect it.
+        GameSettings.Load();
+        GameSettings.ApplyAudio();
+
         // Must run before ANYTHING else touches SaveSystem.Profile this session —
         // including RebuildPlacedMapBlocks below and LevelNode.Refresh's unlock
         // checks — so a fresh profile is what every system sees from frame one.

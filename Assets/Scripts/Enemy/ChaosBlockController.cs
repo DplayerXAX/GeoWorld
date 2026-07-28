@@ -140,6 +140,7 @@ public class ChaosBlockController : MonoBehaviour
         if (!go.TryGetComponent<ChaosBlockUnit>(out _)) go.AddComponent<ChaosBlockUnit>();
 
         grid.SetOccupied(cell);
+        grid.SetNoSupport(cell);   // can't rest a new block/turret on the Chaos Block alone
         _cellOf[unit] = cell;
         _alive.Add(unit);
         unit.OnDied += HandleChaosBlockDied;

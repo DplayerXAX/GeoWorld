@@ -389,7 +389,7 @@ public class ShopController : MonoBehaviour
         AnimateItems();
         UpdateHover();
         UpdateLetterboxBars();
-        if (_cantAffordFlash > 0f) _cantAffordFlash -= Time.deltaTime;
+        if (_cantAffordFlash > 0f) _cantAffordFlash -= Time.unscaledDeltaTime;
     }
 
     // ── Toggle & visibility ───────────────────────────────────────────────────
@@ -488,7 +488,7 @@ public class ShopController : MonoBehaviour
         _riftTarget = letterbox ? (_expanded ? 1f : 0f)        // bars: fully out / fully hidden
                                 : (_expanded ? 0.6f : riftHintScale);
 
-        float t    = 1f - Mathf.Exp(-expandSpeed * Time.deltaTime);
+        float t    = 1f - Mathf.Exp(-expandSpeed * Time.unscaledDeltaTime);
         _riftScale     = Mathf.Lerp(_riftScale, _riftTarget, t);
         _currentOffset = Vector3.Lerp(_currentOffset,
                              _expanded ? cameraOffsetLarge : cameraOffsetSmall, t);
@@ -812,7 +812,7 @@ public class ShopController : MonoBehaviour
 
         while (t < dur && go != null)
         {
-            t += Time.deltaTime;
+            t += Time.unscaledDeltaTime;
             float frac = Mathf.Clamp01(t / dur);
 
             // 0.2: pop up to 1.25×   |   0.2: shrink to 0
@@ -879,7 +879,7 @@ public class ShopController : MonoBehaviour
     void AnimateItems()
     {
         float t = Time.time;
-        float lerpK = 1f - Mathf.Exp(-hoverLerpSpeed * Time.deltaTime);
+        float lerpK = 1f - Mathf.Exp(-hoverLerpSpeed * Time.unscaledDeltaTime);
         bool purchaseGateActive = TutorialDirector.IsPurchaseStepActive;
         foreach (var item in _items)
         {

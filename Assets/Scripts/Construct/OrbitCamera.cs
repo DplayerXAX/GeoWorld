@@ -214,13 +214,13 @@ public class OrbitCamera : MonoBehaviour
         distance = Mathf.Lerp(
     distance,
     targetDistance,
-    1f - Mathf.Exp(-transitionSpeed * Time.deltaTime)
+    1f - Mathf.Exp(-transitionSpeed * Time.unscaledDeltaTime)
 );
 
         orthoSize = Mathf.Lerp(
             orthoSize,
             targetOrthoSize,
-            1f - Mathf.Exp(-transitionSpeed * Time.deltaTime)
+            1f - Mathf.Exp(-transitionSpeed * Time.unscaledDeltaTime)
         );
         if (myCam != null && useOrthographic)
         {
@@ -234,7 +234,7 @@ public class OrbitCamera : MonoBehaviour
         currentFocusPoint = Vector3.Lerp(
             currentFocusPoint,
             focusGoal,
-            1f - Mathf.Exp(-transitionSpeed * Time.deltaTime)
+            1f - Mathf.Exp(-transitionSpeed * Time.unscaledDeltaTime)
         );
 
         Vector2 lookInput = InputLocked ? Vector2.zero : GamepadInput.Look;   // right stick — orbits without a button hold
@@ -256,14 +256,14 @@ public class OrbitCamera : MonoBehaviour
         {
             if (Input.GetMouseButton(1))
             {
-                yaw += mx * speed * Time.deltaTime;
-                pitch -= my * speed * Time.deltaTime;
+                yaw += mx * speed * Time.unscaledDeltaTime;
+                pitch -= my * speed * Time.unscaledDeltaTime;
                 pitch = Mathf.Clamp(pitch, minPitch, maxPitch);
             }
             else if (lookInput.sqrMagnitude > 0.0001f)
             {
-                yaw += lookInput.x * speed * gamepadLookScale * Time.deltaTime;
-                pitch -= lookInput.y * speed * gamepadLookScale * Time.deltaTime;
+                yaw += lookInput.x * speed * gamepadLookScale * Time.unscaledDeltaTime;
+                pitch -= lookInput.y * speed * gamepadLookScale * Time.unscaledDeltaTime;
                 pitch = Mathf.Clamp(pitch, minPitch, maxPitch);
             }
         }
@@ -271,21 +271,21 @@ public class OrbitCamera : MonoBehaviour
         {
             if (Input.GetMouseButton(1))
             {
-                yaw += mx * speed * 0.3f * Time.deltaTime;
+                yaw += mx * speed * 0.3f * Time.unscaledDeltaTime;
 
-                pitch -= my * speed * 0.2f * Time.deltaTime;
+                pitch -= my * speed * 0.2f * Time.unscaledDeltaTime;
                 pitch = Mathf.Clamp(pitch, 10f, 80f);
             }
             else if (lookInput.sqrMagnitude > 0.0001f)
             {
-                yaw += lookInput.x * speed * 0.3f * gamepadLookScale * Time.deltaTime;
-                pitch -= lookInput.y * speed * 0.2f * gamepadLookScale * Time.deltaTime;
+                yaw += lookInput.x * speed * 0.3f * gamepadLookScale * Time.unscaledDeltaTime;
+                pitch -= lookInput.y * speed * 0.2f * gamepadLookScale * Time.unscaledDeltaTime;
                 pitch = Mathf.Clamp(pitch, 10f, 80f);
             }
         }
 
         if (Mathf.Abs(GamepadInput.ZoomDelta) > 0.05f)
-            AddDistance(-GamepadInput.ZoomDelta * gamepadZoomSpeed * Time.deltaTime);
+            AddDistance(-GamepadInput.ZoomDelta * gamepadZoomSpeed * Time.unscaledDeltaTime);
         }
         Quaternion rot;
 
@@ -309,7 +309,7 @@ public class OrbitCamera : MonoBehaviour
         transform.position = Vector3.Lerp(
             transform.position,
             desiredPos,
-            1f - Mathf.Exp(-transitionSpeed * Time.deltaTime)
+            1f - Mathf.Exp(-transitionSpeed * Time.unscaledDeltaTime)
         );
 
         // Smooth aim (eased rotation, not a per-frame snap). Looking at the SHIFTED

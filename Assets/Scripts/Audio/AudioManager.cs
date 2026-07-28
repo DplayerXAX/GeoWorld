@@ -213,6 +213,7 @@ public class AudioManager : MonoBehaviour
     {
         if (string.IsNullOrEmpty(rtpc)) return;
         AkUnitySoundEngine.SetRTPCValue(rtpc, Mathf.Clamp01(v01) * 100f);
+        Debug.Log("Setting!");
     }
 
     public void PlayRotate()

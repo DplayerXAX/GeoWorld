@@ -43,6 +43,11 @@ public class GridSystem : MonoBehaviour
     // Sparse: only occupied cells are stored. Missing keys ⇒ unoccupied.
     private Dictionary<Vector3Int, bool> occupied = new();
     private Dictionary<Vector3Int, PlacedBlockInstance> cellToInstance = new();
+    // Occupied cells that must NOT count as build support (a Chaos Block): they
+    // still block placement and take fire, but you can't rest a new block/turret
+    // on them without other real support — otherwise you could stack a turret
+    // straight onto the Chaos Block to shoot it.
+    private HashSet<Vector3Int> noSupport = new();
 
     void Awake()
     {
@@ -54,6 +59,7 @@ public class GridSystem : MonoBehaviour
     {
         occupied.Clear();
         cellToInstance.Clear();
+        noSupport.Clear();
     }
 
     public Vector3 GridToWorld(Vector3Int gp)
@@ -82,7 +88,14 @@ public class GridSystem : MonoBehaviour
     public void ClearOccupied(Vector3Int pos)
     {
         occupied.Remove(pos);
+        noSupport.Remove(pos);
     }
+
+    // Mark/clear an occupied cell as non-supporting (Chaos Block). Call alongside
+    // SetOccupied/ClearOccupied for hazards that shouldn't anchor new builds.
+    public void SetNoSupport(Vector3Int pos)   => noSupport.Add(pos);
+    public void ClearNoSupport(Vector3Int pos) => noSupport.Remove(pos);
+    public bool IsNoSupport(Vector3Int pos)    => noSupport.Contains(pos);
 
     public void RegisterInstance(PlacedBlockInstance instance)
     {
@@ -175,6 +188,28 @@ public class GridSystem : MonoBehaviour
                 var n = new Vector3Int(c.x + dx, c.y + dy, c.z + dz);
                 if (newSet.Contains(n)) continue;
                 if (IsOccupied(n)) return true;
+            }
+        }
+        return false;
+    }
+
+    // Same as HasOccupiedNeighbor26 but ignores non-supporting cells (Chaos Block),
+    // so a new block can't anchor to a Chaos Block alone. Used by placement validation.
+    public bool HasSupportingNeighbor26(IList<Vector3Int> newCells)
+    {
+        if (newCells == null || newCells.Count == 0) return false;
+
+        var newSet = new HashSet<Vector3Int>(newCells);
+        foreach (var c in newCells)
+        {
+            for (int dx = -1; dx <= 1; dx++)
+            for (int dy = -1; dy <= 1; dy++)
+            for (int dz = -1; dz <= 1; dz++)
+            {
+                if (dx == 0 && dy == 0 && dz == 0) continue;
+                var n = new Vector3Int(c.x + dx, c.y + dy, c.z + dz);
+                if (newSet.Contains(n)) continue;
+                if (IsOccupied(n) && !noSupport.Contains(n)) return true;
             }
         }
         return false;

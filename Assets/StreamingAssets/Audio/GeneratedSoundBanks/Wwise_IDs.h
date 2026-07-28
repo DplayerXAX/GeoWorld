@@ -71,8 +71,11 @@ namespace AK
 
     namespace GAME_PARAMETERS
     {
+        static const AkUniqueID MASTERVOLUME = 2918011349U;
+        static const AkUniqueID MUSICVOLUME = 2346531308U;
         static const AkUniqueID NOTEVALUE = 2992552588U;
         static const AkUniqueID OCT = 880379197U;
+        static const AkUniqueID SFXVOLUME = 988953028U;
         static const AkUniqueID SS_AIR_FEAR = 1351367891U;
         static const AkUniqueID SS_AIR_FREEFALL = 3002758120U;
         static const AkUniqueID SS_AIR_FURY = 1029930033U;
@@ -94,6 +97,10 @@ namespace AK
     namespace BUSSES
     {
         static const AkUniqueID MAIN_AUDIO_BUS = 2246998526U;
+        static const AkUniqueID MASTER_AUDIO_BUS = 3803692087U;
+        static const AkUniqueID MUSIC_AUDIO_BUS = 493417818U;
+        static const AkUniqueID SFX_AUDIO_BUS = 4084199202U;
+        static const AkUniqueID SFX_AUDIO_BUS_ = 1530229465U;
         static const AkUniqueID SPACIAL = 4054672182U;
     } // namespace BUSSES
 

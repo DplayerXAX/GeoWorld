@@ -175,7 +175,7 @@ public class PlacementHintOverlay : MonoBehaviour
 
             // Hide Q/E (camera-forward/back depth arrows) when configured.
             // Those project as "into/out of screen" and read poorly in iso.
-            bool isDepth = a.key == KeyCode.Q || a.key == KeyCode.E;
+            bool isDepth = a.key == KeyCode.W || a.key == KeyCode.S;
             bool show    = !(hideForwardBackArrows && isDepth);
             if (a.obj.activeSelf != show) a.obj.SetActive(show);
             if (!show) continue;
@@ -388,18 +388,18 @@ public class PlacementHintOverlay : MonoBehaviour
 
     void BuildMovementArrows()
     {
-        // New WASDQE mapping:
-        //   W / S = world UP / DOWN  (fixed)
-        //   A / D = camera left / right  (camera-relative, snapped to world axis)
-        //   Q / E = camera forward / back  (camera-relative)
+        // WASDQE mapping (matches PlacementController.HandleKeyboardOffset):
+        //   W / S = camera forward / back  (camera-relative, snapped to world axis)
+        //   A / D = camera left / right    (camera-relative, snapped to world axis)
+        //   Q / E = world UP / DOWN        (fixed)
         var defs = new (string lbl, KeyCode k, bool cam, Vector3 worldDir)[]
         {
-            ("W", KeyCode.W, false, Vector3.up),
-            ("S", KeyCode.S, false, Vector3.down),
+            ("W", KeyCode.W, true,  Vector3.forward),
+            ("S", KeyCode.S, true,  Vector3.back),
             ("A", KeyCode.A, true,  Vector3.left),
             ("D", KeyCode.D, true,  Vector3.right),
-            ("Q", KeyCode.Q, true,  Vector3.forward),
-            ("E", KeyCode.E, true,  Vector3.back),
+            ("Q", KeyCode.Q, false, Vector3.up),
+            ("E", KeyCode.E, false, Vector3.down),
         };
 
         _arrows = new Arrow[defs.Length];
@@ -444,8 +444,8 @@ public class PlacementHintOverlay : MonoBehaviour
         {
             KeyCode.A => -right,
             KeyCode.D =>  right,
-            KeyCode.Q =>  fwd,
-            KeyCode.E => -fwd,
+            KeyCode.W =>  fwd,
+            KeyCode.S => -fwd,
             _         => a.worldDirIfFixed,
         };
     }
