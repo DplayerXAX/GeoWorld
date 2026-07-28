@@ -80,10 +80,20 @@ public static class GameSettings
     public static void ApplyAudio()
     {
         var am = AudioManager.Instance;
-        if (am == null) return;
-        am.SetMasterVolume(MasterVolume);
-        am.SetMusicVolume(MusicVolume);
-        am.SetSfxVolume(SfxVolume);
+        if (am != null)
+        {
+            am.SetMasterVolume(MasterVolume);
+            am.SetMusicVolume(MusicVolume);
+            am.SetSfxVolume(SfxVolume);
+            return;
+        }
+        // No AudioManager in this scene (e.g. LevelSelect, which plays its BGM
+        // directly). The volume RTPCs are GLOBAL Wwise RTPCs, so set them straight
+        // on the sound engine — the sliders then work everywhere. Names match
+        // AudioManager's default masterVolumeRtpc / musicVolumeRtpc / sfxVolumeRtpc.
+        AkUnitySoundEngine.SetRTPCValue("MasterVolume", Mathf.Clamp01(MasterVolume) * 100f);
+        AkUnitySoundEngine.SetRTPCValue("MusicVolume",  Mathf.Clamp01(MusicVolume)  * 100f);
+        AkUnitySoundEngine.SetRTPCValue("SFXVolume",    Mathf.Clamp01(SfxVolume)    * 100f);
     }
 
     public static void ApplyInput()

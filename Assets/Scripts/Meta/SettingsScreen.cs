@@ -284,6 +284,7 @@ public class SettingsScreen : MonoBehaviour
         sliderLe.preferredHeight = 20f;   // HorizontalLayoutGroup controls height — give it one, or it collapses to 0
         var slider = BuildSlider(sliderRt, min, max);
         slider.onValueChanged.AddListener(v => onChanged(v));
+        Debug.LogWarning($"Create listener for {label}!");
         return slider;
     }
 

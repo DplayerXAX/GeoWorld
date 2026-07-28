@@ -10,7 +10,7 @@
     "Type": "User",
     "GUID": "{FBAC0406-FA36-4CC0-8121-80F7B6376C7E}",
     "Language": "SFX",
-    "Hash": "{7830D59E-CE64-68A2-6741-AC6AFC82024B}",
+    "Hash": "{D1AC9A8A-1FAC-3472-64B0-A89CC146ACDA}",
     "ObjectPath": "\\SoundBanks\\Default Work Unit\\GeoWorld_bank",
     "ShortName": "GeoWorld_bank",
     "Path": "GeoWorld_bank.bnk",
@@ -708,6 +708,6 @@
     ]
    }
   ],
-  "FileHash": "{864DE678-8A92-EB4B-7CE8-369EFEB4187D}"
+  "FileHash": "{5A3E186A-C3BF-663E-F87F-18A375B6FBA0}"
  }
 }

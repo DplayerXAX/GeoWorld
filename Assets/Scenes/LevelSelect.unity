@@ -1574,12 +1574,14 @@ MonoBehaviour:
   titleScene: Title
   levelSelectScene: LevelSelect
   overlayColor: {r: 1, g: 1, b: 1, a: 0.6}
+  pauseDimColor: {r: 0, g: 0, b: 0, a: 0.35}
   panelWidth: 320
   buttonHeight: 42
   showControls: 1
   pauseIcon: {fileID: 21300000, guid: 2f6dd4e25db6d5940b6f64a87b995189, type: 3}
   resumeIcon: {fileID: 21300000, guid: 198ba2fc8853d664e8ee311ca9a29522, type: 3}
   fastForwardIcon: {fileID: 21300000, guid: 3e1f31c09da1c7a4a94d710aa2a7dcff, type: 3}
+  settingsIcon: {fileID: 21300000, guid: 8ead35985a751ed4b84ff41eed51e57d, type: 3}
   speedPipFilled: {fileID: 10917, guid: 0000000000000000f000000000000000, type: 0}
   speedPipEmpty: {fileID: 10905, guid: 0000000000000000f000000000000000, type: 0}
   iconColorOnShop: {r: 1, g: 1, b: 1, a: 1}

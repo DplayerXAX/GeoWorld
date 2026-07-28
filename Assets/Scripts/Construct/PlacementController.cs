@@ -478,7 +478,7 @@ public partial class PlacementController : MonoBehaviour
         _currentRotation = Quaternion.Slerp(
             _currentRotation,
             _targetRotation,
-            1f - Mathf.Exp(-rotateSpeed * Time.deltaTime)
+            1f - Mathf.Exp(-rotateSpeed * Time.unscaledDeltaTime)
         );
 
         HandleScroll();
@@ -634,8 +634,8 @@ public partial class PlacementController : MonoBehaviour
 
     // Edit mode only.
     // A / D move block left/right relative to camera's horizontal facing
-    // W / S move block UP / DOWN in world Y
-    // Q / E move block forward / back relative to camera's horizontal facing
+    // W / S move block forward / back relative to camera's horizontal facing
+    // Q / E move block UP / DOWN in world Y
     void HandleKeyboardOffset()
     {
         Vector3Int right   = SnapToHorizontalAxis(cam.transform.right);
@@ -643,10 +643,10 @@ public partial class PlacementController : MonoBehaviour
 
         if (Input.GetKeyDown(KeyCode.A)) manualOffset -= right;
         if (Input.GetKeyDown(KeyCode.D)) manualOffset += right;
-        if (Input.GetKeyDown(KeyCode.W)) manualOffset += Vector3Int.up;
-        if (Input.GetKeyDown(KeyCode.S)) manualOffset += Vector3Int.down;
-        if (Input.GetKeyDown(KeyCode.Q)) manualOffset += forward;
-        if (Input.GetKeyDown(KeyCode.E)) manualOffset -= forward;
+        if (Input.GetKeyDown(KeyCode.W)) manualOffset += forward;
+        if (Input.GetKeyDown(KeyCode.S)) manualOffset -= forward;
+        if (Input.GetKeyDown(KeyCode.Q)) manualOffset += Vector3Int.up;
+        if (Input.GetKeyDown(KeyCode.E)) manualOffset += Vector3Int.down;
 
         // Gamepad d-pad mirrors A/D/W/S (Q/E depth stays mouse/keyboard-only, low value on a pad).
         if (GamepadInput.CycleBlockPrevDown) manualOffset -= right;
@@ -675,7 +675,7 @@ public partial class PlacementController : MonoBehaviour
         // in Select mode, so reusing it for camera pan too would fight the cursor.
         // Gamepad users pan by orbiting the right stick (OrbitCamera) instead.
         if (delta.sqrMagnitude > 0.0001f)
-            cam.Pan(delta.normalized * panSpeed * Time.deltaTime);
+            cam.Pan(delta.normalized * panSpeed * Time.unscaledDeltaTime);
     }
 
     // Projects a world-space direction onto the XZ plane and snaps to the
@@ -801,7 +801,7 @@ public partial class PlacementController : MonoBehaviour
         NotifyBlockLifted(lastObjectCells);
         selectedInstance = null;
         HideRangeIndicator();
-        EnterEditMode(lastObjectPos);
+        EnterEditMode(null);   // leave the camera where it is — SnapDepthToWorldPos already fixed the height plane
         return true;
     }
 
@@ -1509,7 +1509,7 @@ public partial class PlacementController : MonoBehaviour
         else
         {
             _ghostVisualAnchor = Vector3.Lerp(_ghostVisualAnchor, targetAnchor,
-                                               1f - Mathf.Exp(-ghostFollowSpeed * Time.deltaTime));
+                                               1f - Mathf.Exp(-ghostFollowSpeed * Time.unscaledDeltaTime));
         }
 
         for (int i = 0; i < cells.Length; i++)
@@ -1643,8 +1643,10 @@ public partial class PlacementController : MonoBehaviour
         }
 
         // Underground (y < 0) is allowed — you can build down into the earth — but
-        // a block must still touch an existing block or endpoint.
-        if (!grid.HasOccupiedNeighbor26(worldCells))
+        // a block must still touch an existing block or endpoint. The Chaos Block
+        // doesn't count as support (HasSupportingNeighbor26 skips it), so you can't
+        // stack a turret straight onto it to attack it.
+        if (!grid.HasSupportingNeighbor26(worldCells))
             return PlaceFailureReason.NotAdjacent;
 
         return PlaceFailureReason.None;
