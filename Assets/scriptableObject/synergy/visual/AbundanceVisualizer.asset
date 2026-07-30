@@ -17,16 +17,19 @@ MonoBehaviour:
   bloomColor: {r: 0.95, g: 0.45, b: 0.55, a: 1}
   accentColor: {r: 0.98, g: 0.8, b: 0.3, a: 1}
   flowerBrightness: 1.25
+  hueSpread: 0.08
   flowersPerCell: 3
-  maxFlowersPerPatch: 24
+  cellCoverChance: 0.85
+  maxFlowersPerPatch: 18
   flowerSize: 0.28
   scatterRadius: 0.3
+  stemHeight: 0.13
+  stemColor: {r: 0.2, g: 0.42, b: 0.16, a: 1}
   bloomDuration: 0.45
   bloomStagger: 0.05
   witherDuration: 0.35
-  swaySpeed: 1.6
-  swayAngleDeg: 9
+  spinSpeed: 16
+  swaySpeed: 1.3
+  swayAngleDeg: 6.5
   bobAmplitude: 0.05
   bobSpeed: 1.2
-  twinkleSpeed: 2.5
-  twinkleDepth: 0.25

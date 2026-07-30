@@ -16,7 +16,7 @@ MonoBehaviour:
   color: 3
   priority: 40
   absorbAdditionalPieces: 1
-  effect: {fileID: 11400000, guid: 770657fb0b7345c40bbcd02a4d8a4eef, type: 2}
+  effect: {fileID: 11400000, guid: ad3f80c16e4d5f1b0a2f3b4c5d6e7f81, type: 2}
   visualizer: {fileID: 11400000, guid: f08f1736f2d311d488fe0bbfd3113d35, type: 2}
   flavorText: 
   minPieces: 3

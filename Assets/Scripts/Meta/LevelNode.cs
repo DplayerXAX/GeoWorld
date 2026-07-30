@@ -23,6 +23,22 @@ public class LevelNode : MonoBehaviour
     // (used to auto-link face-adjacent nodes). Empty for hand-authored nodes.
     [System.NonSerialized] public Vector3Int[] cells;
 
+    // Player-built map-extension pieces only (LevelMapController build mode): which
+    // reward BlockData this node was built from, and at what rotation — lets the
+    // piece be picked back up and re-edited exactly like gameplay's PickUpSelected.
+    // Null on every authored map node (level blocks, decorations, connectors baked
+    // into the map asset) — those were never a player's reward, so they're inert.
+    [System.NonSerialized] public BlockData  sourceBlock;
+    [System.NonSerialized] public Quaternion builtRotation = Quaternion.identity;
+
+    // Is there an unbroken walkable surface from the START node to this one RIGHT
+    // NOW? Recomputed by LevelMapController.RefreshNodes() after every map change
+    // (build, pick-up, load). A level nobody can walk to cannot be entered — that's
+    // what makes the reward blocks matter: you don't unlock the road, you build it.
+    // Defaults true so hand-authored scenes with no controller driving them behave
+    // exactly as they did before.
+    [System.NonSerialized] public bool connectedToStart = true;
+
     // Face-adjacent (touching) to another node?
     public bool IsAdjacentTo(LevelNode o)
     {
@@ -46,6 +62,9 @@ public class LevelNode : MonoBehaviour
     public State NodeState { get; private set; }
 
     public bool    IsWaypoint => level == null;
+    // Locked specifically because no road reaches it yet (as opposed to locked by
+    // progression) — lets the info panel explain WHICH wall the player hit.
+    public bool    Unreachable => level != null && !connectedToStart;
     // The pawn may walk THROUGH a node if it's a waypoint or a non-locked level.
     public bool    Passable   => IsWaypoint || NodeState != State.Locked;
     public Vector3 PawnPoint  => transform.position + Vector3.up * pawnLift;
@@ -55,9 +74,16 @@ public class LevelNode : MonoBehaviour
     void Awake() => _rends = GetComponentsInChildren<Renderer>();
 
     // Recompute state from the save profile and recolor the block.
+    //
+    // Every reachable node shows its EXACT synergy-palette colour — no brightness
+    // modulation. Waypoints used to render at 70% and cleared levels at 115%,
+    // which meant two blocks authored the identical palette green showed up on
+    // screen as two different greens purely because one was a path stone. Locked
+    // is the one state still worth recolouring: it's not a shade of the theme,
+    // it's "you can't go here", and it has to read at a glance.
     public void Refresh()
     {
-        if (IsWaypoint) { NodeState = State.Unlocked; Tint(Dim(themeColor, 0.7f)); return; }
+        if (IsWaypoint) { NodeState = State.Unlocked; Tint(themeColor); return; }
 
         var p   = SaveSystem.Profile;
         var rec = p.GetRecord(level.levelId);
@@ -65,12 +91,13 @@ public class LevelNode : MonoBehaviour
         else if (p.IsUnlocked(level.levelId)) NodeState = State.Unlocked;
         else                                  NodeState = State.Locked;
 
-        Tint(NodeState switch
-        {
-            State.Locked  => lockedColor,
-            State.Cleared => Dim(themeColor, 1.15f),
-            _             => themeColor,
-        });
+        // No road home = not activated, whatever the profile says. Applied last so
+        // it overrides Unlocked; a CLEARED level stays cleared (its record is
+        // history — greying out a level you've already beaten because you moved a
+        // bridge would read as losing progress).
+        if (NodeState == State.Unlocked && !connectedToStart) NodeState = State.Locked;
+
+        Tint(NodeState == State.Locked ? lockedColor : themeColor);
     }
 
     void Tint(Color c)
@@ -79,6 +106,4 @@ public class LevelNode : MonoBehaviour
         for (int i = 0; i < _rends.Length; i++)
             if (_rends[i] != null) MpbColor.Set(_rends[i], c);
     }
-
-    static Color Dim(Color c, float m) => new Color(c.r * m, c.g * m, c.b * m, 1f);
 }

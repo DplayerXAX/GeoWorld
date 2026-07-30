@@ -1,0 +1,50 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 1322e568a8b707c4bb5ce602eca52f0e, type: 3}
+  m_Name: 1-3Preset
+  m_EditorClassIdentifier: Assembly-CSharp::LevelMapAsset
+  data:
+    version: 1
+    name: 1-3Preset
+    nodes:
+    - cells:
+      - {x: -4, y: 0, z: 4}
+      - {x: -3, y: 0, z: 4}
+      - {x: -4, y: 0, z: 5}
+      - {x: -4, y: 1, z: 4}
+      color: {r: 0.19999996, g: 0.54999995, b: 1, a: 1}
+      blockTypeName: Lift
+      levelId: 
+      isStart: 0
+      blockAssetName: corner
+      rotation: {x: 0, y: 0, z: 0, w: 1}
+      synergyColor: 6
+    - cells:
+      - {x: -3, y: 0, z: 5}
+      - {x: -3, y: 1, z: 5}
+      - {x: -4, y: 1, z: 5}
+      color: {r: 0.19999996, g: 0.54999995, b: 1, a: 1}
+      blockTypeName: Shadow
+      levelId: 
+      isStart: 0
+      blockAssetName: L3
+      rotation: {x: 0.50000024, y: 0.50000024, z: -0.49999976, w: -0.49999976}
+      synergyColor: 6
+    - cells:
+      - {x: -5, y: 0, z: 4}
+      color: {r: 1, g: 0.41999996, b: 0.17999998, a: 1}
+      blockTypeName: AoeTurret
+      levelId: 
+      isStart: 0
+      blockAssetName: AoeTurretSingle
+      rotation: {x: 0.5, y: 0.5, z: -0.5, w: -0.5}
+      synergyColor: 0

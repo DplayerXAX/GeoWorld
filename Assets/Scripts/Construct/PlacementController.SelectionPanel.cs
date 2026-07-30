@@ -12,24 +12,53 @@ public partial class PlacementController
     [Tooltip("Separate world-space UGUI upgrade panel (turret upgrade paths).")]
     public UpgradePanel upgradePanel;
 
-    Camera _hudCam;   // cached main camera for projecting the selected block to screen
+    Camera _hudCam;
 
     bool PointerOverInfoPanel()
         => infoPanel != null
         && UnityEngine.EventSystems.EventSystem.current != null
         && UnityEngine.EventSystems.EventSystem.current.IsPointerOverGameObject();
 
-    // Drives the UGUI panel (call every frame from Update). Mirrors DrawSelectionPanel's
-    // logic but pushes plain strings instead of laying out IMGUI.
+    // False only when the level restricts its color pool and excludes
+    // Enlightenment — then the turret-upgrade menu is hidden entirely
+    // instead of always showing "Locked".
+    static bool EnlightenmentAllowedThisLevel()
+    {
+        var lv = RunConfig.Level;
+        return lv == null || lv.AllowsColor(BlockColor.Enlightenment);
+    }
+
+    // Drives the UGUI panel every frame. Mirrors DrawSelectionPanel's logic
+    // but pushes plain strings instead of laying out IMGUI.
     void UpdateInfoPanel()
     {
         if (infoPanel == null) return;
 
-        // Spawn-point forecast (same gate as the IMGUI start panel).
+        if (GameFlowManager.SettlementUp)
+        {
+            infoPanel.Hide();
+            upgradePanel?.Hide();
+            return;
+        }
+
         if (mode == PlacementMode.Select && _selectedEndpoint != null && _selectedEndpointIsStart
             && (GameFlowManager.Instance == null || GameFlowManager.Instance.phase != GamePhase.Running))
         {
             infoPanel.ShowReadonly(_selectedEndpoint.transform.position, "Spawn Point", BuildStartBody());
+            upgradePanel?.Hide();
+            return;
+        }
+
+        if (mode == PlacementMode.Select && _selectedChaos != null)
+        {
+            infoPanel.ShowReadonly(_selectedChaos.transform.position, "Chaos Block", BuildChaosBody(_selectedChaos));
+            upgradePanel?.Hide();
+            return;
+        }
+
+        if (mode == PlacementMode.Select && _selectedShrine != null)
+        {
+            infoPanel.ShowReadonly(_selectedShrine.transform.position, "Enlightenment Shrine", BuildShrineBody());
             upgradePanel?.Hide();
             return;
         }
@@ -46,37 +75,84 @@ public partial class PlacementController
         string title    = isTurret ? TurretTypes.DisplayName(ins.data.blockType) : ins.data.DisplayName;
         string body     = BuildInfoBody(ins, isTurret);
 
-        // No editing of placed objects during combat (pick up / sell / upgrade).
+        // No editing during combat, or ever for pre-built level furniture.
         bool combatLocked = GameFlowManager.Instance != null
             && GameFlowManager.Instance.phase == GamePhase.Running;
+        bool canEdit = !combatLocked && !ins.locked;
         int refund = ComputeSellRefund(ins);
 
         Vector3 worldPos = ins.visualObject.transform.position;
 
-        // Selection panel: title / stats / pick-up / sell.
-        infoPanel.Show(worldPos, title, body, !combatLocked, $"Sell +{refund}",
+        string lockedReason = ins.locked ? "Fixed block, locked" : "Locked during combat";
+        infoPanel.Show(worldPos, title, body, canEdit, $"Sell +{refund}",
             () => _panelPickUpRequested = true,
-            () => _panelSellRequested   = true);
+            () => _panelSellRequested   = true,
+            lockedReason);
 
-        // Separate upgrade panel.
         if (upgradePanel != null)
         {
             BuildUpgradeButtons(ins,
                 out string upgradeAText, out bool canUpgradeA, out System.Action onUpgradeA,
-                out string upgradeBText, out bool canUpgradeB, out System.Action onUpgradeB);
+                out string upgradeBText, out bool canUpgradeB, out System.Action onUpgradeB,
+                out string enlightenmentHint);
 
+            // Upgrades stay available even when locked — locking only blocks pickup/sell.
             bool hasUpgrades = !string.IsNullOrEmpty(upgradeAText) || !string.IsNullOrEmpty(upgradeBText);
-            if (hasUpgrades && !combatLocked)
+            if (hasUpgrades && !combatLocked && EnlightenmentAllowedThisLevel())
                 upgradePanel.Show(worldPos, upgradeAText, canUpgradeA, onUpgradeA,
-                                            upgradeBText, canUpgradeB, onUpgradeB);
+                                            upgradeBText, canUpgradeB, onUpgradeB,
+                                            enlightenmentHint);
             else
                 upgradePanel.Hide();
         }
     }
 
+    // Read-only intel for a Chaos Block: what it's costing you every round it
+    // stays alive, and its current health so you can judge whether a turret can
+    // finish it before the next payout.
+    string BuildChaosBody(ChaosBlockUnit chaos)
+    {
+        var sb = new System.Text.StringBuilder();
+        var cfg = RunConfig.Level != null ? RunConfig.Level.GetMechanic<ChaosBlockMechanicConfig>() : null;
+        int drain = cfg != null ? cfg.currencyDrain : 0;
+
+        sb.AppendLine($"<color=#E2241B><b>-{drain} block currency</b> every wave it survives</color>");
+        sb.AppendLine();
+
+        var unit = chaos.GetComponent<EnemySurfaceUnit>();
+        if (unit != null)
+            sb.AppendLine($"Health     <b>{unit.CurrentHealth}/{unit.maxHealth}</b>");
+
+        sb.Append("<size=85%><color=#6A6A6A>Destroy it with turrets during combat to stop the drain. Left alone, more will pile up.</color></size>");
+        return sb.ToString().TrimEnd();
+    }
+
+    // Read-only intel for a Shrine: the free buff it grants every turret touching
+    // it (26-neighbour, same reach ShrineController.ApplyAura uses), plus how
+    // many can be alive at once — the numbers matter here, since it's a boon the
+    // player didn't build and might not realize is reversible/limited.
+    string BuildShrineBody()
+    {
+        var sb = new System.Text.StringBuilder();
+        var cfg = RunConfig.Level != null ? RunConfig.Level.GetMechanic<ShrineMechanicConfig>() : null;
+
+        int firePct = cfg != null ? Mathf.RoundToInt(cfg.fireRateBonus * 100f) : 0;
+        int dmgPct  = cfg != null ? Mathf.RoundToInt(cfg.damageBonus   * 100f) : 0;
+
+        sb.AppendLine($"<color=#E8B23A><b>+{firePct}% attack speed, +{dmgPct}% damage</b></color>");
+        sb.AppendLine("to every turret touching it");
+        sb.AppendLine();
+        sb.Append("<size=85%><color=#6A6A6A>Free while it stays adjacent — moving every touching block away lets it vanish, and the buff drops the instant a turret leaves its side. Nothing is upgraded for real.</color></size>");
+        return sb.ToString().TrimEnd();
+    }
+
+    const string SealedNote = "<color=#B44BC8><b>SEALED</b> — can't move, sell only</color>";
+
     string BuildInfoBody(PlacedBlockInstance ins, bool isTurret)
     {
         var sb = new System.Text.StringBuilder();
+
+        if (ins.sealedByEnemy) sb.AppendLine(SealedNote);
 
         if (isTurret)
         {
@@ -86,7 +162,14 @@ public partial class PlacementController
             float fireRate = t.fireInterval > 0.0001f ? 1f / t.fireInterval : 0f;
             sb.AppendLine($"Damage     <b>{t.bulletDamage}</b>");
             sb.AppendLine($"Range      <b>{t.attackRange:0.#}</b>");
-            sb.AppendLine($"Fire rate  <b>{fireRate:0.0}/s</b>");
+            // Combined synergy buff × enemy-suppression debuff.
+            float rateMult = t.FireRateMultiplier;
+            if (rateMult > 1.0001f)
+                sb.AppendLine($"Fire rate  <b>{t.EffectiveFireRate:0.0}/s</b>  <color=#7BE6B0>(+{(rateMult - 1f) * 100f:0}%)</color>");
+            else if (rateMult < 0.9999f)
+                sb.AppendLine($"Fire rate  <b>{t.EffectiveFireRate:0.0}/s</b>  <color=#E2241B>(-{(1f - rateMult) * 100f:0}% suppressed)</color>");
+            else
+                sb.AppendLine($"Fire rate  <b>{fireRate:0.0}/s</b>");
             sb.AppendLine($"Bullets    <b>{Mathf.Max(1, t.projectilesPerShot)}</b>");
 
             if (t.mode == TurretController.Mode.Slow)
@@ -110,8 +193,7 @@ public partial class PlacementController
             return sb.ToString().TrimEnd();
         }
 
-        // Block: synergy line (themed) + flavour description.
-        if (ins.color == BlockColor.None) return "Synergy  None";
+        if (ins.color == BlockColor.None) { sb.Append("Synergy  None"); return sb.ToString().TrimEnd(); }
 
         bool   hasProg = TryGetSynergyProgress(ins, out string ruleName, out int cur, out int req, out bool active);
         string name    = (hasProg && !string.IsNullOrEmpty(ruleName)) ? ruleName : ins.color.ToString();
@@ -124,6 +206,8 @@ public partial class PlacementController
         return sb.ToString().TrimEnd();
     }
 
+    const string EnlightenmentHint = "Activate/Upgrade Enlightenment synergy to further upgrade turret!";
+
     void BuildUpgradeButtons(
         PlacedBlockInstance ins,
         out string upgradeAText,
@@ -131,23 +215,36 @@ public partial class PlacementController
         out System.Action onUpgradeA,
         out string upgradeBText,
         out bool canUpgradeB,
-        out System.Action onUpgradeB)
+        out System.Action onUpgradeB,
+        out string enlightenmentHint)
     {
         upgradeAText = upgradeBText = null;
         canUpgradeA = canUpgradeB = false;
         onUpgradeA = onUpgradeB = null;
+        enlightenmentHint = null;
 
         var turret = ins?.visualObject != null
             ? ins.visualObject.GetComponentInChildren<TurretController>()
             : null;
         if (turret == null) return;
 
+        // Blocked by the turret-wide Enlightenment allowance, not a per-path
+        // cap; show the actionable hint instead of two "Locked" buttons.
+        if (turret.BlockedByEnlightenmentGate) enlightenmentHint = EnlightenmentHint;
+
+        // Upgrades cost turret currency equal to the turret's own price; can't
+        // afford → buttons read as disabled (and TryUpgrade* re-checks on click).
+        int cost      = ComputeUpgradeCost(ins);
+        bool canAfford = ResourceManager.Instance == null
+                      || ResourceManager.Instance.CanAfford(cost, ins.data.blockType);
+        string tag = $"  ({cost}¤)";
+
         if (turret.mode == TurretController.Mode.Basic)
         {
-            canUpgradeA = turret.CanUpgradeBasicPath(BasicTurretUpgradePath.Power, out _);
-            canUpgradeB = turret.CanUpgradeBasicPath(BasicTurretUpgradePath.Burst, out _);
-            upgradeAText = $"Power: {turret.NextBasicUpgradeDescription(BasicTurretUpgradePath.Power)}";
-            upgradeBText = $"Burst: {turret.NextBasicUpgradeDescription(BasicTurretUpgradePath.Burst)}";
+            canUpgradeA = canAfford && turret.CanUpgradeBasicPath(BasicTurretUpgradePath.Power, out _);
+            canUpgradeB = canAfford && turret.CanUpgradeBasicPath(BasicTurretUpgradePath.Burst, out _);
+            upgradeAText = $"Power: {turret.NextBasicUpgradeDescription(BasicTurretUpgradePath.Power)}{tag}";
+            upgradeBText = $"Burst: {turret.NextBasicUpgradeDescription(BasicTurretUpgradePath.Burst)}{tag}";
             onUpgradeA = () => _panelPowerUpgradeRequested = true;
             onUpgradeB = () => _panelBurstUpgradeRequested = true;
             return;
@@ -155,10 +252,10 @@ public partial class PlacementController
 
         if (turret.mode == TurretController.Mode.Aoe)
         {
-            canUpgradeA = turret.CanUpgradeAoePath(AoeTurretUpgradePath.Fire, out _);
-            canUpgradeB = turret.CanUpgradeAoePath(AoeTurretUpgradePath.Gravity, out _);
-            upgradeAText = $"Fire: {turret.NextAoeUpgradeDescription(AoeTurretUpgradePath.Fire)}";
-            upgradeBText = $"Gravity: {turret.NextAoeUpgradeDescription(AoeTurretUpgradePath.Gravity)}";
+            canUpgradeA = canAfford && turret.CanUpgradeAoePath(AoeTurretUpgradePath.Fire, out _);
+            canUpgradeB = canAfford && turret.CanUpgradeAoePath(AoeTurretUpgradePath.Gravity, out _);
+            upgradeAText = $"Fire: {turret.NextAoeUpgradeDescription(AoeTurretUpgradePath.Fire)}{tag}";
+            upgradeBText = $"Gravity: {turret.NextAoeUpgradeDescription(AoeTurretUpgradePath.Gravity)}{tag}";
             onUpgradeA = () => _panelAoeFireUpgradeRequested = true;
             onUpgradeB = () => _panelAoeGravityUpgradeRequested = true;
         }
@@ -186,10 +283,9 @@ public partial class PlacementController
         return sb.ToString().TrimEnd();
     }
 
-    // True when the cursor is over the info panel this frame. Used in Update to
-    // swallow the click so the panel's own IMGUI buttons handle it instead of
-    // the world-selection raycast (which would deselect). Input.mousePosition is
-    // bottom-left origin; GUI rects are top-left, hence the Y flip.
+    // Used in Update to swallow clicks so IMGUI buttons handle them instead of
+    // the world-selection raycast. Input.mousePosition is bottom-left origin;
+    // GUI rects are top-left, hence the Y flip.
     bool IsPointerOverSelectionPanel()
     {
         if (_panelRect.width <= 0f || _panelRect.height <= 0f) return false;
@@ -201,9 +297,8 @@ public partial class PlacementController
     {
         if (infoPanel != null) { _panelRect = default; return; }   // UGUI panel takes over
 
-        // Spawn point ("起点") selected → show the upcoming-wave intel panel
-        // instead of block/turret stats. Hidden during combat (forecast is for
-        // the NEXT wave, which is ambiguous mid-run).
+        // Spawn point selected -> show upcoming-wave intel instead of block
+        // stats. Hidden during combat (forecast is for the next wave only).
         if (mode == PlacementMode.Select && _selectedEndpoint != null && _selectedEndpointIsStart
             && (GameFlowManager.Instance == null || GameFlowManager.Instance.phase != GamePhase.Running))
         {
@@ -220,12 +315,11 @@ public partial class PlacementController
         }
 
         float s = UiScale.Get();
-        EnsurePanelStyles();                       // FIXED reference sizes; scaled below via GUI.matrix
+        EnsurePanelStyles();
 
         bool  isTurret = TurretTypes.Is(ins.data.blockType);
-        // Everything below is in REFERENCE (unscaled) units. The whole panel is
-        // scaled by `s` with one GUI.matrix transform, so it stays perfectly
-        // proportional at any window size (no per-element font rounding drift).
+        // Reference (unscaled) units; the whole panel is scaled by `s` via one
+        // GUI.matrix transform so it stays proportional at any window size.
         float panelW = 240f;
         float panelH = (_selPanelFor == ins && _selPanelHeight > 1f)
             ? _selPanelHeight
@@ -235,9 +329,8 @@ public partial class PlacementController
         float screenW = panelW * s;                // on-screen footprint
         float screenH = panelH * s;
 
-        // Anchor the panel to the block's on-screen position so it reads as a
-        // spatial label that tracks the block as the camera moves. Falls back to
-        // the right edge if the block is off / behind the camera.
+        // Anchor to the block's on-screen position; falls back to the right
+        // edge if the block is off / behind the camera.
         if (_hudCam == null) _hudCam = Camera.main;
         float x, y;
         Vector3 sp = _hudCam != null
@@ -257,14 +350,13 @@ public partial class PlacementController
             x = Mathf.Clamp(x, margin, Screen.width  - screenW - margin);
             y = Mathf.Clamp(y, margin, Screen.height - screenH - margin);
         }
-        _panelRect = new Rect(x, y, screenW, screenH);       // hit-test in screen px
+        _panelRect = new Rect(x, y, screenW, screenH);
 
         // Pop-in bounce on selection change.
         if (_panelAnimFor != ins) { _panelAnimStart = Time.time; _panelAnimFor = ins; }
         float pt  = selectionPopDuration > 1e-4f ? (Time.time - _panelAnimStart) / selectionPopDuration : 1f;
         float pop = Mathf.Lerp(0.6f, 1f, EaseOutBack(Mathf.Clamp01(pt)));
 
-        // One uniform scale (resolution × pop) around the panel's screen centre.
         float cx = x + screenW * 0.5f, cy = y + screenH * 0.5f;
         Matrix4x4 prevGuiMatrix = GUI.matrix;
         GUIUtility.ScaleAroundPivot(new Vector2(s * pop, s * pop), new Vector2(cx, cy));
@@ -281,8 +373,11 @@ public partial class PlacementController
         if (isTurret)
         {
             DrawTurretStats(ins);
-            DrawBasicTurretUpgrades(ins);
-            DrawAoeTurretUpgrades(ins);
+            if (EnlightenmentAllowedThisLevel())
+            {
+                DrawBasicTurretUpgrades(ins);
+                DrawAoeTurretUpgrades(ins);
+            }
         }
         else
         {
@@ -293,7 +388,7 @@ public partial class PlacementController
         DrawPanelButtons(ins, isTurret);
 
         GUILayout.EndVertical();
-        // Measure the real content height (repaint only) so next frame hugs it.
+        // Measure content height on repaint so next frame hugs it.
         if (Event.current.type == EventType.Repaint)
         {
             _selPanelHeight = GUILayoutUtility.GetLastRect().height;
@@ -303,9 +398,8 @@ public partial class PlacementController
         GUI.matrix = prevGuiMatrix;
     }
 
-    // Spawn-point intel panel: upcoming wave number, total enemy count, and the
-    // per-type breakdown ("Runner ×7"). No pick-up / sell — endpoints aren't
-    // editable. Forecast is cached per round (non-destructive to the run RNG).
+    // Spawn-point intel: wave number, enemy count, per-type breakdown.
+    // Forecast is cached per round (non-destructive to the run RNG).
     void DrawStartPanel()
     {
         float s = UiScale.Get();
@@ -370,12 +464,11 @@ public partial class PlacementController
         int header = 1;   // "Incoming" sub-header
         int lines  = (fc.valid && fc.groups != null && fc.groups.Count > 0)
             ? fc.groups.Count : 1;
-        // rows: Wave + Enemies (2) + header + per-type lines.
         return padding + title + divider + (2 + header + lines) * row + 10f;
     }
 
-    // Slightly-generous content-height estimate so the panel hugs its content
-    // (no big empty gap) without ever clipping the bottom buttons.
+    // Generous content-height estimate so the panel hugs its content without
+    // clipping the bottom buttons.
     float EstimatePanelHeight(PlacedBlockInstance ins, bool isTurret)
     {
         const float row = 26f, title = 36f, divider = 12f, button = 34f, buttonGap = 8f, padding = 30f;
@@ -430,8 +523,7 @@ public partial class PlacementController
 
         Color theme = BlockColorPalette.Get(ins.color);
 
-        // ONE line: color swatch + synergy type + activation progress (e.g.
-        // "Order  2/3"). The whole line turns the theme color once active.
+        // One line: color swatch + synergy type + activation progress.
         bool   hasProg = TryGetSynergyProgress(ins, out string ruleName, out int cur, out int req, out bool active);
         string name    = (hasProg && !string.IsNullOrEmpty(ruleName)) ? ruleName : ins.color.ToString();
         string txt     = name;
@@ -450,7 +542,6 @@ public partial class PlacementController
         GUI.contentColor = prevC;
         GUILayout.EndHorizontal();
 
-        // Flavor description.
         string desc = BlockColorPalette.Description(ins.color);
         if (!string.IsNullOrEmpty(desc))
         {
@@ -459,9 +550,8 @@ public partial class PlacementController
         }
     }
 
-    // Activation progress for the selected block's color. Returns the matching
-    // rule's display name + (current/required), and whether it's already active
-    // (this piece sits in a live claim → caller themes the text).
+    // Matching rule's display name + (current/required), and whether it's
+    // already active (piece sits in a live claim).
     bool TryGetSynergyProgress(PlacedBlockInstance ins, out string ruleName,
                                out int cur, out int req, out bool active)
     {
@@ -535,7 +625,11 @@ public partial class PlacementController
 
         PanelRow("Damage",    turret.bulletDamage.ToString());
         PanelRow("Range",     turret.attackRange.ToString("0.#"));
-        PanelRow("Fire rate", fireRate.ToString("0.0") + "/s");
+        if (turret.SynergyFireRateMultiplier > 1.0001f)
+            PanelRow("Fire rate", turret.EffectiveFireRate.ToString("0.0") + "/s  (+"
+                                  + ((turret.SynergyFireRateMultiplier - 1f) * 100f).ToString("0") + "%)");
+        else
+            PanelRow("Fire rate", fireRate.ToString("0.0") + "/s");
         PanelRow("Bullets",   Mathf.Max(1, turret.projectilesPerShot).ToString());
 
         if (turret.mode == TurretController.Mode.Slow)
@@ -686,9 +780,8 @@ public partial class PlacementController
         GUILayout.Space(4f);
     }
 
-    // FIXED reference sizes — the whole panel is uniformly scaled by GUI.matrix in
-    // Draw*Panel, so styles never need per-element scaling (which caused font-rounding
-    // drift and clipping). Built once.
+    // Fixed reference sizes; the panel is uniformly scaled by GUI.matrix in
+    // Draw*Panel so styles never need per-element scaling. Built once.
     void EnsurePanelStyles()
     {
         if (_panelBox != null) return;

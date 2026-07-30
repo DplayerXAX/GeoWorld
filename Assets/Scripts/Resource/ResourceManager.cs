@@ -169,10 +169,13 @@ public class ResourceManager : MonoBehaviour
 
     // Lift enables vertical routing longer paths stronger blocks pricier.
     // Shadow is slightly cheaper since it adds less path utility.
+    // Fallback only — used when no `balance` asset is wired. Must mirror
+    // BalanceTable.GetTypeMult or the two paths silently price differently.
     static float TypeMult(BlockType t) => t switch
     {
         BlockType.Lift   => 1.4f,
         BlockType.Shadow => 0.85f,
+        BlockType.Turret => 0.8f,
         _                => 1.0f
     };
 
@@ -292,6 +295,17 @@ public class ResourceManager : MonoBehaviour
     {
         if (amount == 0) return;
         _blockCurrency += amount;
+        OnBlockCurrencyChanged?.Invoke(_blockCurrency);
+    }
+
+    /// <summary>Subtracts <paramref name="amount"/> from block currency, clamped at 0.
+    /// Unlike TryBuy this is a PENALTY, not a purchase — it always succeeds (no
+    /// insufficient-funds gate, no OnInsufficientFunds). Used by level hazards
+    /// (e.g. Chaos Block) that tax the player rather than sell them something.</summary>
+    public void DrainBlockCurrency(int amount)
+    {
+        if (amount <= 0) return;
+        _blockCurrency = Mathf.Max(0, _blockCurrency - amount);
         OnBlockCurrencyChanged?.Invoke(_blockCurrency);
     }
 

@@ -67,12 +67,16 @@ public abstract class FaceMaterialVisualizerBase : SynergyVisualizer
 
         // Optional per-cell filter: rules implementing ICellHighlightFilter
         // (e.g. Enlightenment cube) restrict decoration to specific cells of
-        // a claimed piece. Rules without the interface decorate all cells.
-        var cellFilter = active.rule as ICellHighlightFilter;
+        // a claimed piece. Rules without the interface (highlightCells==null)
+        // decorate all cells. Read from the snapshot taken at claim time
+        // (ActiveSynergy.highlightCells) rather than querying the rule live —
+        // the rule's own cached filter state can belong to a DIFFERENT
+        // simultaneous instance of the same rule by the time this runs.
+        var highlightCells = active.highlightCells;
 
         foreach (var worldCell in instance.occupiedCells)
         {
-            if (cellFilter != null && !cellFilter.ShouldHighlight(worldCell)) continue;
+            if (highlightCells != null && !highlightCells.Contains(worldCell)) continue;
 
             var cellLocal = parent.InverseTransformPoint(grid.GridToWorld(worldCell));
             for (int i = 0; i < _faces.Length; i++)

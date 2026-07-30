@@ -14,62 +14,64 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::BalanceTable
   blockStartingCurrency: 250
   blockIncomeByRound: 2300000025000000280000002b0000002f00000033000000370000003c00000041000000470000004d000000530000005a0000006100000069000000
-  blockIncomeEndlessGrowth: 8
+  blockIncomeEndlessGrowth: 30
   turretStartingCurrency: 20
-  turretIncomeByRound: 030000000300000004000000040000000500000005000000060000000600000007000000070000000800000008000000090000000900000014000000
+  turretIncomeByRound: 0400000004000000050000000500000006000000060000000700000007000000080000000800000009000000090000000a0000000a00000014000000
   turretIncomeEndlessGrowth: 1
   turretRegenPerSecond: 0.3
   turretPerPassedBlock: 0
-  turretBonusPerWaveComplete: 5
+  turretBonusPerWaveComplete: 6
   cellBasePrice: 10
   roundPriceScale: 0.06
   fluctuationRange: {x: 0.82, y: 1.22}
   commonRarityMult: 1
   uncommonRarityMult: 1.4
-  rareRarityMult: 2
-  liftTypeMult: 1.4
-  shadowTypeMult: 0.85
+  rareRarityMult: 1.6
+  liftTypeMult: 1
+  shadowTypeMult: 1
+  turretTypeMult: 0.8
   startingLives: 10
   enemies:
   - name: Fast
     prefab: {fileID: 1000000000000000004, guid: 8e112c6d7d9b44b29b6d28b4cf5a5401, type: 3}
-    maxHealth: 3
+    maxHealth: 4
     speedMultiplier: 2
-    rewardOnKill: 0
+    rewardOnKill: 1
     targetPriority: 0
     spawnCost: 1
     minRound: 0
     spawnWeight: 2
     groupSize: {x: 3, y: 6}
-    spawnInterval: 0.5
+    spawnInterval: 0.8
   - name: Taunt
     prefab: {fileID: 2000000000000000004, guid: 9cd11ec29906452fae87b242eaa57704, type: 3}
-    maxHealth: 5
+    maxHealth: 6
     speedMultiplier: 1.5
-    rewardOnKill: 0
+    rewardOnKill: 1
     targetPriority: 100
     spawnCost: 1
     minRound: 1
     spawnWeight: 1.5
     groupSize: {x: 6, y: 10}
-    spawnInterval: 0.25
+    spawnInterval: 0.4
   - name: Splitter
     prefab: {fileID: 3000000000000000004, guid: 7f9459c0f939e624c8b042b0ee3c0803, type: 3}
-    maxHealth: 8
+    maxHealth: 9
     speedMultiplier: 0.85
-    rewardOnKill: 0
+    rewardOnKill: 1
     targetPriority: 20
     spawnCost: 4
     minRound: 2
     spawnWeight: 0.75
     groupSize: {x: 1, y: 2}
-    spawnInterval: 0.85
-  waveBaseBudget: 10
-  waveBudgetGrowth: 4
+    spawnInterval: 1
+  waveBaseBudget: 20
+  waveBudgetGrowth: 7
   waveBudgetVariance: 0.15
-  waveBudgetMax: 80
-  waveGroupSpacing: 1.5
+  waveBudgetMax: 160
+  waveGroupSpacing: 2.2
   waveAffordSlack: 1.2
+  enemyHealthGrowthPerRound: 0.2
   basicTurret:
     cost: 3
     damage: 1

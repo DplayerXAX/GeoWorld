@@ -13,6 +13,9 @@ Shader "Custom/PathLaser"
         _Intensity  ("Intensity",     Float)  = 4.5
         _PulseSpeed ("Pulse Speed",   Float)  = 1.4
         _PulseDepth ("Pulse Depth",   Float)  = 0.22
+        // 4 = LEqual (normal, occluded by geometry). Runtime-set to 8 (Always) for the
+        // middle-mouse "x-ray all paths" mode — see PathFlowManager.
+        [Enum(UnityEngine.Rendering.CompareFunction)] _ZTest ("ZTest", Float) = 4
     }
 
     SubShader
@@ -23,6 +26,7 @@ Shader "Custom/PathLaser"
         {
             Blend SrcAlpha One
             ZWrite Off
+            ZTest [_ZTest]
             Cull Off
 
             HLSLPROGRAM

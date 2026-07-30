@@ -13,10 +13,13 @@ MonoBehaviour:
   m_Name: AkWwiseInitializationSettings
   m_EditorClassIdentifier: AK.Wwise.Unity.API::AkWwiseInitializationSettings
   PlatformSettingsNameList:
+  - Mac
   - Windows
   PlatformSettingsList:
+  - {fileID: 11400000, guid: 6cc710d6cf2ed0c48a9be9d8bab5924b, type: 2}
   - {fileID: 11400000, guid: 3ad861a02c6e08942b30cca18626f4ee, type: 2}
-  InvalidReferencePlatforms: []
+  InvalidReferencePlatforms:
+  - Web
   UserSettings:
     m_BasePath: Audio\GeneratedSoundBanks
     m_StartupLanguage: English(US)

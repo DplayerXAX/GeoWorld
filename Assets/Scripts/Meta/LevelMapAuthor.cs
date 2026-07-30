@@ -109,11 +109,11 @@ public class LevelMapAuthor : MonoBehaviour
             foreach (var c in node.cells) if (grid.IsOccupied(c)) { clash = true; break; }
             if (clash) continue;
 
-            BlockData bd = null;
-            if (System.Enum.TryParse(node.blockTypeName, out BlockType bt)) bd = pc.FindBlockData(bt);
-            if (bd == null) { Debug.LogWarning($"[LevelMap] can't resolve block '{node.blockTypeName}', skipped."); continue; }
+            BlockData bd = !string.IsNullOrEmpty(node.blockAssetName) ? pc.FindBlockDataByName(node.blockAssetName) : null;
+            if (bd == null && System.Enum.TryParse(node.blockTypeName, out BlockType bt)) bd = pc.FindBlockData(bt);
+            if (bd == null) { Debug.LogWarning($"[LevelMap] can't resolve block '{node.blockAssetName}'/'{node.blockTypeName}', skipped."); continue; }
 
-            var ins = pc.PlaceBlockDirect(bd, node.cells, Quaternion.identity, node.color);
+            var ins = pc.PlaceBlockDirect(bd, node.cells, node.rotation, node.color, node.synergyColor);
             if (ins?.visualObject != null && (!string.IsNullOrEmpty(node.levelId) || node.isStart))
             {
                 var tag = ins.visualObject.AddComponent<LevelNodeTag>();

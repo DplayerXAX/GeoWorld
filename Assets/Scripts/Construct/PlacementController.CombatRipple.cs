@@ -31,12 +31,16 @@ public partial class PlacementController
         {
             if (ins.visualObject == null) continue;
             // Parent stays at scale 1; we drive each child independently.
-            ins.visualObject.transform.localScale = Vector3.one;
+            //ins.visualObject.transform.localScale = Vector3.one;
 
             int count = Mathf.Min(ins.visualObject.transform.childCount, ins.occupiedCells.Count);
             for (int i = 0; i < count; i++)
             {
                 var t = ins.visualObject.transform.GetChild(i);
+                // Turret prefab visuals (TurretBeacon, scaled to fit a cell) are NOT
+                // cell cubes — skip them so the cube ripple doesn't reset their scale
+                // to 1. They pop back via BeaconPop at their own captured scale.
+                if (t.GetComponent<TurretBeacon>() != null) continue;
                 cubes.Add((t, ins.occupiedCells[i], t.position, t.localPosition));
                 t.localScale = Vector3.zero;
             }
@@ -50,7 +54,7 @@ public partial class PlacementController
                 beacon.transform.localScale = Vector3.zero;
             }
         }
-        if (cubes.Count == 0) yield break;
+        if (cubes.Count == 0 && beacons.Count == 0) yield break;
         yield return null;
 
         // Step 2: cell first index along path.
@@ -118,7 +122,18 @@ public partial class PlacementController
         for (int i = 0; i < beacons.Count; i++)
             StartCoroutine(BeaconPop(beacons[i].t, delayFor(beacons[i].worldPos), beacons[i].origScale));
 
-        SynergyVisualFX.ReplayGrowIn(delayFor);
+        // Synergy FX (and seal chains) wait for the WHOLE block ripple to finish
+        // before growing, rather than following the wavefront like the beacons do.
+        // A synergy spans several blocks, so sprouting its decoration when the
+        // wave reaches one of them means it blooms over blocks that haven't
+        // popped in yet. Waiting for the last cube — path sweep plus the off-path
+        // bloom that trails it — guarantees every block a synergy is built from is
+        // already standing, and gives a clean "structure builds, then it comes
+        // alive" beat. The small per-position term just keeps them from all
+        // firing on the exact same frame.
+        float blocksDoneAt = Mathf.Max(pathSweepEnd, pathSweepEnd - cubeDur * 0.5f + 0.55f + cubeDur);
+        System.Func<Vector3, float> synergyDelayFor = wp => blocksDoneAt + Mathf.Min(0.25f, delayFor(wp) * 0.12f);
+        SynergyVisualFX.ReplayGrowIn(synergyDelayFor);
 
         // Step 5: off-path cubes bloom from their nearest path cube. Small
         // overlap with the path sweep so it doesn't feel halted.
@@ -269,7 +284,7 @@ public partial class PlacementController
         while (elapsed < dur)
         {
             if (obj == null) yield break;
-            elapsed += Time.deltaTime;
+            elapsed += Time.unscaledDeltaTime;   // must still play during the planning pause (timeScale = 0)
             float t = Mathf.Clamp01(elapsed / dur);
 
             float scale;

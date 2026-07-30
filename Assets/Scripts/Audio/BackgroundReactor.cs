@@ -61,6 +61,16 @@ public class BackgroundReactor : MonoBehaviour
     float _pitchGlow;
     float _combatMode;        // current smoothed value (0=calm, 1=intense)
     float _targetCombatMode;  // 0 or 1
+    float _clearReact;        // level-clear ordered-geometry reaction (0→1)
+
+    [Header("Clear reaction")]
+    [Tooltip("How fast the skybox reorganises into ordered geometry on level clear.")]
+    public float clearTransitionSpeed = 2.5f;
+
+    [Header("Kill reaction")]
+    [Tooltip("How fast the kill-reaction pulse decays back to 0 after each kill — kept high so it reads as a brief twitch, not a lingering shift.")]
+    [Range(0.5f, 30f)] public float killReactDecay = 18f;
+    float _killReact;   // current pulse (0 = no pulse, 1 = full snap-to-calm)
 
     static readonly int BeatPulseId  = Shader.PropertyToID("_BeatPulse");
     static readonly int IntensityId  = Shader.PropertyToID("_MusicIntensity");
@@ -68,6 +78,8 @@ public class BackgroundReactor : MonoBehaviour
     static readonly int TypeHueId    = Shader.PropertyToID("_TypeHue");
     static readonly int PitchGlowId  = Shader.PropertyToID("_PitchGlow");
     static readonly int CombatModeId = Shader.PropertyToID("_CombatMode");
+    static readonly int ClearReactId = Shader.PropertyToID("_ClearReact");
+    static readonly int KillReactId  = Shader.PropertyToID("_KillReact");
 
     void Awake()
     {
@@ -109,6 +121,10 @@ public class BackgroundReactor : MonoBehaviour
         _combatMode = Mathf.MoveTowards(_combatMode, _targetCombatMode,
                                         combatTransitionSpeed * dt);
 
+        // Level-clear: ramp the ordered-geometry reaction while the settlement is up.
+        float targetClear = GameFlowManager.SettlementUp ? 1f : 0f;
+        _clearReact = Mathf.MoveTowards(_clearReact, targetClear, clearTransitionSpeed * dt);
+
         // In combat, music intensity rides higher for extra visual energy
         float targetInt = _targetCombatMode > 0.5f
                           ? Mathf.Max(_targetIntensity, 0.85f)
@@ -126,6 +142,7 @@ public class BackgroundReactor : MonoBehaviour
     1f - Mathf.Exp(-4f * dt)
 );
         _flashAmount = Mathf.Lerp(_flashAmount, 0f, 1f - Mathf.Exp(-themeFlashDecay * dt));
+        _killReact   = Mathf.Lerp(_killReact,   0f, 1f - Mathf.Exp(-killReactDecay  * dt));
         if (skyboxMaterial == null) return;
         skyboxMaterial.SetFloat(BeatPulseId,  _beatPulse);
         skyboxMaterial.SetFloat(IntensityId,  _smoothIntensity); 
@@ -139,6 +156,8 @@ public class BackgroundReactor : MonoBehaviour
         skyboxMaterial.SetFloat(TypeHueId,    _typeHue);
         skyboxMaterial.SetFloat(PitchGlowId,  _pitchGlow);
         skyboxMaterial.SetFloat(CombatModeId, _combatMode);
+        skyboxMaterial.SetFloat(ClearReactId, _clearReact);
+        skyboxMaterial.SetFloat(KillReactId,  _killReact);
     }
 
     /// <summary>
@@ -153,6 +172,14 @@ public class BackgroundReactor : MonoBehaviour
     public void TriggerDamageFlash()
     {
         _damageTint = 1f;
+    }
+
+    // Mirror of TriggerDamageFlash — pulses the skybox back toward calm on an enemy
+    // kill instead of toward chaos. `strength` scales with combo (ComboManager), so
+    // bigger combos punch the sky harder back toward calm.
+    public void TriggerKillReact(float strength)
+    {
+        _killReact = Mathf.Max(_killReact, Mathf.Clamp01(strength));
     }
 
     // Flash the skybox toward an arbitrary theme colour, then fade out (mirrors

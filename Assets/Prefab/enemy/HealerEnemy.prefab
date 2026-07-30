@@ -1,0 +1,106 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!1 &2100000000000000001
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 2100000000000000002}
+  - component: {fileID: 2100000000000000004}
+  - component: {fileID: 2100000000000000005}
+  - component: {fileID: 2100000000000000006}
+  m_Layer: 0
+  m_Name: HealerEnemy
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &2100000000000000002
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2100000000000000001}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 0.72, y: 0.72, z: 0.72}
+  m_ConstrainProportionsScale: 1
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &2100000000000000004
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2100000000000000001}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 35184de46b48402aa20433b916bb4fe2, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Assembly-CSharp::EnemySurfaceUnit
+  bpm: 120
+  moveRatio: 0.8
+  baseSpeedMultiplier: 0.85
+  maxHealth: 6
+  rewardOnKill: 2
+  faceClearance: 0.15
+  targetPriority: 0
+--- !u!114 &2100000000000000005
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2100000000000000001}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 735b9c52af41b9b4da09c5bc959f2508, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Assembly-CSharp::EnemyChaoticVisual
+  shardCount: 5
+  accentCount: 2
+  shardMaterial: {fileID: 0}
+  accentMaterial: {fileID: 0}
+  forceUnlit: 1
+  layoutRadius: 0.36
+  shardSizeRange: {x: 0.26, y: 0.36}
+  accentSizeRange: {x: 0.08, y: 0.13}
+  shardPalette:
+  - {r: 0.16, g: 0.55, b: 0.28, a: 1}
+  - {r: 0.24, g: 0.72, b: 0.42, a: 1}
+  - {r: 0.12, g: 0.42, b: 0.38, a: 1}
+  accentPalette:
+  - {r: 0.55, g: 1, b: 0.6, a: 1}
+  - {r: 0.85, g: 1, b: 0.75, a: 1}
+  bodyRotSpeed: 2
+  shardSpinSpeed: 5
+  bobAmplitude: 0.1
+  bobSpeed: 0.06
+  orbitDriftSpeed: 3
+  randomizeRootTilt: 1
+--- !u!114 &2100000000000000006
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2100000000000000001}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7c1f9a3e5d2b46e8ab90c4d17f635a01, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Assembly-CSharp::EnemyHealerAura
+  healInterval: 2
+  healRadius: 3
+  healAmount: 1
+  healSelf: 0
+  maxTargetsPerPulse: 0
+  auraColor: {r: 0.35, g: 1, b: 0.45, a: 1}

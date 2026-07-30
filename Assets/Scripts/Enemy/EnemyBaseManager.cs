@@ -60,6 +60,11 @@ public class EnemyBaseManager : MonoBehaviour
     }
 
     readonly List<EnemySurfaceUnit> _activeEnemies = new();
+    // Turret-visible but NOT part of wave bookkeeping — a level hazard (e.g.
+    // Chaos Block) that lives across rounds. Any entry ALSO listed here is
+    // excluded from the "wave has finished" check and survives CancelWave()'s
+    // per-round reset; the registrant owns its own spawn/death/cleanup entirely.
+    readonly HashSet<EnemySurfaceUnit> _persistentTargets = new();
     Coroutine _spawnRoutine;
     bool _waveActive;
     int _spawnedCount;
@@ -134,11 +139,16 @@ public class EnemyBaseManager : MonoBehaviour
             _spawnRoutine = null;
         }
 
-        foreach (var enemy in _activeEnemies)
-            if (enemy != null)
-                Destroy(enemy.gameObject);
+        // Persistent targets (Chaos Block etc.) survive a wave reset — their
+        // registrant owns their lifecycle, not the wave system.
+        for (int i = _activeEnemies.Count - 1; i >= 0; i--)
+        {
+            var enemy = _activeEnemies[i];
+            if (enemy != null && _persistentTargets.Contains(enemy)) continue;
+            if (enemy != null) Destroy(enemy.gameObject);
+            _activeEnemies.RemoveAt(i);
+        }
 
-        _activeEnemies.Clear();
         _currentPaths  = null;
         _currentGroups = null;
         _spawnTotal    = 0;
@@ -292,7 +302,12 @@ public class EnemyBaseManager : MonoBehaviour
         var record = LookupBalanceRecord(source);
         if (record != null)
         {
-            enemy.SetMaxHealth(record.maxHealth);
+            // Additive (not compounding) per-round HP growth — R0 ×1.0, R1 ×1.2, R5 ×2.0 —
+            // so late waves don't explode exponentially the way ×1.2^round would.
+            float hpMult = balance != null && GameFlowManager.Instance != null
+                ? balance.GetEnemyHealthMultiplier(GameFlowManager.Instance.RoundIndex)
+                : 1f;
+            enemy.SetMaxHealth(Mathf.Max(1, Mathf.RoundToInt(record.maxHealth * hpMult)));
             enemy.rewardOnKill = record.rewardOnKill;
             enemy.baseSpeedMultiplier = Mathf.Max(0.01f, record.speedMultiplier);
             enemy.targetPriority      = record.targetPriority;
@@ -415,9 +430,44 @@ public class EnemyBaseManager : MonoBehaviour
         //   • Block currency   ← combat-success income (kill rewards) so
         //                        clearing waves feeds the building budget.
         if (enemy != null && enemy.rewardOnKill > 0 && ResourceManager.Instance != null)
+        {
             ResourceManager.Instance.AddBlockCurrency(enemy.rewardOnKill);
+            CurrencyFlyFx.Fly(enemy.transform.position, isTurret: false, enemy.rewardOnKill);
+        }
 
+        ComboManager.RegisterKill();
         RemoveEnemy(enemy, destroy: true);
+    }
+
+    // ── Persistent (non-wave) targets ────────────────────────────────────────
+    // For level hazards that should be turret-visible without being wave enemies
+    // (e.g. Chaos Block): visible to FindClosest() via ActiveEnemies, excluded
+    // from wave-completion bookkeeping, and immune to CancelWave()'s per-round
+    // sweep. The REGISTRANT owns spawn/health/death/cleanup entirely — this
+    // manager only ever adds/removes list membership.
+    public void RegisterPersistentTarget(EnemySurfaceUnit unit)
+    {
+        if (unit == null || !_persistentTargets.Add(unit)) return;
+        if (!_activeEnemies.Contains(unit)) _activeEnemies.Add(unit);
+    }
+
+    public void UnregisterPersistentTarget(EnemySurfaceUnit unit)
+    {
+        if (unit == null) return;
+        _persistentTargets.Remove(unit);
+        _activeEnemies.Remove(unit);
+    }
+
+    // True while at least one NON-persistent (real wave) enemy is still alive.
+    // Persistent targets (Chaos Block) don't count — their presence must never
+    // stall wave completion.
+    bool HasActiveWaveEnemies()
+    {
+        if (_activeEnemies.Count == 0) return false;
+        if (_persistentTargets.Count == 0) return true;   // fast path: nothing to exclude
+        for (int i = 0; i < _activeEnemies.Count; i++)
+            if (_activeEnemies[i] != null && !_persistentTargets.Contains(_activeEnemies[i])) return true;
+        return false;
     }
 
     void RemoveEnemy(EnemySurfaceUnit enemy, bool destroy)
@@ -431,7 +481,7 @@ public class EnemyBaseManager : MonoBehaviour
         if (destroy)
             Destroy(enemy.gameObject);
 
-        if (_spawnRoutine == null && _activeEnemies.Count == 0 && _spawnedCount >= _spawnTotal)
+        if (_spawnRoutine == null && !HasActiveWaveEnemies() && _spawnedCount >= _spawnTotal)
         {
             if (_waveActive)
             {

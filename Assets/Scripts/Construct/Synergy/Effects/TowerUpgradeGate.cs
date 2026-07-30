@@ -1,43 +1,55 @@
 using System;
+using System.Collections.Generic;
+using UnityEngine;
 
-// Gate for the turret-upgrade feature (启发 / Enlightenment unlock).
+// Gate for the turret-upgrade feature (Enlightenment unlock).
 //
-// The actual "upgrade a turret" UI/flow is NOT implemented yet — this is the
-// hook it will read. Enlightenment's 2×2×2 cube flips this on via
-// UnlockTowerUpgradeEffect; whatever builds the upgrade UI later should check
-// TowerUpgradeGate.Unlocked and/or subscribe to OnChanged to show/enable it.
+// Turrets start with zero upgrade actions allowed. An active Enlightenment
+// cube grants some via a per-tier UnlockTowerUpgradeEffect (see
+// EnlightenmentRule.perTierEffects). AllowedUpgrades is the LARGEST currently
+// active grant, not a sum — the biggest active cube sets the ceiling.
 //
-// Ref-counted so multiple unlock sources (or a tier-up that revokes+re-applies)
-// compose without prematurely re-locking.
+// A multiset (not a plain ref-count) so tier-up — revoke old, apply new —
+// composes correctly without the allowance ever visibly dropping to 0.
 public static class TowerUpgradeGate
 {
-    static int _refs;
+    static readonly List<int> _active = new();
 
-    public static bool Unlocked => _refs > 0;
-
-    // (unlocked) — fires when the gate transitions locked↔unlocked.
-    public static event Action<bool> OnChanged;
-
-    public static void Acquire()
+    public static int AllowedUpgrades
     {
-        bool was = Unlocked;
-        _refs++;
-        if (!was && Unlocked) OnChanged?.Invoke(true);
+        get
+        {
+            int max = 0;
+            for (int i = 0; i < _active.Count; i++)
+                if (_active[i] > max) max = _active[i];
+            return max;
+        }
     }
 
-    public static void Release()
+    public static bool Unlocked => AllowedUpgrades > 0;
+
+    // Fires with the new AllowedUpgrades whenever it changes.
+    public static event Action<int> OnChanged;
+
+    public static void Acquire(int upgrades)
     {
-        if (_refs <= 0) return;
-        bool was = Unlocked;
-        _refs--;
-        if (was && !Unlocked) OnChanged?.Invoke(false);
+        int before = AllowedUpgrades;
+        _active.Add(Mathf.Max(0, upgrades));
+        if (AllowedUpgrades != before) OnChanged?.Invoke(AllowedUpgrades);
     }
 
-    // Hard reset (e.g. new run). Safe to call any time.
+    public static void Release(int upgrades)
+    {
+        int before = AllowedUpgrades;
+        _active.Remove(upgrades);   // removes ONE matching entry
+        if (AllowedUpgrades != before) OnChanged?.Invoke(AllowedUpgrades);
+    }
+
+    // Hard reset for a new run.
     public static void ResetAll()
     {
-        bool was = Unlocked;
-        _refs = 0;
-        if (was) OnChanged?.Invoke(false);
+        bool changed = _active.Count > 0;
+        _active.Clear();
+        if (changed) OnChanged?.Invoke(0);
     }
 }

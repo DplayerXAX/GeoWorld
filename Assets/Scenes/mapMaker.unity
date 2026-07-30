@@ -163,24 +163,35 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d2e7a7b02a8f0f14088959c2758c5141, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::TopLeftHUD
-  panelX: 12
-  panelY: 12
-  panelW: 190
-  rowHeight: 20
-  padding: 5
+  heartIcon: {fileID: 0}
+  blockIcon: {fileID: 0}
+  turretIcon: {fileID: 0}
+  gridIcon: {fileID: 0}
+  iconSize: 26
+  font: {fileID: 0}
+  valueSize: 18
+  incomeSize: 13
+  waveSize: 18
+  panelColor: {r: 0, g: 0, b: 0, a: 0.42}
+  heartColor: {r: 1, g: 0.4, b: 0.4, a: 1}
   blockColor: {r: 0.55, g: 0.95, b: 1, a: 1}
   turretColor: {r: 1, g: 0.65, b: 0.3, a: 1}
-  labelColor: {r: 0.85, g: 0.85, b: 0.85, a: 1}
   valueColor: {r: 1, g: 1, b: 1, a: 1}
-  hintColor: {r: 0.65, g: 0.65, b: 0.65, a: 1}
-  bgColor: {r: 0, g: 0, b: 0, a: 0.55}
-  heartColor: {r: 1, g: 0.4, b: 0.4, a: 1}
+  incomeColor: {r: 0.65, g: 0.65, b: 0.65, a: 1}
+  waveColor: {r: 0, g: 0, b: 0, a: 1}
+  waveLabelColor: {r: 0.6, g: 0.6, b: 0.6, a: 1}
+  panelMargin: {x: 16, y: 16}
+  cellGap: 8
+  cornerRadius: 24
+  topMargin: 14
+  topInset: 28
+  topPanelSprite: {fileID: 0}
+  topPanelSize: {x: 380, y: 36}
   worldCamera: {fileID: 330585545}
   rayMaxDistance: 200
   groundPlaneY: 0
   cellHysteresis: 0.07
   toggleKey: 0
-  visibleOnStart: 1
 --- !u!1 &25065608
 GameObject:
   m_ObjectHideFlags: 0
@@ -378,6 +389,10 @@ MonoBehaviour:
   rangeBlockedColor: {r: 1, g: 0.18, b: 0.12, a: 0.6}
   sellRefundFraction: 0.5
   selectionPopDuration: 0.16
+  restartTapMaxSeconds: 0.25
+  restartHoldSeconds: 1.2
+  infoPanel: {fileID: 0}
+  upgradePanel: {fileID: 0}
 --- !u!4 &164805053
 Transform:
   m_ObjectHideFlags: 0
@@ -742,6 +757,9 @@ MonoBehaviour:
   orthoSize: 5
   orthoZoomSpeed: 2
   orthoAngle: {x: 35, y: 45, z: 0}
+  focusViewport: {x: 0.5, y: 0.5}
+  gamepadLookScale: 1
+  gamepadZoomSpeed: 12
   projectionToggleKey: 289
   perspectiveFov: 50
   transitionSpeed: 15
@@ -1281,7 +1299,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::LevelMapAuthor
   database: {fileID: 11400000, guid: 5fec9a2db26ea9f4d9c19242de8a9162, type: 2}
-  mapName: Select
+  mapName: 1-3Preset
 --- !u!4 &604723794
 Transform:
   m_ObjectHideFlags: 0
@@ -1307,6 +1325,7 @@ GameObject:
   m_Component:
   - component: {fileID: 621363998}
   - component: {fileID: 621363997}
+  - component: {fileID: 621363999}
   m_Layer: 0
   m_Name: WwiseGlobal
   m_TagString: Untagged
@@ -1354,6 +1373,18 @@ Transform:
   m_Children: []
   m_Father: {fileID: 1896091937}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &621363999
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 621363996}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ed39f2b237e573f4f85990bb5d1440ac, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: AK.Wwise.Unity.Addressables::AK.Wwise.Unity.WwiseAddressables.InitBankHolder
 --- !u!1 &653921579
 GameObject:
   m_ObjectHideFlags: 0
@@ -1432,6 +1463,7 @@ MonoBehaviour:
   laserMaterial: {fileID: 2100000, guid: cbe27151982a69641ab591e07a569734, type: 2}
   lineWidth: 0.055
   heightOffset: 0.04
+  xrayMouseButton: 2
   livePathColor: {r: 1, g: 1, b: 0.7, a: 0.9}
 --- !u!1 &658080851
 GameObject:
@@ -1812,17 +1844,18 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PauseMenu
   toggleKey: 27
+  titleScene: Title
   overlayColor: {r: 0, g: 0, b: 0, a: 0.6}
-  titleColor: {r: 0.6, g: 0.95, b: 1, a: 1}
   panelWidth: 260
   buttonHeight: 42
   showControls: 1
-  controlsRight: 12
-  controlsTop: 12
-  controlSize: 40
-  controlGap: 8
-  controlBg: {r: 0, g: 0, b: 0, a: 0.55}
-  controlFg: {r: 1, g: 0.82, b: 0.32, a: 1}
+  pauseIcon: {fileID: 0}
+  resumeIcon: {fileID: 0}
+  fastForwardIcon: {fileID: 0}
+  speedPipFilled: {fileID: 0}
+  speedPipEmpty: {fileID: 0}
+  iconColorOnShop: {r: 1, g: 1, b: 1, a: 1}
+  iconColorDefault: {r: 0, g: 0, b: 0, a: 1}
 --- !u!1 &745744072
 GameObject:
   m_ObjectHideFlags: 0
@@ -2113,6 +2146,8 @@ MonoBehaviour:
   themeFlashDecay: 3
   combatTestKey: 48
   combatTransitionSpeed: 2
+  clearTransitionSpeed: 2.5
+  killReactDecay: 18
 --- !u!4 &1188158438
 Transform:
   m_ObjectHideFlags: 0
@@ -2429,6 +2464,26 @@ MonoBehaviour:
     idInternal: 0
     valueGuidInternal: 
     WwiseObjectReference: {fileID: 11400000, guid: a769a98ee568cdc45828c71ac6fc2119, type: 2}
+  UISound:
+    idInternal: 0
+    valueGuidInternal: 
+    WwiseObjectReference: {fileID: 0}
+  TextBlip:
+    idInternal: 0
+    valueGuidInternal: 
+    WwiseObjectReference: {fileID: 0}
+  SelectObject:
+    idInternal: 0
+    valueGuidInternal: 
+    WwiseObjectReference: {fileID: 0}
+  ShopExpand:
+    idInternal: 0
+    valueGuidInternal: 
+    WwiseObjectReference: {fileID: 0}
+  ShopCollapse:
+    idInternal: 0
+    valueGuidInternal: 
+    WwiseObjectReference: {fileID: 0}
   masterVolumeRtpc: MasterVolume
   musicVolumeRtpc: MusicVolume
   sfxVolumeRtpc: SFXVolume
@@ -2558,6 +2613,9 @@ MonoBehaviour:
   riftHintScale: 0.22
   expandSpeed: 9
   shopToggleKey: 102
+  letterbox: 1
+  barHeight: 0.16
+  barColor: {r: 0, g: 0, b: 0, a: 1}
   shopCenter: {x: -99, y: -99, z: -99}
   shopLayerName: ShopItem
   blockSpacing: 3.7
@@ -2592,12 +2650,16 @@ MonoBehaviour:
   sparkleCount: 32
   sparkleRadius: 1.35
   sparkleTwinkleSpeed: 1.3
-  crackJaggedness: 0
-  crackWobbleSpeed: 0
-  crackSubdivision: 0
   hoverScale: 1.5
   hoverLerpSpeed: 8
   tooltipBg: {r: 0.04, g: 0.04, b: 0.08, a: 0.9}
+  tooltipScale: 2
+  refreshIcon: {fileID: 0}
+  shopButtonIcon: {fileID: 0}
+  refreshButtonSize: 54
+  refreshButtonOffset: {x: 0, y: 6}
+  flatBlocks: 1
+  flatMaterial: {fileID: 0}
   flipHoverX: 0
   flipHoverY: 1
   hoverRadius: 0.35

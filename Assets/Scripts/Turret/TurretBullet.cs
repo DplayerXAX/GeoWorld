@@ -21,7 +21,7 @@ public class TurretBullet : MonoBehaviour
         _target = target;
         _turret = turret;
         _speed = turret.bulletSpeed;
-        _damage = turret.bulletDamage;
+        _damage = turret.EffectiveBulletDamage;   // base × reversible shrine-aura buff (base untouched)
         _life = turret.bulletLifetime;
 
         SetupBulletCollider();

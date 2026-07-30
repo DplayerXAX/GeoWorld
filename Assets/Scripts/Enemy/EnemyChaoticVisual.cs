@@ -97,6 +97,17 @@ public class EnemyChaoticVisual : MonoBehaviour
     [Tooltip("Each instance gets a small random body tilt so two enemies don't look identical.")]
     public bool randomizeRootTilt = true;
 
+    [Header("Authored art")]
+    [Tooltip("On (default): if the prefab already has its own MeshRenderer, skip the procedural shards entirely and let the authored model be the enemy. Turn off to layer shards on top of a mesh on purpose.")]
+    public bool skipWhenPrefabHasMesh = true;
+
+    [Tooltip("Give an authored model the same idle spin + bob the shard enemies get, by attaching a TurretBeacon to it. Without this a re-meshed enemy stands perfectly still.")]
+    public bool spinAuthoredMesh = true;
+    [Tooltip("Spin speed range (deg/sec) for the authored model. Slower than the turret beacon's default tumble — an enemy should turn, not whirl.")]
+    public Vector2 authoredSpinSpeed = new Vector2(25f, 45f);
+    [Tooltip("Idle bob height for the authored model, in local units.")]
+    public float authoredBobHeight = 0.05f;
+
     // ────────────────────────────────────────────────────────────────────
     // Internals
     // ────────────────────────────────────────────────────────────────────
@@ -116,6 +127,20 @@ public class EnemyChaoticVisual : MonoBehaviour
 
     void Start()
     {
+        // A prefab that ships its own model doesn't want a random shard cloud
+        // built on top of it — that's what made every re-meshed enemy still read
+        // as the same generic blob. Prefabs with no MeshRenderer (the original
+        // mesh-less enemies) are unaffected and still build their shards.
+        var authored = skipWhenPrefabHasMesh ? GetComponentInChildren<MeshRenderer>(true) : null;
+        if (authored != null)
+        {
+            var meshApplier = GetComponent<BlockOutlineApplier>();
+            if (meshApplier != null) meshApplier.Apply();   // authored mesh still gets its outline
+            if (spinAuthoredMesh) AttachSpin(authored.transform);
+            enabled = false;
+            return;
+        }
+
         var rng = new System.Random(GetInstanceID());
 
         _body = new GameObject("Body").transform;
@@ -163,6 +188,26 @@ public class EnemyChaoticVisual : MonoBehaviour
             // Independent spin.
             s.t.Rotate(s.spinAxis, shardSpinSpeed * Time.deltaTime, Space.Self);
         }
+    }
+
+    // Reuses TurretBeacon — it already does exactly the idle spin + bob we want,
+    // and its fields are public so the enemy can dial the speed down from the
+    // turret diamond's fast tumble.
+    //
+    // It goes on the MESH CHILD, never the enemy root: TurretBeacon drives
+    // localPosition for its bob, and the root's position is owned by
+    // EnemySurfaceUnit's pathing — the two would fight. On the child, the bob is
+    // relative to the enemy, which is what it should be anyway.
+    void AttachSpin(Transform meshChild)
+    {
+        if (meshChild == null || meshChild == transform) return;
+        if (meshChild.GetComponent<TurretBeacon>() != null) return;
+
+        var beacon = meshChild.gameObject.AddComponent<TurretBeacon>();
+        beacon.minSpinSpeed = Mathf.Min(authoredSpinSpeed.x, authoredSpinSpeed.y);
+        beacon.maxSpinSpeed = Mathf.Max(authoredSpinSpeed.x, authoredSpinSpeed.y);
+        beacon.bobHeight    = authoredBobHeight;
+        beacon.bobSpeed     = bobSpeed > 0.01f ? bobSpeed : 1.2f;
     }
 
     // ────────────────────────────────────────────────────────────────────

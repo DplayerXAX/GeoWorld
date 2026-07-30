@@ -26,6 +26,8 @@ public class TurretController : MonoBehaviour
     [Header("Bullet")]
     public GameObject bulletPrefab;
     public string bulletResourcePath = "Bullet";
+    [Tooltip("Uniform scale applied to the spawned bullet instance (the prefab asset itself is left untouched).")]
+    public float bulletScale = 1f;
     public float bulletSpeed = 9f;
     public int bulletDamage = 1;
     public float bulletLifetime = 3f;
@@ -40,6 +42,9 @@ public class TurretController : MonoBehaviour
     EnemySurfaceUnit _target;
     float _fireTimer;
     float _synergyFireRateMult = 1f;   // reversible synergy attack-speed buff (1 = none)
+    float _debuffFireRateMult  = 1f;   // reversible enemy attack-speed debuff (1 = none)
+    float _shrineFireRateMult  = 1f;   // reversible Enlightenment-shrine aura buff (1 = none)
+    float _shrineDamageMult    = 1f;   // reversible Enlightenment-shrine aura buff (1 = none)
 
     [SerializeField, Range(0, 3)] int _powerPathLevel;
     [SerializeField, Range(0, 3)] int _burstPathLevel;
@@ -50,6 +55,21 @@ public class TurretController : MonoBehaviour
     public int BurstPathLevel => _burstPathLevel;
     public int AoeFirePathLevel => _aoeFirePathLevel;
     public int AoeGravityPathLevel => _aoeGravityPathLevel;
+
+    // Upgrade actions spent so far, across ALL paths/modes. Turrets start with
+    // zero allowance (see TowerUpgradeGate) — an active Enlightenment cube is
+    // the only source of AllowedUpgrades, so this stays capped at whatever the
+    // biggest currently-active cube grants (1 / 2 / 3 for tier 1/2/3).
+    public int TotalUpgradesUsed =>
+        _powerPathLevel + _burstPathLevel + _aoeFirePathLevel + _aoeGravityPathLevel;
+
+    // True whenever the turret's own upgrade actions have caught up with (or
+    // exceed) the currently-active Enlightenment allowance — the SAME check
+    // CanUpgradeBasicPath/CanUpgradeAoePath run first, exposed here as its own
+    // named condition so the UI can distinguish "blocked by Enlightenment" from
+    // "blocked because this specific path is maxed" without string-matching a
+    // `reason` message.
+    public bool BlockedByEnlightenmentGate => TotalUpgradesUsed >= TowerUpgradeGate.AllowedUpgrades;
 
     public bool AoeBurnGroundEnabled => mode == Mode.Aoe && _aoeFirePathLevel >= 1;
     public float AoeBurnGroundDuration => _aoeFirePathLevel >= 2 ? 3f : 2f;
@@ -69,6 +89,42 @@ public class TurretController : MonoBehaviour
     {
         _synergyFireRateMult = Mathf.Max(0.01f, multiplier);
     }
+
+    // Reversible fire-rate multiplier from ENEMY debuffs (EnemyTurretSuppressor,
+    // via TurretSuppressionEffect). <1 = slower. Its own channel so a suppressor
+    // and a Harmony buff compose instead of clobbering each other's restore-to-1.
+    public void SetDebuffFireRateMultiplier(float multiplier)
+    {
+        _debuffFireRateMult = Mathf.Max(0.01f, multiplier);
+    }
+
+    public float DebuffFireRateMultiplier => _debuffFireRateMult;
+
+    // Reversible aura buff from a nearby Enlightenment shrine (ShrineController).
+    // Its OWN channels so it composes with (never clobbers) the synergy buff and
+    // enemy debuff. Call SetShrineBuff(1, 1) to clear — the shrine controller
+    // re-asserts this every frame from turret↔shrine adjacency, so a turret that
+    // walks out of the aura (or whose shrine vanishes) is cleared automatically.
+    public void SetShrineBuff(float fireRateMult, float damageMult)
+    {
+        _shrineFireRateMult = Mathf.Max(0.01f, fireRateMult);
+        _shrineDamageMult   = Mathf.Max(0.01f, damageMult);
+    }
+
+    public bool  ShrineBuffActive => _shrineFireRateMult > 1.0001f || _shrineDamageMult > 1.0001f;
+    public float ShrineFireRateMultiplier => _shrineFireRateMult;
+
+    // Damage a bullet fired RIGHT NOW deals — base bulletDamage scaled by the
+    // reversible shrine channel (base is left untouched so the buff reverts cleanly).
+    // TurretBullet reads this at spawn, so removing the aura instantly stops boosting
+    // NEW shots without needing to rewind any permanent stat.
+    public int EffectiveBulletDamage => Mathf.Max(1, Mathf.RoundToInt(bulletDamage * _shrineDamageMult));
+
+    // Current fire-rate multipliers (1 = none) and the effective shots/sec after
+    // them — used by the selection panel to show the live buff.
+    public float SynergyFireRateMultiplier => _synergyFireRateMult;
+    public float FireRateMultiplier => _synergyFireRateMult * _debuffFireRateMult * _shrineFireRateMult;
+    public float EffectiveFireRate => fireInterval > 0.0001f ? FireRateMultiplier / fireInterval : 0f;
 
     public void AddAttackSpeed(float percent)
     {
@@ -106,9 +162,20 @@ public class TurretController : MonoBehaviour
         attackRange += amount;
     }
 
-    public void Configure(BlockType type)
+    // bulletPrefabOverride: pass BlockData.bulletPrefab here. TurretController is
+    // added at runtime (AddComponent on a placed block) so it has no prefab of its
+    // own to bind a bullet in the Inspector — BlockData does, since it's a real
+    // ScriptableObject asset. Leave null to keep whatever's already set / fall back
+    // to the Resources-folder lookup in ResolveBulletPrefab().
+    // bulletScaleOverride: pass BlockData.bulletScale. 0 means "unset" (BlockData
+    // assets predating this field default to 0) — leaves bulletScale at whatever
+    // Configure() is called with, or the Inspector/AddComponent default of 1.
+    public void Configure(BlockType type, GameObject bulletPrefabOverride = null, float bulletScaleOverride = 0f)
     {
         if (!TurretTypes.Is(type)) return;
+
+        if (bulletPrefabOverride != null) bulletPrefab = bulletPrefabOverride;
+        if (bulletScaleOverride > 0f) bulletScale = bulletScaleOverride;
 
         mode = TurretTypes.Mode(type);
 
@@ -138,6 +205,13 @@ public class TurretController : MonoBehaviour
     public bool CanUpgradeBasicPath(BasicTurretUpgradePath path, out string reason)
     {
         reason = null;
+        if (TotalUpgradesUsed >= TowerUpgradeGate.AllowedUpgrades)
+        {
+            reason = TowerUpgradeGate.AllowedUpgrades <= 0
+                ? "Requires an active Enlightenment cube."
+                : "No upgrades left — form a bigger Enlightenment cube.";
+            return false;
+        }
         if (mode != Mode.Basic)
         {
             reason = "Only Basic Turret can use these upgrades.";
@@ -173,6 +247,10 @@ public class TurretController : MonoBehaviour
         return true;
     }
 
+    // Restores a turret's upgrade levels (e.g. picking it up and re-placing
+    // it) — deliberately bypasses CanUpgradeBasicPath's live Enlightenment gate.
+    // These upgrades were already earned; re-placing the same turret must not
+    // silently strip them just because no cube happens to be active THIS instant.
     public void SetBasicUpgradeLevels(int powerLevel, int burstLevel)
     {
         _powerPathLevel = 0;
@@ -186,10 +264,8 @@ public class TurretController : MonoBehaviour
         if (powerLevel == 3 && burstLevel == 3)
             burstLevel = 2;
 
-        for (int i = 0; i < powerLevel; i++)
-            TryUpgradeBasicPath(BasicTurretUpgradePath.Power);
-        for (int i = 0; i < burstLevel; i++)
-            TryUpgradeBasicPath(BasicTurretUpgradePath.Burst);
+        for (int i = 1; i <= powerLevel; i++) { _powerPathLevel = i; ApplyBasicUpgrade(BasicTurretUpgradePath.Power, i); }
+        for (int i = 1; i <= burstLevel; i++) { _burstPathLevel = i; ApplyBasicUpgrade(BasicTurretUpgradePath.Burst, i); }
     }
 
     public int GetBasicPathLevel(BasicTurretUpgradePath path) =>
@@ -237,6 +313,13 @@ public class TurretController : MonoBehaviour
     public bool CanUpgradeAoePath(AoeTurretUpgradePath path, out string reason)
     {
         reason = null;
+        if (TotalUpgradesUsed >= TowerUpgradeGate.AllowedUpgrades)
+        {
+            reason = TowerUpgradeGate.AllowedUpgrades <= 0
+                ? "Requires an active Enlightenment cube."
+                : "No upgrades left — form a bigger Enlightenment cube.";
+            return false;
+        }
         if (mode != Mode.Aoe)
         {
             reason = "Only AOE Turret can use these upgrades.";
@@ -272,6 +355,7 @@ public class TurretController : MonoBehaviour
         return true;
     }
 
+    // Same restore-bypass reasoning as SetBasicUpgradeLevels — see its comment.
     public void SetAoeUpgradeLevels(int fireLevel, int gravityLevel)
     {
         _aoeFirePathLevel = 0;
@@ -283,10 +367,8 @@ public class TurretController : MonoBehaviour
         if (fireLevel == 3 && gravityLevel == 3)
             gravityLevel = 2;
 
-        for (int i = 0; i < fireLevel; i++)
-            TryUpgradeAoePath(AoeTurretUpgradePath.Fire);
-        for (int i = 0; i < gravityLevel; i++)
-            TryUpgradeAoePath(AoeTurretUpgradePath.Gravity);
+        for (int i = 1; i <= fireLevel; i++) { _aoeFirePathLevel = i; ApplyAoeUpgrade(AoeTurretUpgradePath.Fire, i); }
+        for (int i = 1; i <= gravityLevel; i++) { _aoeGravityPathLevel = i; ApplyAoeUpgrade(AoeTurretUpgradePath.Gravity, i); }
     }
 
     public int GetAoePathLevel(AoeTurretUpgradePath path) =>
@@ -428,7 +510,7 @@ public class TurretController : MonoBehaviour
         if (_target == null) return;
 
         Fire(_target);
-        _fireTimer = fireInterval / _synergyFireRateMult;
+        _fireTimer = fireInterval / FireRateMultiplier;
     }
 
     bool InRange(EnemySurfaceUnit e)
@@ -498,6 +580,8 @@ public class TurretController : MonoBehaviour
     {
         var bullet = Instantiate(bulletPrefab, spawn, rot);
         bullet.SetActive(true);
+        if (!Mathf.Approximately(bulletScale, 1f))
+            bullet.transform.localScale *= bulletScale;
 
         if (!bullet.TryGetComponent(out TurretBullet projectile))
             projectile = bullet.AddComponent<TurretBullet>();
@@ -519,14 +603,18 @@ public class TurretController : MonoBehaviour
         return bulletPrefab;
     }
 
+    // Tints ONLY the turret's own visual (this GameObject + children), never
+    // transform.parent — that's the block, which has to keep showing its synergy
+    // colour. The division of labour is: block = which synergy you're on, gun on
+    // top = which turret type it is. Tinting the parent made every turret repaint
+    // its whole block and fight the synergy palette.
     void ApplyModeColor()
     {
-        Transform root = transform.parent != null ? transform.parent : transform;
         Color color = TurretTypes.DisplayColor(mode);
 
         // MaterialPropertyBlock instead of r.material.color — the latter clones a
         // unique material per turret renderer (extra allocs, no GPU instancing).
-        foreach (var r in root.GetComponentsInChildren<Renderer>())
+        foreach (var r in GetComponentsInChildren<Renderer>())
             MpbColor.Set(r, color);
     }
 

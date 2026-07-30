@@ -37,6 +37,8 @@ public partial class PlacementController : MonoBehaviour
     public static event System.Action ShopRefreshed;
     // Fired when a selected turret is successfully upgraded.
     public static event System.Action TurretUpgraded;
+    // Fired with the highest branch level reached on that turret after an upgrade.
+    public static event System.Action<int> TurretUpgradeLevelReached;
     public Vector3Int SnappedGridPos => baseGridPos;
     public Vector3Int CurrentGridPos => currentGridPos;
     [Range(0.5f, 4f)] public float snapGridRadius = 1.5f;
@@ -87,6 +89,11 @@ public partial class PlacementController : MonoBehaviour
 
     private Vector3Int baseGridPos, currentGridPos, manualOffset;
     private float _depth = 10f;
+
+    [Tooltip("Ghost glide speed when GameSettings.SmoothBlockEditing is on — matches LevelMapController's ghostFollowSpeed.")]
+    public float ghostFollowSpeed = 16f;
+    Vector3 _ghostVisualAnchor;
+    bool    _ghostAnchorSnap = true;   // true = next UpdatePreview() snaps instantly instead of gliding in
     [Header("Ortho placement")]
     [Tooltip("Current build-plane Y in cells when camera is orthographic. Scroll wheel changes it.")]
     public int _buildY = 0;
@@ -174,6 +181,24 @@ public partial class PlacementController : MonoBehaviour
     public Color rangeBlockedColor = new Color(1f, 0.20f, 0.14f, 0.32f);
     [Tooltip("Fraction of a block's recomputed base price returned when sold.")]
     [Range(0f, 1f)] public float sellRefundFraction = 0.5f;
+
+    // The shared turret model (BlockData.turretPrefab → tryprism) is authored
+    // tiny, so every spawn site has to scale it up by the same amount. It used to
+    // be a bare 50 in PlaceBlock and a bare 1 in the two PlaceBlockDirect paths —
+    // meaning turrets restored from a save OR spawned as a level's starting
+    // layout came out at 1/50 size and read as "not there at all", even though
+    // they were fully functional and firing.
+    // Legacy fixed multiplier — now only a FALLBACK for a turret prefab we can't
+    // measure (no renderers / degenerate bounds). The normal path fits each turret
+    // to one grid cell by its own measured bounds instead (see SpawnTurretVisual),
+    // so prefabs of different intrinsic mesh size all read the same on the board.
+    public const float TurretVisualScale = 50f;
+
+    // How much of one grid cell a fitted turret should span (largest dimension).
+    // 1 = exactly cube-sized; drop toward ~0.85 if turrets should sit a touch
+    // smaller than a full block.
+    public const float TurretVisualCellFraction = 1f;
+
     [Tooltip("Seconds for the info panel + turret range to pop in when selected.")]
     [Range(0.01f, 0.6f)] public float selectionPopDuration = 0.16f;
 
@@ -210,14 +235,28 @@ public partial class PlacementController : MonoBehaviour
 
     GUIStyle _panelBox, _panelTitle, _panelLabel, _panelValue, _panelButton, _panelProgress;
 
-    // ── Spawn-point ("起点") selection → wave-intel panel ──────────────────────
-    // When the player clicks a start endpoint we show the upcoming wave's
-    // forecast instead of the block/turret stats panel. Cached per round so the
+    // Spawn-point selection -> wave-intel panel. Cached per round so the
     // (non-destructive) forecast isn't recomputed every OnGUI pass.
     GameObject _selectedEndpoint;
     bool       _selectedEndpointIsStart;
     GameFlowManager.WaveForecast _startForecast;
     int        _startForecastRound = int.MinValue;
+
+    // Chaos-block selection -> read-only panel showing its per-round drain.
+    ChaosBlockUnit _selectedChaos;
+
+    // Shrine selection -> read-only panel showing its aura buff. Same pattern.
+    ShrineUnit _selectedShrine;
+
+    [Header("R key: tap = refresh shop, hold = restart level")]
+    [Tooltip("Release before this and R counts as a TAP (refresh shop). Also how long the screen stays clear before the white wash starts, so a tap never flashes.")]
+    public float restartTapMaxSeconds = 0.25f;
+    [Tooltip("Total hold time before the level restarts. The screen reaches full white exactly here.")]
+    public float restartHoldSeconds = 1.2f;
+
+    float _rHeld;
+    bool  _rRestarting;
+    bool  _rArmed;   // a fresh key-press is required — see UpdateRestartHold
 
     void Awake()
     {
@@ -260,8 +299,10 @@ public partial class PlacementController : MonoBehaviour
     }
     void OnGUI()
     {
+        if (GameFlowManager.SettlementUp) return;   // clear settlement — hide selection panel / popups
         DrawSelectionPanel();
         DrawPopup();
+        DrawBoxSelect();
     }
 
     void DrawPopup()
@@ -347,8 +388,59 @@ public partial class PlacementController : MonoBehaviour
         var blockColors  = RollColors(blockRow.Length,  dist, rng, isTurret: false);
         var turretColors = RollColors(turretRow.Length, dist, rng, isTurret: true);
 
+        // Opening hand: overwrite the front of each row with the level's authored
+        // entries. Done AFTER rolling (rather than instead of it) so the RNG draw
+        // order is identical whether or not a level authors a starting shop — the
+        // run RNG is shared with wave generation and upgrade offers, so skipping
+        // draws here would shift every other system's results for the same seed.
+        if (!_startingShopApplied)
+        {
+            _startingShopApplied = true;
+            ApplyStartingShop(RunConfig.Mode == GameMode.Level ? RunConfig.Level : null,
+                              blockRow, blockColors, turretRow, turretColors);
+        }
+
         ShopController.Instance.SetShopItems(
             blockRow, turretRow, blockColors, turretColors, cubePrefab, grid);
+    }
+
+    // Set once per run (a level restart reloads the scene, so this resets with it).
+    bool _startingShopApplied;
+
+    // Forces LevelDefinition.startingShop entries into the first shop. Turret
+    // entries fill the turret row, everything else the block row; anything beyond
+    // a row's size is dropped rather than resizing the shop.
+    static void ApplyStartingShop(LevelDefinition lv,
+                                  BlockData[] blockRow,  BlockColor[] blockColors,
+                                  BlockData[] turretRow, BlockColor[] turretColors)
+    {
+        if (lv?.startingShop == null || lv.startingShop.Length == 0) return;
+
+        int bi = 0, ti = 0;
+        foreach (var e in lv.startingShop)
+        {
+            if (e?.block == null) continue;
+
+            bool isTurret = TurretTypes.Is(e.block.blockType);
+            var  row      = isTurret ? turretRow    : blockRow;
+            var  colors   = isTurret ? turretColors : blockColors;
+            int  i        = isTurret ? ti : bi;
+
+            if (i >= row.Length)
+            {
+                Debug.LogWarning($"[Shop] startingShop entry '{e.block.name}' dropped — " +
+                                 $"the {(isTurret ? "turret" : "block")} row only has {row.Length} slot(s) " +
+                                 $"({(isTurret ? "turretsPerTurn" : "blocksPerTurn")}).");
+                continue;
+            }
+
+            row[i] = e.block;
+            // None = let the rolled colour stand, so an entry can pin the block
+            // but still take whatever colour the level's pool gave that slot.
+            if (e.color != BlockColor.None) colors[i] = e.color;
+
+            if (isTurret) ti = i + 1; else bi = i + 1;
+        }
     }
 
     static BlockData[] RollRow(List<BlockData> pool, int count, Xoshiro256StarStar rng)
@@ -381,16 +473,29 @@ public partial class PlacementController : MonoBehaviour
 
     void Update()
     {
-        if (SettingsScreen.Open || IntroDirector.Playing) return;   // modal overlay / intro — block placement input
+        if (SettingsScreen.Open || IntroDirector.Playing || GameFlowManager.SettlementUp) return;   // modal / intro / clear settlement — block placement input
 
         _currentRotation = Quaternion.Slerp(
             _currentRotation,
             _targetRotation,
-            1f - Mathf.Exp(-rotateSpeed * Time.deltaTime)
+            1f - Mathf.Exp(-rotateSpeed * Time.unscaledDeltaTime)
         );
 
         HandleScroll();
         HandleMouseMove();
+
+        // Batch-move owns the whole rest of the frame while active: mode switch,
+        // single-block edit keys, undo, and normal click dispatch all assume
+        // "one currentBlock" and must not run concurrently with an N-block hold.
+        // See PlacementController.BatchEdit.cs for why this is a separate state
+        // machine instead of reusing mode==Edit.
+        if (_batchMoving)
+        {
+            UpdateBatchMove();
+            currentGridPos = baseGridPos + manualOffset;
+            return;
+        }
+
         HandleModeSwitch();
 
         if (mode == PlacementMode.Edit)
@@ -413,15 +518,15 @@ public partial class PlacementController : MonoBehaviour
         if (_panelAoeGravityUpgradeRequested) { _panelAoeGravityUpgradeRequested = false; TryUpgradeSelectedAoeTurret(AoeTurretUpgradePath.Gravity); }
         if (_panelPickUpRequested)            { _panelPickUpRequested            = false; PickUpSelected(); }
         if (_panelSellRequested)              { _panelSellRequested              = false; SellSelected();   }
+        if (_multiMoveRequested)              { _multiMoveRequested              = false; TryBeginBatchMove(); }
+        if (_multiSellRequested)              { _multiSellRequested              = false; SellAllSelected(); }
 
-        if (Input.GetKeyDown(KeyCode.R)) 
-        {
-            TryRefreshShop();
+        UpdateRestartHold();
 
-        }
-        if (Input.GetMouseButtonDown(0))
+        if (Input.GetMouseButtonDown(0) || VirtualCursor.ConfirmPressedThisFrame)
         {
-            if (IsPointerOverSelectionPanel() || HudSidePanels.PointerOver || PointerOverInfoPanel())
+            if (IsPointerOverSelectionPanel() || HudSidePanels.PointerOver || PointerOverInfoPanel()
+                || MultiSelectPanel.IsPointerOver(VirtualCursor.Position))
             {
                 // Click landed on an HUD panel (info / synergies / controls) or the
                 // UGUI selection panel — it handles the click. Skip world
@@ -435,14 +540,24 @@ public partial class PlacementController : MonoBehaviour
             {
                 // Shop viewport consumed the click don't run main-camera selection.
             }
+            else if (mode == PlacementMode.Select && Input.GetMouseButtonDown(0))
+            {
+                // Mouse only (VirtualCursor.ConfirmPressedThisFrame covers gamepad,
+                // which has no held/drag state to marquee with) — box-select only
+                // ever starts here; a click straight onto a target still resolves
+                // instantly via TryBeginBoxSelect's own target check.
+                TryBeginBoxSelect();
+            }
             else
             {
                 TrySelectObject();
             }
         }
 
+        UpdateBoxSelect();   // advances (or resolves) a drag started above, across frames
+
         // Delete cancel current hold (Edit mode) or remove selected placed block.
-        if (Input.GetKeyDown(KeyCode.Delete))
+        if (Input.GetKeyDown(KeyCode.Delete) || GamepadInput.DeleteDown)
         {
             if (mode == PlacementMode.Edit)
                 CancelEditMode();
@@ -451,8 +566,9 @@ public partial class PlacementController : MonoBehaviour
         }
 
         // Ctrl+Z undo last placement or deletion.
-        if (Input.GetKeyDown(KeyCode.Z)
+        if ((Input.GetKeyDown(KeyCode.Z)
             && (Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl)))
+            || GamepadInput.UndoDown)
             TryUndo();
 
         currentGridPos = baseGridPos + manualOffset;
@@ -469,13 +585,17 @@ public partial class PlacementController : MonoBehaviour
         float s = Input.GetAxis("Mouse ScrollWheel");
         if (Mathf.Abs(s) < 0.001f) return;
 
-        if (mode == PlacementMode.Select)
+        // A group (batch) move is a "hold" just like single-block Edit, even though
+        // mode is still Select — so scroll must adjust the build plane (height/depth)
+        // to move the held group up and down, NOT zoom the camera. Only a plain
+        // Select-mode cursor (nothing held) zooms.
+        if (mode == PlacementMode.Select && !_batchMoving)
         {
             cam.AddDistance(-s * scrollSpeed * 10f);
             return;
         }
 
-        // Edit mode
+        // Edit mode (or a batch-move hold — same build-plane logic)
         if (cam != null && cam.useOrthographic)
         {
             // Ortho: scroll moves the build plane up/down. Discrete steps so
@@ -491,7 +611,7 @@ public partial class PlacementController : MonoBehaviour
 
     void HandleMouseMove()
     {
-        Ray r = cam.myCam.ScreenPointToRay(Input.mousePosition);
+        Ray r = cam.myCam.ScreenPointToRay(VirtualCursor.Position);
         Vector3 world;
 
         if (cam != null && cam.useOrthographic && Mathf.Abs(r.direction.y) > 0.001f)
@@ -509,13 +629,62 @@ public partial class PlacementController : MonoBehaviour
             world = r.origin + r.direction * _depth;
         }
 
-        baseGridPos = grid.WorldToGrid(world);
+        Vector3Int raw = grid.WorldToGrid(world);
+
+        // Snapping placement (GameSettings.FreeMove == false, the default): the mouse
+        // still moves the ghost freely, but the cell it lands on is pulled to the
+        // nearest one where the held block's shape actually has support — so you
+        // can't leave it hanging in empty space far from the build, only ever
+        // riding the surface of what's already there. WASDQE/scroll still nudge
+        // it further from wherever it snaps to.
+        baseGridPos = (mode == PlacementMode.Edit && !GameSettings.FreeMove)
+            ? SnapToNearestSupported(raw)
+            : raw;
+    }
+
+    // Last cell SnapToNearestSupported actually resolved to. Doubles as the "stay
+    // put" fallback when the mouse (or a scroll depth change) moves `raw` outside
+    // snapGridRadius of anything supported — without this the ghost would jump to
+    // the unsnapped raw position instead, which is exactly the "runs off the edge"
+    // escape the radius search was supposed to prevent.
+    Vector3Int _lastSnappedBaseGridPos;
+
+    // Searches a small cube of cells around `raw` for the nearest one where the
+    // currently-held block (its rotated shape, offset by the existing manualOffset
+    // nudge) would actually be a valid, supported placement — i.e. touches an
+    // existing block/endpoint and doesn't overlap anything. If nothing in range
+    // qualifies, holds at the last cell that DID qualify instead of snapping back
+    // to the raw (unsupported) mouse position — the mouse can keep moving, but the
+    // ghost simply won't follow it off into empty space.
+    Vector3Int SnapToNearestSupported(Vector3Int raw)
+    {
+        var cells = GetRotatedCells();
+        if (cells.Length == 0) return raw;
+        if (CanPlace(raw + manualOffset, cells)) return _lastSnappedBaseGridPos = raw;
+
+        int cellRadius = Mathf.Max(1, Mathf.CeilToInt(snapGridRadius / Mathf.Max(0.01f, grid.cellSize)));
+        Vector3Int best = _lastSnappedBaseGridPos;
+        int bestSqr = int.MaxValue;
+        bool found = false;
+
+        for (int dx = -cellRadius; dx <= cellRadius; dx++)
+        for (int dy = -cellRadius; dy <= cellRadius; dy++)
+        for (int dz = -cellRadius; dz <= cellRadius; dz++)
+        {
+            if (dx == 0 && dy == 0 && dz == 0) continue;
+            var cand = raw + new Vector3Int(dx, dy, dz);
+            if (!CanPlace(cand + manualOffset, cells)) continue;
+            int sqr = dx * dx + dy * dy + dz * dz;
+            if (sqr < bestSqr) { bestSqr = sqr; best = cand; found = true; }
+        }
+        if (found) _lastSnappedBaseGridPos = best;
+        return _lastSnappedBaseGridPos;
     }
 
     // Edit mode only.
     // A / D move block left/right relative to camera's horizontal facing
-    // W / S move block UP / DOWN in world Y
-    // Q / E move block forward / back relative to camera's horizontal facing
+    // W / S move block forward / back relative to camera's horizontal facing
+    // Q / E move block UP / DOWN in world Y
     void HandleKeyboardOffset()
     {
         Vector3Int right   = SnapToHorizontalAxis(cam.transform.right);
@@ -523,10 +692,16 @@ public partial class PlacementController : MonoBehaviour
 
         if (Input.GetKeyDown(KeyCode.A)) manualOffset -= right;
         if (Input.GetKeyDown(KeyCode.D)) manualOffset += right;
-        if (Input.GetKeyDown(KeyCode.W)) manualOffset += Vector3Int.up;
-        if (Input.GetKeyDown(KeyCode.S)) manualOffset += Vector3Int.down;
-        if (Input.GetKeyDown(KeyCode.Q)) manualOffset += forward;
-        if (Input.GetKeyDown(KeyCode.E)) manualOffset -= forward;
+        if (Input.GetKeyDown(KeyCode.W)) manualOffset += forward;
+        if (Input.GetKeyDown(KeyCode.S)) manualOffset -= forward;
+        if (Input.GetKeyDown(KeyCode.Q)) manualOffset += Vector3Int.up;
+        if (Input.GetKeyDown(KeyCode.E)) manualOffset += Vector3Int.down;
+
+        // Gamepad d-pad mirrors A/D/W/S (Q/E depth stays mouse/keyboard-only, low value on a pad).
+        if (GamepadInput.CycleBlockPrevDown) manualOffset -= right;
+        if (GamepadInput.CycleBlockNextDown) manualOffset += right;
+        if (GamepadInput.DPadUpDown)         manualOffset += Vector3Int.up;
+        if (GamepadInput.DPadDownDown)       manualOffset += Vector3Int.down;
     }
 
     // Select mode: WASD pans the camera continuously along its horizontal facing,
@@ -542,11 +717,14 @@ public partial class PlacementController : MonoBehaviour
         if (Input.GetKey(KeyCode.A)) delta -= right;
         if (Input.GetKey(KeyCode.W)) delta += fwd;
         if (Input.GetKey(KeyCode.S)) delta -= fwd;
-        if (Input.GetKey(KeyCode.Q)) delta += Vector3.up; 
-        if (Input.GetKey(KeyCode.E)) delta -= Vector3.up; 
+        if (Input.GetKey(KeyCode.Q)) delta += Vector3.up;
+        if (Input.GetKey(KeyCode.E)) delta -= Vector3.up;
 
+        // Note: left stick isn't wired here — it already drives VirtualCursor's pointer
+        // in Select mode, so reusing it for camera pan too would fight the cursor.
+        // Gamepad users pan by orbiting the right stick (OrbitCamera) instead.
         if (delta.sqrMagnitude > 0.0001f)
-            cam.Pan(delta.normalized * panSpeed * Time.deltaTime);
+            cam.Pan(delta.normalized * panSpeed * Time.unscaledDeltaTime);
     }
 
     // Projects a world-space direction onto the XZ plane and snaps to the
@@ -591,12 +769,21 @@ public partial class PlacementController : MonoBehaviour
             rotated = true;
         }
 
+        // Right shoulder — a single gamepad button can't cover all 3 axes, so it
+        // mirrors the most common one (yaw, same as Alpha2).
+        if (GamepadInput.RotateDown)
+        {
+            AudioManager.Instance.PlayRotate();
+            _targetRotation = Quaternion.Euler(0, 90, 0) * _targetRotation;
+            rotated = true;
+        }
+
         if (rotated) BlockRotated?.Invoke();
     }
 
     void HandleModeSwitch()
     {
-        if (!Input.GetKeyDown(KeyCode.Tab)) return;
+        if (!Input.GetKeyDown(KeyCode.Tab) && !GamepadInput.ToggleModeDown) return;
 
         if (mode == PlacementMode.Select)
         {
@@ -626,6 +813,21 @@ public partial class PlacementController : MonoBehaviour
             Debug.Log("[Placement] Editing placed objects is locked during combat.");
             return false;
         }
+        if (selectedInstance.locked)
+        {
+            Debug.Log("[Placement] This block is part of the level's fixed layout and can't be moved.");
+            return false;
+        }
+        if (selectedInstance.sealedByEnemy)
+        {
+            ShowPlacementPopup("Sealed by the enemy — this block can't be moved. You can still sell it.");
+            return false;
+        }
+        if (FindOrphanedTurret(selectedInstance) != null)
+        {
+            ShowPlacementPopup("There's still turret on this block, try move it first");
+            return false;
+        }
 
         isPickingUpObject = true;
         lastObjectPos   = selectedInstance.visualObject.transform.position;
@@ -648,7 +850,7 @@ public partial class PlacementController : MonoBehaviour
         NotifyBlockLifted(lastObjectCells);
         selectedInstance = null;
         HideRangeIndicator();
-        EnterEditMode(lastObjectPos);
+        EnterEditMode(null);   // leave the camera where it is — SnapDepthToWorldPos already fixed the height plane
         return true;
     }
 
@@ -679,17 +881,49 @@ public partial class PlacementController : MonoBehaviour
 
     void TrySelectObject()
     {
-        Ray ray = cam.myCam.ScreenPointToRay(Input.mousePosition);
+        ClearMultiSelection();   // any plain click replaces a box-selection, even one that lands on nothing
+
+        Ray ray = cam.myCam.ScreenPointToRay(VirtualCursor.Position);
 
         if (!Physics.Raycast(ray, out RaycastHit hit))
         {
             // Empty-space click — dismiss any current selection (Arknights-style).
             selectedInstance  = null;
             _selectedEndpoint = null;
+            _selectedChaos    = null;
+            _selectedShrine   = null;
             UpdateHighlight(null);
             _lastClickTarget = null;
+            if (WavePreview.Active) WavePreview.Exit();
             return;
         }
+
+        // --- Chaos block: read-only panel explaining what it's costing you ---
+        var chaos = hit.transform.GetComponentInParent<ChaosBlockUnit>();
+        if (chaos != null)
+        {
+            selectedInstance    = null;
+            activePhysicsObject = null;
+            _selectedEndpoint   = null;
+            _selectedShrine     = null;
+            _selectedChaos      = chaos;
+            UpdateHighlight(chaos.gameObject);
+            return;
+        }
+        _selectedChaos = null;
+
+        // --- Shrine: read-only panel explaining the aura buff it grants ---
+        var shrine = hit.transform.GetComponentInParent<ShrineUnit>();
+        if (shrine != null)
+        {
+            selectedInstance    = null;
+            activePhysicsObject = null;
+            _selectedEndpoint   = null;
+            _selectedShrine     = shrine;
+            UpdateHighlight(shrine.gameObject);
+            return;
+        }
+        _selectedShrine = null;
 
         // --- Tray token: single click immediately grab and enter Edit ---
         var sb = hit.transform.GetComponentInParent<SelectableBlock>();
@@ -705,6 +939,7 @@ public partial class PlacementController : MonoBehaviour
 
             currentBlock        = sb.data;
             currentSynergyColor = sb.color;
+            _ghostAnchorSnap    = true;   // appear at the cursor, don't glide in from the last hold
             // Derive the visual tint directly from the synergy color so the
             // placed block matches the palette exactly, instead of round-
             // tripping through the shop renderer (which has different
@@ -726,6 +961,24 @@ public partial class PlacementController : MonoBehaviour
         var ep = hit.transform.GetComponentInParent<GridEndpoint>();
         if (ep != null)
         {
+            bool isStart = ep.gameObject.name.IndexOf(
+                "start", System.StringComparison.OrdinalIgnoreCase) >= 0;
+
+            // Start points: click toggles the zoomed-in wave preview instead of the
+            // old side-panel forecast. Not available mid-combat (the forecast is for
+            // the NEXT wave, ambiguous while one is running) — falls through to plain
+            // selection in that case, same as before this feature existed.
+            bool combatRunning = GameFlowManager.Instance != null && GameFlowManager.Instance.phase == GamePhase.Running;
+            if (isStart && !combatRunning)
+            {
+                selectedInstance    = null;
+                activePhysicsObject = null;
+                _selectedEndpoint   = null;   // old side panel stays off for starts now
+                UpdateHighlight(ep.gameObject);
+                WavePreview.Toggle(ep, GameFlowManager.Instance != null ? GameFlowManager.Instance.GetNextWaveForecast() : default);
+                return;
+            }
+
             UpdateHighlight(ep.gameObject);
             selectedInstance    = null;
             activePhysicsObject = null;
@@ -734,8 +987,7 @@ public partial class PlacementController : MonoBehaviour
             // wave when it's a START point. Endpoints are named "startBlock" /
             // "endBlock" by LevelEndpointGenerator.
             _selectedEndpoint        = ep.gameObject;
-            _selectedEndpointIsStart = ep.gameObject.name.IndexOf(
-                "start", System.StringComparison.OrdinalIgnoreCase) >= 0;
+            _selectedEndpointIsStart = isStart;
             _startForecastRound      = int.MinValue;   // force a fresh forecast
 
             bool isDouble = ep.gameObject == _lastClickTarget
@@ -760,6 +1012,7 @@ public partial class PlacementController : MonoBehaviour
             BlockSelected?.Invoke(instance.data);
             currentBlock        = instance.data;
             currentSynergyColor = instance.color;
+            _ghostAnchorSnap    = true;   // appear at the cursor, don't glide in from the last hold
             // Re-derive tint from synergy color when present keeps placed
             // block visuals exactly on-palette across pickup→replace cycles.
             currentColor        = instance.color != BlockColor.None
@@ -790,18 +1043,18 @@ public partial class PlacementController : MonoBehaviour
             SetOutlineHighlight(lastHighlightedObject, restoreDefault: true);
 
         if (target != null && target != lastHighlightedObject)
+        {
             SetOutlineHighlight(target, restoreDefault: false);
+            AudioManager.Instance?.PlaySelect();
+        }
 
         lastHighlightedObject = target;
     }
 
-    // Walks every Renderer under `obj`, finds the slot using the cartoon
-    // outline shader (GeoWorld/BlockOutline or the legacy Custom/ObjectOutline)
-    // and overrides its `_OutlineColor` via MPB. On restore, reads the shared
-    // material's authored color back so deselect returns to black/dark.
-    //
-    // MPB is read with GetPropertyBlock before mutating so we don't clobber
-    // other per-renderer overrides (e.g. silkscreen `_BaseColor`).
+    // Finds the renderer using the cartoon outline shader and overrides its
+    // `_OutlineColor` via MPB (read first so we don't clobber other overrides
+    // like silkscreen `_BaseColor`). Restore reads the material's authored
+    // color back.
     void SetOutlineHighlight(GameObject obj, bool restoreDefault)
     {
         if (obj == null) return;
@@ -851,6 +1104,14 @@ public partial class PlacementController : MonoBehaviour
         return Mathf.Max(1, Mathf.RoundToInt(basePrice * sellRefundFraction));
     }
 
+    // Upgrading a turret costs turret currency equal to the turret's own price
+    // (fluctuation-free base). Fixed per turret type — doesn't climb with level.
+    int ComputeUpgradeCost(PlacedBlockInstance ins)
+    {
+        if (ins?.data == null || ResourceManager.Instance == null) return 0;
+        return Mathf.Max(1, ResourceManager.Instance.ComputePrice(ins.data, 1f));
+    }
+
     void TryUpgradeSelectedBasicTurret(BasicTurretUpgradePath path)
     {
         if (!TutorialDirector.CanUpgrade()) return;   // tutorial gate
@@ -860,6 +1121,15 @@ public partial class PlacementController : MonoBehaviour
             : null;
         if (ins == null || turret == null) return;
 
+        // Costs turret currency equal to the turret's own price; gate before touching state.
+        int cost = ComputeUpgradeCost(ins);
+        var rm   = ResourceManager.Instance;
+        if (rm != null && !rm.CanAfford(cost, ins.data.blockType))
+        {
+            ShowPlacementPopup($"Need {cost} turret currency to upgrade");
+            return;
+        }
+
         if (!turret.TryUpgradeBasicPath(path))
         {
             if (!turret.CanUpgradeBasicPath(path, out string reason))
@@ -867,12 +1137,19 @@ public partial class PlacementController : MonoBehaviour
             return;
         }
 
+        rm?.TryBuy(cost, ins.data.blockType);   // charge only after a successful upgrade
+
         ins.basicPowerUpgradeLevel = turret.PowerPathLevel;
         ins.basicBurstUpgradeLevel = turret.BurstPathLevel;
 
         string branch = path == BasicTurretUpgradePath.Power ? "Power" : "Burst";
-        ShowPlacementPopup($"{branch} upgraded");
+        ShowPlacementPopup($"{branch} upgraded (-{cost})");
         TurretUpgraded?.Invoke();
+        TurretUpgradeLevelReached?.Invoke(Mathf.Max(turret.PowerPathLevel, turret.BurstPathLevel));
+
+        selectedInstance = null;   // collapse the detail/upgrade panels instead of re-showing every frame
+        UpdateHighlight(null);
+        HideRangeIndicator();
     }
 
     void TryUpgradeSelectedAoeTurret(AoeTurretUpgradePath path)
@@ -884,6 +1161,15 @@ public partial class PlacementController : MonoBehaviour
             : null;
         if (ins == null || turret == null) return;
 
+        // Costs turret currency equal to the turret's own price; gate before touching state.
+        int cost = ComputeUpgradeCost(ins);
+        var rm   = ResourceManager.Instance;
+        if (rm != null && !rm.CanAfford(cost, ins.data.blockType))
+        {
+            ShowPlacementPopup($"Need {cost} turret currency to upgrade");
+            return;
+        }
+
         if (!turret.TryUpgradeAoePath(path))
         {
             if (!turret.CanUpgradeAoePath(path, out string reason))
@@ -891,12 +1177,59 @@ public partial class PlacementController : MonoBehaviour
             return;
         }
 
+        rm?.TryBuy(cost, ins.data.blockType);   // charge only after a successful upgrade
+
         ins.aoeFireUpgradeLevel = turret.AoeFirePathLevel;
         ins.aoeGravityUpgradeLevel = turret.AoeGravityPathLevel;
 
         string branch = path == AoeTurretUpgradePath.Fire ? "Fire" : "Gravity";
-        ShowPlacementPopup($"{branch} upgraded");
+        ShowPlacementPopup($"{branch} upgraded (-{cost})");
         TurretUpgraded?.Invoke();
+        TurretUpgradeLevelReached?.Invoke(Mathf.Max(turret.AoeFirePathLevel, turret.AoeGravityPathLevel));
+
+        selectedInstance = null;   // collapse the detail/upgrade panels instead of re-showing every frame
+        UpdateHighlight(null);
+        HideRangeIndicator();
+    }
+
+    // R is overloaded: a TAP refreshes the shop, a HOLD restarts the level with a
+    // white wash that builds while you hold. The wash is the confirmation — it's
+    // why restart needs no dialog, and why letting go early has to cleanly abort.
+    void UpdateRestartHold()
+    {
+        if (Input.GetKeyDown(KeyCode.R)) { _rHeld = 0f; _rRestarting = false; _rArmed = true; }
+
+        // Only a hold that STARTED in this scene counts. After a restart this is a
+        // brand-new controller with _rHeld back at 0, and the player is very likely
+        // still holding R from the press that caused it — without this gate the
+        // wash would immediately start climbing again and restart a second time.
+        if (_rArmed && !_rRestarting && Input.GetKey(KeyCode.R))
+        {
+            // Unscaled: restarting has to work while paused / mid-settlement.
+            _rHeld += Time.unscaledDeltaTime;
+
+            float hold = Mathf.Max(restartTapMaxSeconds + 0.01f, restartHoldSeconds);
+            HoldRestartFade.SetAlpha(Mathf.InverseLerp(restartTapMaxSeconds, hold, _rHeld));
+
+            if (_rHeld >= hold)
+            {
+                _rRestarting = true;   // latch: don't re-fire while the key is still down
+                HoldRestartFade.SetAlpha(1f);
+                GameFlowManager.Instance?.RestartGame();
+            }
+            return;
+        }
+
+        if (Input.GetKeyUp(KeyCode.R))
+        {
+            if (_rArmed && !_rRestarting)
+            {
+                if (_rHeld < restartTapMaxSeconds) TryRefreshShop();
+                HoldRestartFade.FadeOut();
+            }
+            _rHeld  = 0f;
+            _rArmed = false;
+        }
     }
 
     // Removes the selected block and refunds part of its value to the matching
@@ -904,6 +1237,7 @@ public partial class PlacementController : MonoBehaviour
     // final — no undo record is pushed.
     void SellSelected()
     {
+        if (GameFlowManager.SettlementUp) return;   // locked during clear settlement
         var ins = selectedInstance;
         if (ins == null || ins.data == null) return;
 
@@ -915,9 +1249,20 @@ public partial class PlacementController : MonoBehaviour
             Debug.Log("[Placement] Selling is locked during combat.");
             return;
         }
-        if (!TutorialDirector.CanSell()) return;   // tutorial gate
+        if (ins.locked)
+        {
+            Debug.Log("[Placement] This block is part of the level's fixed layout and can't be sold.");
+            return;
+        }
+        if (FindOrphanedTurret(ins) != null)
+        {
+            ShowPlacementPopup("There's still turret on this block, try move it first");
+            return;
+        }
+        if (!TutorialDirector.CanSell()) { ShowPlacementPopup("Sell banned during tutorial!"); return; }   // tutorial gate
 
         int refund = ComputeSellRefund(ins);
+        Vector3 soldPos = ins.visualObject != null ? ins.visualObject.transform.position : transform.position;
 
         ResourceManager.Instance?.OnBlockRemoved(ins.data.blockType);
         SynergyEvaluator.Instance?.OnPieceRemoved(ins.placedPiece);
@@ -930,6 +1275,7 @@ public partial class PlacementController : MonoBehaviour
 
         if (isTurret) ResourceManager.Instance?.AddTurretCurrency(refund);
         else          ResourceManager.Instance?.RefundBlock(refund);
+        CurrencyFlyFx.Fly(soldPos, isTurret, refund);
 
         GameFlowManager.Instance?.EvaluateGrid();
         ShowPlacementPopup($"Sold for +{refund}");
@@ -945,7 +1291,7 @@ public partial class PlacementController : MonoBehaviour
     // back to its old cell with an offset.
     void SnapDepthToWorldPos(Vector3 worldPos)
     {
-        Ray r    = cam.myCam.ScreenPointToRay(Input.mousePosition);
+        Ray r    = cam.myCam.ScreenPointToRay(VirtualCursor.Position);
         _depth   = Mathf.Clamp(Vector3.Dot(worldPos - r.origin, r.direction), minDepth, maxDepth);
         baseGridPos  = grid.WorldToGrid(r.origin + r.direction * _depth);
         manualOffset = Vector3Int.zero;
@@ -954,11 +1300,17 @@ public partial class PlacementController : MonoBehaviour
     // focusPos: if provided, camera pivots there once. Pass null to leave camera in place.
     void EnterEditMode(Vector3? focusPos)
     {
+        ClearMultiSelection();   // single choke point — edit mode and a box-selection can never coexist
         mode = PlacementMode.Edit;
         _selectedEndpoint = null;   // leaving Select hides the spawn-intel panel
         SetTrayVisible(false);  // hide tokens while placing so they don't clutter the view
         previewParent.gameObject.SetActive(currentBlock != null);
         if (focusPos == null) manualOffset = Vector3Int.zero;
+        // Seed the snap anchor at wherever the mouse/pickup already put baseGridPos
+        // (HandleMouseMove keeps updating it even in Select mode) — otherwise the
+        // very first snap search this hold would fall back to a stale cell left
+        // over from a previous hold instead of somewhere near the cursor.
+        _lastSnappedBaseGridPos = baseGridPos;
         UpdateHighlight(null);
 
         if (focusPos.HasValue)
@@ -1043,12 +1395,19 @@ public partial class PlacementController : MonoBehaviour
         obj.transform.position = center;
         obj.transform.rotation = _currentRotation;
 
-        var br = obj.AddComponent<BlockRenderer>();
-        br.cubePrefab = cubePrefab;
-        br.Render(currentGridPos, cells, grid.cellSize, grid);
+        if (TurretTypes.Is(currentBlock.blockType))
+        {
+            SpawnTurretVisual(obj, currentBlock);
+        }
+        else
+        {
+            var br = obj.AddComponent<BlockRenderer>();
+            br.cubePrefab = cubePrefab;
+            br.Render(currentGridPos, cells, grid.cellSize, grid);
 
-        foreach (var r in obj.GetComponentsInChildren<Renderer>())
-            MpbColor.Set(r, currentColor);
+            foreach (var r in obj.GetComponentsInChildren<Renderer>())
+                MpbColor.Set(r, currentColor);
+        }
 
         PlacedBlockInstance ins = new()
         {
@@ -1192,10 +1551,25 @@ public partial class PlacementController : MonoBehaviour
             ? new Color(0.25f, 1.00f, 0.35f, 0.55f)
             : new Color(1.00f, 0.20f, 0.20f, 0.45f);
 
+        // Cells stay snapped (for validity + TryPlace); cubes draw offset from an
+        // eased anchor so a one-cell move slides instead of popping — same technique
+        // as LevelMapController's build ghost. Toggle: GameSettings.SmoothBlockEditing.
+        Vector3 targetAnchor = grid.GridToWorld(currentGridPos);
+        if (!GameSettings.SmoothBlockEditing || _ghostAnchorSnap)
+        {
+            _ghostVisualAnchor = targetAnchor;
+            _ghostAnchorSnap   = false;
+        }
+        else
+        {
+            _ghostVisualAnchor = Vector3.Lerp(_ghostVisualAnchor, targetAnchor,
+                                               1f - Mathf.Exp(-ghostFollowSpeed * Time.unscaledDeltaTime));
+        }
+
         for (int i = 0; i < cells.Length; i++)
         {
             previewCubes[i].transform.position =
-                grid.GridToWorld(currentGridPos + cells[i]);
+                _ghostVisualAnchor + (grid.GridToWorld(currentGridPos + cells[i]) - targetAnchor);
             previewCubes[i].GetComponent<Renderer>().material.color = tint;
         }
     }
@@ -1211,43 +1585,66 @@ public partial class PlacementController : MonoBehaviour
         return res;
     }
 
-    // Direct block spawn that bypasses player input, payment, preview, and the
-    // grow animation. Used by snapshot restore. Caller is responsible for
-    // ensuring `worldCells` are unoccupied; this method does not validate.
-    //
-    // `synergyColor` defaults to None snapshot restore should serialize and
-    // pass the original BlockColor so reloaded boards keep their synergies.
+    // Direct block spawn bypassing player input, payment, preview, and grow
+    // animation. Used by snapshot restore; caller must ensure `worldCells`
+    // are unoccupied. Pass the original `synergyColor` so reloaded boards
+    // keep their synergies.
     public PlacedBlockInstance PlaceBlockDirect(
-        BlockData data, Vector3Int[] worldCells, Quaternion rotation, Color color,
-        BlockColor synergyColor = BlockColor.None)
+    BlockData data,
+    Vector3Int[] worldCells,
+    Quaternion rotation,
+    Color color,
+    BlockColor synergyColor = BlockColor.None)
     {
-        if (data == null || worldCells == null || worldCells.Length == 0) return null;
+        if (data == null || worldCells == null || worldCells.Length == 0)
+            return null;
 
         Vector3 center = Vector3.zero;
-        foreach (var c in worldCells) center += grid.GridToWorld(c);
+        foreach (var c in worldCells)
+            center += grid.GridToWorld(c);
         center /= worldCells.Length;
 
         var obj = new GameObject("PlacedBlock");
         obj.transform.position = center;
         obj.transform.rotation = rotation;
 
-        var br = obj.AddComponent<BlockRenderer>();
-        br.cubePrefab = cubePrefab;
+        if (TurretTypes.Is(data.blockType))
+        {
+            SpawnTurretVisual(obj, data);
+        }
+        else
+        {
+            var br = obj.AddComponent<BlockRenderer>();
+            br.cubePrefab = cubePrefab;
 
-        var origin = grid.WorldToGrid(center);
-        var rel    = new Vector3Int[worldCells.Length];
-        for (int i = 0; i < worldCells.Length; i++) rel[i] = worldCells[i] - origin;
-        br.Render(origin, rel, grid.cellSize, grid);
+            var origin = grid.WorldToGrid(center);
+            var rel = new Vector3Int[worldCells.Length];
 
-        foreach (var r in obj.GetComponentsInChildren<Renderer>())
-            MpbColor.Set(r, color);
+            for (int i = 0; i < worldCells.Length; i++)
+                rel[i] = worldCells[i] - origin;
 
-        var ins = new PlacedBlockInstance { data = data, visualObject = obj, color = synergyColor };
-        foreach (var c in worldCells) ins.occupiedCells.Add(c);
+            br.Render(origin, rel, grid.cellSize, grid);
+
+            foreach (var r in obj.GetComponentsInChildren<Renderer>())
+                MpbColor.Set(r, color);
+        }
+
+        var ins = new PlacedBlockInstance
+        {
+            data = data,
+            visualObject = obj,
+            color = synergyColor
+        };
+
+        foreach (var c in worldCells)
+            ins.occupiedCells.Add(c);
+
         RegisterPlacedBlock(ins);
 
         ins.placedPiece = SynergyEvaluator.Instance?.OnPiecePlaced(
-            ins.data, ins.color, ins.occupiedCells.ToArray());
+            ins.data,
+            ins.color,
+            ins.occupiedCells.ToArray());
 
         return ins;
     }
@@ -1257,6 +1654,18 @@ public partial class PlacementController : MonoBehaviour
         if (blocks == null) return null;
         foreach (var b in blocks)
             if (b != null && b.blockType == type) return b;
+        return null;
+    }
+
+    // Unambiguous lookup by asset name — unlike FindBlockData(BlockType), which just
+    // returns the first match and silently picks the wrong shape if two BlockData
+    // assets share a BlockType. Used by LevelMapAuthor/GameFlowManager to resolve
+    // LevelMapNode.blockAssetName.
+    public BlockData FindBlockDataByName(string name)
+    {
+        if (blocks == null || string.IsNullOrEmpty(name)) return null;
+        foreach (var b in blocks)
+            if (b != null && b.name == name) return b;
         return null;
     }
 
@@ -1283,15 +1692,60 @@ public partial class PlacementController : MonoBehaviour
         for (int i = 0; i < cs.Length; i++)
         {
             var p = bp + cs[i];
-            if (p.y < 0)            return PlaceFailureReason.OutOfBounds;
             if (grid.IsOccupied(p)) return PlaceFailureReason.Occupied;
             worldCells[i] = p;
         }
 
-        if (!grid.HasOccupiedNeighbor26(worldCells))
+        // Underground (y < 0) is allowed — you can build down into the earth — but
+        // a block must still touch an existing block or endpoint. The Chaos Block
+        // doesn't count as support (HasSupportingNeighbor26 skips it), so you can't
+        // stack a turret straight onto it to attack it.
+        if (!grid.HasSupportingNeighbor26(worldCells))
             return PlaceFailureReason.NotAdjacent;
 
         return PlaceFailureReason.None;
+    }
+
+    // ── Turret-support check (pickup / sell guard) ────────────────────────────
+    // Mirrors Validate()'s NotAdjacent rule but in reverse: placing a block
+    // requires it to touch something existing; removing one must not leave a
+    // TURRET with nothing left to attach to. Only turrets are checked — regular
+    // blocks are allowed to end up disconnected (no such rule exists for them).
+
+    // First turret that would have zero occupied 26-neighbor cells if
+    // `toRemove` were taken off the grid — null if none. Skips `toRemove`
+    // itself (picking a turret up doesn't need to "support" itself).
+    PlacedBlockInstance FindOrphanedTurret(PlacedBlockInstance toRemove)
+    {
+        if (toRemove == null || grid == null) return null;
+
+        foreach (var other in grid.GetAllInstances())
+        {
+            if (other == null || other == toRemove || other.data == null) continue;
+            if (!TurretTypes.Is(other.data.blockType)) continue;
+            if (!HasExternalSupport(other, toRemove.occupiedCells)) return other;
+        }
+        return null;
+    }
+
+    // True if ANY cell of `instance` has a 26-neighbor occupied by something
+    // OTHER than `instance` itself or a cell in `excludeCells` (the block about
+    // to be removed) — i.e. it would still have something to attach to.
+    bool HasExternalSupport(PlacedBlockInstance instance, IList<Vector3Int> excludeCells)
+    {
+        foreach (var cell in instance.occupiedCells)
+            for (int dx = -1; dx <= 1; dx++)
+            for (int dy = -1; dy <= 1; dy++)
+            for (int dz = -1; dz <= 1; dz++)
+            {
+                if (dx == 0 && dy == 0 && dz == 0) continue;
+                var n = new Vector3Int(cell.x + dx, cell.y + dy, cell.z + dz);
+                if (!grid.IsOccupied(n)) continue;
+                if (excludeCells.Contains(n)) continue;
+                if (instance.occupiedCells.Contains(n)) continue;   // own cell — not external
+                return true;
+            }
+        return false;
     }
 
     static string ReasonToMessage(PlaceFailureReason r) => r switch
@@ -1319,6 +1773,18 @@ public partial class PlacementController : MonoBehaviour
         if (GameFlowManager.Instance?.phase == GamePhase.Running)
         {
             Debug.Log("[Placement] Deletion is locked during combat.");
+            return;
+        }
+        if (selectedInstance.locked)
+        {
+            Debug.Log("[Placement] This block is part of the level's fixed layout and can't be deleted.");
+            return;
+        }
+        // Sealed blocks are sell-only: delete pushes an undo record, and restoring
+        // from it would hand back an unsealed block — laundering the seal away.
+        if (selectedInstance.sealedByEnemy)
+        {
+            ShowPlacementPopup("Sealed by the enemy — this block can't be deleted. You can still sell it.");
             return;
         }
 
@@ -1362,6 +1828,12 @@ public partial class PlacementController : MonoBehaviour
 
     void TryUndo()
     {
+        if (!TutorialDirector.CanUndo())
+        {
+            Debug.Log("[Undo] Locked during the tutorial's first round.");
+            return;
+        }
+
         // No history.
         if (_undoStack.Count == 0)
         {
@@ -1471,28 +1943,44 @@ public partial class PlacementController : MonoBehaviour
     }
 
     // ── Shared: instantiate a placed block from saved state ───────────────────
-    void PlaceBlockFromRecord(BlockData data, Color color, Vector3Int[] cells,
-                              Vector3 center, Quaternion rotation,
-                              int basicPowerUpgradeLevel = 0,
-                              int basicBurstUpgradeLevel = 0,
-                              int aoeFireUpgradeLevel = 0,
-                              int aoeGravityUpgradeLevel = 0)
+    void PlaceBlockFromRecord(
+    BlockData data,
+    Color color,
+    Vector3Int[] cells,
+    Vector3 center,
+    Quaternion rotation,
+    int basicPowerUpgradeLevel = 0,
+    int basicBurstUpgradeLevel = 0,
+    int aoeFireUpgradeLevel = 0,
+    int aoeGravityUpgradeLevel = 0)
     {
         var obj = new GameObject("PlacedBlock");
         obj.transform.position = center;
         obj.transform.rotation = rotation;
 
-        var br      = obj.AddComponent<BlockRenderer>();
-        br.cubePrefab = cubePrefab;
-        Vector3Int origin = grid.WorldToGrid(center);
-        var rel = new Vector3Int[cells.Length];
-        for (int i = 0; i < cells.Length; i++)
-            rel[i] = cells[i] - origin;
-        br.Render(origin, rel, grid.cellSize, grid);
-        obj.transform.localScale = Vector3.zero;
+        if (TurretTypes.Is(data.blockType))
+        {
+            SpawnTurretVisual(obj, data);
+        }
+        else
+        {
+            var br = obj.AddComponent<BlockRenderer>();
+            br.cubePrefab = cubePrefab;
 
-        foreach (var r in obj.GetComponentsInChildren<Renderer>())
-            MpbColor.Set(r, color);
+            Vector3Int origin = grid.WorldToGrid(center);
+
+            var rel = new Vector3Int[cells.Length];
+
+            for (int i = 0; i < cells.Length; i++)
+                rel[i] = cells[i] - origin;
+
+            br.Render(origin, rel, grid.cellSize, grid);
+
+            foreach (var r in obj.GetComponentsInChildren<Renderer>())
+                MpbColor.Set(r, color);
+        }
+
+        obj.transform.localScale = Vector3.zero;
 
         var ins = new PlacedBlockInstance
         {
@@ -1501,11 +1989,16 @@ public partial class PlacementController : MonoBehaviour
             basicPowerUpgradeLevel = basicPowerUpgradeLevel,
             basicBurstUpgradeLevel = basicBurstUpgradeLevel,
             aoeFireUpgradeLevel = aoeFireUpgradeLevel,
-            aoeGravityUpgradeLevel = aoeGravityUpgradeLevel,
+            aoeGravityUpgradeLevel = aoeGravityUpgradeLevel
         };
-        foreach (var c in cells) ins.occupiedCells.Add(c);
+
+        foreach (var c in cells)
+            ins.occupiedCells.Add(c);
+
         RegisterPlacedBlock(ins);
+
         StartCoroutine(GrowIn(obj));
+
         ResourceManager.Instance?.OnBlockPlaced(data.blockType);
     }
 
@@ -1518,6 +2011,7 @@ public partial class PlacementController : MonoBehaviour
     public void GrabFromShop(SelectableBlock sb)
     {
         if (sb == null || sb.data == null) return;
+        if (GameFlowManager.SettlementUp) return;   // locked during clear settlement
 
         // Buying NEW items is allowed during combat. Tutorial may restrict to the
         // current step's block (blocks buying the wrong one).
@@ -1530,6 +2024,7 @@ public partial class PlacementController : MonoBehaviour
         BlockPurchased?.Invoke(sb.data);
         currentBlock        = sb.data;
         currentSynergyColor = sb.color;
+        _ghostAnchorSnap    = true;   // appear at the cursor, don't glide in from the last hold
         currentColor        = sb.color != BlockColor.None
             ? BlockColorPalette.Get(sb.color)
             : MpbColor.Get(sb.GetComponentInChildren<Renderer>());
@@ -1633,11 +2128,67 @@ public partial class PlacementController : MonoBehaviour
     // UTIL
     // =========================
 
+    // Builds a turret block's visual as a child of `obj`. Shared by every spawn
+    // path (player placement, starting layout, snapshot restore) because they
+    // MUST agree: they used to each roll their own copy, and the direct paths
+    // silently dropped the beacon (so restored turrets never span) and the
+    // collider (so they couldn't be clicked or inspected at all), on top of
+    // spawning at 1/50 scale.
+    void SpawnTurretVisual(GameObject obj, BlockData data)
+    {
+        if (data?.turretPrefab == null) return;
+
+        var visual = Instantiate(data.turretPrefab, obj.transform);
+        visual.transform.localPosition = Vector3.zero;
+        visual.transform.localRotation = Quaternion.identity;
+        visual.transform.localScale    = Vector3.one;   // measure the raw prefab first
+
+        // Fit the turret to one grid cell by ITS OWN measured bounds, rather than a
+        // shared magic multiplier. The old fixed ×50 was tuned to the basic turret's
+        // tiny mesh; a prefab with a different intrinsic size (e.g. the AOE turret)
+        // sailed past one cell and read as oversized. Measuring each prefab's bounds
+        // makes every turret — and any future prefab — snap to the same cube size.
+        float target = (grid != null ? grid.cellSize : 1f) * TurretVisualCellFraction;
+        FitTurretToCell(visual, target);
+
+        visual.AddComponent<TurretBeacon>();    // idle spin + bob (rotation/pos only, doesn't touch scale)
+
+        // Type colour, NOT the block's synergy colour — turret BlockDatas share (or
+        // reuse) a prefab, so this tint is the only thing telling Basic / Slow / AOE
+        // apart on the board.
+        foreach (var r in visual.GetComponentsInChildren<Renderer>())
+            MpbColor.Set(r, TurretTypes.DisplayColor(data.blockType));
+    }
+
+    // Uniformly scales `visual` so its largest measured renderer dimension equals
+    // `targetSize` (≈ one grid cell), then adds a click-select BoxCollider matched
+    // to that fitted size. Falls back to the legacy fixed multiplier if the prefab
+    // has nothing measurable. Assumes `visual` starts at localScale 1 / localPos 0 /
+    // identity rotation (SpawnTurretVisual sets that up).
+    void FitTurretToCell(GameObject visual, float targetSize)
+    {
+        if (TurretVisualFit.Fit(visual, targetSize, out var localCenter, out var maxDim))
+        {
+            // Collider lives on `visual`, so it inherits the fitted scale: local size
+            // maxDim × that scale == targetSize in world. center scales with the mesh,
+            // so the box stays on the gun rather than drifting to origin.
+            var col = visual.AddComponent<BoxCollider>();
+            col.center = localCenter;
+            col.size   = Vector3.one * maxDim;
+            return;
+        }
+
+        // No renderers / degenerate bounds — fall back to the legacy fixed scale so
+        // the turret is at least present and clickable.
+        visual.transform.localScale = Vector3.one * TurretVisualScale;
+        visual.AddComponent<BoxCollider>().size = Vector3.one / TurretVisualScale;
+    }
+
     void RegisterPlacedBlock(PlacedBlockInstance ins)
     {
         grid.RegisterInstance(ins);
         AttachTurretController(ins);
-        AttachTurretBeacon(ins);
+        //AttachTurretBeacon(ins);
     }
 
     void AttachTurretController(PlacedBlockInstance ins)
@@ -1645,68 +2196,69 @@ public partial class PlacementController : MonoBehaviour
         if (ins?.data == null || ins.visualObject == null) return;
         if (!TurretTypes.Is(ins.data.blockType)) return;
 
-        Transform target = ins.visualObject.transform.childCount > 0
-            ? ins.visualObject.transform.GetChild(0)
-            : ins.visualObject.transform;
+        Transform target = ins.visualObject.transform;
+
+        if (TurretTypes.Is(ins.data.blockType) &&
+            ins.visualObject.transform.childCount > 0)
+        {
+            target = ins.visualObject.transform.GetChild(0);
+        }
 
         var turret = target.GetComponent<TurretController>();
         if (turret == null)
             turret = target.gameObject.AddComponent<TurretController>();
-        turret.Configure(ins.data.blockType);
+        turret.Configure(ins.data.blockType, ins.data.bulletPrefab, ins.data.bulletScale);
         turret.SetBasicUpgradeLevels(ins.basicPowerUpgradeLevel, ins.basicBurstUpgradeLevel);
         turret.SetAoeUpgradeLevels(ins.aoeFireUpgradeLevel, ins.aoeGravityUpgradeLevel);
     }
 
-    // Turrets don't render their cube body they ARE the diamond beacon.
-    // We hide the underlying cube renderers and float a larger diamond at
-    // the cell centroid so the silhouette reads as "turret" at a glance.
-    void AttachTurretBeacon(PlacedBlockInstance ins)
-    {
-        if (ins?.data == null || ins.visualObject == null) return;
-        if (!TurretTypes.Is(ins.data.blockType)) return;
+    //Legacy function for debugging turret appearance
+    //void AttachTurretBeacon(PlacedBlockInstance ins)
+    //{
+    //    if (ins?.data == null || ins.visualObject == null) return;
+    //    if (!TurretTypes.Is(ins.data.blockType)) return;
 
-        Vector3 centroid = Vector3.zero;
-        int     n        = 0;
-        foreach (Transform child in ins.visualObject.transform)
-        {
-            if (child.GetComponent<TurretBeacon>() != null) continue;
-            centroid += child.position;
-            n++;
-        }
-        centroid = (n == 0) ? ins.visualObject.transform.position : centroid / n;
+    //    Vector3 centroid = Vector3.zero;
+    //    int     n        = 0;
+    //    foreach (Transform child in ins.visualObject.transform)
+    //    {
+    //        if (child.GetComponent<TurretBeacon>() != null) continue;
+    //        centroid += child.position;
+    //        n++;
+    //    }
+    //    centroid = (n == 0) ? ins.visualObject.transform.position : centroid / n;
 
-        // Hide the cube meshes the beacon is the only visible part.
-        foreach (var r in ins.visualObject.GetComponentsInChildren<Renderer>())
-            r.enabled = false;
+    //    // Hide the cube meshes the beacon is the only visible part.
+    //    if (ins.data.turretPrefab == null)
+    //        return;
+    //    float cs    = grid != null ? grid.cellSize : 1f;
+    //    var marker  = GameObject.CreatePrimitive(PrimitiveType.Cube);
+    //    marker.name = "TurretBeacon";
+    //    marker.transform.SetParent(ins.visualObject.transform, worldPositionStays: false);
+    //    marker.transform.position      = centroid;
+    //    marker.transform.localScale    = Vector3.one * (0.62f * cs);
+    //    marker.transform.localRotation = Quaternion.Euler(45f, 45f, 0f);
 
-        float cs    = grid != null ? grid.cellSize : 1f;
-        var marker  = GameObject.CreatePrimitive(PrimitiveType.Cube);
-        marker.name = "TurretBeacon";
-        marker.transform.SetParent(ins.visualObject.transform, worldPositionStays: false);
-        marker.transform.position      = centroid;
-        marker.transform.localScale    = Vector3.one * (0.62f * cs);
-        marker.transform.localRotation = Quaternion.Euler(45f, 45f, 0f);
+    //    var col = marker.GetComponent<Collider>();
+    //    if (col != null) Destroy(col);
 
-        var col = marker.GetComponent<Collider>();
-        if (col != null) Destroy(col);
+    //    var rend = marker.GetComponent<Renderer>();
+    //    if (rend != null)
+    //    {
+    //        // Use the same material asset as cubePrefab so beacons share the
+    //        // silkscreen shader. (Primitives spawn with URP Lit by default.)
+    //        var prefabRend = cubePrefab != null ? cubePrefab.GetComponentInChildren<Renderer>() : null;
+    //        if (prefabRend != null && prefabRend.sharedMaterial != null)
+    //            rend.sharedMaterial = prefabRend.sharedMaterial;
 
-        var rend = marker.GetComponent<Renderer>();
-        if (rend != null)
-        {
-            // Use the same material asset as cubePrefab so beacons share the
-            // silkscreen shader. (Primitives spawn with URP Lit by default.)
-            var prefabRend = cubePrefab != null ? cubePrefab.GetComponentInChildren<Renderer>() : null;
-            if (prefabRend != null && prefabRend.sharedMaterial != null)
-                rend.sharedMaterial = prefabRend.sharedMaterial;
+    //        // Color per turret subtype — Basic = cyan, Slow = blue-violet,
+    //        // AOE = orange. Defined centrally in TurretTypes.DisplayColor.
+    //        MpbColor.Set(rend, TurretTypes.DisplayColor(ins.data.blockType));
+    //        rend.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+    //    }
 
-            // Color per turret subtype — Basic = cyan, Slow = blue-violet,
-            // AOE = orange. Defined centrally in TurretTypes.DisplayColor.
-            MpbColor.Set(rend, TurretTypes.DisplayColor(ins.data.blockType));
-            rend.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-        }
-
-        marker.AddComponent<TurretBeacon>();
-    }
+    //    marker.AddComponent<TurretBeacon>();
+    //}
 
     static int PlacementDegree(BlockType t) => t switch
     {

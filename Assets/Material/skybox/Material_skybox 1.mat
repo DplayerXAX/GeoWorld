@@ -107,7 +107,7 @@ Material:
     - _DstBlendAlpha: 0
     - _EnvironmentReflections: 1
     - _FlashAmount: 0
-    - _FlowSpeed: 0.15
+    - _FlowSpeed: 0.06
     - _FogDensity: 3.5
     - _FogStart: 0.94
     - _FogStrength: 1
@@ -121,8 +121,8 @@ Material:
     - _GridScale: 12
     - _GridThickness: 0.03
     - _HorizonSharp: 1
-    - _HueDrift: 0.1
-    - _Intensity: 1.2
+    - _HueDrift: 0.122
+    - _Intensity: 2
     - _LineSharp: 0.029
     - _Metallic: 0
     - _MusicIntensity: 0.5
@@ -132,14 +132,14 @@ Material:
     - _QueueOffset: 0
     - _ReceiveShadows: 1
     - _RingCount: 9.76
-    - _Scale: 3
+    - _Scale: 2
     - _SkyCurve: 1
     - _Smoothness: 0.5
     - _SmoothnessTextureChannel: 0
     - _SpecularHighlights: 1
     - _SrcBlend: 1
     - _SrcBlendAlpha: 1
-    - _StarDensity: 0.6
+    - _StarDensity: 1
     - _StreamSpeed: 0.5
     - _Surface: 0
     - _TimeSpeed: 0.2
@@ -169,11 +169,11 @@ Material:
     - _InkColor: {r: 0.049999982, g: 0.049999982, b: 0.089999996, a: 1}
     - _LineColor: {r: 0.46171027, g: 0.5500292, b: 0.72327036, a: 0.4}
     - _MatrixBgColor: {r: 0, g: 0.02, b: 0.01, a: 1}
-    - _NebulaA: {r: 0.45964843, g: 0, b: 0.8490566, a: 1}
-    - _NebulaB: {r: 0.1681499, g: 0.29600453, b: 0.49056602, a: 1}
-    - _NebulaC: {r: 0.886, g: 0.14099997, b: 0.10599997, a: 1}
-    - _SkyBottom: {r: 0.089999996, g: 0.09999997, b: 0.17999998, a: 1}
-    - _SkyTop: {r: 0.04, g: 0.04, b: 0.089999996, a: 1}
+    - _NebulaA: {r: 1, g: 1, b: 1, a: 0.79607844}
+    - _NebulaB: {r: 1, g: 1, b: 1, a: 1}
+    - _NebulaC: {r: 0.95, g: 0.88, b: 0.78, a: 1}
+    - _SkyBottom: {r: 0.19496846, g: 0.19496846, b: 0.18086696, a: 1}
+    - _SkyTop: {r: 0, g: 0, b: 0, a: 0.42745098}
     - _SpaceColor: {r: 0, g: 0, b: 0, a: 1}
     - _SpecColor: {r: 0.19999996, g: 0.19999996, b: 0.19999996, a: 1}
     - _StarColor: {r: 1, g: 0.96999997, b: 0.9, a: 1}

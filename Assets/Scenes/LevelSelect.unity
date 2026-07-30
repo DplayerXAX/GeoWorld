@@ -309,9 +309,17 @@ MonoBehaviour:
   buttonTextColor: {r: 0.949, g: 0.937, b: 0.902, a: 1}
   panelSize: {x: 420, y: 700}
   rightMargin: 60
+  verticalMargin: 60
+  maxWidthFraction: 0.5
   contentPad: {x: 36, y: 40}
   cornerRadius: 26
   fadeSpeed: 12
+  autoScaleCanvas: 1
+  balance: {fileID: 0}
+  thumbSize: 46
+  tooltipWidth: 260
+  cubePrefab: {fileID: 1003193531}
+  buildThumbHeight: 330
 --- !u!225 &303145626
 CanvasGroup:
   m_ObjectHideFlags: 0
@@ -680,6 +688,7 @@ GameObject:
   m_Component:
   - component: {fileID: 947512696}
   - component: {fileID: 947512695}
+  - component: {fileID: 947512697}
   m_Layer: 0
   m_Name: WwiseGlobal
   m_TagString: Untagged
@@ -727,6 +736,18 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &947512697
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 947512694}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ed39f2b237e573f4f85990bb5d1440ac, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: AK.Wwise.Unity.Addressables::AK.Wwise.Unity.WwiseAddressables.InitBankHolder
 --- !u!1001 &1003193530
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -741,7 +762,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 2132525315679210296, guid: 2d67442949634b046a787f5c9948be95, type: 3}
       propertyPath: m_LocalPosition.y
-      value: 0
+      value: -999
       objectReference: {fileID: 0}
     - target: {fileID: 2132525315679210296, guid: 2d67442949634b046a787f5c9948be95, type: 3}
       propertyPath: m_LocalPosition.z
@@ -778,6 +799,10 @@ PrefabInstance:
     - target: {fileID: 5859562048836445988, guid: 2d67442949634b046a787f5c9948be95, type: 3}
       propertyPath: m_Name
       value: Cube
+      objectReference: {fileID: 0}
+    - target: {fileID: 5859562048836445988, guid: 2d67442949634b046a787f5c9948be95, type: 3}
+      propertyPath: m_IsActive
+      value: 1
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -1219,15 +1244,75 @@ MonoBehaviour:
   gridSystem: {fileID: 1293787489}
   cubePrefab: {fileID: 1003193531}
   pawn: {fileID: 1132883677}
+  timeLoop:
+    idInternal: 0
+    valueGuidInternal: 
+    WwiseObjectReference: {fileID: 11400000, guid: 52054f8a490aa594fbe07f471ed6fe84, type: 2}
   infoPanel: {fileID: 303145625}
+  firstVisitConversation: {fileID: 11400000, guid: cc58ee9980f0af044af5f14956b7833c, type: 2}
+  harmonyVinePrefab: {fileID: 5386003392207672047, guid: 835a92ac1a661154b973e5d4184d2def, type: 3}
   gameplayScene: gamePlay
   titleScene: Title
   pawnSpeed: 6
   pawnSurfaceLift: 0.5
+  trailMaterial: {fileID: 0}
+  trailColor: {r: 1, g: 0.95, b: 0.75, a: 0.9}
+  trailWidth: 0.07
   cameraFocus: 1
   cameraLerp: 4
   focusViewportX: 0.4
-  focusViewportY: 0.5
+  focusViewportY: 0.35
+  buildableBlocks:
+  - {fileID: 11400000, guid: 7d867ce72998a0f4689850dd5dd2258e, type: 2}
+  - {fileID: 11400000, guid: 6eeb6b311184fcb40be187ae07e15da1, type: 2}
+  - {fileID: 11400000, guid: a8fa6df35bf1b6c438e02427ec8409c0, type: 2}
+  - {fileID: 11400000, guid: 820a88ddf0392914889d66c41c3658a0, type: 2}
+  buildModeKey: 102
+  rotateSpeed: 10
+  ghostFollowSpeed: 16
+  ghostValidColor: {r: 0.35, g: 1, b: 0.45, a: 0.55}
+  ghostInvalidColor: {r: 1, g: 0.3, b: 0.3, a: 0.55}
+  playerBuiltColor: {r: 0.55, g: 0.85, b: 0.95, a: 1}
+  pawnScale: 1.1
+  resetSaveOnStart: 0
+  autoFill: 0
+  autoReward: 0
+  editorAutoFillBlocks:
+  - cells:
+    - {x: 3, y: 2, z: 9}
+    - {x: 3, y: 2, z: 8}
+    - {x: 3, y: 2, z: 7}
+    blockAssetName: corner
+    rotation: {x: 0, y: 0, z: 0, w: 1}
+  - cells:
+    - {x: 6, y: 2, z: 9}
+    - {x: 6, y: 1, z: 9}
+    - {x: 7, y: 1, z: 9}
+    blockAssetName: L3
+    rotation: {x: 0, y: 0, z: 0, w: 1}
+  - cells:
+    - {x: 8, y: -1, z: 9}
+    - {x: 8, y: 0, z: 9}
+    blockAssetName: I2
+    rotation: {x: 0, y: 0, z: 0, w: 1}
+  - cells:
+    - {x: 7, y: -3, z: 9}
+    - {x: 8, y: -3, z: 9}
+    - {x: 8, y: -2, z: 9}
+    - {x: 8, y: -3, z: 8}
+    blockAssetName: corner
+    rotation: {x: 0, y: 0, z: 0, w: 1}
+  trayExpandSpeed: 9
+  defaultCharacter: {fileID: 11400000, guid: 80993e3c86b4337429c2d6273c8eedc2, type: 2}
+  monumentMaterial: {fileID: 0}
+  monumentScale: 1
+  monumentLight: 1.6
+  monumentSink: 0.35
+  windMaterial: {fileID: 0}
+  windColor: {r: 0.91, g: 0.698, b: 0.227, a: 1}
+  windWidth: 0.3
+  windLift: 0.08
+  windFadeSpeed: 2.5
 --- !u!114 &1293787489
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1251,7 +1336,7 @@ Transform:
   m_GameObject: {fileID: 1293787487}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 1.24776, y: -0, z: 4.20732}
+  m_LocalPosition: {x: 1.24776, y: -0.1, z: 4.17}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -1442,14 +1527,16 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::OrbitCamera
   target: {fileID: 1003193535}
   distance: 10
-  speed: 120
+  speed: 150
   minPitch: -80
   maxPitch: 80
   useOrthographic: 0
   orthoSize: 5
   orthoZoomSpeed: 2
   orthoAngle: {x: 35, y: 45, z: 0}
-  focusViewport: {x: 0.5, y: 0.5}
+  focusViewport: {x: 0.5, y: 0.2}
+  gamepadLookScale: 1
+  gamepadZoomSpeed: 12
   projectionToggleKey: 289
   perspectiveFov: 50
   transitionSpeed: 6
@@ -1465,7 +1552,7 @@ GameObject:
   - component: {fileID: 1911354783}
   - component: {fileID: 1911354782}
   m_Layer: 0
-  m_Name: GameObject
+  m_Name: pauseMenu
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -1485,15 +1572,20 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::PauseMenu
   toggleKey: 27
   titleScene: Title
+  levelSelectScene: LevelSelect
   overlayColor: {r: 1, g: 1, b: 1, a: 0.6}
-  titleColor: {r: 0.6, g: 0.95, b: 1, a: 1}
-  panelWidth: 260
+  pauseDimColor: {r: 0, g: 0, b: 0, a: 0.35}
+  panelWidth: 320
   buttonHeight: 42
   showControls: 1
-  controlsRight: 12
-  controlsTop: 12
-  controlSize: 50
-  controlFg: {r: 1, g: 1, b: 1, a: 1}
+  pauseIcon: {fileID: 21300000, guid: 2f6dd4e25db6d5940b6f64a87b995189, type: 3}
+  resumeIcon: {fileID: 21300000, guid: 198ba2fc8853d664e8ee311ca9a29522, type: 3}
+  fastForwardIcon: {fileID: 21300000, guid: 3e1f31c09da1c7a4a94d710aa2a7dcff, type: 3}
+  settingsIcon: {fileID: 21300000, guid: 8ead35985a751ed4b84ff41eed51e57d, type: 3}
+  speedPipFilled: {fileID: 10917, guid: 0000000000000000f000000000000000, type: 0}
+  speedPipEmpty: {fileID: 10905, guid: 0000000000000000f000000000000000, type: 0}
+  iconColorOnShop: {r: 1, g: 1, b: 1, a: 1}
+  iconColorDefault: {r: 1, g: 1, b: 1, a: 1}
 --- !u!4 &1911354783
 Transform:
   m_ObjectHideFlags: 0
@@ -1509,6 +1601,150 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &1965468294
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1965468296}
+  - component: {fileID: 1965468295}
+  - component: {fileID: 1965468297}
+  m_Layer: 0
+  m_Name: BackgroundReact
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &1965468295
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1965468294}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e91067c67225c9f4ebca5863cb054e69, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::AtmosphereDecor
+  backdropLayer: 11
+  archCount: 30
+  archRadiusRange: {x: 300, y: 500}
+  archHeightRange: {x: 300, y: 420}
+  archWidthRange: {x: 25, y: 30}
+  archBaseY: -550
+  archCapChance: 0.25
+  pillarColor: {r: 0.40251565, g: 0.40251565, b: 0.40251565, a: 1}
+  pillarColorJitter: 0.12
+  shapeCount: 0
+  radiusRange: {x: 80, y: 160}
+  heightRange: 75
+  sizeRange: {x: 2.5, y: 9}
+  spinSpeed: 6
+  bobAmplitude: 2.2
+  bobSpeed: 0.3
+  driftSpeed: 1
+  palette:
+  - {r: 0.9496855, g: 0.9359094, b: 0.91086185, a: 1}
+  - {r: 0.8301887, g: 0.82350284, b: 0.8119141, a: 1}
+  - {r: 0.754717, g: 0.7333571, b: 0.70487714, a: 1}
+  shaftCount: 0
+  shaftLength: {x: 170, y: 320}
+  shaftWidth: {x: 150, y: 100}
+  shaftDistance: {x: 90, y: 240}
+  shaftBaseY: -55
+  shaftColor: {r: 0.69803923, g: 0.6480986, b: 0.39607844, a: 0.60784316}
+  shaftPulse: 0.3
+  shaftPulseSpeed: 0.5
+  baseFog: 0
+  baseFogPerColumn: 6
+  baseFogY: -10
+  baseFogSize: {x: 45, y: 95}
+  baseFogAlpha: 0.5
+  baseFogScatter: 18
+  sunGlow: 0
+  sunGlowDir: {x: 0.15, y: 1, z: 0.1}
+  sunGlowColor: {r: 1, g: 0.85, b: 0.55, a: 0.6}
+  sunGlowSize: 140
+  sunGlowDistance: 240
+  sunGlowPulse: 0.12
+  fogPatches: 0
+  fogPatchCount: 28
+  fogPatchDistance: {x: 75, y: 240}
+  fogPatchHeight: {x: -12, y: 45}
+  fogPatchSize: {x: 60, y: 135}
+  fogPatchAlpha: 0.45
+  fogPatchDrift: 1.2
+  depthFog: 1
+  depthFogColor: {r: 0.9308176, g: 0.9308176, b: 0.9308176, a: 1}
+  depthFogScatterTint: {r: 1, g: 0.97422045, b: 0.68238986, a: 1}
+  depthFogBaseDensity: 0.04
+  depthFogExtinction: 1
+  depthFogStart: 300
+  depthFogRamp: 140
+  depthFogMaxDistance: 600
+  depthFogHeight: -300
+  depthFogHeightFalloff: 0.03
+  depthFogStrength: 0.9
+  depthFogAnisotropy: 0.6
+  depthFogScatter: 0.8
+  depthFogSteps: 14
+  depthFogNoiseScale: 0.02
+  depthFogNoiseAmount: 0.7
+  depthFogWind: {x: 0.5, y: 0.05, z: 0.3}
+  depthFogRadius: 25
+  enableFog: 0
+  fogColor: {r: 1, g: 1, b: 1, a: 1}
+  fogStart: 40
+  fogEnd: 280
+  fogMaxStrength: 0.9
+  combatMotionBoost: 0.6
+  combatGlowBoost: 0.5
+  combatLerpSpeed: 2
+--- !u!4 &1965468296
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1965468294}
+  serializedVersion: 2
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
+  m_LocalPosition: {x: -11.27065, y: -7.10001, z: -6.11918}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1965468297
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1965468294}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e4958a0c109860647aebf65a62e482f9, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: AK.Wwise.Unity.MonoBehaviour::AkBank
+  triggerList: f7e1664c
+  useOtherObject: 0
+  data:
+    idInternal: 0
+    valueGuidInternal: 
+    WwiseObjectReference: {fileID: 11400000, guid: 6f1abaeb51019fc48ad73bcf3b869753, type: 2}
+  decodeBank: 0
+  overrideLoadSetting: 0
+  loadAsynchronous: 0
+  saveDecodedBank: 0
+  unloadTriggerList: 958ca0ea
+  bankNameInternal: 
+  valueGuidInternal: 
 --- !u!1 &2021819522
 GameObject:
   m_ObjectHideFlags: 0
@@ -1799,3 +2035,4 @@ SceneRoots:
   - {fileID: 616878591}
   - {fileID: 906724471}
   - {fileID: 1911354783}
+  - {fileID: 1965468296}

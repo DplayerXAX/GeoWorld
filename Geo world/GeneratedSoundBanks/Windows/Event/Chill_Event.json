@@ -1,0 +1,70 @@
+{
+ "SoundBanksInfo": {
+  "Platform": "Windows",
+  "BasePlatform": "Windows",
+  "SchemaVersion": "16",
+  "SoundBankVersion": "172",
+  "SoundBanks": [
+   {
+    "Id": "3153557168",
+    "Type": "Event",
+    "GUID": "{79255C4A-16B7-4027-8F85-430C19DD0914}",
+    "Language": "SFX",
+    "Hash": "{B7859C59-3D35-EBBD-F974-65E15418EDB9}",
+    "ObjectPath": "Chill_Event",
+    "ShortName": "Chill_Event",
+    "Path": "Event/Chill_Event.bnk",
+    "Media": [
+     {
+      "Id": "566543099",
+      "Language": "SFX",
+      "Streaming": "false",
+      "Location": "Loose",
+      "ShortName": "bgm_Jump.wav",
+      "Path": "Media/566543099.wem",
+      "CachePath": "28/{28D4672F-2484-1CD6-8135-CDAD372308AD}.wem"
+     },
+     {
+      "Id": "759153527",
+      "Language": "SFX",
+      "Streaming": "false",
+      "Location": "Loose",
+      "ShortName": "ambient bgm.wav",
+      "Path": "Media/759153527.wem",
+      "CachePath": "EA/{EAE24123-C675-595C-B50B-C5C8DBB2DC3C}.wem"
+     },
+     {
+      "Id": "888948449",
+      "Language": "SFX",
+      "Streaming": "false",
+      "Location": "Loose",
+      "ShortName": "bgm_bright.wav",
+      "Path": "Media/888948449.wem",
+      "CachePath": "80/{802F01CA-1B7C-C650-FF9E-451F3BE2007C}.wem"
+     }
+    ],
+    "Events": [
+     {
+      "Id": "3153557168",
+      "Name": "Chill_Event",
+      "ObjectPath": "\\Events\\Default Work Unit\\Chill_Event",
+      "GUID": "{79255C4A-16B7-4027-8F85-430C19DD0914}",
+      "DurationType": "Infinite",
+      "MediaRefs": [
+       {
+        "Id": "566543099"
+       },
+       {
+        "Id": "759153527"
+       },
+       {
+        "Id": "888948449"
+       }
+      ]
+     }
+    ]
+   }
+  ],
+  "FileHash": "{CE9A016F-E6AE-B4E7-A69F-0F737EC38F86}"
+ }
+}

@@ -17,5 +17,5 @@ MonoBehaviour:
   priority: 10
   absorbAdditionalPieces: 0
   effect: {fileID: 0}
-  visualizer: {fileID: 0}
+  visualizer: {fileID: 11400000, guid: 5c88e21fb4a3d9647e12c05a9f38d716, type: 2}
   flavorText: 

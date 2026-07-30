@@ -55,7 +55,7 @@ public class HudSidePanels : MonoBehaviour
     Canvas        _canvas;
     RectTransform _leftPanel, _rightPanel, _leftHandle, _rightHandle, _leftContent, _rightContent;
 
-    class Row { public GameObject go; public Image swatch; public TMP_Text label; }
+    class Row { public GameObject go; public RectTransform rt; public Image swatch; public TMP_Text label; public ActiveSynergy active; }
     readonly List<Row> _synRows = new();
 
     bool _autoSpawned;
@@ -89,6 +89,9 @@ public class HudSidePanels : MonoBehaviour
         BuildUI();
     }
 
+    void OnDisable() => SynergyHoverHighlight.Clear();
+    void OnDestroy() => SynergyHoverHighlight.Clear();
+
     void EnsureDefaults()
     {
         if (controls.Count > 0) return;
@@ -100,6 +103,8 @@ public class HudSidePanels : MonoBehaviour
         A("F", "Open / Close shop");
         A("LMB",     "Select / place");
         A("Space",   "Start wave");
+        A("R",       "Refresh shop");
+        A("Hold R",  "Restart level");
         A("RMB drag","Rotate camera");
         A("Scroll",  "Zoom");
         A("Esc",     "Pause / settings");
@@ -111,7 +116,7 @@ public class HudSidePanels : MonoBehaviour
 
         bool show = GameFlowManager.Instance != null && !SettingsScreen.Open;
         _canvas.enabled = show;
-        if (!show) { PointerOver = false; return; }
+        if (!show) { PointerOver = false; SynergyHoverHighlight.Clear(); return; }
 
         UpdateSynergies();
 
@@ -153,7 +158,7 @@ public class HudSidePanels : MonoBehaviour
 
     void UpdatePointerOver()
     {
-        Vector2 mp = Input.mousePosition;
+        Vector2 mp = VirtualCursor.Position;
         bool over = Contains(_leftHandle, mp) || Contains(_rightHandle, mp);
         if (_synOpen)  over |= Contains(_leftContent,  mp);
         if (_ctrlOpen) over |= Contains(_rightContent, mp);
@@ -315,11 +320,16 @@ public class HudSidePanels : MonoBehaviour
                 if (a?.rule == null) continue;
                 var row = (n < _synRows.Count) ? _synRows[n] : MakeSynRow();
                 row.go.SetActive(true);
+                row.active = a;
                 row.swatch.enabled = true;
                 row.swatch.color   = GeoPalette.Accents[n % GeoPalette.Accents.Length];
-                string nm = string.IsNullOrEmpty(a.rule.displayName) ? a.rule.name : a.rule.displayName;
+                string nm     = string.IsNullOrEmpty(a.rule.displayName) ? a.rule.name : a.rule.displayName;
+                string title  = a.tier > 1 ? $"{nm}  ·  T{a.tier}" : nm;
+                string detail = BuildSynergyDetail(a);
                 row.label.color = GeoPalette.Ink;
-                row.label.text  = a.tier > 1 ? $"{nm}  ·  T{a.tier}" : nm;
+                row.label.text  = detail != null
+                    ? $"{title}\n<size=70%><color=#7A7A7A>{detail}</color></size>"
+                    : title;
                 n++;
             }
 
@@ -327,13 +337,76 @@ public class HudSidePanels : MonoBehaviour
         {
             var row = (_synRows.Count > 0) ? _synRows[0] : MakeSynRow();
             row.go.SetActive(true);
+            row.active = null;
             row.swatch.enabled = false;
             row.label.color    = new Color(0.4f, 0.4f, 0.4f);
             row.label.text     = "No active synergies";
             n = 1;
         }
 
-        for (int i = n; i < _synRows.Count; i++) _synRows[i].go.SetActive(false);
+        for (int i = n; i < _synRows.Count; i++) { _synRows[i].go.SetActive(false); _synRows[i].active = null; }
+
+        UpdateSynergyHover();
+    }
+
+    // Highlights the claimed cells of whichever synergy row the pointer is
+    // currently over — same manual hit-test pattern as UpdatePointerOver()
+    // (rows have no raycastTarget graphic of their own, so this reuses
+    // RectTransformUtility directly instead of routing through UGUI events).
+    void UpdateSynergyHover()
+    {
+        ActiveSynergy hovered = null;
+        if (_synOpen)
+        {
+            Vector2 mp = VirtualCursor.Position;
+            for (int i = 0; i < _synRows.Count; i++)
+            {
+                var row = _synRows[i];
+                if (row.active == null || !row.go.activeSelf) continue;
+                if (Contains(row.rt, mp)) { hovered = row.active; break; }
+            }
+        }
+        SynergyHoverHighlight.SetHovered(hovered);
+        SynergyHoverHighlight.Tick();
+    }
+
+    // Live stat line for an active synergy — the numbers/affected units it's
+    // currently producing, read straight off its GameEffect instance. Returns
+    // null for rules with no numeric detail to show (name-only row).
+    static string BuildSynergyDetail(ActiveSynergy a)
+    {
+        if (a?.rule == null) return null;
+
+        // Enlightenment's grant is tier-scoped (see UnlockTowerUpgradeEffect /
+        // TowerUpgradeGate), not the flat `rule.effect` — key off the rule type.
+        if (a.rule is EnlightenmentRule)
+        {
+            int allowed = TowerUpgradeGate.AllowedUpgrades;
+            return $"{allowed} turret upgrade{(allowed == 1 ? "" : "s")} allowed";
+        }
+
+        switch (a.rule.effect)
+        {
+            case AbundanceHarvestEffect ah:
+                // Per-INSTANCE numbers, not ah.LastUnitCount/LastPayoutAmount —
+                // those are the effect-wide total across every simultaneous
+                // Abundance loop, which would show the same combined number on
+                // every loop's row. Recompute just this active's contribution.
+                int units = ah.countMode == AbundanceHarvestEffect.CountMode.Pieces
+                    ? SynergyEffectUtil.CountParticipatingPieces(a)
+                    : SynergyEffectUtil.CountParticipatingCells(a);
+                int payout = units > 0 ? units * Mathf.Max(0, ah.blockPerUnit) + Mathf.Max(0, ah.flatBonus) : 0;
+                return $"{units} piece{(units == 1 ? "" : "s")}  ·  +{payout}/turn";
+            case OrderSlowEffect os:
+                int blocks  = SynergyEffectUtil.CountParticipatingPieces(a);
+                int slowPct = Mathf.RoundToInt(os.SlowFractionFor(blocks) * 100f);
+                return $"-{slowPct}% speed  ·  {os.AffectedEnemyCount} enemy affected";
+            case HarmonyAttackSpeedEffect ha:
+                int spdPct = Mathf.RoundToInt(ha.attackSpeedBonus * 100f);
+                return $"+{spdPct}% atk spd  ·  {ha.BuffedTurretCount} turret{(ha.BuffedTurretCount == 1 ? "" : "s")}";
+            default:
+                return null;
+        }
     }
 
     Row MakeSynRow()
@@ -343,7 +416,10 @@ public class HudSidePanels : MonoBehaviour
         h.childAlignment = TextAnchor.MiddleLeft; h.spacing = 8f;
         h.childControlWidth = h.childControlHeight = true;
         h.childForceExpandWidth = false; h.childForceExpandHeight = false;
-        rt.gameObject.AddComponent<LayoutElement>().minHeight = rowSize * 1.6f;
+        // Tall enough for a two-line row (name + detail) — used uniformly so
+        // rows don't jump height depending on whether a synergy has a detail
+        // line this frame.
+        rt.gameObject.AddComponent<LayoutElement>().minHeight = rowSize * 2.8f;
 
         var sw = NewImage("Swatch", rt, Color.white, false);
         var swle = sw.gameObject.AddComponent<LayoutElement>();
@@ -352,7 +428,7 @@ public class HudSidePanels : MonoBehaviour
         var lbl = NewText("Label", rt, rowSize, GeoPalette.Ink, FontStyles.Bold, TextAlignmentOptions.MidlineLeft);
         lbl.gameObject.AddComponent<LayoutElement>().flexibleWidth = 1f;
 
-        var row = new Row { go = rt.gameObject, swatch = sw, label = lbl };
+        var row = new Row { go = rt.gameObject, rt = rt, swatch = sw, label = lbl };
         _synRows.Add(row);
         return row;
     }

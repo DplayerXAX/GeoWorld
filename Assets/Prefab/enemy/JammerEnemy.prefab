@@ -1,0 +1,101 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!1 &2500000000000000001
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 2500000000000000002}
+  - component: {fileID: 2500000000000000004}
+  - component: {fileID: 2500000000000000005}
+  - component: {fileID: 2500000000000000006}
+  m_Layer: 0
+  m_Name: JammerEnemy
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &2500000000000000002
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2500000000000000001}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 0.72, y: 0.72, z: 0.72}
+  m_ConstrainProportionsScale: 1
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &2500000000000000004
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2500000000000000001}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 35184de46b48402aa20433b916bb4fe2, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Assembly-CSharp::EnemySurfaceUnit
+  bpm: 120
+  moveRatio: 0.8
+  baseSpeedMultiplier: 0.75
+  maxHealth: 6
+  rewardOnKill: 2
+  faceClearance: 0.15
+  targetPriority: 0
+--- !u!114 &2500000000000000005
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2500000000000000001}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 735b9c52af41b9b4da09c5bc959f2508, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Assembly-CSharp::EnemyChaoticVisual
+  shardCount: 8
+  accentCount: 1
+  shardMaterial: {fileID: 0}
+  accentMaterial: {fileID: 0}
+  forceUnlit: 1
+  layoutRadius: 0.38
+  shardSizeRange: {x: 0.24, y: 0.38}
+  accentSizeRange: {x: 0.05, y: 0.09}
+  shardPalette:
+  - {r: 0.16, g: 0.16, b: 0.19, a: 1}
+  - {r: 0.28, g: 0.28, b: 0.33, a: 1}
+  - {r: 0.09, g: 0.09, b: 0.11, a: 1}
+  accentPalette:
+  - {r: 0.55, g: 0.58, b: 0.65, a: 1}
+  - {r: 0.35, g: 0.36, b: 0.42, a: 1}
+  bodyRotSpeed: 2
+  shardSpinSpeed: 4
+  bobAmplitude: 0.08
+  bobSpeed: 0.04
+  orbitDriftSpeed: 2
+  randomizeRootTilt: 1
+--- !u!114 &2500000000000000006
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2500000000000000001}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8c3e7a5f2b1d46905d4b0e93a71c62f8, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Assembly-CSharp::EnemySynergyJammer
+  auraColor: {r: 0.25, g: 0.25, b: 0.3, a: 1}

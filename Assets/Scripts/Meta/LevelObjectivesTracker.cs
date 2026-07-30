@@ -14,6 +14,9 @@ public class LevelObjectivesTracker : MonoBehaviour
     enum State { Pending, Done, Failed }
 
     static LevelObjectivesTracker _inst;
+    // True once the tracker is live (so callers don't treat the vacuous
+    // "no tracker → AllRequiredSatisfied = true" as a real completion).
+    public static bool Tracking => _inst != null;
     // True when every non-optional objective is currently satisfied (gates the clear
     // if the level has requireAllObjectives).
     public static bool AllRequiredSatisfied
@@ -28,11 +31,30 @@ public class LevelObjectivesTracker : MonoBehaviour
         }
     }
 
+    // Satisfied/total count across ALL objectives (including optional/bonus ones) —
+    // used to scale the level-clear star rating with how much of the level's
+    // objective list was actually completed, not just a binary pass/fail.
+    public static (int satisfied, int total) Progress
+    {
+        get
+        {
+            if (_inst == null || _inst._lv.objectives == null) return (0, 0);
+            int total = 0, satisfied = 0;
+            foreach (var o in _inst._lv.objectives)
+            {
+                if (o == null) continue;
+                total++;
+                if (_inst.Eval(o, out _, out _) == State.Done) satisfied++;
+            }
+            return (satisfied, total);
+        }
+    }
+
     [Tooltip("Optional TMP font for the objectives text (leave null for TMP default).")]
     public TMP_FontAsset font;
 
     LevelDefinition _lv;
-    int _kills, _leaks, _placed, _maxSynergies;
+    int _kills, _leaks, _placed, _maxSynergies, _maxTurretUpgradeLevel;
 
     Canvas    _canvas;
     TMP_Text[] _rows;
@@ -64,6 +86,7 @@ public class LevelObjectivesTracker : MonoBehaviour
         EnemySurfaceUnit.AnyDied       += OnKill;
         EnemySurfaceUnit.AnyReachedEnd += OnLeak;
         PlacementController.BlockPlaced += OnPlaced;
+        PlacementController.TurretUpgradeLevelReached += OnTurretUpgradeLevelReached;
     }
 
     void OnDisable()
@@ -71,12 +94,14 @@ public class LevelObjectivesTracker : MonoBehaviour
         EnemySurfaceUnit.AnyDied       -= OnKill;
         EnemySurfaceUnit.AnyReachedEnd -= OnLeak;
         PlacementController.BlockPlaced -= OnPlaced;
+        PlacementController.TurretUpgradeLevelReached -= OnTurretUpgradeLevelReached;
         if (_inst == this) _inst = null;
     }
 
     void OnKill(EnemySurfaceUnit _)            => _kills++;
     void OnLeak(EnemySurfaceUnit _)            => _leaks++;
     void OnPlaced(BlockData _, Vector3Int[] __) => _placed++;
+    void OnTurretUpgradeLevelReached(int level) => _maxTurretUpgradeLevel = Mathf.Max(_maxTurretUpgradeLevel, level);
 
     void Start() { if (_lv != null && _lv.objectives.Count > 0) BuildUI(); }
 
@@ -85,7 +110,7 @@ public class LevelObjectivesTracker : MonoBehaviour
         var ev = SynergyEvaluator.Instance;
         if (ev != null) _maxSynergies = Mathf.Max(_maxSynergies, ev.Actives.Count);
 
-        if (_canvas != null) _canvas.enabled = !IntroDirector.Playing;   // hold until the intro finishes
+        if (_canvas != null) _canvas.enabled = !IntroDirector.Playing && !GameFlowManager.SettlementUp;   // hidden during intro / clear settlement
         if (_rows == null) return;
         for (int i = 0; i < _rows.Length; i++)
         {
@@ -129,6 +154,9 @@ public class LevelObjectivesTracker : MonoBehaviour
                 return cur >= tgt ? State.Done : State.Failed;
             case ObjectiveType.BuildPathLength:
                 cur = gfm != null ? gfm.CurrentPathLength : 0;
+                return cur >= tgt ? State.Done : State.Pending;
+            case ObjectiveType.UpgradeTurretToLevel:
+                cur = _maxTurretUpgradeLevel;
                 return cur >= tgt ? State.Done : State.Pending;
         }
         cur = 0; return State.Pending;

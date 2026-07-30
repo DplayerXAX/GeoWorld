@@ -1,7 +1,6 @@
 using UnityEngine;
 
-// 秩序 (Order) — concentric square frames on each face. Rigid, symmetric,
-// repeating — the Constructivism "discipline" pattern.
+// Order — concentric square frames on each face.
 [CreateAssetMenu(menuName = "GeoWorld/Synergy/Visualizers/Order Concentric",
                  fileName = "OrderConcentricVisualizer")]
 public class OrderConcentricVisualizer : FaceMaterialVisualizerBase

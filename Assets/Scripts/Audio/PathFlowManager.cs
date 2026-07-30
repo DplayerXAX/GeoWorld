@@ -8,8 +8,16 @@ public class PathFlowManager : MonoBehaviour
 
     [Header("Laser line")]
     public Material laserMaterial;
-    [Range(0.02f, 0.3f)] public float lineWidth    = 0.055f;
-    [Range(0f,    1f)]   public float heightOffset = 0.04f;
+    [Range(0.02f, 0.3f)] public float lineWidth    = 0.15f;   // thin lines read as decoration, not as "the enemy comes THIS way"
+    [Range(0f,    1f)]   public float heightOffset = 0.05f;
+
+    [Header("X-ray (hold middle mouse)")]
+    [Tooltip("Mouse button that reveals every path line through walls/blocks while held (2 = middle).")]
+    public int xrayMouseButton = 2;
+    static readonly int ZTestId = Shader.PropertyToID("_ZTest");
+    const float ZTestNormal = 4f;   // LEqual — occluded by geometry (default)
+    const float ZTestXray   = 8f;   // Always — draws through everything
+    bool _xrayActive;
 
     [Header("Live path")]
     public Color livePathColor = new Color(1f, 1f, 0.70f, 0.90f);   
@@ -19,9 +27,9 @@ public class PathFlowManager : MonoBehaviour
         new Color(0.25f, 0.90f, 1.00f),   
         new Color(1.00f, 0.72f, 0.18f),  
         new Color(0.38f, 1.00f, 0.52f),  
-        new Color(1.00f, 0.35f, 0.72f),   // 粉红
-        new Color(0.78f, 0.46f, 1.00f),   // 紫
-        new Color(0.28f, 1.00f, 0.72f),   // 青绿
+        new Color(1.00f, 0.35f, 0.72f),   // pink
+        new Color(0.78f, 0.46f, 1.00f),   // purple
+        new Color(0.28f, 1.00f, 0.72f),   // teal
     };
 
     int _count;
@@ -35,11 +43,30 @@ public class PathFlowManager : MonoBehaviour
     }
     readonly List<FlowEntry> _flows = new();
 
-    // ── Live preview line ─────────────────────────────────────────────────────
-    GameObject _liveGO;
-    Coroutine  _liveCoroutine;
+    // ── Live preview lines (one per spawn point) ───────────────────────────────
+    readonly List<GameObject> _liveGOs        = new();
+    readonly List<Coroutine>  _liveCoroutines = new();
+
+    // Every per-line material instance ever created (MakeLine), so the x-ray toggle
+    // can flip ZTest on all of them at once regardless of which list they live in.
+    readonly List<Material> _lineMats = new();
 
     void Awake() => Instance = this;
+
+    void Update()
+    {
+        bool held = Input.GetMouseButton(xrayMouseButton);
+        if (held == _xrayActive) return;
+        _xrayActive = held;
+
+        float zt = held ? ZTestXray : ZTestNormal;
+        for (int i = _lineMats.Count - 1; i >= 0; i--)
+        {
+            var m = _lineMats[i];
+            if (m == null) { _lineMats.RemoveAt(i); continue; }
+            m.SetFloat(ZTestId, zt);
+        }
+    }
 
     // ── Public API ────────────────────────────────────────────────────────────
 
@@ -66,18 +93,33 @@ public class PathFlowManager : MonoBehaviour
     // Pass null to hide the preview.
     public void UpdateLiveLine(List<FaceNode> path)
     {
-        ClearLiveLine();
-        if (laserMaterial == null || path == null || path.Count < 2) return;
-
-        var lr = MakeLine("PathLaser_Live", livePathColor, out _liveGO);
-        _liveCoroutine = StartCoroutine(RevealLine(lr, BuildPositions(path)));
+        if (path == null) { ClearLiveLine(); return; }
+        UpdateLiveLines(new List<List<FaceNode>> { path });
     }
 
-    // Removes the live preview line (called when Run() commits the path).
+    // Shows a live preview line for EVERY spawn-point path (so all routes redraw on
+    // each block placement, not just the last one). Pass null/empty to hide.
+    public void UpdateLiveLines(List<List<FaceNode>> paths)
+    {
+        ClearLiveLine();
+        if (laserMaterial == null || paths == null) return;
+
+        foreach (var path in paths)
+        {
+            if (path == null || path.Count < 2) continue;
+            var lr = MakeLine("PathLaser_Live", livePathColor, out GameObject go);
+            _liveGOs.Add(go);
+            _liveCoroutines.Add(StartCoroutine(RevealLine(lr, BuildPositions(path))));
+        }
+    }
+
+    // Removes the live preview lines (called when Run() commits the path).
     public void ClearLiveLine()
     {
-        if (_liveCoroutine != null) { StopCoroutine(_liveCoroutine); _liveCoroutine = null; }
-        if (_liveGO != null) { Destroy(_liveGO); _liveGO = null; }
+        foreach (var c in _liveCoroutines) if (c != null) StopCoroutine(c);
+        _liveCoroutines.Clear();
+        foreach (var g in _liveGOs) if (g != null) Destroy(g);
+        _liveGOs.Clear();
     }
 
     // Removes all loop lines whose path overlaps any of the given cells.
@@ -116,6 +158,8 @@ public class PathFlowManager : MonoBehaviour
         var lr  = go.AddComponent<LineRenderer>();
         var mat = new Material(laserMaterial);
         mat.SetColor("_Color", col);
+        mat.SetFloat(ZTestId, _xrayActive ? ZTestXray : ZTestNormal);
+        _lineMats.Add(mat);
         lr.material          = mat;
         lr.useWorldSpace     = true;
         lr.positionCount     = 0;
@@ -127,7 +171,8 @@ public class PathFlowManager : MonoBehaviour
         return lr;
     }
 
-    // FaceNode 路径 → 世界坐标数组，在法线变化处插入拐角路径点。
+    // FaceNode path -> world-position array, inserting corner points where
+    // the normal changes.
     Vector3[] BuildPositions(List<FaceNode> path)
     {
         var   gs   = GridSystem.instance;

@@ -2,8 +2,8 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 
-// A speaker: display name, name colour, and a set of named portraits (立绘 / expressions).
-// Portable: pure data, no project dependencies. Create via Assets ▸ Create ▸ Dialogue ▸ Character.
+// A speaker: display name, name colour, and a set of named portraits.
+// Pure data, no project dependencies.
 [CreateAssetMenu(menuName = "Dialogue/Character", fileName = "Character")]
 public class DialogueCharacter : ScriptableObject
 {
@@ -16,17 +16,28 @@ public class DialogueCharacter : ScriptableObject
         [Tooltip("Expression key referenced by a line, e.g. 'happy', 'angry'. First entry is the default.")]
         public string key = "default";
         public Sprite sprite;
+        [Tooltip("Per-portrait size multiplier (1 = the dialogue's default portrait size).")]
+        [Min(0.05f)] public float scale = 1f;
     }
 
     public List<Portrait> portraits = new();
 
     // Returns the portrait for `key`, or the first one as a fallback.
-    public Sprite GetPortrait(string key)
+    public Sprite GetPortrait(string key) => Find(key)?.sprite;
+
+    // Per-portrait size multiplier for `key` (1 if unset / not found).
+    public float GetPortraitScale(string key)
+    {
+        var p = Find(key);
+        return p != null && p.scale > 0f ? p.scale : 1f;
+    }
+
+    Portrait Find(string key)
     {
         if (portraits == null || portraits.Count == 0) return null;
         if (!string.IsNullOrEmpty(key))
             foreach (var p in portraits)
-                if (p != null && p.key == key) return p.sprite;
-        return portraits[0]?.sprite;
+                if (p != null && p.key == key) return p;
+        return portraits[0];
     }
 }

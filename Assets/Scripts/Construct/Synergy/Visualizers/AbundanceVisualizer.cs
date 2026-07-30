@@ -1,28 +1,14 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-// 丰饶 (Abundance) — "harvest field" visualizer.
+// Abundance — "harvest field" visualizer. Only cells on the loop itself
+// bloom (ActiveSynergy.highlightCells); tail cells stay bare. Plants
+// geometric mesh flowers on the top face of each claimed block.
 //
-// AbundanceRule claims the WHOLE connected component that contains a closed
-// loop, and (unlike Enlightenment) implements NO ICellHighlightFilter, so EVERY
-// claimed cell is fair game. This visualizer plants a patch of GEOMETRIC mesh
-// flowers (flat radial petal rosettes + a golden core — Constructivism, not
-// fuzzy sprites) on the top face of each claimed block, so a completed loop
-// reads as a blooming harvest field — flowers pop open in a wave, then slowly
-// turn and sway in the wind.
-//
-// RECONCILER (read before editing) — same contract as HarmonyVineVisualizer:
-// SynergyVisualFX tears down + rebuilds EVERY claimed piece's decoration
-// whenever a synergy's claim count changes (any block add/remove). If we spawned
-// in OnPieceClaimed and let the dispatcher Destroy in OnPieceReleased, every
-// patch would re-bloom on every churn. So instead:
-//   • WE own each patch in a pieceId → BloomPatch-GameObject dictionary.
-//   • OnPieceClaimed / OnPieceReleased just call Reconcile(), which reads the
-//     LIVE claim state and makes the world match: spawn missing patches, KEEP
-//     existing ones untouched (no re-bloom), wilt patches whose piece left.
-//   • OnPieceClaimed returns null so the dispatcher never Destroys our patches.
-// Patches are parented to the block's visualObject, so a destroyed block takes
-// its patch with it (Reconcile then prunes the dead dictionary entry).
+// Same reconciler contract as HarmonyVineVisualizer: SynergyVisualFX rebuilds
+// every claimed piece's decoration on any claim-count change, so we own each
+// patch ourselves (keyed by pieceId) via Reconcile() rather than letting the
+// dispatcher spawn/destroy it, so existing patches don't re-bloom on churn.
 [CreateAssetMenu(
     menuName = "GeoWorld/Synergy/Visualizers/Abundance Bloom",
     fileName = "AbundanceVisualizer")]
@@ -63,6 +49,12 @@ public class AbundanceVisualizer : SynergyVisualizer
     [Tooltip("How far flowers scatter across a cell's top face, in cell-size units.")]
     public float scatterRadius = 0.26f;
 
+    [Tooltip("Stalk height the flower head rides on, in cell-size units. Raises the whole field so it reads taller and clears the block face. 0 = flowers sit flat on the face.")]
+    [Range(0f, 1f)] public float stemHeight = 0.18f;
+
+    [Tooltip("Stalk color (the green stem under each flower head).")]
+    public Color stemColor = new Color(0.20f, 0.42f, 0.16f, 1f);
+
     [Header("Bloom timing")]
     [Tooltip("Seconds for one flower to pop open.")]
     public float bloomDuration = 0.45f;
@@ -88,15 +80,14 @@ public class AbundanceVisualizer : SynergyVisualizer
     // What one claimed piece should bloom this tick.
     private struct PatchTarget
     {
-        public Color[] palette;   // analogous petal colors (flowers pick one each)
-        public Color   center;    // shared golden core
+        public Color[] palette;
+        public Color   center;
+        public HashSet<Vector3Int> highlightCells; // null = every cell blooms
     }
 
-    // ── Runtime state. NOT serialized, reset on load, so it never leaks across
-    //    editor Play sessions or holds stale ActiveSynergy references.
     [System.NonSerialized] private Dictionary<int, GameObject>  _patches;  // pieceId -> live patch
-    [System.NonSerialized] private Dictionary<int, PatchTarget> _desired;  // pieceId -> what to bloom (this tick)
-    [System.NonSerialized] private List<int>                    _prune;    // scratch
+    [System.NonSerialized] private Dictionary<int, PatchTarget> _desired;  // pieceId -> what to bloom
+    [System.NonSerialized] private List<int>                    _prune;
 
     private void OnEnable()
     {
@@ -115,22 +106,16 @@ public class AbundanceVisualizer : SynergyVisualizer
     public override GameObject OnPieceClaimed(PlacedBlockInstance instance, ActiveSynergy active)
     {
         Reconcile();
-        // Return null on purpose: WE own the patch lifecycle. If we returned it,
-        // the dispatcher would Destroy it on the next claim-count change,
-        // restarting every patch's bloom.
-        return null;
+        return null;   // WE own the patch lifecycle; dispatcher must not destroy it.
     }
 
     public override void OnPieceReleased(PlacedBlockInstance instance, ActiveSynergy active, GameObject spawned)
     {
         // Do NOT call base (it would Destroy `spawned`, but spawned is null).
-        // Reconcile against the live truth: a piece that truly left the claim is
-        // no longer in any active, so its patch wilts here. During dispatcher
-        // churn the piece is still claimed, so its patch is preserved.
         Reconcile();
     }
 
-    // ── Core: make the world's patches match the live claim state ────────────
+    // Make the world's patches match the live claim state.
     private void Reconcile()
     {
         if (_patches == null) OnEnable();   // lazy guard (OnEnable may not have run)
@@ -139,8 +124,7 @@ public class AbundanceVisualizer : SynergyVisualizer
         var grid      = GridSystem.instance;
         if (evaluator == null || grid == null) return;
 
-        // 1) Desired this tick: every claimed piece across every active using
-        //    THIS visualizer (Abundance has no cell filter → all cells bloom).
+        // Every claimed piece across every active using this visualizer.
         _desired.Clear();
         var actives = evaluator.Actives;
         for (int i = 0; i < actives.Count; i++)
@@ -151,13 +135,12 @@ public class AbundanceVisualizer : SynergyVisualizer
             Color theme   = BlockColorPalette.Get(a.rule.color);
             Color baseCol = useThemeColor ? Color.Lerp(theme, Color.white, themeWhiten) : bloomColor;
 
-            var target = new PatchTarget { palette = BuildPalette(baseCol), center = accentColor };
+            var target = new PatchTarget { palette = BuildPalette(baseCol), center = accentColor, highlightCells = a.highlightCells };
             foreach (var p in a.claimedPieces)
                 if (p != null) _desired[p.id] = target;
         }
 
-        // 2) Prune: patches whose block was destroyed (null) or whose piece is no
-        //    longer claimed.
+        // Prune patches whose block was destroyed or piece is no longer claimed.
         _prune.Clear();
         foreach (var kv in _patches)
             if (kv.Value == null || !_desired.ContainsKey(kv.Key)) _prune.Add(kv.Key);
@@ -169,8 +152,7 @@ public class AbundanceVisualizer : SynergyVisualizer
             RetirePatch(go);
         }
 
-        // 3) Spawn: wanted pieces that don't have a live patch yet. Existing
-        //    patches are left untouched (they keep blooming — no restart).
+        // Spawn wanted pieces without a live patch; existing ones keep blooming.
         foreach (var kv in _desired)
         {
             if (_patches.TryGetValue(kv.Key, out var go) && go != null) continue;
@@ -188,23 +170,21 @@ public class AbundanceVisualizer : SynergyVisualizer
 
         float cs = grid.cellSize;
 
-        // Plant on the TOP face center of grid cells (axis-aligned in WORLD even
-        // when the block visual is rotated, so the field always grows straight
-        // up). Each cell is randomly covered or left bare — a scattered field,
-        // not a uniform carpet. Hashed by cell so coverage is stable.
+        // Plant on top face centers (world-axis-aligned even if the block is
+        // rotated). Each cell is randomly covered or left bare, hashed by
+        // cell so coverage is stable.
         var tops = new List<Vector3>(piece.cells.Length);
         for (int i = 0; i < piece.cells.Length; i++)
         {
             var cell = piece.cells[i];
+            if (target.highlightCells != null && !target.highlightCells.Contains(cell)) continue;
             if (Hash01(CellHash(cell) ^ 0x5bd1e995) <= cellCoverChance)
                 tops.Add(grid.GridToWorld(cell) + Vector3.up * (cs * 0.5f));
         }
 
-        // FREE world-space object (NOT parented to the block): a rotated block
-        // would tip the upright flower geometry and a scale-0 GrowIn block would
-        // collapse it. Reconcile owns its lifetime instead (prune → Retire). We
-        // create it even when no cell is covered (an empty patch) so Reconcile
-        // doesn't try to respawn it every tick.
+        // Free world-space object, not parented to the block: a rotated block
+        // would tip the flower geometry and a scale-0 GrowIn would collapse it.
+        // Created even when empty so Reconcile doesn't respawn it every tick.
         var go = new GameObject($"AbundanceBloom_{pieceId}");
 
         var patch = go.AddComponent<BloomPatch>();
@@ -216,6 +196,8 @@ public class AbundanceVisualizer : SynergyVisualizer
         patch.bobAmplitude   = bobAmplitude * cs;
         patch.bobSpeed       = bobSpeed;
         patch.witherDuration = witherDuration;
+        patch.stemHeight     = stemHeight * cs;
+        patch.stemColor      = stemColor;
 
         patch.Grow(tops.ToArray(), target.palette, target.center,
                    flowersPerCell, flowerSize * cs, scatterRadius * cs, maxFlowersPerPatch);
@@ -230,11 +212,8 @@ public class AbundanceVisualizer : SynergyVisualizer
         else Object.Destroy(go);
     }
 
-    // ── Color palette ────────────────────────────────────────────────────────
-    // A small ANALOGOUS set around the base hue (small ± hue shifts, gentle
-    // saturation/value variation), clamped to a vivid-but-not-muddy range. Stays
-    // cohesive — flowers vary in color without going rainbow-garish — and the
-    // shared golden core ties the whole field together.
+    // Small analogous color set around the base hue, clamped to a
+    // vivid-but-not-muddy range so flowers vary without going garish.
     private Color[] BuildPalette(Color baseCol)
     {
         Color.RGBToHSV(baseCol, out float h, out float s, out float v);
@@ -267,7 +246,6 @@ public class AbundanceVisualizer : SynergyVisualizer
         return c;
     }
 
-    // ── Deterministic hashing for stable per-cell coverage ───────────────────
     private static int CellHash(Vector3Int c)
     {
         unchecked { return c.x * 73856093 ^ c.y * 19349663 ^ c.z * 83492791; }

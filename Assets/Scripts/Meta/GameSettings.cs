@@ -19,6 +19,15 @@ public static class GameSettings
     // ── Controls ──
     public static float CameraPanSpeed  = 8f;        // → PlacementController.panSpeed
     public static float LookSensitivity = 120f;      // → OrbitCamera.speed
+    // On: held-block ghosts glide between cells (both PlacementController in gameplay
+    // and LevelMapController in LevelSelect). Off: both snap instantly, cell to cell.
+    public static bool SmoothBlockEditing = true;
+    // Off (default): the mouse still moves the held block freely in Edit mode, but
+    // the cell it lands on is pulled to the nearest one actually touching the
+    // existing build (see PlacementController.SnapToNearestSupported) — WASDQE/
+    // scroll nudge it further from there. On: the raw mouse-projected cell is used
+    // directly with no snap search, the original free-floating behavior.
+    public static bool FreeMove = false;
 
     public static readonly int[] FrameCaps = { 0, 30, 60, 120, 144 };
 
@@ -44,6 +53,8 @@ public static class GameSettings
 
         CameraPanSpeed  = PlayerPrefs.GetFloat("set.panspeed", CameraPanSpeed);
         LookSensitivity = PlayerPrefs.GetFloat("set.looksens", LookSensitivity);
+        SmoothBlockEditing = PlayerPrefs.GetInt("set.smoothedit", SmoothBlockEditing ? 1 : 0) == 1;
+        FreeMove           = PlayerPrefs.GetInt("set.freemove",   FreeMove ? 1 : 0) == 1;
     }
 
     public static void Save()
@@ -57,6 +68,8 @@ public static class GameSettings
         PlayerPrefs.SetInt("set.framecap",   FrameCap);
         PlayerPrefs.SetFloat("set.panspeed", CameraPanSpeed);
         PlayerPrefs.SetFloat("set.looksens", LookSensitivity);
+        PlayerPrefs.SetInt("set.smoothedit", SmoothBlockEditing ? 1 : 0);
+        PlayerPrefs.SetInt("set.freemove",   FreeMove ? 1 : 0);
         PlayerPrefs.Save();
     }
 
@@ -75,10 +88,20 @@ public static class GameSettings
     public static void ApplyAudio()
     {
         var am = AudioManager.Instance;
-        if (am == null) return;
-        am.SetMasterVolume(MasterVolume);
-        am.SetMusicVolume(MusicVolume);
-        am.SetSfxVolume(SfxVolume);
+        if (am != null)
+        {
+            am.SetMasterVolume(MasterVolume);
+            am.SetMusicVolume(MusicVolume);
+            am.SetSfxVolume(SfxVolume);
+            return;
+        }
+        // No AudioManager in this scene (e.g. LevelSelect, which plays its BGM
+        // directly). The volume RTPCs are GLOBAL Wwise RTPCs, so set them straight
+        // on the sound engine — the sliders then work everywhere. Names match
+        // AudioManager's default masterVolumeRtpc / musicVolumeRtpc / sfxVolumeRtpc.
+        AkUnitySoundEngine.SetRTPCValue("MasterVolume", Mathf.Clamp01(MasterVolume) * 100f);
+        AkUnitySoundEngine.SetRTPCValue("MusicVolume",  Mathf.Clamp01(MusicVolume)  * 100f);
+        AkUnitySoundEngine.SetRTPCValue("SFXVolume",    Mathf.Clamp01(SfxVolume)    * 100f);
     }
 
     public static void ApplyInput()
@@ -96,6 +119,8 @@ public static class GameSettings
         Fullscreen = true; VSync = true;
         QualityLevel = QualitySettings.GetQualityLevel(); FrameCap = 0;
         CameraPanSpeed = 8f; LookSensitivity = 120f;
+        SmoothBlockEditing = true;
+        FreeMove = false;
         Save(); ApplyAll();
     }
 }

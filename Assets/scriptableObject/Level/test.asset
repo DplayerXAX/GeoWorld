@@ -14,19 +14,41 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::LevelDefinition
   levelId: Test
   displayName: Test
-  description: Room for play test
+  description: Room for playtesting. Change all the config as you wish to test a
+    specific mechanic
   runSeed: 0
   blocksPerTurn: 3
   turretsPerTurn: 3
+  allowedColors: 
+  startingShop: []
   waves: []
   wavesToClear: 5
-  objectives: []
-  requireAllObjectives: 0
+  objectives:
+  - type: 3
+    target: 1
+    description: 
+    optional: 0
+  - type: 0
+    target: 100
+    description: 
+    optional: 0
+  requireAllObjectives: 1
+  clearOnObjectivesComplete: 1
   unlockedByDefault: 1
   unlocks: []
   techReward: 1
+  mapBlockRewards: []
   isTutorial: 0
   fixedEndpoints: 0
   startCell: {x: 0, y: 0, z: 0}
   endCell: {x: 0, y: 0, z: 0}
   tutorialSteps: []
+  startingLayout: {fileID: 0}
+  chaosBlockEnabled: 0
+  chaosBlockStartWave: 1
+  chaosBlockHealth: 20
+  chaosBlockCurrencyDrain: 5
+  chaosBlockMinDistance: 4
+  chaosBlockMaxDistance: 7
+  chaosBlockSearchMargin: 6
+  chaosBlockMaxSimultaneous: 6

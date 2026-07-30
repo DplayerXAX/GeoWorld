@@ -36,11 +36,15 @@ public class UpgradePanel : MonoBehaviour
 
     const float DesignWidth = 320f;
 
+    [Header("Gated hint (shown instead of the buttons — see Show(hint))")]
+    public Color hintColor = new Color(0.55f, 0.42f, 0.10f);
+
     Camera        _cam;
     Canvas        _canvas;
     CanvasGroup   _cg;
     Button        _aButton, _bButton;
     TMP_Text      _aLabel, _bLabel;
+    TMP_Text      _hintLabel;
     Action        _onA, _onB;
     Vector3       _anchor;
     float         _target;
@@ -56,7 +60,10 @@ public class UpgradePanel : MonoBehaviour
         _cg.alpha = Mathf.Lerp(_cg.alpha, _target, 1f - Mathf.Exp(-fadeSpeed * Time.unscaledDeltaTime));
         bool on = _target > 0.5f && _cg.alpha > 0.5f;
         _cg.interactable = _cg.blocksRaycasts = on;
-        _canvas.enabled = _cg.alpha > 0.01f;
+
+        // Holding the middle mouse button temporarily ducks the panel — see BlockInfoPanel.
+        bool middleHeld = Input.GetMouseButton(2);
+        _canvas.enabled = _cg.alpha > 0.01f && !middleHeld;
         if (!_canvas.enabled || _cam == null) return;
 
         transform.position = BlockInfoPanel.StableSpot(_cam, _anchor, heightOffset, lateralOffset, cameraPull,
@@ -68,15 +75,30 @@ public class UpgradePanel : MonoBehaviour
 
     // ── Public API ───────────────────────────────────────────────────────────────
 
+    // `hint`: when non-empty, REPLACES the two upgrade buttons with a single
+    // message line (e.g. "Activate/Upgrade Enlightenment synergy to further
+    // upgrade turret!") — for when upgrading is blocked for a reason the
+    // player needs to go DO something about elsewhere, not just "wait"/"maxed".
+    // Leave null/empty for the normal button behavior.
     public void Show(Vector3 worldPos,
                      string aText, bool canA, Action onA,
-                     string bText, bool canB, Action onB)
+                     string bText, bool canB, Action onB,
+                     string hint = null)
     {
         if (_target < 0.5f) _justShown = true;
         _anchor = worldPos;
 
-        SetupButton(_aButton, _aLabel, aText, canA);
-        SetupButton(_bButton, _bLabel, bText, canB);
+        bool showHint = !string.IsNullOrEmpty(hint);
+        _hintLabel.gameObject.SetActive(showHint);
+        if (showHint) _hintLabel.text = hint;
+
+        _aButton.gameObject.SetActive(!showHint);
+        _bButton.gameObject.SetActive(!showHint);
+        if (!showHint)
+        {
+            SetupButton(_aButton, _aLabel, aText, canA);
+            SetupButton(_bButton, _bLabel, bText, canB);
+        }
         _onA = onA;
         _onB = onB;
         _target = 1f;
@@ -136,6 +158,10 @@ public class UpgradePanel : MonoBehaviour
 
         var title = NewText("Title", panel, titleSize, titleColor, FontStyles.Bold, TextAlignmentOptions.TopLeft);
         title.text = "UPGRADES";
+
+        _hintLabel = NewText("Hint", panel, buttonSize, hintColor, FontStyles.Bold, TextAlignmentOptions.TopLeft);
+        _hintLabel.textWrappingMode = TextWrappingModes.Normal;
+        _hintLabel.gameObject.SetActive(false);
 
         _aButton = NewButton(panel, "A", out _aLabel);
         _aButton.onClick.AddListener(() => _onA?.Invoke());

@@ -8,6 +8,8 @@ using TMPro;
 // with adjustable font/size. Keep this component in the scene and assign the sprites.
 public class TopLeftHUD : MonoBehaviour
 {
+    public static TopLeftHUD Instance;
+
     [Header("Icons (Sprites)")]
     public Sprite heartIcon;
     public Sprite blockIcon;
@@ -61,14 +63,49 @@ public class TopLeftHUD : MonoBehaviour
     GameObject    _panel, _cellReadout;
     RectTransform _cellRect;
 
+    void Awake() => Instance = this;
     void Start() => BuildUI();
+
+    // ── Currency-fly-in target points (screen space — this canvas is ScreenSpaceOverlay,
+    // so a UI RectTransform's .position IS its screen pixel position). ─────────────────
+    public Vector2 BlockCounterScreenPos  => _blockVal  != null ? (Vector2)_blockVal.transform.position  : (Vector2)Input.mousePosition;
+    public Vector2 TurretCounterScreenPos => _turretVal != null ? (Vector2)_turretVal.transform.position : (Vector2)Input.mousePosition;
+
+    public void PulseBlockCounter()  => PulseRow(_blockVal);
+    public void PulseTurretCounter() => PulseRow(_turretVal);
+
+    void PulseRow(TMP_Text val)
+    {
+        if (val == null) return;
+        // "Row" is val's grandparent-ish container — walk up to the row built in
+        // BuildRow (val's direct parent holds icon+value+income as siblings).
+        var row = val.transform.parent;
+        if (row != null) StartCoroutine(PulseRoutine(row));
+    }
+
+    System.Collections.IEnumerator PulseRoutine(Transform row)
+    {
+        const float dur = 0.28f;
+        Vector3 baseScale = Vector3.one;
+        float t = 0f;
+        while (t < dur)
+        {
+            t += Time.unscaledDeltaTime;
+            float k = t / dur;
+            // Quick pop out, ease back — 1 -> 1.35 -> 1.
+            float s = 1f + Mathf.Sin(k * Mathf.PI) * 0.35f;
+            row.localScale = baseScale * s;
+            yield return null;
+        }
+        row.localScale = baseScale;
+    }
 
     void Update()
     {
         if (toggleKey != KeyCode.None && Input.GetKeyDown(toggleKey)) _visible = !_visible;
         if (_canvas == null) return;
 
-        _canvas.enabled = _visible && !IntroDirector.Playing;   // hold until the intro finishes
+        _canvas.enabled = _visible && !IntroDirector.Playing && !GameFlowManager.SettlementUp;   // hidden during intro / clear settlement
         if (!_canvas.enabled) return;
 
         UpdateMouseCell();
@@ -295,7 +332,7 @@ public class TopLeftHUD : MonoBehaviour
         _mouseHitValid = false;
         var cam = worldCamera != null ? worldCamera : Camera.main;
         if (cam == null) return;
-        Ray ray = cam.ScreenPointToRay(Input.mousePosition);
+        Ray ray = cam.ScreenPointToRay(VirtualCursor.Position);
         if (Physics.Raycast(ray, out RaycastHit hit, rayMaxDistance))
         {
             _mouseHitValid = true;

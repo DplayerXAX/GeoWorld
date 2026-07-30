@@ -21,12 +21,12 @@ MonoBehaviour:
   jitterAmount: 0.18
   starSize: 0.5
   linksPerStar: 3
-  starBrightness: 2
+  starBrightness: 1.7
   lineBrightness: 1.2
-  twinkleSpeed: 3
-  twinkleDepth: 0.5
-  spinSpeed: 8
-  tiltSpeed: 6
-  bobAmplitude: 0.12
+  twinkleSpeed: 2.2
+  twinkleDepth: 0.3
+  spinSpeed: 5
+  tiltSpeed: 4
+  bobAmplitude: 0.08
   bobSpeed: 1
   fadeInDuration: 0.6

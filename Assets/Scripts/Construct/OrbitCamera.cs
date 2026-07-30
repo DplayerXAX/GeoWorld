@@ -20,6 +20,12 @@ public class OrbitCamera : MonoBehaviour
     [Tooltip("Where the focus point sits on screen (0.5,0.5 = centre). e.g. LevelMapController sets x≈0.3 to bias the selected cell to the left.")]
     public Vector2 focusViewport = new Vector2(0.5f, 0.5f);
 
+    [Header("Gamepad")]
+    [Tooltip("Right-stick look sensitivity multiplier (mirrors mouse 'speed').")]
+    public float gamepadLookScale = 1f;
+    [Tooltip("Trigger/bumper zoom speed.")]
+    public float gamepadZoomSpeed = 12f;
+
     [Header("Projection toggle")]
     public KeyCode projectionToggleKey = KeyCode.F8;
     [Tooltip("Perspective FOV applied when switching out of ortho.")]
@@ -28,6 +34,11 @@ public class OrbitCamera : MonoBehaviour
     private float pitch = 20f;
 
     public float transitionSpeed = 6f;
+
+    // Set true while a modal camera view (e.g. WavePreview) owns the framing — blocks
+    // player-driven orbit/zoom/pan input, but NOT programmatic FocusOnPoint/SetZoom/
+    // SetPhysicalDistance calls (those are how the modal view drives the camera itself).
+    public static bool InputLocked;
     public Camera myCam;
     private Vector3 currentFocusPoint;
     private Transform desiredTarget;
@@ -80,6 +91,22 @@ public class OrbitCamera : MonoBehaviour
             ToggleProjection();
     }
 
+    // Regaining window focus (e.g. an external screenshot tool grabbing input for
+    // a moment, or Alt-Tab) hands back a single frame carrying a huge backlog of
+    // Input.GetAxis("Mouse X"/"Y") — Windows keeps tracking raw mouse movement
+    // even while Unity isn't focused (including any cursor jump the screenshot
+    // tool itself causes), and the legacy Input Manager flushes it all into the
+    // first polled frame after refocus. If right-mouse-look was still held across
+    // that gap (plausible: hold RMB to orbit with one hand, hit a screenshot
+    // hotkey with the other), that spike gets applied straight to yaw/pitch and
+    // reads as the camera suddenly flinging/spinning away. Swallow exactly one
+    // frame of mouse-look on refocus to eat the spike.
+    bool _suppressMouseLookOnce;
+    void OnApplicationFocus(bool hasFocus)
+    {
+        if (hasFocus) _suppressMouseLookOnce = true;
+    }
+
     public void ToggleProjection() => SetOrthographic(!useOrthographic);
 
     public void SetOrthographic(bool ortho)
@@ -109,6 +136,7 @@ public class OrbitCamera : MonoBehaviour
 
     public void AddDistance(float delta)
     {
+        if (InputLocked) return;
         if (useOrthographic)
         {
             targetOrthoSize = Mathf.Clamp(
@@ -126,6 +154,15 @@ public class OrbitCamera : MonoBehaviour
             );
         }
     }
+
+    // Physical camera-to-focus distance, independent of ortho/perspective "zoom"
+    // (orthoSize controls apparent size in ortho mode, not physical position — see
+    // LateUpdate's `offset = rot * (0,0,-distance)`, used regardless of projection).
+    // Bypasses SetZoom's normal 2-40 clamp so the camera can be pushed almost all
+    // the way to the focus point — e.g. WavePreview pushing it inside the start
+    // portal's core sphere (small enough that the opaque shader's default backface
+    // culling makes it disappear from inside, so it never occludes anything).
+    public void SetPhysicalDistance(float d) => targetDistance = Mathf.Max(0.01f, d);
 
     // Absolute zoom target. In ortho this is the orthographicSize; in perspective
     // it's the orbit distance. SMALLER = more zoomed in. Clamped to each mode's
@@ -168,6 +205,7 @@ public class OrbitCamera : MonoBehaviour
     // Called by PlacementController on WASD/QE in Select mode.
     public void Pan(Vector3 worldDelta)
     {
+        if (InputLocked) return;
         _panOffset += worldDelta;
     }
 
@@ -176,13 +214,13 @@ public class OrbitCamera : MonoBehaviour
         distance = Mathf.Lerp(
     distance,
     targetDistance,
-    1f - Mathf.Exp(-transitionSpeed * Time.deltaTime)
+    1f - Mathf.Exp(-transitionSpeed * Time.unscaledDeltaTime)
 );
 
         orthoSize = Mathf.Lerp(
             orthoSize,
             targetOrthoSize,
-            1f - Mathf.Exp(-transitionSpeed * Time.deltaTime)
+            1f - Mathf.Exp(-transitionSpeed * Time.unscaledDeltaTime)
         );
         if (myCam != null && useOrthographic)
         {
@@ -196,15 +234,36 @@ public class OrbitCamera : MonoBehaviour
         currentFocusPoint = Vector3.Lerp(
             currentFocusPoint,
             focusGoal,
-            1f - Mathf.Exp(-transitionSpeed * Time.deltaTime)
+            1f - Mathf.Exp(-transitionSpeed * Time.unscaledDeltaTime)
         );
 
+        Vector2 lookInput = InputLocked ? Vector2.zero : GamepadInput.Look;   // right stick — orbits without a button hold
+
+        // Consume the refocus guard for this frame; also clamp the raw axis reading
+        // itself (defense in depth against any other source of a one-frame delta
+        // spike, not just refocus — a stuttered frame, a driver hiccup, ...).
+        // MaxAxisPerFrame is generous for a genuinely fast intentional mouse flick
+        // but well below what a multi-frame backlog dump reports.
+        bool suppressMouse = _suppressMouseLookOnce;
+        _suppressMouseLookOnce = false;
+        const float MaxAxisPerFrame = 6f;
+        float mx = suppressMouse ? 0f : Mathf.Clamp(Input.GetAxis("Mouse X"), -MaxAxisPerFrame, MaxAxisPerFrame);
+        float my = suppressMouse ? 0f : Mathf.Clamp(Input.GetAxis("Mouse Y"), -MaxAxisPerFrame, MaxAxisPerFrame);
+
+        if (!InputLocked)
+        {
         if (!useOrthographic)
         {
             if (Input.GetMouseButton(1))
             {
-                yaw += Input.GetAxis("Mouse X") * speed * Time.deltaTime;
-                pitch -= Input.GetAxis("Mouse Y") * speed * Time.deltaTime;
+                yaw += mx * speed * Time.unscaledDeltaTime;
+                pitch -= my * speed * Time.unscaledDeltaTime;
+                pitch = Mathf.Clamp(pitch, minPitch, maxPitch);
+            }
+            else if (lookInput.sqrMagnitude > 0.0001f)
+            {
+                yaw += lookInput.x * speed * gamepadLookScale * Time.unscaledDeltaTime;
+                pitch -= lookInput.y * speed * gamepadLookScale * Time.unscaledDeltaTime;
                 pitch = Mathf.Clamp(pitch, minPitch, maxPitch);
             }
         }
@@ -212,11 +271,21 @@ public class OrbitCamera : MonoBehaviour
         {
             if (Input.GetMouseButton(1))
             {
-                yaw += Input.GetAxis("Mouse X") * speed * 0.3f * Time.deltaTime;
+                yaw += mx * speed * 0.3f * Time.unscaledDeltaTime;
 
-                pitch -= Input.GetAxis("Mouse Y") * speed * 0.2f * Time.deltaTime;
+                pitch -= my * speed * 0.2f * Time.unscaledDeltaTime;
                 pitch = Mathf.Clamp(pitch, 10f, 80f);
             }
+            else if (lookInput.sqrMagnitude > 0.0001f)
+            {
+                yaw += lookInput.x * speed * 0.3f * gamepadLookScale * Time.unscaledDeltaTime;
+                pitch -= lookInput.y * speed * 0.2f * gamepadLookScale * Time.unscaledDeltaTime;
+                pitch = Mathf.Clamp(pitch, 10f, 80f);
+            }
+        }
+
+        if (Mathf.Abs(GamepadInput.ZoomDelta) > 0.05f)
+            AddDistance(-GamepadInput.ZoomDelta * gamepadZoomSpeed * Time.unscaledDeltaTime);
         }
         Quaternion rot;
 
@@ -240,7 +309,7 @@ public class OrbitCamera : MonoBehaviour
         transform.position = Vector3.Lerp(
             transform.position,
             desiredPos,
-            1f - Mathf.Exp(-transitionSpeed * Time.deltaTime)
+            1f - Mathf.Exp(-transitionSpeed * Time.unscaledDeltaTime)
         );
 
         // Smooth aim (eased rotation, not a per-frame snap). Looking at the SHIFTED

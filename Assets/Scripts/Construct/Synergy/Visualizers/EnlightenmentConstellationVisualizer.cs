@@ -1,29 +1,14 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-// 启发 (Enlightenment) — star-sphere visualizer.
+// Enlightenment — star-sphere visualizer. Wraps an EnlightenmentRule's cube
+// in a glowing sphere of "tech stars" linked into a nearest-neighbour mesh,
+// slowly tumbling around the blocks.
 //
-// When an EnlightenmentRule forms its N×N×N cube, this wraps the blocks in a
-// glowing sphere of "tech stars": points sampled evenly over a sphere centered
-// on the cube, linked into a nearest-neighbour mesh, slowly tumbling around the
-// blocks. Reads as an energy/constellation sphere orbiting the cube.
-//
-// RECONCILER (read before editing) — same contract as HarmonyVineVisualizer:
-// SynergyVisualFX tears down + rebuilds EVERY claimed piece's decoration
-// whenever a synergy's claim count changes (i.e. on any block add/remove). If
-// we spawned in OnPieceClaimed and let the dispatcher Destroy in
-// OnPieceReleased, the sphere would restart on every churn. So instead:
-//   • WE own each sphere in a per-ActiveSynergy dictionary.
-//   • OnPieceClaimed / OnPieceReleased just call Reconcile(), which reads the
-//     LIVE claim state and makes the world match.
-//   • OnPieceClaimed returns null so the dispatcher never Destroys our views.
-//   • A view is only rebuilt when its cube actually changes (tracked by a cell
-//     signature), so it doesn't restart its fade/twinkle on unrelated churn.
-//
-// ActiveSynergy instances are stable across ticks (created once on activation,
-// mutated in place on absorb, removed on deactivation), so they make safe
-// dictionary keys: a 2³→3³ tier-up keeps the same key but changes the
-// signature, which triggers exactly one rebuild into the larger sphere.
+// Same reconciler contract as HarmonyVineVisualizer: SynergyVisualFX rebuilds
+// every claimed piece's decoration on any claim-count change, so we own each
+// sphere ourselves (keyed by ActiveSynergy, which is stable across ticks) and
+// only rebuild it when its cell-set signature actually changes.
 [CreateAssetMenu(
     menuName = "GeoWorld/Synergy/Visualizers/Enlightenment Constellation",
     fileName = "EnlightenmentConstellationVisualizer")]
@@ -95,7 +80,6 @@ public class EnlightenmentConstellationVisualizer : SynergyVisualizer
         public int              sig;   // cell-set signature; rebuild only when it changes
     }
 
-    // ── Owned lifecycle (NOT serialized; reset per load) ────────────────────
     [System.NonSerialized] Dictionary<ActiveSynergy, ConstellationView> _views;
     [System.NonSerialized] Dictionary<ActiveSynergy, int>               _sig;
     [System.NonSerialized] Dictionary<ActiveSynergy, Built>             _desired;
@@ -129,7 +113,7 @@ public class EnlightenmentConstellationVisualizer : SynergyVisualizer
         Reconcile();
     }
 
-    // ── Core: make the live spheres match the current claim state ────────────
+    // Make the live spheres match the current claim state.
     void Reconcile()
     {
         if (_views == null) OnEnable();   // lazy guard (OnEnable may not have run)
@@ -192,14 +176,13 @@ public class EnlightenmentConstellationVisualizer : SynergyVisualizer
         }
     }
 
-    // Wrap the cube in a sphere of stars: find the in-cube cells → their world
-    // bounding box → a circumscribed sphere → Fibonacci-sample stars on it →
-    // link nearest neighbours. Returns false if there's nothing to draw.
+    // Wrap the cube: in-cube cells -> bounding box -> circumscribed sphere ->
+    // Fibonacci-sample stars -> link nearest neighbours.
     bool TryBuild(ActiveSynergy a, GridSystem grid, out Built built)
     {
         built = default;
 
-        var   filter = a.rule as ICellHighlightFilter;
+        var   highlightCells = a.highlightCells;
         float cs     = grid.cellSize;
 
         // Unique in-cube cells (overhang cells, which the filter rejects, are
@@ -212,7 +195,7 @@ public class EnlightenmentConstellationVisualizer : SynergyVisualizer
             for (int i = 0; i < p.cells.Length; i++)
             {
                 var c = p.cells[i];
-                if (filter != null && !filter.ShouldHighlight(c)) continue;
+                if (highlightCells != null && !highlightCells.Contains(c)) continue;
                 if (seen.Add(c)) cells.Add(c);
             }
         }
@@ -276,8 +259,8 @@ public class EnlightenmentConstellationVisualizer : SynergyVisualizer
         return true;
     }
 
-    // ── Links: connect each star to its `k` nearest neighbours (deduped), so
-    //    the points read as a faceted mesh sphere rather than random lines.
+    // Connect each star to its `k` nearest neighbours (deduped) so the points
+    // read as a faceted mesh sphere rather than random lines.
     static List<Vector2Int> BuildSphereLinks(Vector3[] pts, int k)
     {
         var edges = new List<Vector2Int>();
@@ -312,7 +295,6 @@ public class EnlightenmentConstellationVisualizer : SynergyVisualizer
         return ((long)a << 32) | (uint)b;
     }
 
-    // ── Deterministic hashing for stable scatter + signature ────────────────
     static int CellHash(Vector3Int c)
     {
         unchecked { return c.x * 73856093 ^ c.y * 19349663 ^ c.z * 83492791; }

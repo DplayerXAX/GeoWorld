@@ -1,3 +1,4 @@
+using System.Collections;
 using UnityEngine;
 
 public class AudioManager : MonoBehaviour
@@ -27,7 +28,15 @@ public class AudioManager : MonoBehaviour
     public AK.Wwise.Event rotate;
     public AK.Wwise.Event fight_start;
     public AK.Wwise.Event fight_end;
-
+    public AK.Wwise.Event UISound;
+    [Tooltip("Posted while a dialogue/tutorial-hint typewriter reveals new characters.")]
+    public AK.Wwise.Event TextBlip;
+    [Tooltip("Posted when a placed block / turret / endpoint is newly click-selected (PlacementController.UpdateHighlight's new-target branch).")]
+    public AK.Wwise.Event SelectObject;
+    [Tooltip("Posted when the shop rift opens.")]
+    public AK.Wwise.Event ShopExpand;
+    [Tooltip("Posted when the shop rift closes.")]
+    public AK.Wwise.Event ShopCollapse;
     [Header("Volume RTPCs (Wwise global, 0..100)")]
     [Tooltip("Global Wwise RTPC names bound to your bus volumes. SettingsScreen drives these 0..1 → 0..100. Set them up on the Master / Music / SFX buses in Wwise.")]
     public string masterVolumeRtpc = "MasterVolume";
@@ -43,6 +52,12 @@ public class AudioManager : MonoBehaviour
     // (event-swap path). 0 = nothing playing.
     uint _currentBgmPlayingId;
 
+    // TextBlip is authored as ONE continuous segment (not a per-character one-shot),
+    // so it's started once when a typewriter begins and stopped once it finishes/skips
+    // — never re-posted per character (that would restart/overlap the clip).
+    uint _currentBlipPlayingId;
+
+    
     void Awake()
     {
         Instance = this;
@@ -59,13 +74,60 @@ public class AudioManager : MonoBehaviour
                 AkCurveInterpolation.AkCurveInterpolation_Linear);
             _currentBgmPlayingId = 0;
         }
+        StopTextBlip();
         if (Instance == this) Instance = null;
     }
 
+
+    public void PlayUISound()
+    {
+        UISound.Post(this.gameObject);
+    }
+
+    public void PlaySelect()
+    {
+        if (SelectObject != null && SelectObject.IsValid()) SelectObject.Post(this.gameObject);
+    }
+
+    public void PlayShopToggle(bool expanded)
+    {
+        var e = expanded ? ShopExpand : ShopCollapse;
+        if (e != null && e.IsValid()) e.Post(this.gameObject);
+    }
+
+    // Call once when a typewriter starts revealing a new line/hint.
+    public void StartTextBlip()
+    {
+        StopTextBlip();   // guard: don't stack a second instance if a prior one is still ringing
+        if (TextBlip != null && TextBlip.IsValid())
+            _currentBlipPlayingId = TextBlip.Post(this.gameObject);
+    }
+
+    // Call once when the typewriter finishes (naturally or skipped).
+    public void StopTextBlip()
+    {
+        if (_currentBlipPlayingId == 0) return;
+        AkUnitySoundEngine.StopPlayingID(_currentBlipPlayingId, 150,
+            AkCurveInterpolation.AkCurveInterpolation_Linear);
+        _currentBlipPlayingId = 0;
+    }
     private void Start()
     {
         SetChordOnObject(BlockType.Home, this.gameObject);
         SetChordOnObject(BlockType.Home, audioEmitter);
+
+        StartCoroutine(PostBgmAfterIntro());
+
+        GameSettings.ApplyAudio();   // push saved volumes once the engine is up
+    }
+
+    // In the gameplay scene, IntroDirector plays a short reveal before the player can
+    // act — don't start the BGM until that's done (it isn't present in other scenes,
+    // e.g. Title/LevelSelect, so this just posts next-frame there, no behavior change).
+    IEnumerator PostBgmAfterIntro()
+    {
+        yield return null;   // let IntroDirector spawn + set Playing=true first, if this scene has one
+        while (IntroDirector.Playing) yield return null;
 
         // Force the initial music state to Calm BEFORE posting the BGM event.
         // Wwise doesn't always honor a "default state" config in the authoring
@@ -75,8 +137,6 @@ public class AudioManager : MonoBehaviour
 
         if (BGM != null && BGM.IsValid())
             _currentBgmPlayingId = BGM.Post(this.gameObject);
-
-        GameSettings.ApplyAudio();   // push saved volumes once the engine is up
     }
 
     void SetChordOnObject(BlockType type, GameObject target)
@@ -153,6 +213,7 @@ public class AudioManager : MonoBehaviour
     {
         if (string.IsNullOrEmpty(rtpc)) return;
         AkUnitySoundEngine.SetRTPCValue(rtpc, Mathf.Clamp01(v01) * 100f);
+        Debug.Log("Setting!");
     }
 
     public void PlayRotate()
@@ -218,6 +279,6 @@ public class AudioManager : MonoBehaviour
     public void SetChord(BlockType type)
     {
         SetChordOnObject(type, audioEmitter);
-        SetChordOnObject(type, this.gameObject);   // BGM Switch Container 也需要
+        SetChordOnObject(type, this.gameObject);   // BGM Switch Container also needs it
     }
 }

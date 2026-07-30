@@ -1,21 +1,9 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-// 秩序 (Order) — N pieces of the same color, connected face-to-face.
-//
-// On activation, claims the ENTIRE connected component (not just N), so
-// later same-color pieces that connect to the group are absorbed into the
-// same synergy rather than spawning a parallel claim. Effect (debuff
-// enemies on path) is assigned via the `effect` field on the base class.
-//
-// To author:
-//   1. Project → Create → GeoWorld → Synergy → Rules → Order Rule
-//   2. Set `color` to one of the 6 themes (e.g. BlockColor.Order itself,
-//      but any theme color works — you can have an "Order rule for green
-//      pieces" if you want)
-//   3. Drag a GameEffect asset (DebugLogEffect for smoke test, real combat
-//      effect later) into the `effect` slot
-//   4. Add this asset to SynergyEvaluator.rules in the scene
+// Order — N pieces of the same color, connected face-to-face. Claims the
+// entire connected component on activation, so later same-color pieces
+// joining the group get absorbed instead of spawning a parallel claim.
 [CreateAssetMenu(menuName = "GeoWorld/Synergy/Rules/Order Rule",
                  fileName = "OrderRule")]
 public class OrderRule : SynergyRule
@@ -24,7 +12,6 @@ public class OrderRule : SynergyRule
     [Tooltip("Minimum number of pieces (own color + Universal jokers) that must form a single face-connected component for the rule to fire.")]
     [Min(2)] public int minConnected = 3;
 
-    // Set sensible defaults when the asset is first created.
     void Reset()
     {
         absorbAdditionalPieces = true;
@@ -37,14 +24,8 @@ public class OrderRule : SynergyRule
         claimed = null;
         tier    = 0;
 
-        if (color == BlockColor.None || color == BlockColor.Universal)
-        {
-            // Wildcard / unset rule shouldn't fire — Order needs a real theme.
-            return false;
-        }
+        if (color == BlockColor.None || color == BlockColor.Universal) return false;
 
-        // Restrict to pieces in the pool that can count as our color (own
-        // color + Universal jokers).
         var usable = new HashSet<PlacedPiece>();
         foreach (var p in board.PiecesUsableAs(color))
             if (pool.Contains(p)) usable.Add(p);
@@ -65,8 +46,8 @@ public class OrderRule : SynergyRule
         return false;
     }
 
-    // Progress = size of the connected same-colour component the piece sits in,
-    // toward minConnected (e.g. "2/3").
+    // Progress = size of the connected same-color component the piece sits
+    // in, toward minConnected.
     public override bool TryGetActivationProgress(BoardSnapshot board, PlacedPiece piece,
                                                   out int current, out int required)
     {
@@ -75,7 +56,7 @@ public class OrderRule : SynergyRule
         if (board == null || piece == null) return true;
 
         var usable = new HashSet<PlacedPiece>(board.PiecesUsableAs(color));
-        if (!usable.Contains(piece)) return true;   // 0 / required
+        if (!usable.Contains(piece)) return true;
 
         var comps = board.ConnectedComponents(usable);
         for (int i = 0; i < comps.Count; i++)

@@ -24,9 +24,13 @@ public class CarouselMenu : MonoBehaviour
     [Header("Feel")]
     public float scrollLerp = 12f;
     public bool  wrap       = false;
-
+    [Tooltip("Minimum seconds between wheel-driven steps. Higher = less sensitive scrolling — one flick won't skip several items.")]
+    public float wheelCooldown = 0.18f;
+    [Tooltip("Wheel delta below this is ignored (deadzone against tiny/accidental scrolls).")]
+    public float wheelThreshold = 0.1f;
     int         _selected;
     float       _scroll;
+    float       _wheelTimer;
     CanvasGroup _panelCg;
 
     void Awake()
@@ -37,7 +41,10 @@ public class CarouselMenu : MonoBehaviour
         {
             items = new List<RectTransform>();
             foreach (Transform c in transform)
-                if (c.GetComponent<Button>() != null) items.Add((RectTransform)c);
+                if (c.GetComponent<Button>() != null)
+                { 
+                    items.Add((RectTransform)c);
+                }
         }
         foreach (var rt in items)
             if (rt != null && rt.GetComponent<CanvasGroup>() == null)
@@ -77,12 +84,19 @@ public class CarouselMenu : MonoBehaviour
 
     void HandleInput()
     {
+        // Wheel: throttled to one step per wheelCooldown so a single flick (which
+        // spans several frames / a big delta) advances by one item, not several.
+        if (_wheelTimer > 0f) _wheelTimer -= Time.unscaledDeltaTime;
         float wheel = Input.mouseScrollDelta.y;
-        if (wheel >  0.01f) Move(-1);
-        if (wheel < -0.01f) Move( 1);
-        if (Input.GetKeyDown(KeyCode.S) || Input.GetKeyDown(KeyCode.DownArrow)) Move( 1);
-        if (Input.GetKeyDown(KeyCode.W) || Input.GetKeyDown(KeyCode.UpArrow))   Move(-1);
-        if (Input.GetKeyDown(KeyCode.Return) || Input.GetKeyDown(KeyCode.KeypadEnter) || Input.GetKeyDown(KeyCode.Space))
+        if (Mathf.Abs(wheel) > wheelThreshold && _wheelTimer <= 0f)
+        {
+            Move(wheel > 0f ? -1 : 1);
+            _wheelTimer = wheelCooldown;
+        }
+        if (Input.GetKeyDown(KeyCode.S) || Input.GetKeyDown(KeyCode.DownArrow) || GamepadInput.DPadDownDown) Move( 1);
+        if (Input.GetKeyDown(KeyCode.W) || Input.GetKeyDown(KeyCode.UpArrow)   || GamepadInput.DPadUpDown)   Move(-1);
+        if (Input.GetKeyDown(KeyCode.Return) || Input.GetKeyDown(KeyCode.KeypadEnter) || Input.GetKeyDown(KeyCode.Space)
+            || GamepadInput.ConfirmDown)
             Confirm();
     }
 

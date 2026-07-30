@@ -1,26 +1,14 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-// 秩序 (Order) — "architect" visualizer.
+// Order — "architect" visualizer. OrderRule has no cell filter, so every
+// claimed cell is decorated with a technical-blueprint overlay: cube-edge
+// wireframe, corner brackets, dimension ticks, and slowly-turning gear
+// schematics that mesh with neighbours.
 //
-// OrderRule claims a whole face-connected same-color component and (like
-// Abundance) implements NO ICellHighlightFilter, so every claimed cell is fair
-// game. This visualizer reads Order as PRECISION / STRUCTURE: it overlays each
-// claimed block with a technical-blueprint line drawing — cube-edge wireframe,
-// corner registration brackets, dimension ticks — and sets slowly-turning gear
-// schematics on top, neighbours meshing in opposite directions. The structure
-// "snaps into place" and breathes a calibration pulse. Architect's plan, gears,
-// calibration, becoming structure.
-//
-// RECONCILER (read before editing) — same contract as HarmonyVineVisualizer /
-// AbundanceVisualizer:
-//   • WE own each rig in a pieceId → OrderRig-GameObject dictionary.
-//   • OnPieceClaimed / OnPieceReleased just call Reconcile(), which reads the
-//     LIVE claim state and makes the world match: spawn missing rigs, KEEP
-//     existing ones untouched (no re-assemble on churn), fade out departed ones.
-//   • OnPieceClaimed returns null so the dispatcher never Destroys our rigs.
-// Rigs are FREE-STANDING world-space objects (not parented), built from the grid
-// cells, so they're immune to the block's rotation and GrowIn scale.
+// Same reconciler contract as HarmonyVineVisualizer / AbundanceVisualizer:
+// we own each rig (keyed by pieceId) via Reconcile(). Rigs are free-standing
+// world objects built from grid cells, immune to block rotation/GrowIn scale.
 [CreateAssetMenu(
     menuName = "GeoWorld/Synergy/Visualizers/Order Architect",
     fileName = "OrderArchitectVisualizer")]
@@ -103,6 +91,51 @@ public class OrderArchitectVisualizer : SynergyVisualizer
     [Tooltip("Per-cog beat offset so the ticks aren't perfectly lockstep.")]
     [Range(0f, 0.5f)] public float phaseJitter = 0.15f;
 
+    [Header("Living machine")]
+    [Tooltip("Bright cross-section outline that periodically sweeps up the frame — the blueprint being re-verified layer by layer.")]
+    public bool showScan = true;
+
+    [Tooltip("Seconds between scan sweeps.")]
+    public float scanInterval = 5f;
+
+    [Tooltip("Seconds one sweep takes (bottom → top).")]
+    public float scanDuration = 0.9f;
+
+    [Tooltip("Small bright nodes tracing the base perimeter in a loop — current flowing through the structure.")]
+    public bool showRunners = true;
+
+    [Range(1, 4)] public int runnerCount = 2;
+
+    [Tooltip("Runner speed in cells per second.")]
+    public float runnerSpeed = 1.6f;
+
+    [Tooltip("Runner node size, in cell-size units.")]
+    [Range(0.02f, 0.2f)] public float runnerSizeFrac = 0.07f;
+
+    [Tooltip("Every N beats the whole clockwork reverses direction in one synchronized clunk (0 = never). Makes the ticking read as a machine cycle, not a metronome.")]
+    public int shiftEveryBeats = 8;
+
+    [Header("Hologram")]
+    [Tooltip("Render the cogs as translucent, floating, flickering holograms (additive glow) instead of solid metal.")]
+    public bool holographic = true;
+
+    [Tooltip("Base opacity of the holo cogs.")]
+    [Range(0.05f, 1f)] public float holoAlpha = 0.4f;
+
+    [Tooltip("How far cogs float OFF the block faces (cell-size units) — they ring the block, they don't hug it.")]
+    [Range(0f, 1f)] public float floatDistanceFrac = 0.35f;
+
+    [Tooltip("Ring the block on its SIDE faces only — keeps the top/bottom (the walkable road) clear of cogs.")]
+    public bool sideFacesOnly = true;
+
+    [Tooltip("Cog hover amplitude along the face normal, in cell-size units. 0 = no up/down drift (cogs stay put).")]
+    [Range(0f, 0.3f)] public float hoverAmplitudeFrac = 0f;
+
+    public float hoverSpeed = 1.1f;
+
+    [Tooltip("Holo opacity flicker amount (0 = steady, higher = more unstable projection).")]
+    [Range(0f, 0.6f)] public float flickerAmount = 0.18f;
+
     [Header("Animation")]
     [Tooltip("Seconds for a rig to assemble / snap into place.")]
     public float fadeInDuration = 0.5f;
@@ -122,8 +155,8 @@ public class OrderArchitectVisualizer : SynergyVisualizer
     }
 
     [System.NonSerialized] private Dictionary<int, GameObject> _rigs;     // pieceId -> live rig
-    [System.NonSerialized] private Dictionary<int, Target>     _desired;  // pieceId -> colors (this tick)
-    [System.NonSerialized] private List<int>                   _prune;    // scratch
+    [System.NonSerialized] private Dictionary<int, Target>     _desired;  // pieceId -> colors this tick
+    [System.NonSerialized] private List<int>                   _prune;
 
     private void OnEnable()
     {
@@ -151,7 +184,7 @@ public class OrderArchitectVisualizer : SynergyVisualizer
         Reconcile();
     }
 
-    // ── Core: make the world's rigs match the live claim state ───────────────
+    // Make the world's rigs match the live claim state.
     private void Reconcile()
     {
         if (_rigs == null) OnEnable();   // lazy guard
@@ -160,8 +193,7 @@ public class OrderArchitectVisualizer : SynergyVisualizer
         var grid      = GridSystem.instance;
         if (evaluator == null || grid == null) return;
 
-        // 1) Desired this tick: every claimed piece across every active using
-        //    THIS visualizer (Order has no cell filter → all cells decorated).
+        // Every claimed piece across every active using this visualizer.
         _desired.Clear();
         var actives = evaluator.Actives;
         for (int i = 0; i < actives.Count; i++)
@@ -178,7 +210,7 @@ public class OrderArchitectVisualizer : SynergyVisualizer
                 if (p != null) _desired[p.id] = target;
         }
 
-        // 2) Prune: rigs whose block was destroyed (null) or whose piece left.
+        // Prune rigs whose block was destroyed or whose piece left.
         _prune.Clear();
         foreach (var kv in _rigs)
             if (kv.Value == null || !_desired.ContainsKey(kv.Key)) _prune.Add(kv.Key);
@@ -190,7 +222,7 @@ public class OrderArchitectVisualizer : SynergyVisualizer
             RetireRig(go);
         }
 
-        // 3) Spawn: wanted pieces with no live rig yet. Existing rigs untouched.
+        // Spawn wanted pieces with no live rig yet; existing rigs untouched.
         foreach (var kv in _desired)
         {
             if (_rigs.TryGetValue(kv.Key, out var go) && go != null) continue;
@@ -211,9 +243,8 @@ public class OrderArchitectVisualizer : SynergyVisualizer
         for (int i = 0; i < piece.cells.Length; i++)
             centers[i] = grid.GridToWorld(piece.cells[i]);
 
-        // FREE world-space object (NOT parented): a rotated block would tip the
-        // upright structure and a scale-0 GrowIn block would collapse it. The grid
-        // cells are axis-aligned in world, so the rig always frames them squarely.
+        // Free world-space object, not parented: a rotated block would tip
+        // the structure and a scale-0 GrowIn would collapse it.
         var go = new GameObject($"OrderRig_{pieceId}");
 
         var rig = go.AddComponent<OrderRig>();
@@ -237,6 +268,21 @@ public class OrderArchitectVisualizer : SynergyVisualizer
         rig.bracketFrac      = bracketFrac;
         rig.showTicks        = showTicks;
         rig.tickCount        = tickCount;
+        rig.showScan         = showScan;
+        rig.scanInterval     = scanInterval;
+        rig.scanDuration     = scanDuration;
+        rig.showRunners      = showRunners;
+        rig.runnerCount      = runnerCount;
+        rig.runnerSpeed      = runnerSpeed;
+        rig.runnerSizeFrac   = runnerSizeFrac;
+        rig.shiftEveryBeats  = shiftEveryBeats;
+        rig.holographic        = holographic;
+        rig.holoAlpha          = holoAlpha;
+        rig.floatDistanceFrac  = floatDistanceFrac;
+        rig.sideFacesOnly      = sideFacesOnly;
+        rig.hoverAmplitudeFrac = hoverAmplitudeFrac;
+        rig.hoverSpeed         = hoverSpeed;
+        rig.flickerAmount      = flickerAmount;
         rig.fadeInDuration   = fadeInDuration;
         rig.witherDuration   = witherDuration;
         rig.pulseSpeed       = pulseSpeed;

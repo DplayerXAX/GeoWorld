@@ -107,7 +107,9 @@ public class BalanceTable : ScriptableObject
     [Header("Pricing — Type multipliers")]
     public float liftTypeMult   = 1.4f;
     public float shadowTypeMult = 0.85f;
-    // Other block types use 1.0 implicitly.
+    [Tooltip("Basic turret price multiplier. A 1-cell turret is cells(1) × cellBasePrice(10) × this, so 0.8 ≈ 8 before the per-shop fluctuation roll — i.e. 2 cheaper than the flat 10 it used to be.")]
+    public float turretTypeMult = 0.8f;
+    // Other block types (Slow / AOE turrets included) use 1.0 implicitly.
 
     // ═══════════════════════════════════════════════════════════════════════
     // 2. PLAYER
@@ -180,6 +182,9 @@ public class BalanceTable : ScriptableObject
     [Tooltip("Allow buying an entry whose cost slightly exceeds remaining budget. 1.0 = strict, 1.5 = up to 50% overshoot.")]
     [Range(1f, 2f)] public float waveAffordSlack = 1.2f;
 
+    [Tooltip("Extra enemy HP per round, ADDITIVE (not compounding) — e.g. 0.2 means R0 enemies are ×1.0, R1 ×1.2, R5 ×2.0. Applied on top of each EnemyRecord.maxHealth at spawn.")]
+    public float enemyHealthGrowthPerRound = 0.2f;
+
     // ═══════════════════════════════════════════════════════════════════════
     // 5. TURRET STATS
     // ═══════════════════════════════════════════════════════════════════════
@@ -242,7 +247,7 @@ public class BalanceTable : ScriptableObject
     [Serializable]
     public class TurretRecord
     {
-        [Tooltip("Cost in turret currency to deploy one.")]
+        [Tooltip("UNUSED — shop price does NOT come from here. Every block (turrets included) is priced by ComputePrice: cells × cellBasePrice × rarity × type × round × fluctuation. To change what a turret costs, edit the Type multipliers above (turretTypeMult / slowTurretTypeMult / aoeTurretTypeMult), not this field.")]
         [Min(1)] public int cost = 3;
 
         [Tooltip("Damage per shot.")]
@@ -312,6 +317,9 @@ public class BalanceTable : ScriptableObject
         return Mathf.Min(raw, waveBudgetMax);
     }
 
+    /// <summary>Additive (non-compounding) HP multiplier for the given round: R0 = 1.0, R1 = 1+growth, R2 = 1+2*growth, …</summary>
+    public float GetEnemyHealthMultiplier(int round) => 1f + Mathf.Max(0, round) * enemyHealthGrowthPerRound;
+
     /// <summary>Turret stat record for a given mode. Returns basicTurret for unknown modes.</summary>
     public TurretRecord GetTurretStats(TurretController.Mode mode) => mode switch
     {
@@ -334,6 +342,7 @@ public class BalanceTable : ScriptableObject
     {
         BlockType.Lift   => liftTypeMult,
         BlockType.Shadow => shadowTypeMult,
+        BlockType.Turret => turretTypeMult,
         _                => 1f,
     };
 

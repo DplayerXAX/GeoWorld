@@ -31,7 +31,7 @@ public class GameFlowManager : MonoBehaviour
 
     [Header("Tower Defense Pacing")]
     [Tooltip("Completed runs before a new endpoint is added.")]
-    public int runsPerEndpoint = 3;
+    public int runsPerEndpoint = 2;
     [Tooltip("Maximum concurrent ambient loop layers. Oldest retires when exceeded.")]
     public int maxLoopLayers   = 5;
     [Tooltip("ON: start/end spacing is auto-derived from blocksPerTurn each stage (overrides the generator). " +
@@ -115,12 +115,66 @@ public class GameFlowManager : MonoBehaviour
         if (enemyBaseManager != null)
             enemyBaseManager.OnWaveCompleted += HandleWaveCompleted;
 
+        // Enlightenment's turret-upgrade gate is static/asset-backed state that
+        // otherwise survives across scene loads — clear it so a previous run
+        // that ended mid-cube doesn't leak a stale allowance (or a stuck-locked
+        // gate) into this one.
+        TowerUpgradeGate.ResetAll();
+        UnlockTowerUpgradeEffect.ResetAllHeld();
+
+        RunStats.BeginRun();   // reset kill/blocks/time counters for score-keeping
         ApplyRunConfig();   // Level vs Endless setup (seed, pacing, authored waves)
         CreateFirstStage();
+        SpawnStartingLayout();       // pre-built blocks authored via LevelMapAuthor, if any
         FocusCameraOnFirstStage();   // centre the camera between the first start & end
 
         phase = GamePhase.Build;
         StartTurn();
+    }
+
+    // Populated by SpawnStartingLayout(); IntroDirector reads this to pop the pre-built
+    // blocks in alongside the start/end endpoints once the intro finishes, instead of
+    // having them sit visible (at full scale) through the whole intro sequence.
+    public readonly List<GameObject> startingLayoutVisuals = new();
+
+    // Places the level's optional pre-built starting layout (LevelDefinition.startingLayout,
+    // authored with LevelMapAuthor) as REAL functional blocks — reuses the same
+    // PlacementController.PlaceBlockDirect path SnapshotManager uses for save/load, so turrets
+    // get AttachTurretController and pieces get registered with SynergyEvaluator, not just
+    // decorative geometry.
+    void SpawnStartingLayout()
+    {
+        var layout = RunConfig.Mode == GameMode.Level ? RunConfig.Level?.startingLayout : null;
+        if (layout?.data?.nodes == null) return;
+        var pc = PlacementController.Instance;
+        if (pc == null) return;
+
+        foreach (var node in layout.data.nodes)
+        {
+            if (node.cells == null || node.cells.Length == 0) continue;
+
+            bool clash = false;
+            foreach (var c in node.cells) if (gridSystem.IsOccupied(c)) { clash = true; break; }
+            if (clash) continue;
+
+            BlockData bd = !string.IsNullOrEmpty(node.blockAssetName) ? pc.FindBlockDataByName(node.blockAssetName) : null;
+            if (bd == null && System.Enum.TryParse(node.blockTypeName, out BlockType bt)) bd = pc.FindBlockData(bt);
+            if (bd == null)
+            {
+                Debug.LogWarning($"[GameFlowManager] starting layout: can't resolve block '{node.blockAssetName}'/'{node.blockTypeName}', skipped.");
+                continue;
+            }
+
+            var ins = pc.PlaceBlockDirect(bd, node.cells, node.rotation, node.color, node.synergyColor);
+            if (ins != null)
+            {
+                ins.locked = true;   // level furniture — not pickup/sell/delete-able
+                ResourceManager.Instance?.OnBlockPlaced(bd.blockType);
+                if (ins.visualObject != null) startingLayoutVisuals.Add(ins.visualObject);
+            }
+        }
+
+        EvaluateGrid();   // reconcile pathing/synergy once, same as SnapshotManager's restore flow
     }
 
     // Pull this run's settings from RunConfig (set by Title / LevelSelect before
@@ -128,6 +182,10 @@ public class GameFlowManager : MonoBehaviour
     void ApplyRunConfig()
     {
         if (RunConfig.Seed != 0UL) runSeed = RunConfig.Seed;
+
+        // No level asset (Endless) → always on; a Level run reads its own flag.
+        SynergyEvaluator.Enabled = RunConfig.Mode != GameMode.Level
+            || RunConfig.Level == null || RunConfig.Level.synergyEnabled;
 
         if (RunConfig.Mode == GameMode.Level && RunConfig.Level != null)
         {
@@ -153,18 +211,115 @@ public class GameFlowManager : MonoBehaviour
             && _wavesCompleted >= RunConfig.Level.wavesToClear
             && (!RunConfig.Level.requireAllObjectives || LevelObjectivesTracker.AllRequiredSatisfied))
         {
-            SaveSystem.RecordClear(RunConfig.Level, _wavesCompleted);
-            ReturnToMap();
+            DoLevelClear(_wavesCompleted);
             return true;
         }
 
         if (RunConfig.Mode == GameMode.Endless)
-            SaveSystem.RecordEndless(_wavesCompleted);
+        {
+            int lives = PlayerHealth.Instance != null ? PlayerHealth.Instance.CurrentLives : 0;
+            int score = RunStats.ComputeScore(_wavesCompleted, lives, stars: 1);   // no star tiers in endless
+            SaveSystem.RecordEndless(_wavesCompleted, score);
+        }
 
         return false;
     }
 
-    void ReturnToMap()
+    // Continuous objective-driven clear: fires the moment every NON-optional
+    // objective is satisfied (any phase). Gated by Level.clearOnObjectivesComplete.
+    bool _levelDone;
+
+    // True while the level-clear settlement is on screen — systems read this to
+    // lock input (shop, pickup, sell, …) and hide gameplay HUD.
+    public bool LevelCleared => _levelDone;
+    public static bool SettlementUp => Instance != null && Instance._levelDone;
+
+    bool TryObjectiveClear()
+    {
+        if (_levelDone) return false;
+        var lv = RunConfig.Mode == GameMode.Level ? RunConfig.Level : null;
+        if (lv == null || !lv.clearOnObjectivesComplete) return false;
+        if (!LevelObjectivesTracker.Tracking) return false;   // tracker not live yet
+        if (!HasRequiredObjective(lv) || !LevelObjectivesTracker.AllRequiredSatisfied) return false;
+
+        DoLevelClear(_wavesCompleted);
+        return true;
+    }
+
+    static bool HasRequiredObjective(LevelDefinition lv)
+    {
+        if (lv == null || lv.objectives == null) return false;
+        for (int i = 0; i < lv.objectives.Count; i++)
+            if (lv.objectives[i] != null && !lv.objectives[i].optional) return true;
+        return false;
+    }
+
+    // Records the clear, stops any in-progress wave, and shows the settlement.
+    void DoLevelClear(int wavesReached)
+    {
+        if (_levelDone) return;
+        _levelDone = true;
+
+        if (phase == GamePhase.Running)
+        {
+            ArpeggiatorManager.Instance?.StopRecording();
+            if (currentUnit != null) { Destroy(currentUnit.gameObject); currentUnit = null; }
+            ResourceManager.Instance?.SetCombatActive(false);
+            enemyBaseManager?.CancelWave();
+            BackgroundReactor.Instance?.SetCombatMode(false);
+            AudioManager.Instance?.ExitBattleBGM();
+        }
+        Time.timeScale = 1f;
+        phase = GamePhase.Build;
+
+        int lives    = PlayerHealth.Instance != null ? PlayerHealth.Instance.CurrentLives : 0;
+        int maxLives = PlayerHealth.Instance != null ? PlayerHealth.Instance.maxLives     : 0;
+        bool objMet  = LevelObjectivesTracker.AllRequiredSatisfied;
+        var (objSatisfied, objTotal) = LevelObjectivesTracker.Tracking ? LevelObjectivesTracker.Progress : (0, 0);
+        int stars    = RunStats.ComputeStars(objSatisfied, objTotal, lives, maxLives);
+        int score    = RunStats.ComputeScore(wavesReached, lives, stars);
+
+        int prevBest = RunConfig.Level != null ? SaveSystem.Profile.GetRecord(RunConfig.Level.levelId)?.bestScore ?? 0 : 0;
+        bool isNewBest = score > prevBest;
+
+        // Keepsake: the exact board this clear was won with, plus which synergy
+        // theme was flying highest at the buzzer. Written into the record BEFORE
+        // RecordClear so its own Save() call at the end persists both in the same
+        // write. Overwritten on every clear (not just the first) so it always
+        // reflects your latest winning build, not a stale first attempt.
+        if (RunConfig.Level != null)
+        {
+            var rec = SaveSystem.Profile.GetOrCreateRecord(RunConfig.Level.levelId);
+            rec.buildSnapshot       = SnapshotManager.Capture();
+            rec.clearSynergyColor   = DominantActiveSynergyColor();
+        }
+
+        bool firstClear = SaveSystem.RecordClear(RunConfig.Level, wavesReached, score);
+        if (firstClear && RunConfig.Level != null && RunConfig.Level.rewardConversation != null)
+            RunConfig.PendingRewardConversation = RunConfig.Level.rewardConversation;
+
+        LevelClearScreen.Show(RunConfig.Level, wavesReached, lives, maxLives, stars, score, prevBest, isNewBest, objMet, ReturnToMap);
+    }
+
+    // Highest-tier synergy still active the moment the level was cleared. None if
+    // nothing was active — LevelMapController treats that the same as Universal
+    // (no specific theme to celebrate), picking an arbitrary accent instead.
+    static BlockColor DominantActiveSynergyColor()
+    {
+        var actives = SynergyEvaluator.Instance?.Actives;
+        if (actives == null) return BlockColor.None;
+
+        var best = BlockColor.None;
+        int bestTier = -1;
+        foreach (var a in actives)
+        {
+            if (a?.rule == null || a.rule.color == BlockColor.Universal) continue;
+            if (a.tier > bestTier) { bestTier = a.tier; best = a.rule.color; }
+        }
+        return best;
+    }
+
+    public void ReturnToMap()
     {
         Time.timeScale = 1f;
         LoadingScreen.Go("LevelSelect");   // spinning-cube loading page, then async-load
@@ -206,6 +361,20 @@ public class GameFlowManager : MonoBehaviour
 
     void ConfigureEndpointBounds(float extraRange = 0f)
     {
+        // Per-level override wins outright — fixed bounds for EVERY endpoint this
+        // level generates (opening pair and every later AddNextEndpoint() call
+        // alike), ignoring both the auto blocksPerTurn scaling below AND whatever
+        // the generator's own Inspector defaults are. This is what lets a level
+        // author pin down "the second start point sometimes rolls really far"
+        // instead of inheriting gameplay's global widening-per-round behavior.
+        var lv = RunConfig.Mode == GameMode.Level ? RunConfig.Level : null;
+        if (lv != null && lv.overrideEndpointDistance)
+        {
+            endpoints.minDistance = Mathf.Max(0f, lv.endpointMinDistance);
+            endpoints.maxDistance = Mathf.Max(endpoints.minDistance, lv.endpointMaxDistance);
+            return;
+        }
+
         // Respect the generator's Inspector values when auto-bounds is off.
         if (!autoEndpointBounds) return;
 
@@ -250,7 +419,9 @@ public class GameFlowManager : MonoBehaviour
 
         if (addStart)
         {
-            var cell = endpoints.GenerateSinglePoint(allStarts, true);
+            // allEnds constrains the new start to the union of the existing
+            // starts' reach circles — see LevelEndpointGenerator.SampleStartInsideReach.
+            var cell = endpoints.GenerateSinglePoint(allStarts, true, allEnds);
             if (cell != Vector3Int.zero)
             {
                 allStarts.Add(cell);
@@ -277,6 +448,10 @@ public class GameFlowManager : MonoBehaviour
     void Update()
     {
         if (phase == GamePhase.GameOver) return;
+
+        // Objective-driven levels clear the instant every required goal is met (any
+        // phase), independent of wavesToClear.
+        if (TryObjectiveClear()) return;
 
         if (phase == GamePhase.Build)
         {
@@ -424,8 +599,10 @@ public class GameFlowManager : MonoBehaviour
         placement.ClearTray();                          // remove leftover tokens from last round
         PlacementController.Instance.ResetRefreshCost();
         // Refresh the synergy color pool. In mode C this samples a new subset
-        // of colors for the round; in mode B it's a no-op snapshot.
-        colorDistribution?.BeginRound(EnsureRng());
+        // of colors for the round; in mode B it's a no-op snapshot. Also re-applies
+        // the CURRENT level's fixed color pool (LevelDefinition.allowedColors) every
+        // round, so it's never stale across a level change.
+        colorDistribution?.BeginRound(EnsureRng(), RunConfig.Level != null ? RunConfig.Level.allowedColors : null);
 
         placement.SpawnRoundBlocks(blocksPerTurn, turretsPerTurn);
 
@@ -462,8 +639,9 @@ public class GameFlowManager : MonoBehaviour
             return;
         }
 
-        // Build / ReadyToRun: show or hide the live preview line.
-        PathFlowManager.Instance?.UpdateLiveLine(path);
+        // Build / ReadyToRun: show a live preview line for EVERY connected spawn
+        // point, not just the challenge path (multi-spawn rounds redraw all routes).
+        PathFlowManager.Instance?.UpdateLiveLines(FindAllSpawnPaths());
         phase = path != null ? GamePhase.ReadyToRun : GamePhase.Build;
     }
 
@@ -637,7 +815,7 @@ public class GameFlowManager : MonoBehaviour
             string name = g.prefab != null ? g.prefab.name : "Enemy";
             int at = dst.FindIndex(e => e.name == name);
             if (at >= 0) { var e = dst[at]; e.count += g.count; dst[at] = e; }
-            else dst.Add(new WaveGenerator.WaveForecastGroup { name = name, count = g.count });
+            else dst.Add(new WaveGenerator.WaveForecastGroup { name = name, count = g.count, prefab = g.prefab });
         }
     }
 

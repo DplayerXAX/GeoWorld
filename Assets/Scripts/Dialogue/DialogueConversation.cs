@@ -18,6 +18,9 @@ public class DialogueLine
     [Tooltip("Optional id broadcast (DialogueRunner.OnLineEvent) when this line shows — hook game events / SFX.")]
     public string eventId = "";
 
+    [Tooltip("Optional gate id. If set, this line does NOT advance on click/space — it waits until some other system calls DialogueRunner.Instance.CompleteGate(id), meaning the player actually did the real thing this line is describing. Shows the passive action-needed icon (☝) instead of the continue light for just this line. Leave blank for a normal click-to-continue line. Also broadcast through OnLineEvent when the line shows, same as eventId, so a listener can arm itself for the gate.")]
+    public string actionGateId = "";
+
     public string SpeakerName =>
         !string.IsNullOrEmpty(speakerOverride) ? speakerOverride
         : (character != null ? character.displayName : "");
@@ -50,4 +53,8 @@ public class DialogueConversation : ScriptableObject
     public List<DialogueChoice> choices = new();
     [Tooltip("If there are no choices, automatically continue into this conversation.")]
     public DialogueConversation autoNext;
+
+    [Header("Skip")]
+    [Tooltip("Show a Skip button that ends this conversation outright (ignoring any remaining lines, choices, or autoNext). Leave off for anything plot- or choice-critical; on for flavor/reminder chatter the player shouldn't be forced to sit through twice. Never offered on passive (tutorial) dialogue — see DialogueRunner.")]
+    public bool skippable = false;
 }

@@ -1,15 +1,9 @@
 using UnityEngine;
 
-// 丰饶 (Abundance) — per-TURN block income that scales with the size of the
-// closed-loop structure.
-//
-// AbundanceRule claims the whole connected component that contains the cycle, so
-// "the closed-loop blocks" = that claim. Each turn (GameFlowManager.OnTurnStarted,
-// i.e. the start of every Build phase) this pays out block currency proportional
-// to the synergy's size. Subscribes on Apply, unsubscribes on Revoke.
-//
-// (Unlike the older time-based AbundanceIncomeEffect, this is turn-based and
-// size-scaled. Assign THIS to AbundanceRule.effect to use it.)
+// Abundance — per-turn block income scaling with the closed-loop structure's
+// size. Pays out on GameFlowManager.OnTurnStarted (start of each Build phase).
+// Unlike the older time-based AbundanceIncomeEffect, this is turn-based and
+// size-scaled.
 [CreateAssetMenu(menuName = "GeoWorld/Synergy/Effects/Abundance Harvest",
                  fileName = "AbundanceHarvestEffect")]
 public class AbundanceHarvestEffect : GameEffect
@@ -25,6 +19,14 @@ public class AbundanceHarvestEffect : GameEffect
 
     [Tooltip("Flat block currency added on top each turn, regardless of size.")]
     [Min(0)] public int flatBonus = 0;
+
+    [Header("Visual")]
+    [Tooltip("Colour of the harvest mote that floats up from the loop each turn.")]
+    public Color moteColor = new Color(0.95f, 0.8f, 0.3f);
+
+    // Last turn's payout + unit count, for the synergy HUD.
+    public int LastUnitCount   { get; private set; }
+    public int LastPayoutAmount { get; private set; }
 
     bool _subscribed;
 
@@ -47,9 +49,19 @@ public class AbundanceHarvestEffect : GameEffect
         int count = countMode == CountMode.Pieces
             ? SynergyEffectUtil.CountClaimedPieces(this)
             : SynergyEffectUtil.CountClaimedCells(this);
-        if (count <= 0) return;
+        LastUnitCount = count;
+        if (count <= 0) { LastPayoutAmount = 0; return; }
 
         int amount = count * Mathf.Max(0, blockPerUnit) + Mathf.Max(0, flatBonus);
-        if (amount > 0) ResourceManager.Instance?.AddBlockCurrency(amount);
+        LastPayoutAmount = amount;
+        if (amount <= 0) return;
+        ResourceManager.Instance?.AddBlockCurrency(amount);
+
+        if (SynergyEffectUtil.TryGetClaimedCellWorld(this, out var w))
+        {
+            SynergyBuffFx.Mote(w, moteColor,
+                GridSystem.instance != null ? GridSystem.instance.cellSize * 0.8f : 0.8f);
+            CurrencyFlyFx.Fly(w, isTurret: false, amount);
+        }
     }
 }

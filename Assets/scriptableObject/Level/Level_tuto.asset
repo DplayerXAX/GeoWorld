@@ -18,8 +18,11 @@ MonoBehaviour:
   runSeed: 25
   blocksPerTurn: 5
   turretsPerTurn: 3
+  synergyEnabled: 0
+  allowedColors: 01000000
+  startingShop: []
   waves: []
-  wavesToClear: 5
+  wavesToClear: 3
   objectives:
   - type: 1
     target: 3
@@ -28,15 +31,18 @@ MonoBehaviour:
   - type: 3
     target: 10
     description: 
-    optional: 0
-  - type: 6
-    target: 1
+    optional: 1
+  - type: 7
+    target: 12
     description: 
-    optional: 0
-  requireAllObjectives: 1
+    optional: 1
+  requireAllObjectives: 0
+  clearOnObjectivesComplete: 1
   unlockedByDefault: 1
   unlocks: []
   techReward: 1
+  mapBlockRewards: []
+  rewardConversation: {fileID: 0}
   isTutorial: 1
   fixedEndpoints: 1
   startCell: {x: 1, y: 0, z: 0}
@@ -50,10 +56,19 @@ MonoBehaviour:
     waitSeconds: 1
     count: 1
     inputKey: 323
+    pathLength: 15
     freeOperations: 0
+    hideInCombat: 0
+    requiredWave: 0
+    unlocksOps: 
     cameraFocus: 0
     focusZoom: 0
-    hint: Welcome god, please help us defend chaos
+    hint: O Lord, born of our unwavering faith, you have come to save us from the
+      infinite chaos.
+    conversation: {fileID: 0}
+    speaker: {fileID: 11400000, guid: 80993e3c86b4337429c2d6273c8eedc2, type: 2}
+    speakerSlot: 1
+    speakerPortrait: Default
   - kind: 5
     block: {fileID: 11400000, guid: 3bcfeb02226d44d49a6df82d6c36a1a7, type: 2}
     origin: {x: 1, y: 1, z: 1}
@@ -62,10 +77,19 @@ MonoBehaviour:
     waitSeconds: 2
     count: 1
     inputKey: 323
+    pathLength: 15
     freeOperations: 0
+    hideInCombat: 0
+    requiredWave: 0
+    unlocksOps: 
     cameraFocus: 1
     focusZoom: 3
-    hint: Enemy is spawning from this portal, trying to break and destroy our order.
+    hint: An endless horde of chaotic enemies pours forth from this Rift, determined
+      to destroy our order.
+    conversation: {fileID: 0}
+    speaker: {fileID: 11400000, guid: 80993e3c86b4337429c2d6273c8eedc2, type: 2}
+    speakerSlot: 1
+    speakerPortrait: Default
   - kind: 5
     block: {fileID: 11400000, guid: 3bcfeb02226d44d49a6df82d6c36a1a7, type: 2}
     origin: {x: 1, y: 1, z: 1}
@@ -74,10 +98,19 @@ MonoBehaviour:
     waitSeconds: 2
     count: 1
     inputKey: 323
+    pathLength: 15
     freeOperations: 0
+    hideInCombat: 0
+    requiredWave: 0
+    unlocksOps: 
     cameraFocus: 2
     focusZoom: 3
-    hint: This is our core, we need to prevent enemies from entering it.
+    hint: This is the heart of our realm. Please do not let the forces of chaos reach
+      it.
+    conversation: {fileID: 0}
+    speaker: {fileID: 11400000, guid: 80993e3c86b4337429c2d6273c8eedc2, type: 2}
+    speakerSlot: 1
+    speakerPortrait: Default
   - kind: 5
     block: {fileID: 11400000, guid: 3bcfeb02226d44d49a6df82d6c36a1a7, type: 2}
     origin: {x: 1, y: 1, z: 1}
@@ -86,10 +119,18 @@ MonoBehaviour:
     waitSeconds: 2
     count: 1
     inputKey: 323
+    pathLength: 15
     freeOperations: 0
+    hideInCombat: 0
+    requiredWave: 0
+    unlocksOps: 
     cameraFocus: 1
     focusZoom: 10
-    hint: We build our path to misguide enemies
+    hint: We shape the path before enemies, leading them away from our Core.
+    conversation: {fileID: 0}
+    speaker: {fileID: 11400000, guid: 80993e3c86b4337429c2d6273c8eedc2, type: 2}
+    speakerSlot: 1
+    speakerPortrait: Default
   - kind: 5
     block: {fileID: 11400000, guid: 3bcfeb02226d44d49a6df82d6c36a1a7, type: 2}
     origin: {x: 1, y: 1, z: 1}
@@ -98,10 +139,18 @@ MonoBehaviour:
     waitSeconds: 2
     count: 1
     inputKey: 323
+    pathLength: 15
     freeOperations: 0
+    hideInCombat: 0
+    requiredWave: 0
+    unlocksOps: 
     cameraFocus: 0
     focusZoom: 0
-    hint: We use blocks to build path, and turret to attack enemies
+    hint: With blocks, we shape their path. With turrets, we strike them down.
+    conversation: {fileID: 0}
+    speaker: {fileID: 11400000, guid: 80993e3c86b4337429c2d6273c8eedc2, type: 2}
+    speakerSlot: 1
+    speakerPortrait: Default
   - kind: 5
     block: {fileID: 11400000, guid: 3bcfeb02226d44d49a6df82d6c36a1a7, type: 2}
     origin: {x: 1, y: 1, z: 1}
@@ -110,10 +159,18 @@ MonoBehaviour:
     waitSeconds: 2
     count: 1
     inputKey: 102
+    pathLength: 15
     freeOperations: 0
+    hideInCombat: 0
+    requiredWave: 0
+    unlocksOps: 
     cameraFocus: 0
     focusZoom: 0
-    hint: Press F to open store
+    hint: (Press F to open the shop)
+    conversation: {fileID: 0}
+    speaker: {fileID: 0}
+    speakerSlot: 1
+    speakerPortrait: Default
   - kind: 6
     block: {fileID: 11400000, guid: eb476e18de9d37e4dbc97c8247017e54, type: 2}
     origin: {x: 1, y: 0, z: 1}
@@ -122,10 +179,18 @@ MonoBehaviour:
     waitSeconds: 0
     count: 1
     inputKey: 32
+    pathLength: 15
     freeOperations: 0
+    hideInCombat: 0
+    requiredWave: 0
+    unlocksOps: 
     cameraFocus: 0
     focusZoom: 0
-    hint: Purchase the L-shape block from the panel
+    hint: (Click and purchase the L-shape block!)
+    conversation: {fileID: 0}
+    speaker: {fileID: 0}
+    speakerSlot: 1
+    speakerPortrait: Default
   - kind: 0
     block: {fileID: 11400000, guid: eb476e18de9d37e4dbc97c8247017e54, type: 2}
     origin: {x: 1, y: 0, z: 1}
@@ -134,10 +199,18 @@ MonoBehaviour:
     waitSeconds: 0
     count: 1
     inputKey: 32
+    pathLength: 15
     freeOperations: 0
+    hideInCombat: 0
+    requiredWave: 0
+    unlocksOps: 
     cameraFocus: 0
     focusZoom: 0
-    hint: Place the block on the white area, Connecting the portal and the core
+    hint: Please place the block on the white area, Connecting the rift and our core.
+    conversation: {fileID: 0}
+    speaker: {fileID: 11400000, guid: 80993e3c86b4337429c2d6273c8eedc2, type: 2}
+    speakerSlot: 1
+    speakerPortrait: Default
   - kind: 5
     block: {fileID: 11400000, guid: eb476e18de9d37e4dbc97c8247017e54, type: 2}
     origin: {x: 1, y: 0, z: 1}
@@ -146,11 +219,19 @@ MonoBehaviour:
     waitSeconds: 2
     count: 1
     inputKey: 323
+    pathLength: 15
     freeOperations: 0
+    hideInCombat: 0
+    requiredWave: 0
+    unlocksOps: 
     cameraFocus: 0
     focusZoom: 0
-    hint: After they are connected, enemies tend to move towards core through shortest
-      path
+    hint: Once the path is complete, the forces of chaos will march toward the Core
+      along the SHORTEST route.
+    conversation: {fileID: 0}
+    speaker: {fileID: 11400000, guid: 80993e3c86b4337429c2d6273c8eedc2, type: 2}
+    speakerSlot: 1
+    speakerPortrait: Default
   - kind: 8
     block: {fileID: 0}
     origin: {x: 0, y: 0, z: 1}
@@ -159,10 +240,18 @@ MonoBehaviour:
     waitSeconds: 2
     count: 1
     inputKey: 32
-    freeOperations: 1
+    pathLength: 15
+    freeOperations: 0
+    hideInCombat: 0
+    requiredWave: 0
+    unlocksOps:
     cameraFocus: 0
     focusZoom: 0
-    hint: Now try to purchase a turret for denfense
+    hint: Allow us to witness your power. Buy a turret from the shop.
+    conversation: {fileID: 0}
+    speaker: {fileID: 11400000, guid: 80993e3c86b4337429c2d6273c8eedc2, type: 2}
+    speakerSlot: 1
+    speakerPortrait: Default
   - kind: 0
     block: {fileID: 11400000, guid: 3bcfeb02226d44d49a6df82d6c36a1a7, type: 2}
     origin: {x: 0, y: 1, z: 1}
@@ -171,10 +260,60 @@ MonoBehaviour:
     waitSeconds: 2
     count: 1
     inputKey: 32
+    pathLength: 15
     freeOperations: 0
+    hideInCombat: 0
+    requiredWave: 0
+    unlocksOps: 
     cameraFocus: 0
     focusZoom: 0
-    hint: After placed on the block, turrets would attack enemies in range
+    hint: Set it down on the marked spot, guarding where the enemy first steps onto
+      the path.
+    conversation: {fileID: 0}
+    speaker: {fileID: 11400000, guid: 80993e3c86b4337429c2d6273c8eedc2, type: 2}
+    speakerSlot: 1
+    speakerPortrait: Default
+  - kind: 8
+    block: {fileID: 0}
+    origin: {x: 0, y: 0, z: 1}
+    rotation90: {x: 1, y: 0, z: 0}
+    cellsOverride: []
+    waitSeconds: 2
+    count: 1
+    inputKey: 32
+    pathLength: 15
+    freeOperations: 0
+    hideInCombat: 0
+    requiredWave: 0
+    unlocksOps:
+    cameraFocus: 0
+    focusZoom: 0
+    hint: One tower alone cannot hold this line. Buy a second turret.
+    conversation: {fileID: 0}
+    speaker: {fileID: 11400000, guid: 80993e3c86b4337429c2d6273c8eedc2, type: 2}
+    speakerSlot: 1
+    speakerPortrait: Default
+  - kind: 0
+    block: {fileID: 11400000, guid: 3bcfeb02226d44d49a6df82d6c36a1a7, type: 2}
+    origin: {x: 4, y: 1, z: 2}
+    rotation90: {x: 0, y: 0, z: 0}
+    cellsOverride: []
+    waitSeconds: 2
+    count: 1
+    inputKey: 32
+    pathLength: 15
+    freeOperations: 0
+    hideInCombat: 0
+    requiredWave: 0
+    unlocksOps: 
+    cameraFocus: 0
+    focusZoom: 0
+    hint: Place this one at the far end, so the two of them cover the whole road
+      to the Core.
+    conversation: {fileID: 0}
+    speaker: {fileID: 11400000, guid: 80993e3c86b4337429c2d6273c8eedc2, type: 2}
+    speakerSlot: 1
+    speakerPortrait: Default
   - kind: 9
     block: {fileID: 0}
     origin: {x: 1, y: 1, z: 1}
@@ -183,10 +322,18 @@ MonoBehaviour:
     waitSeconds: 2
     count: 1
     inputKey: 32
+    pathLength: 15
     freeOperations: 0
+    hideInCombat: 0
+    requiredWave: 0
+    unlocksOps: 
     cameraFocus: 0
     focusZoom: 0
-    hint: Click any placed items for detail
+    hint: (You may click any placed items for detail)
+    conversation: {fileID: 0}
+    speaker: {fileID: 0}
+    speakerSlot: 1
+    speakerPortrait: Default
   - kind: 2
     block: {fileID: 11400000, guid: 3bcfeb02226d44d49a6df82d6c36a1a7, type: 2}
     origin: {x: 1, y: 1, z: 1}
@@ -195,8 +342,104 @@ MonoBehaviour:
     waitSeconds: 2
     count: 1
     inputKey: 32
+    pathLength: 15
     freeOperations: 1
+    hideInCombat: 0
+    requiredWave: 0
+    unlocksOps: 02000000
     cameraFocus: 0
     focusZoom: 0
-    hint: After finish editing for the round, Press space to start wave, trying to
-      defeat all the enemies
+    hint: My Lord, when your preparations are complete, press Space to begin the
+      wave. Drive back the forces of chaos.
+    conversation: {fileID: 0}
+    speaker: {fileID: 11400000, guid: 80993e3c86b4337429c2d6273c8eedc2, type: 2}
+    speakerSlot: 1
+    speakerPortrait: Default
+  - kind: 5
+    block: {fileID: 11400000, guid: 3bcfeb02226d44d49a6df82d6c36a1a7, type: 2}
+    origin: {x: 1, y: 1, z: 1}
+    rotation90: {x: 1, y: 0, z: 0}
+    cellsOverride: []
+    waitSeconds: 2
+    count: 1
+    inputKey: 323
+    pathLength: 15
+    freeOperations: 1
+    hideInCombat: 1
+    requiredWave: 0
+    unlocksOps: 
+    cameraFocus: 0
+    focusZoom: 0
+    hint: Your wisdom guides us, My Lord.
+    conversation: {fileID: 0}
+    speaker: {fileID: 11400000, guid: 80993e3c86b4337429c2d6273c8eedc2, type: 2}
+    speakerSlot: 1
+    speakerPortrait: Default
+  - kind: 5
+    block: {fileID: 11400000, guid: 3bcfeb02226d44d49a6df82d6c36a1a7, type: 2}
+    origin: {x: 1, y: 1, z: 1}
+    rotation90: {x: 1, y: 0, z: 0}
+    cellsOverride: []
+    waitSeconds: 2
+    count: 1
+    inputKey: 323
+    pathLength: 15
+    freeOperations: 1
+    hideInCombat: 0
+    requiredWave: 0
+    unlocksOps: 
+    cameraFocus: 0
+    focusZoom: 0
+    hint: Each enemy that reaches the Core drains 1 Health. Please do not let our
+      strength be extinguished.
+    conversation: {fileID: 0}
+    speaker: {fileID: 11400000, guid: 80993e3c86b4337429c2d6273c8eedc2, type: 2}
+    speakerSlot: 1
+    speakerPortrait: Default
+  - kind: 5
+    block: {fileID: 11400000, guid: 3bcfeb02226d44d49a6df82d6c36a1a7, type: 2}
+    origin: {x: 1, y: 1, z: 1}
+    rotation90: {x: 1, y: 0, z: 0}
+    cellsOverride: []
+    waitSeconds: 2
+    count: 1
+    inputKey: 323
+    pathLength: 15
+    freeOperations: 1
+    hideInCombat: 0
+    requiredWave: 0
+    unlocksOps: 
+    cameraFocus: 0
+    focusZoom: 0
+    hint: A short path gives the enemy an advantage. Let's reshape it to slow them
+      down.
+    conversation: {fileID: 0}
+    speaker: {fileID: 11400000, guid: 80993e3c86b4337429c2d6273c8eedc2, type: 2}
+    speakerSlot: 1
+    speakerPortrait: Default
+  - kind: 13
+    block: {fileID: 11400000, guid: 3bcfeb02226d44d49a6df82d6c36a1a7, type: 2}
+    origin: {x: 1, y: 1, z: 1}
+    rotation90: {x: 1, y: 0, z: 0}
+    cellsOverride: []
+    waitSeconds: 2
+    count: 1
+    inputKey: 323
+    pathLength: 10
+    freeOperations: 1
+    hideInCombat: 0
+    requiredWave: 0
+    unlocksOps: 
+    cameraFocus: 0
+    focusZoom: 0
+    hint: (Try moving or adding  blocks to force enemies to take a path longer than
+      10 before reaching the Core!)
+    conversation: {fileID: 0}
+    speaker: {fileID: 0}
+    speakerSlot: 1
+    speakerPortrait: Default
+  startingLayout: {fileID: 0}
+  overrideEndpointDistance: 0
+  endpointMinDistance: 5
+  endpointMaxDistance: 10
+  mechanics: []

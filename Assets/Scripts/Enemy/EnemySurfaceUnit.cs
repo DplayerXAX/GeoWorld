@@ -118,10 +118,26 @@ public class EnemySurfaceUnit : MonoBehaviour
             Die();
     }
 
+    // Restores health, capped at maxHealth. Never revives a dead enemy. Returns
+    // how much was actually restored so callers can skip FX on a full-HP target.
+    public int Heal(int amount)
+    {
+        if (amount <= 0 || _health <= 0 || _health >= maxHealth) return 0;
+        int before = _health;
+        _health = Mathf.Min(maxHealth, _health + amount);
+        return _health - before;
+    }
+
     public void SetSpeedMultiplier(float multiplier)
     {
         _temporarySpeedMultiplier = Mathf.Max(0.01f, multiplier);
     }
+
+    // The reversible slow/haste channel on its own (1 = untouched). Read by
+    // StatusEffectWatcher to decide whether to show buff / debuff arrows —
+    // baseSpeedMultiplier is deliberately excluded, since that's the archetype's
+    // authored speed, not a status effect.
+    public float TemporarySpeedMultiplier => _temporarySpeedMultiplier;
 
     public void AddExternalDisplacement(Vector3 delta)
     {

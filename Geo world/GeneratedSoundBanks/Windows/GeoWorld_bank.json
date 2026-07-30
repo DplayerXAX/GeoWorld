@@ -10,7 +10,7 @@
     "Type": "User",
     "GUID": "{FBAC0406-FA36-4CC0-8121-80F7B6376C7E}",
     "Language": "SFX",
-    "Hash": "{F0D801FE-3DFF-080B-0A4B-9EB0800FF48C}",
+    "Hash": "{2D37EA41-B34D-B514-45E5-C724D0DFDBA0}",
     "ObjectPath": "\\SoundBanks\\Default Work Unit\\GeoWorld_bank",
     "ShortName": "GeoWorld_bank",
     "Path": "GeoWorld_bank.bnk",
@@ -40,12 +40,12 @@
       "CachePath": "10/{106A5B23-34ED-F388-6F70-52AFE86A2EE4}.wem"
      },
      {
-      "Id": "81791480",
+      "Id": "104523021",
       "Language": "SFX",
       "Streaming": "false",
       "Location": "Memory",
-      "ShortName": "Geo world\\Originals\\SFX\\geo fight.wav",
-      "CachePath": "D3/{D3EE669F-CD4E-7327-6AA9-D72D108B615F}.wem"
+      "ShortName": "Geo world\\Originals\\SFX\\freesound_community-medium-text-blip-14855.wav",
+      "CachePath": "AF/{AFBBD0F8-9787-F038-A381-B14221E65A64}.wem"
      },
      {
       "Id": "135888558",
@@ -70,6 +70,14 @@
       "Location": "Memory",
       "ShortName": "2.wav",
       "CachePath": "5A/{5A86A6C0-68E1-5E45-F13B-F453451E2AC5}.wem"
+     },
+     {
+      "Id": "265774773",
+      "Language": "SFX",
+      "Streaming": "false",
+      "Location": "Memory",
+      "ShortName": "Geo world\\Originals\\SFX\\time drain.wav",
+      "CachePath": "83/{8335D484-A790-CAD0-9284-05AC887809DD}.wem"
      },
      {
       "Id": "267990303",
@@ -104,6 +112,14 @@
       "CachePath": "7A/{7A4C3AA1-D3E7-65B5-BCA8-ADF61F0AA6F5}.wem"
      },
      {
+      "Id": "349089346",
+      "Language": "SFX",
+      "Streaming": "false",
+      "Location": "Memory",
+      "ShortName": "Geo world\\Originals\\SFX\\shop open.wav",
+      "CachePath": "0D/{0DF2EE97-5D8F-018A-E60D-080756789142}.wem"
+     },
+     {
       "Id": "397057705",
       "Language": "SFX",
       "Streaming": "false",
@@ -128,6 +144,14 @@
       "CachePath": "3B/{3BA3F625-0E4B-99CD-B686-D30C81E1F10A}.wem"
      },
      {
+      "Id": "519444923",
+      "Language": "SFX",
+      "Streaming": "false",
+      "Location": "Memory",
+      "ShortName": "Geo world\\Originals\\SFX\\shop close.wav",
+      "CachePath": "72/{72206AC2-7510-60C2-3E98-90DDAB59A817}.wem"
+     },
+     {
       "Id": "529299935",
       "Language": "SFX",
       "Streaming": "false",
@@ -150,6 +174,14 @@
       "Location": "Memory",
       "ShortName": "bgm_Jump.wav",
       "CachePath": "28/{28D4672F-2484-1CD6-8135-CDAD372308AD}.wem"
+     },
+     {
+      "Id": "574625576",
+      "Language": "SFX",
+      "Streaming": "false",
+      "Location": "Memory",
+      "ShortName": "Geo world\\Originals\\SFX\\select.wav",
+      "CachePath": "9D/{9D399CF8-EE15-22F5-5126-1EAACF32A447}.wem"
      },
      {
       "Id": "633751974",
@@ -182,6 +214,30 @@
       "Location": "Memory",
       "ShortName": "bgm_bright.wav",
       "CachePath": "80/{802F01CA-1B7C-C650-FF9E-451F3BE2007C}.wem"
+     },
+     {
+      "Id": "910080498",
+      "Language": "SFX",
+      "Streaming": "false",
+      "Location": "Memory",
+      "ShortName": "geo fight.wav",
+      "CachePath": "93/{9315BEBF-32E3-5C09-B5B1-CF8354B77B71}.wem"
+     },
+     {
+      "Id": "969998505",
+      "Language": "SFX",
+      "Streaming": "false",
+      "Location": "Memory",
+      "ShortName": "Piecing together.wav",
+      "CachePath": "07/{07380261-5851-21B4-FB73-0AA3725DE03D}.wem"
+     },
+     {
+      "Id": "1041853334",
+      "Language": "SFX",
+      "Streaming": "false",
+      "Location": "Memory",
+      "ShortName": "Geo world\\Originals\\SFX\\Firmament's Farewell.wav",
+      "CachePath": "05/{05699BA4-CFCD-889D-F3BE-AFA55F83C841}.wem"
      },
      {
       "Id": "1062488858",
@@ -222,6 +278,18 @@
       ]
      },
      {
+      "Id": "316156164",
+      "Name": "Battle_Loop",
+      "ObjectPath": "\\Events\\Default Work Unit\\Battle_Loop",
+      "GUID": "{6E21EF0F-E595-4270-976A-19DECCBC9F2C}",
+      "DurationType": "Infinite",
+      "MediaRefs": [
+       {
+        "Id": "910080498"
+       }
+      ]
+     },
+     {
       "Id": "1660099773",
       "Name": "Bdim",
       "ObjectPath": "\\Events\\Default Work Unit\\Bdim",
@@ -257,13 +325,7 @@
         },
         "MediaRefs": [
          {
-          "Id": "566543099"
-         },
-         {
-          "Id": "759153527"
-         },
-         {
-          "Id": "888948449"
+          "Id": "969998505"
          }
         ]
        },
@@ -276,7 +338,7 @@
         },
         "MediaRefs": [
          {
-          "Id": "81791480"
+          "Id": "910080498"
          }
         ]
        }
@@ -323,6 +385,20 @@
       ]
      },
      {
+      "Id": "2833906173",
+      "Name": "Ending_Loop",
+      "ObjectPath": "\\Events\\Default Work Unit\\Ending_Loop",
+      "GUID": "{DFE390B2-FB1A-47F1-98F5-5F86CB97A85F}",
+      "DurationType": "OneShot",
+      "DurationMin": "0",
+      "DurationMax": "0",
+      "MediaRefs": [
+       {
+        "Id": "1041853334"
+       }
+      ]
+     },
+     {
       "Id": "84696441",
       "Name": "F",
       "ObjectPath": "\\Events\\Default Work Unit\\F",
@@ -348,8 +424,8 @@
       "ObjectPath": "\\Events\\Default Work Unit\\fight_finish",
       "GUID": "{F86A791E-8754-4CBE-BDA1-C0642D056C88}",
       "DurationType": "OneShot",
-      "DurationMin": "2",
-      "DurationMax": "2",
+      "DurationMin": "2.125",
+      "DurationMax": "2.125",
       "MediaRefs": [
        {
         "Id": "532162984"
@@ -362,8 +438,8 @@
       "ObjectPath": "\\Events\\Default Work Unit\\fight_start",
       "GUID": "{ECE38540-761C-4C47-94DE-38127713B664}",
       "DurationType": "OneShot",
-      "DurationMin": "2",
-      "DurationMax": "2",
+      "DurationMin": "2.125",
+      "DurationMax": "2.125",
       "MediaRefs": [
        {
         "Id": "480639662"
@@ -387,6 +463,30 @@
        },
        {
         "Id": "799708269"
+       }
+      ]
+     },
+     {
+      "Id": "240925188",
+      "Name": "Idle_Loop",
+      "ObjectPath": "\\Events\\Default Work Unit\\Idle_Loop",
+      "GUID": "{0B040373-40A3-4150-A014-B9601F6A69C9}",
+      "DurationType": "Infinite",
+      "MediaRefs": [
+       {
+        "Id": "969998505"
+       }
+      ]
+     },
+     {
+      "Id": "4131907033",
+      "Name": "Piece_Normal",
+      "ObjectPath": "\\Events\\Default Work Unit\\Piece_Normal",
+      "GUID": "{FFFC71CD-910F-4439-A444-F74F4054F8BC}",
+      "DurationType": "Infinite",
+      "MediaRefs": [
+       {
+        "Id": "969998505"
        }
       ]
      },
@@ -521,6 +621,92 @@
         "Id": "282693327"
        }
       ]
+     },
+     {
+      "Id": "1432588725",
+      "Name": "Select",
+      "ObjectPath": "\\Events\\Default Work Unit\\Select",
+      "GUID": "{1B5B7CDE-BAF8-4611-AAA9-532EB27502B4}",
+      "DurationType": "OneShot",
+      "DurationMin": "1.2277551",
+      "DurationMax": "1.2277551",
+      "MediaRefs": [
+       {
+        "Id": "574625576"
+       }
+      ]
+     },
+     {
+      "Id": "2506379688",
+      "Name": "Shop_close",
+      "ObjectPath": "\\Events\\Default Work Unit\\Shop_close",
+      "GUID": "{A67B7153-8708-4B2D-8F3D-CB7944250760}",
+      "DurationType": "OneShot",
+      "DurationMin": "1.2277551",
+      "DurationMax": "1.2277551",
+      "MediaRefs": [
+       {
+        "Id": "519444923"
+       }
+      ]
+     },
+     {
+      "Id": "839522188",
+      "Name": "Shop_open",
+      "ObjectPath": "\\Events\\Default Work Unit\\Shop_open",
+      "GUID": "{D8D4E37E-6751-48CA-9E5B-ADE35555A299}",
+      "DurationType": "OneShot",
+      "DurationMin": "1.5412245",
+      "DurationMax": "1.5412245",
+      "MediaRefs": [
+       {
+        "Id": "349089346"
+       }
+      ]
+     },
+     {
+      "Id": "1387752797",
+      "Name": "TextBlip",
+      "ObjectPath": "\\Events\\Default Work Unit\\TextBlip",
+      "GUID": "{DA006521-4F4D-4E2A-9B6E-AF0402E7BF32}",
+      "DurationType": "OneShot",
+      "DurationMin": "8.832",
+      "DurationMax": "8.832",
+      "MediaRefs": [
+       {
+        "Id": "104523021"
+       }
+      ]
+     },
+     {
+      "Id": "3258153068",
+      "Name": "TimeDrain",
+      "ObjectPath": "\\Events\\Default Work Unit\\TimeDrain",
+      "GUID": "{E43C13E8-CAF7-4BCA-BA8F-99755EFA551A}",
+      "DurationType": "Infinite",
+      "MediaRefs": [
+       {
+        "Id": "265774773"
+       }
+      ]
+     },
+     {
+      "Id": "966390882",
+      "Name": "title_Loop",
+      "ObjectPath": "\\Events\\Default Work Unit\\title_Loop",
+      "GUID": "{F41BB254-1CE3-4FFB-8FF6-585EE39774F9}",
+      "DurationType": "Infinite",
+      "MediaRefs": [
+       {
+        "Id": "566543099"
+       },
+       {
+        "Id": "759153527"
+       },
+       {
+        "Id": "888948449"
+       }
+      ]
      }
     ],
     "GameParameters": [
@@ -622,6 +808,6 @@
     ]
    }
   ],
-  "FileHash": "{2A539AC4-0909-B8A0-F9AD-9A4F419F32E7}"
+  "FileHash": "{476702B5-CDDF-7C3E-747E-BB023AA3E788}"
  }
 }

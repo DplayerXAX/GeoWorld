@@ -19,16 +19,32 @@ using UnityEngine;
 //        • Yes + absorbAdditionalPieces? Try grow claim from unclaimed.
 //          If new claim is strictly bigger / higher tier → Revoke old, Apply new
 //   2. Compute unclaimed = AllPieces - all active claims
-//   3. For each inactive rule sorted by priority desc:
-//        • TryEvaluate against unclaimed
+//   3. For each rule sorted by priority desc, repeatedly:
+//        • TryEvaluate against the (freshly recomputed) unclaimed pool
 //        • Activate + Apply if satisfied, subtract pieces from unclaimed
+//        • Loop again — the SAME rule can claim a SECOND, disjoint set of
+//          pieces this pass (e.g. two separate Abundance loops), stopping
+//          only once TryEvaluate fails against what's left.
 //
-// First-locked semantics (Q5): once a rule claims pieces, no other rule
-// sees them. Active claims survive as long as their pieces still satisfy
-// the rule; deactivating them releases pieces back to the unclaimed pool.
+// First-locked semantics (Q5): once a rule claims pieces, no other rule —
+// and no OTHER instance of the same rule — sees them. Active claims survive
+// as long as their pieces still satisfy the rule; deactivating them releases
+// pieces back to the unclaimed pool. Multiple ActiveSynergy instances of the
+// SAME rule can coexist simultaneously (each an independent, non-overlapping
+// claim); GameEffect Apply/Revoke calls are ref-counted per (rule, tier) so
+// a shared effect asset is still only Applied once no matter how many
+// simultaneous instances hold it, and Revoked only once the last one drops.
 public class SynergyEvaluator : MonoBehaviour
 {
     public static SynergyEvaluator Instance;
+
+    // Set by GameFlowManager.ApplyRunConfig from LevelDefinition.synergyEnabled
+    // (true in Endless, since there's no level asset to read). The single choke
+    // point both OnPiecePlaced/OnPieceRemoved gate on — when false, placing or
+    // picking up a block never touches the board, never runs a rule, never fires
+    // an activation. BoardSnapshot has no consumers outside this file, so there's
+    // nothing else that needs to keep tracking pieces when synergies are off.
+    public static bool Enabled = true;
 
     [Header("Rules")]
     [Tooltip("All synergy rule assets. Evaluator sorts by .priority each pass.")]
@@ -40,7 +56,9 @@ public class SynergyEvaluator : MonoBehaviour
     readonly BoardSnapshot              _board      = new();
     readonly List<ActiveSynergy>        _actives    = new();
     readonly Dictionary<int, PlacedPiece> _byId     = new();
+    readonly Dictionary<(SynergyRule rule, int tier), int> _effectRefCounts = new();
     int _nextId;
+    int _nextActiveId;
 
     public BoardSnapshot Board   => _board;
     public IReadOnlyList<ActiveSynergy> Actives => _actives;
@@ -73,6 +91,8 @@ public class SynergyEvaluator : MonoBehaviour
 
     public PlacedPiece OnPiecePlaced(BlockData data, BlockColor color, Vector3Int[] worldCells)
     {
+        if (!Enabled) return null;   // caller stores the null and hands it right back to OnPieceRemoved — harmless
+
         var piece = new PlacedPiece(_nextId++, data, color, worldCells);
         if (!_board.AddPiece(piece))
         {
@@ -106,13 +126,56 @@ public class SynergyEvaluator : MonoBehaviour
 
     public PlacedPiece GetPieceById(int id) => _byId.TryGetValue(id, out var p) ? p : null;
 
+    // ── Jamming (EnemySynergyJammer) ────────────────────────────────────────
+
+    // The active synergy claiming `cell`, or null. Used by jammer enemies to
+    // find what they're standing on.
+    public ActiveSynergy FindActiveAtCell(Vector3Int cell)
+    {
+        for (int i = 0; i < _actives.Count; i++)
+        {
+            var a = _actives[i];
+            if (a?.claimedPieces == null) continue;
+            foreach (var p in a.claimedPieces)
+            {
+                if (p?.cells == null) continue;
+                for (int k = 0; k < p.cells.Length; k++)
+                    if (p.cells[k] == cell) return a;
+            }
+        }
+        return null;
+    }
+
+    // Temporarily kill/restore an active's EFFECT without touching its claim, so
+    // the synergy stays on the board (and keeps its pieces locked) while a jammer
+    // stands on it. Ref-counted: only the first jammer revokes, only the last one
+    // to leave re-applies.
+    public void SetSuppressed(ActiveSynergy active, bool on)
+    {
+        if (active == null || active.rule == null) return;
+
+        int before = active.suppressCount;
+        active.suppressCount = Mathf.Max(0, before + (on ? 1 : -1));
+        if ((before > 0) == (active.suppressCount > 0)) return;   // no edge crossed
+
+        var game = GameFlowManager.Instance;
+        if (active.suppressCount > 0) RefRevoke(active.rule, active.tier, game);
+        else                          RefApply(active.rule, active.tier, game);
+
+        OnTierChanged?.Invoke(active.rule, active.suppressCount > 0 ? active.tier : 0,
+                                           active.suppressCount > 0 ? 0 : active.tier);
+        OnClaimChanged?.Invoke(active.rule, active);
+    }
+
     public void ResetForNewRun()
     {
         RevokeAll();
         _board.Clear();
         _byId.Clear();
         _actives.Clear();
+        _effectRefCounts.Clear();
         _nextId = 0;
+        _nextActiveId = 0;
 
         // Clear cached version on every rule so the next run starts fresh.
         if (rules != null)
@@ -146,7 +209,10 @@ public class SynergyEvaluator : MonoBehaviour
             if (needCheck && !rule.IsStillSatisfied(_board, active.claimedPieces))
             {
                 int oldTier = active.tier;
-                SafeRevoke(rule, oldTier, game);
+                // A suppressed active's effect is ALREADY revoked (a jammer is
+                // sitting on it) — revoking again would drop the shared refcount
+                // twice and silently kill a sibling instance's effect.
+                if (!active.Suppressed) RefRevoke(rule, oldTier, game);
                 _actives.RemoveAt(i);
                 // After revoke, Pass 2 should be able to re-try this rule
                 // immediately at the current version (claim just collapsed,
@@ -158,35 +224,63 @@ public class SynergyEvaluator : MonoBehaviour
                 continue;
             }
 
-            // Only try absorbing when this rule's pool actually changed.
-            if (needCheck && rule.absorbAdditionalPieces)
-                TryAbsorb(active, game);
+            if (needCheck)
+            {
+                bool absorbed = rule.absorbAdditionalPieces && TryAbsorb(active, game);
+                // TryAbsorb only notices GROWTH (or a same-count set shift for
+                // filter rules). A pure SHRINK — a piece scrubbed out of this
+                // claim by OnPieceRemoved just before this pass ran — leaves
+                // both sides of TryAbsorb's comparison already shrunk, so it
+                // can never detect "we just lost a piece" and never notifies.
+                // Fire unconditionally here so FX listeners (e.g. flower
+                // decorations) still learn the claim changed and can tear
+                // down decorations for the piece that left.
+                if (!absorbed) OnClaimChanged?.Invoke(rule, active);
+            }
         }
 
-        // ── Pass 2: try to activate inactive rules ──────────────────────
-        var inactive = CollectInactiveSorted();
-        for (int i = 0; i < inactive.Count; i++)
+        // ── Pass 2: try to activate/grow every rule, priority order ─────
+        // Unlike before, a rule is no longer skipped just because it already
+        // has an active claim — the SAME rule can pick up a second, disjoint
+        // cluster of pieces this pass (e.g. two separate Abundance loops),
+        // each becoming its own ActiveSynergy. ComputeUnclaimed() already
+        // excludes every existing claim (including sibling instances of the
+        // same rule), so a piece locked into one loop can never be pulled
+        // into another loop of the same rule.
+        var sorted = SortedRules();
+        for (int i = 0; i < sorted.Count; i++)
         {
-            var rule = inactive[i];
+            var rule = sorted[i];
+
+            // Rules that opt out of multi-instance (Enlightenment: one cube
+            // levels up in place, it doesn't fire from a second unrelated
+            // cube) never get a NEW instance while one is already active —
+            // growth for that existing instance is Pass 1's TryAbsorb job.
+            if (!rule.allowMultipleInstances && HasActive(rule)) continue;
 
             // Skip rules whose relevant pool hasn't changed since last try.
-            // (If a previous attempt already returned false, nothing new is
-            // there to satisfy it.)
             int curVer = _board.VersionFor(rule.color);
             if (rule.LastEvalVersion == curVer) continue;
             rule.LastEvalVersion = curVer;
 
-            var unclaimed = ComputeUnclaimed();
-            if (unclaimed.Count == 0) break;
-
-            if (rule.TryEvaluate(_board, unclaimed, out var claim, out var tier) && claim != null && claim.Count > 0)
+            const int maxInstancesPerRulePerPass = 32; // safety cap, not a design limit
+            for (int guard = 0; guard < maxInstancesPerRulePerPass; guard++)
             {
-                var newActive = new ActiveSynergy(rule, claim, tier);
+                var unclaimed = ComputeUnclaimed();
+                if (unclaimed.Count == 0) break;
+
+                if (!rule.TryEvaluate(_board, unclaimed, out var claim, out var tier) || claim == null || claim.Count == 0)
+                    break;
+
+                var newActive = new ActiveSynergy(_nextActiveId++, rule, claim, tier);
+                SnapshotHighlightCells(rule, newActive);
                 _actives.Add(newActive);
-                SafeApply(rule, tier, game);
+                RefApply(rule, tier, game);
                 if (verboseLogging) Debug.Log($"[Synergy] ✓ {rule.displayName} activated at tier {tier} ({claim.Count} pieces)");
                 OnTierChanged?.Invoke(rule, 0, tier);
                 OnClaimChanged?.Invoke(rule, newActive);
+
+                if (!rule.allowMultipleInstances) break; // exactly one instance for this rule
             }
         }
     }
@@ -195,14 +289,16 @@ public class SynergyEvaluator : MonoBehaviour
     // Commits when the result is strictly bigger, higher tier, OR a different
     // set of pieces (rule may have shifted its "best fit" to a different
     // configuration of the same count — filter-state-dependent visualizers
-    // need to refresh in that case).
-    void TryAbsorb(ActiveSynergy active, GameFlowManager game)
+    // need to refresh in that case). Returns true iff it committed a change
+    // (and therefore already fired OnClaimChanged) — false means the caller
+    // should still notify listeners itself if the claim shrank.
+    bool TryAbsorb(ActiveSynergy active, GameFlowManager game)
     {
         var extended = new HashSet<PlacedPiece>(active.claimedPieces);
         foreach (var p in ComputeUnclaimed()) extended.Add(p);
 
-        if (!active.rule.TryEvaluate(_board, extended, out var newClaim, out var newTier)) return;
-        if (newClaim == null) return;
+        if (!active.rule.TryEvaluate(_board, extended, out var newClaim, out var newTier)) return false;
+        if (newClaim == null) return false;
 
         bool grew    = newClaim.Count > active.claimedPieces.Count;
         bool leveled = newTier > active.tier;
@@ -212,13 +308,16 @@ public class SynergyEvaluator : MonoBehaviour
         // even though the piece count stays the same.
         bool setMoved = active.rule is ICellHighlightFilter
                      && !newClaim.SetEquals(active.claimedPieces);
-        if (!grew && !leveled && !setMoved) return;
+        if (!grew && !leveled && !setMoved) return false;
 
         int oldTier = active.tier;
-        SafeRevoke(active.rule, oldTier, game);
+        // While jammed the effect is off; just move the claim and let the jammer's
+        // release re-apply at whatever tier it ends up on.
+        if (!active.Suppressed) RefRevoke(active.rule, oldTier, game);
         active.claimedPieces = newClaim;
         active.tier          = newTier;
-        SafeApply(active.rule, newTier, game);
+        SnapshotHighlightCells(active.rule, active);
+        if (!active.Suppressed) RefApply(active.rule, newTier, game);
 
         if (verboseLogging)
             Debug.Log($"[Synergy] ↑ {active.rule.displayName} absorbed → tier {oldTier}→{newTier}, {newClaim.Count} pieces");
@@ -228,6 +327,27 @@ public class SynergyEvaluator : MonoBehaviour
 
         // Always fire for absorb — claimed pieces changed even if tier didn't.
         OnClaimChanged?.Invoke(active.rule, active);
+        return true;
+    }
+
+    // Snapshot ICellHighlightFilter.ShouldHighlight(...) results for this
+    // claim's cells, right after the rule evaluated it — before any later
+    // TryEvaluate call (for another instance of the same rule, or another
+    // absorb attempt) can overwrite the rule's own cached filter state.
+    // Rules that don't implement the filter leave `highlightCells` null,
+    // which every consumer treats as "everything in the claim counts".
+    static void SnapshotHighlightCells(SynergyRule rule, ActiveSynergy active)
+    {
+        if (rule is not ICellHighlightFilter filter) { active.highlightCells = null; return; }
+
+        var cells = new HashSet<Vector3Int>();
+        foreach (var p in active.claimedPieces)
+        {
+            if (p?.cells == null) continue;
+            for (int k = 0; k < p.cells.Length; k++)
+                if (filter.ShouldHighlight(p.cells[k])) cells.Add(p.cells[k]);
+        }
+        active.highlightCells = cells;
     }
 
     // ── Helpers ─────────────────────────────────────────────────────────
@@ -240,25 +360,20 @@ public class SynergyEvaluator : MonoBehaviour
         return u;
     }
 
-    List<SynergyRule> CollectInactiveSorted()
+    bool HasActive(SynergyRule rule)
+    {
+        for (int i = 0; i < _actives.Count; i++)
+            if (_actives[i].rule == rule) return true;
+        return false;
+    }
+
+    List<SynergyRule> SortedRules()
     {
         var list = new List<SynergyRule>();
         for (int i = 0; i < rules.Count; i++)
-        {
-            var r = rules[i];
-            if (r == null) continue;
-            if (IsActive(r)) continue;
-            list.Add(r);
-        }
+            if (rules[i] != null) list.Add(rules[i]);
         list.Sort((a, b) => b.priority.CompareTo(a.priority));
         return list;
-    }
-
-    bool IsActive(SynergyRule r)
-    {
-        for (int i = 0; i < _actives.Count; i++)
-            if (_actives[i].rule == r) return true;
-        return false;
     }
 
     void RevokeAll()
@@ -267,9 +382,41 @@ public class SynergyEvaluator : MonoBehaviour
         for (int i = 0; i < _actives.Count; i++)
         {
             var a = _actives[i];
-            SafeRevoke(a.rule, a.tier, game);
+            RefRevoke(a.rule, a.tier, game);
         }
         _actives.Clear();
+        _effectRefCounts.Clear();
+    }
+
+    // ── Ref-counted Apply/Revoke ────────────────────────────────────────
+    // Multiple simultaneous ActiveSynergy instances of the same rule (and
+    // same tier) must only Apply the shared effect asset ONCE — it's a
+    // singleton with its own internal held/subscribed state, and downstream
+    // payout/aggregation (SynergyEffectUtil) already sums across every
+    // matching active on its own. Revoke only fires once the LAST instance
+    // at that (rule, tier) drops. Mirrors TowerUpgradeGate's multiset model.
+    void RefApply(SynergyRule rule, int tier, GameFlowManager game)
+    {
+        var key = (rule, tier);
+        _effectRefCounts.TryGetValue(key, out int count);
+        _effectRefCounts[key] = count + 1;
+        if (count == 0) SafeApply(rule, tier, game);
+    }
+
+    void RefRevoke(SynergyRule rule, int tier, GameFlowManager game)
+    {
+        var key = (rule, tier);
+        if (!_effectRefCounts.TryGetValue(key, out int count) || count <= 0) return;
+        count--;
+        if (count <= 0)
+        {
+            _effectRefCounts.Remove(key);
+            SafeRevoke(rule, tier, game);
+        }
+        else
+        {
+            _effectRefCounts[key] = count;
+        }
     }
 
     static void SafeApply(SynergyRule rule, int tier, GameFlowManager game)

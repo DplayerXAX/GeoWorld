@@ -1,5 +1,6 @@
 using System;
 using UnityEngine;
+using UnityEngine.EventSystems;
 using UnityEngine.UI;
 using TMPro;
 
@@ -64,7 +65,12 @@ public class BlockInfoPanel : MonoBehaviour
         _cg.alpha = Mathf.Lerp(_cg.alpha, _target, 1f - Mathf.Exp(-fadeSpeed * Time.unscaledDeltaTime));
         bool on = _target > 0.5f && _cg.alpha > 0.5f;
         _cg.interactable = _cg.blocksRaycasts = on;
-        _canvas.enabled = _cg.alpha > 0.01f;
+
+        // Holding the middle mouse button temporarily ducks the panel so it doesn't block
+        // the view of the block/scene behind it — instant hide/show, no fade, so it never
+        // fights the alpha animation driven by _target.
+        bool middleHeld = Input.GetMouseButton(2);
+        _canvas.enabled = _cg.alpha > 0.01f && !middleHeld;
         if (!_canvas.enabled || _cam == null) return;
 
         transform.position = StableSpot(_cam, _anchor, heightOffset, lateralOffset, cameraPull,
@@ -90,7 +96,7 @@ public class BlockInfoPanel : MonoBehaviour
     // ── Public API (called by PlacementController) ───────────────────────────────
 
     public void Show(Vector3 worldPos, string title, string body, bool canEdit,
-                     string sellText, Action onPickUp, Action onSell)
+                     string sellText, Action onPickUp, Action onSell, string lockedReason = "Locked during combat")
     {
         _anchor = worldPos;
         _titleText.text = title;
@@ -101,9 +107,17 @@ public class BlockInfoPanel : MonoBehaviour
         _sellButton.gameObject.SetActive(true);
         _pickUpButton.interactable = canEdit;
         _sellButton.interactable   = canEdit;
+        _lockedNote.text = lockedReason;
         _lockedNote.gameObject.SetActive(!canEdit);
 
-        if (_target < 0.5f) _justShown = true;   // snap into place on a fresh selection
+        if (_target < 0.5f)
+        {
+            _justShown = true;   // snap into place on a fresh selection
+            // Gamepad: give Navigate/Submit a starting focus the instant the panel opens.
+            var focus = canEdit ? _pickUpButton : _sellButton;
+            if (focus != null && focus.gameObject.activeInHierarchy)
+                EventSystem.current?.SetSelectedGameObject(focus.gameObject);
+        }
         _onPickUp = onPickUp;
         _onSell   = onSell;
         _target   = 1f;
@@ -123,7 +137,15 @@ public class BlockInfoPanel : MonoBehaviour
         _target   = 1f;
     }
 
-    public void Hide() { _target = 0f; _onPickUp = _onSell = null; }
+    public void Hide()
+    {
+        _target = 0f; _onPickUp = _onSell = null;
+        // Drop focus if it was one of our buttons, so a stale selection doesn't
+        // linger into whatever's shown next.
+        var sel = EventSystem.current != null ? EventSystem.current.currentSelectedGameObject : null;
+        if (sel == _pickUpButton?.gameObject || sel == _sellButton?.gameObject)
+            EventSystem.current.SetSelectedGameObject(null);
+    }
 
     // ── Build (runtime) ──────────────────────────────────────────────────────────
 
@@ -205,10 +227,10 @@ public class BlockInfoPanel : MonoBehaviour
 
     internal static void EnsureEventSystem()
     {
-        if (UnityEngine.EventSystems.EventSystem.current != null) return;
+        if (EventSystem.current != null) return;
         new GameObject("EventSystem",
-            typeof(UnityEngine.EventSystems.EventSystem),
-            typeof(UnityEngine.EventSystems.StandaloneInputModule));
+            typeof(EventSystem),
+            typeof(UnityEngine.InputSystem.UI.InputSystemUIInputModule));
     }
 
     Button NewButton(RectTransform parent, string label, Color bgColor, Color textColor, out TMP_Text labelText)

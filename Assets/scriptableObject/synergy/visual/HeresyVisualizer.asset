@@ -1,0 +1,38 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9d3b82e4a1c6f7245b90d3a8e15c62f8, type: 3}
+  m_Name: HeresyVisualizer
+  m_EditorClassIdentifier: Assembly-CSharp::HeresyVisualizer
+  useThemeColor: 1
+  themeWhiten: 0.25
+  lineColor: {r: 0.75, g: 0.45, b: 1, a: 0.9}
+  shardColor: {r: 0.24, g: 0.1, b: 0.32, a: 1}
+  glitchFlashColor: {r: 0.85, g: 0.4, b: 1, a: 1}
+  showHalo: 1
+  haloRadiusMul: 1.15
+  haloTiltDeg: 18
+  haloSegments: 5
+  haloFill: 0.62
+  haloSpinSpeed: -9
+  showShards: 1
+  shardChance: 0.65
+  maxShards: 6
+  shardSizeFrac: 0.16
+  shardHoverFrac: 0.42
+  shardDriftSpeed: 16
+  glitchInterval: 3.2
+  glitchAngle: 32
+  glitchFlash: 0.5
+  bobAmplitude: 0.05
+  bobSpeed: 0.9
+  fadeInDuration: 0.5
+  witherDuration: 0.3

@@ -1,17 +1,12 @@
 using System.Collections;
 using UnityEngine;
 
-// 丰饶 (Abundance) — periodic currency drip while the synergy is active
-// AND the game is in combat (Running phase).
+// Abundance — periodic currency drip while the synergy is active and the
+// game is in combat (Running phase). Time-scaled via WaitForSeconds.
 //
-// • Combat-gated: ticks during Running only. Build phase = silent.
-// • Time-scaled: uses WaitForSeconds, so Time.timeScale (DevPanel speed
-//   buttons / future game-speed UI) speeds up the drip naturally.
-// • Multiple Apply / Revoke cycles are safe — old coroutine is killed first.
-//
-// NOTE: shared SO state. If the SAME effect asset is referenced by multiple
-// rules that activate simultaneously, only the latest coroutine survives.
-// Author one asset per rule that needs independent income (typical case).
+// Shared SO state: if the same effect asset is referenced by multiple rules
+// that activate simultaneously, only the latest coroutine survives. Author
+// one asset per rule that needs independent income.
 [CreateAssetMenu(menuName = "GeoWorld/Synergy/Effects/Abundance Income",
                  fileName = "AbundanceIncomeEffect")]
 public class AbundanceIncomeEffect : GameEffect
@@ -30,6 +25,10 @@ public class AbundanceIncomeEffect : GameEffect
     [Header("On-activation bonus (optional)")]
     [Tooltip("Extra one-shot payment dropped the moment the synergy activates (in addition to subsequent ticks).")]
     [Min(0)] public int activationBonus = 0;
+
+    [Header("Visual")]
+    [Tooltip("Colour of the currency mote that floats up from the structure each drip.")]
+    public Color moteColor = new Color(0.95f, 0.8f, 0.3f);
 
     // Runtime state — assumes one active coroutine per asset.
     Coroutine _tickRoutine;
@@ -79,5 +78,12 @@ public class AbundanceIncomeEffect : GameEffect
 
         if (currency == CurrencyKind.Block) rm.AddBlockCurrency(amount);
         else                                rm.AddTurretCurrency(amount);
+
+        if (SynergyEffectUtil.TryGetClaimedCellWorld(this, out var w))
+        {
+            SynergyBuffFx.Mote(w, moteColor,
+                GridSystem.instance != null ? GridSystem.instance.cellSize * 0.7f : 0.7f);
+            CurrencyFlyFx.Fly(w, isTurret: currency == CurrencyKind.Turret, amount);
+        }
     }
 }

@@ -2,18 +2,14 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Rendering;
 
-// One "architect rig" for a claimed Order (秩序) piece: a technical-blueprint
-// LINE drawing that frames the block(s) as a precise structure (cube-edge
-// wireframe + corner registration brackets + dimension ticks), RINGED by solid
-// METAL gear cogs of varying sizes that turn around it in time with the music.
-// Spawned + owned by OrderArchitectVisualizer.
+// One "architect rig" for a claimed Order piece: a technical-blueprint line
+// drawing (cube-edge wireframe + corner brackets + dimension ticks) ringed by
+// metal gear cogs that turn in time with the music. Spawned + owned by
+// OrderArchitectVisualizer.
 //
-// FREE-STANDING in world space (like ConstellationView), built from the grid
-// CELLS (axis-aligned), so it's immune to the block's rotation and GrowIn scale.
-// The frame is crisp unlit lines; the gears are extruded, lit, metallic meshes
-// placed around the footprint perimeter — different radii, neighbours counter-
-// rotating, bigger cogs turning proportionally slower (a meshed-clockwork read).
-// Rotation is BPM-locked (degreesPerBeat × bpm). Build() draws it; Retire() fades.
+// Free-standing in world space, built from grid cells (axis-aligned), so
+// it's immune to the block's rotation and GrowIn scale. Rotation is
+// BPM-locked (degreesPerBeat x bpm). Build() draws it; Retire() fades.
 [DisallowMultipleComponent]
 public class OrderRig : MonoBehaviour
 {
@@ -36,12 +32,33 @@ public class OrderRig : MonoBehaviour
     [Range(0f, 1f)] public float beatFlash = 0.45f;       // cog ink-stamp flash on each tick
     public Color flashColor      = new Color(0.85f, 1f, 1f, 1f);
 
+    // ── Hologram (translucent, floating, flickering cogs) ────────────────────
+    public bool  holographic     = true;    // translucent additive cogs instead of solid ink
+    [Range(0.05f, 1f)] public float holoAlpha = 0.4f;   // base opacity of the holo cogs
+    public float floatDistanceFrac = 0.35f;  // how far cogs float OFF the faces / cellSize (don't hug the block)
+    public float hoverAmplitudeFrac = 0f;     // vertical/normal hover amplitude / cellSize (0 = no bob)
+    public float hoverSpeed        = 1.1f;    // hover oscillations per second-ish
+    [Range(0f, 0.6f)] public float flickerAmount = 0.18f;   // holo opacity jitter
+    public bool  sideFacesOnly     = true;    // ring the block on its SIDE faces only — keeps top/bottom (the walkable road) clear
+
     // ── Rotation (musical, stepped) ──────────────────────────────────────────
     public float bpm             = 30f;
     public float degreesPerBeat  = 90f;     // reference cog's per-beat STEP (bigger cog → smaller)
     public bool  steppedRotation = true;    // snap one step per beat (ratchet) vs smooth
     [Range(0.02f, 1f)] public float snapFraction = 0.22f;   // portion of the beat spent snapping
     [Range(0f, 0.5f)]  public float phaseJitter  = 0.15f;   // per-cog beat offset (un-lockstep the ticks)
+
+    // ── Living-machine behaviors: scan sweep, circuit runners, gear shift ────
+    public bool  showScan       = true;
+    public float scanInterval   = 5f;      // seconds between sweeps
+    public float scanDuration   = 0.9f;    // seconds one sweep takes (bottom → top)
+
+    public bool  showRunners    = true;
+    public int   runnerCount    = 2;       // nodes tracing the base perimeter
+    public float runnerSpeed    = 1.6f;    // cells per second along the loop
+    public float runnerSizeFrac = 0.07f;   // node size / cellSize
+
+    public int   shiftEveryBeats = 8;      // gears reverse every N beats (0 = never)
 
     // ── Animation ────────────────────────────────────────────────────────────
     public float fadeInDuration = 0.5f;
@@ -61,6 +78,10 @@ public class OrderRig : MonoBehaviour
         public float      degPerBeat; // its own per-beat step (bigger cog → smaller)
         public Quaternion tilt;       // mounts the cog flat on its face (axis = face normal)
         public float      phase;      // per-cog beat offset so ticks aren't lockstep
+        public float      turnsAtFlip;// beats consumed before the last direction shift (angle rebase)
+        public Vector3    basePos;    // local rest position (hover oscillates around it)
+        public Vector3    hoverAxis;  // face normal, in local space (hover direction)
+        public float      hoverPhase; // per-cog hover offset
     }
 
     readonly List<Gear>   _gears = new();
@@ -68,11 +89,30 @@ public class OrderRig : MonoBehaviour
     MaterialPropertyBlock _wireMpb;
     Mesh                  _wireMesh;
 
+    // Scan sweep
+    Transform             _scan;
+    MeshRenderer          _scanMr;
+    MaterialPropertyBlock _scanMpb;
+    Mesh                  _scanMesh;
+    float                 _scanMinY, _scanMaxY;
+
+    // Circuit runners
+    readonly List<Transform> _runners = new();
+    Vector3[]                _loop;        // base-perimeter waypoints (local)
+    float                    _loopLength;
+    float                    _runnerWorldSize;
+    float                    _runnerWorldSpeed;
+
+    // Gear shift
+    int   _lastShiftBlock;
+    float _shiftFlashAt = -999f;
+
     Color _lineColor = Color.white;
     Color _metalColor = Color.gray;
     float _born;
     bool  _built, _retiring;
     float _witherStart;
+    float _refCell = 1f;   // cellSize cached for hover amplitude
 
     static readonly int _ColorID        = Shader.PropertyToID("_Color");
     static readonly int _BaseColorID    = Shader.PropertyToID("_BaseColor");
@@ -86,6 +126,7 @@ public class OrderRig : MonoBehaviour
         Clear();
         _lineColor  = lineColor;
         _metalColor = metalColor;
+        _refCell    = cellSize;
         _born       = Time.time;
         _retiring   = false;
 
@@ -105,6 +146,14 @@ public class OrderRig : MonoBehaviour
         BuildWireframe(cellCentersWorld, center, cellSize, half, mn, mx);
         if (showGears) BuildGears(cellCentersWorld, center, cellSize, half);
 
+        Vector3 mnL = (mn - center) - new Vector3(half, half, half);
+        Vector3 mxL = (mx - center) + new Vector3(half, half, half);
+        if (showScan) BuildScan(mnL, mxL);
+        if (showRunners) BuildRunners(mnL, mxL, cellSize);
+
+        _lastShiftBlock = 0;
+        _shiftFlashAt   = -999f;
+
         _built = true;
     }
 
@@ -116,7 +165,6 @@ public class OrderRig : MonoBehaviour
         if (!_built) Destroy(gameObject);
     }
 
-    // ── Combat-ripple replay: re-assemble in sync with the block sprout ──────
     void OnEnable()  { SynergyVisualFX.OnReplayGrowIn += HandleReplay; }
     void OnDisable() { SynergyVisualFX.OnReplayGrowIn -= HandleReplay; }
 
@@ -157,6 +205,28 @@ public class OrderRig : MonoBehaviour
         Color line = _lineColor * pulse; line.a = _lineColor.a * fade;
         if (_wireMr != null) SetCol(_wireMr, _wireMpb, line);
 
+        // Gear shift: every shiftEveryBeats the whole clockwork reverses in one
+        // synchronized clunk. Each gear's angle is REBASED at the flip (baseAngle
+        // absorbs the turns already made) so the reversal never pops.
+        if (shiftEveryBeats > 0 && !_retiring)
+        {
+            int block = Mathf.FloorToInt(beatsGlobal / shiftEveryBeats);
+            if (block != _lastShiftBlock)
+            {
+                _lastShiftBlock = block;
+                _shiftFlashAt   = now;
+                for (int i = 0; i < _gears.Count; i++)
+                {
+                    var g = _gears[i];
+                    float turnsNow = GearTurns(beatsGlobal, g.phase);
+                    g.baseAngle  += (turnsNow - g.turnsAtFlip) * g.degPerBeat * g.dir;
+                    g.turnsAtFlip = turnsNow;
+                    g.dir         = -g.dir;
+                }
+            }
+        }
+        float shiftFlash = Mathf.Clamp01(1f - (now - _shiftFlashAt) / 0.35f);
+
         // Gears: BPM-locked STEPPED ratchet + a silkscreen ink-stamp flash on each
         // tick. Opaque, so appear/disappear is via scale.
         for (int i = 0; i < _gears.Count; i++)
@@ -165,32 +235,79 @@ public class OrderRig : MonoBehaviour
             if (g.t == null) continue;
             g.t.localScale = Vector3.one * (g.radius * fade);
 
+            // Optional hover along the face normal (0 amplitude = cogs stay put —
+            // they ring the block without any up/down drift).
+            if (holographic && hoverAmplitudeFrac > 1e-4f)
+            {
+                float hover = Mathf.Sin(now * hoverSpeed * Mathf.PI * 2f + g.hoverPhase)
+                            * (hoverAmplitudeFrac * _refCell);
+                g.t.localPosition = g.basePos + g.hoverAxis * hover;
+            }
+
             float beats = Mathf.Max(0f, beatsGlobal - g.phase);
-            int   step  = Mathf.FloorToInt(beats);
-            float frac  = beats - step;
+            float frac  = beats - Mathf.Floor(beats);
+            float turns = GearTurns(beatsGlobal, g.phase);
 
-            float turns;
-            if (steppedRotation)
-            {
-                float snap = snapFraction > 1e-3f ? Mathf.Clamp01(frac / snapFraction) : 1f;
-                turns = step + EaseOutBack(snap);   // quick snap, slight clack, then hold
-            }
-            else
-            {
-                turns = beats;
-            }
-
-            float ang = g.baseAngle + turns * g.degPerBeat * g.dir;
+            float ang = g.baseAngle + (turns - g.turnsAtFlip) * g.degPerBeat * g.dir;
             g.t.localRotation = g.tilt * Quaternion.Euler(0f, ang, 0f);
 
-            // Ink-stamp: flash toward flashColor right after the tick, then settle.
+            // Ink-stamp: flash toward flashColor right after the tick — harder on
+            // the synchronized gear-shift clunk — then settle. Holo cogs also get
+            // a subtle opacity flicker (unstable projection) baked into the tint.
             if (g.mr != null)
             {
-                float flash = beatFlash * Mathf.Clamp01(1f - frac / 0.3f);
-                g.mpb.SetColor(_BaseColorID, Color.Lerp(g.baseCol, flashColor, flash));
+                float flash = Mathf.Max(beatFlash * Mathf.Clamp01(1f - frac / 0.3f),
+                                        beatFlash * 1.6f * shiftFlash);
+                Color col = Color.Lerp(g.baseCol, flashColor, Mathf.Clamp01(flash));
+                if (holographic)
+                {
+                    float flick = 1f - flickerAmount * (0.5f + 0.5f * Mathf.Sin(now * 17f + g.hoverPhase * 3f));
+                    col.a = g.baseCol.a * flick * fade;
+                }
+                g.mpb.SetColor(_BaseColorID, col);
+                g.mpb.SetColor(_ColorID, col);
                 g.mr.SetPropertyBlock(g.mpb);
             }
         }
+
+        // Scan sweep: a bright cross-section outline rides bottom → top every
+        // scanInterval, alpha enveloped so it fades in/out at the ends.
+        if (_scan != null)
+        {
+            float cycle = Mathf.Repeat(now - _born, Mathf.Max(1f, scanInterval));
+            bool sweeping = cycle < scanDuration && !_retiring && fade >= 0.999f;
+            float k = sweeping ? cycle / Mathf.Max(0.01f, scanDuration) : 0f;
+            _scan.localPosition = new Vector3(0f, Mathf.Lerp(_scanMinY, _scanMaxY, k), 0f);
+
+            Color sc = _lineColor * 1.6f;
+            sc.a = (sweeping ? Mathf.Sin(k * Mathf.PI) : 0f) * fade;
+            if (_scanMr != null) SetCol(_scanMr, _scanMpb, sc);
+        }
+
+        // Circuit runners: constant-speed nodes tracing the base perimeter.
+        if (_runners.Count > 0 && _loop != null && _loopLength > 1e-4f)
+        {
+            for (int i = 0; i < _runners.Count; i++)
+            {
+                var r = _runners[i];
+                if (r == null) continue;
+                float d = Mathf.Repeat((now - _born) * _runnerWorldSpeed + i * (_loopLength / _runners.Count), _loopLength);
+                r.localPosition = PointOnLoop(d);
+                r.localScale    = Vector3.one * (_runnerWorldSize * fade);
+            }
+        }
+    }
+
+    // Beats → accumulated turns under the current ratchet mode (shared by the
+    // rotation and the shift-rebase so both always agree).
+    float GearTurns(float beatsGlobal, float phase)
+    {
+        float beats = Mathf.Max(0f, beatsGlobal - phase);
+        if (!steppedRotation) return beats;
+        int   step = Mathf.FloorToInt(beats);
+        float frac = beats - step;
+        float snap = snapFraction > 1e-3f ? Mathf.Clamp01(frac / snapFraction) : 1f;
+        return step + EaseOutBack(snap);   // quick snap, slight clack, then hold
     }
 
     // ── Wireframe (cube edges + brackets + ticks) as ONE Lines mesh ──────────
@@ -241,19 +358,18 @@ public class OrderRig : MonoBehaviour
         (Vector3Int.forward, Vector3.forward), (Vector3Int.back,  Vector3.back),
     };
 
-    // ── Metal cogs bolted onto the structure's OUTER faces ───────────────────
-    // For every cell × face that isn't shared with a same-piece neighbour, a
-    // random roll attaches a varying-size cog flush on that face, spinning around
-    // the FACE NORMAL — so top cogs spin flat, side cogs spin in a vertical plane,
-    // etc. (rotation no longer lives in a single plane).
+    // For every cell x face not shared with a same-piece neighbour, a random
+    // roll attaches a varying-size cog flush on that face, spinning around
+    // the face normal (so top cogs spin flat, side cogs spin vertically).
     void BuildGears(Vector3[] cells, Vector3 center, float cellSize, float half)
     {
         Mesh gearMesh    = GetSolidGearMesh(Mathf.Clamp(gearTeeth, 6, 24));
-        Material fill    = GetGearFillMaterial();
+        Material fill    = holographic ? GetHoloMaterial() : GetGearFillMaterial();
         Material outline = GetGearOutlineMaterial();
         if (outline != null)
         {
-            outline.SetColor(_OutlineColorID, outlineColor);
+            // Holo rim glows in the line color, not black ink.
+            outline.SetColor(_OutlineColorID, holographic ? _lineColor : outlineColor);
             outline.SetFloat(_OutlineWidthID, Mathf.Max(0f, outlineWidth));
         }
         Material[] gearMats = outline != null ? new[] { fill, outline } : new[] { fill };
@@ -281,11 +397,14 @@ public class OrderRig : MonoBehaviour
             for (int f = 0; f < 6 && made < cap; f++, gi++)
             {
                 var (gdir, n) = _faces[f];
+                if (sideFacesOnly && Mathf.Abs(n.y) > 0.5f) continue;   // skip top/bottom → don't cover the road
                 if (occupied.Contains(keys[i] + gdir)) continue;        // interior face → skip
                 if (Hash01(gi * 131 + 5) > faceCoverChance) continue;   // random coverage
 
                 float radius = cellSize * Mathf.Lerp(gearSizeMinFrac, gearSizeMaxFrac, Hash01(gi * 977 + 3));
-                float off    = half + cellSize * faceOffsetFrac + 0.12f * radius;   // sit just off the face
+                // Float OFF the face (holo projections hover, they don't hug the
+                // block) — extra floatDistanceFrac on top of the flush offset.
+                float off    = half + cellSize * (faceOffsetFrac + floatDistanceFrac) + 0.12f * radius;
                 Vector3 pos  = cl + n * off;
 
                 // Orient so the cog's axis points along the face normal; it then
@@ -299,13 +418,16 @@ public class OrderRig : MonoBehaviour
 
                 go.AddComponent<MeshFilter>().sharedMesh = gearMesh;
                 var mr = go.AddComponent<MeshRenderer>();
-                mr.sharedMaterials = gearMats;            // [silkscreen fill, bold outline]
+                mr.sharedMaterials = gearMats;            // [holo/silkscreen fill, bright outline]
                 ConfigRenderer(mr);
 
-                Color baseCol = _metalColor * Mathf.Lerp(0.82f, 1.12f, Hash01(gi * 967 + 8));
-                baseCol.a = 1f;
+                Color baseCol = holographic
+                    ? Color.Lerp(_lineColor, Color.white, 0.15f)   // holo cogs glow in the frame's line color
+                    : _metalColor * Mathf.Lerp(0.82f, 1.12f, Hash01(gi * 967 + 8));
+                baseCol.a = holographic ? holoAlpha : 1f;
                 var mpb = new MaterialPropertyBlock();
                 mpb.SetColor(_BaseColorID, baseCol);
+                mpb.SetColor(_ColorID, baseCol);
                 mr.SetPropertyBlock(mpb);
 
                 _gears.Add(new Gear
@@ -320,10 +442,92 @@ public class OrderRig : MonoBehaviour
                     degPerBeat = degreesPerBeat * (refR / Mathf.Max(0.001f, radius)),   // bigger cog → smaller step
                     tilt       = faceOrient,
                     phase      = Hash01(gi * 97 + 13) * phaseJitter,
+                    basePos    = pos,
+                    hoverAxis  = n,
+                    hoverPhase = Hash01(gi * 613 + 29) * Mathf.PI * 2f,
                 });
                 made++;
             }
         }
+    }
+
+    // ── Scan sweep: bounding-box cross-section outline, animated in Y ────────
+    void BuildScan(Vector3 mnL, Vector3 mxL)
+    {
+        _scanMinY = mnL.y;
+        _scanMaxY = mxL.y;
+
+        var v   = new List<Vector3>();
+        var idx = new List<int>();
+        Vector3 a = new Vector3(mnL.x, 0f, mnL.z);
+        Vector3 b = new Vector3(mxL.x, 0f, mnL.z);
+        Vector3 c = new Vector3(mxL.x, 0f, mxL.z);
+        Vector3 d = new Vector3(mnL.x, 0f, mxL.z);
+        AddSeg(v, idx, a, b); AddSeg(v, idx, b, c);
+        AddSeg(v, idx, c, d); AddSeg(v, idx, d, a);
+
+        _scanMesh = new Mesh { name = "OrderScan" };
+        _scanMesh.SetVertices(v);
+        _scanMesh.SetIndices(idx.ToArray(), MeshTopology.Lines, 0);
+        _scanMesh.bounds = new Bounds(Vector3.zero, Vector3.one * 1000f);
+
+        var go = new GameObject("Scan");
+        go.transform.SetParent(transform, false);
+        go.transform.localPosition = new Vector3(0f, _scanMinY, 0f);
+        _scan = go.transform;
+        go.AddComponent<MeshFilter>().sharedMesh = _scanMesh;
+        _scanMr = go.AddComponent<MeshRenderer>();
+        _scanMr.sharedMaterial = GetLineMaterial();
+        ConfigRenderer(_scanMr);
+        _scanMpb = new MaterialPropertyBlock();
+    }
+
+    // ── Circuit runners: nodes tracing the base perimeter loop ───────────────
+    void BuildRunners(Vector3 mnL, Vector3 mxL, float cellSize)
+    {
+        _loop = new[]
+        {
+            new Vector3(mnL.x, mnL.y, mnL.z),
+            new Vector3(mxL.x, mnL.y, mnL.z),
+            new Vector3(mxL.x, mnL.y, mxL.z),
+            new Vector3(mnL.x, mnL.y, mxL.z),
+        };
+        _loopLength = 0f;
+        for (int i = 0; i < _loop.Length; i++)
+            _loopLength += Vector3.Distance(_loop[i], _loop[(i + 1) % _loop.Length]);
+
+        _runnerWorldSize  = cellSize * Mathf.Max(0.01f, runnerSizeFrac);
+        _runnerWorldSpeed = cellSize * Mathf.Max(0.01f, runnerSpeed);
+
+        Mesh node = GetNodeMesh();
+        int count = Mathf.Clamp(runnerCount, 1, 4);
+        for (int i = 0; i < count; i++)
+        {
+            var go = new GameObject("Runner");
+            go.transform.SetParent(transform, false);
+            go.transform.localScale = Vector3.zero;
+            go.AddComponent<MeshFilter>().sharedMesh = node;
+            var mr = go.AddComponent<MeshRenderer>();
+            mr.sharedMaterial = GetGearFillMaterial();
+            ConfigRenderer(mr);
+            var mpb = new MaterialPropertyBlock();
+            mpb.SetColor(_BaseColorID, flashColor);
+            mr.SetPropertyBlock(mpb);
+            _runners.Add(go.transform);
+        }
+    }
+
+    // Distance along the perimeter → local position on the loop.
+    Vector3 PointOnLoop(float d)
+    {
+        for (int i = 0; i < _loop.Length; i++)
+        {
+            Vector3 p0 = _loop[i], p1 = _loop[(i + 1) % _loop.Length];
+            float seg = Vector3.Distance(p0, p1);
+            if (d <= seg || seg < 1e-5f) return Vector3.Lerp(p0, p1, seg < 1e-5f ? 0f : d / seg);
+            d -= seg;
+        }
+        return _loop[0];
     }
 
     // ── line-geometry helpers ────────────────────────────────────────────────
@@ -406,13 +610,21 @@ public class OrderRig : MonoBehaviour
             if (_gears[i] != null && _gears[i].t != null) Destroy(_gears[i].t.gameObject);
         _gears.Clear();
 
+        for (int i = 0; i < _runners.Count; i++)
+            if (_runners[i] != null) Destroy(_runners[i].gameObject);
+        _runners.Clear();
+
+        if (_scan != null)     { Destroy(_scan.gameObject); _scan = null; _scanMr = null; }
+        if (_scanMesh != null) { Destroy(_scanMesh); _scanMesh = null; }
+
         if (_wireMr != null)   { Destroy(_wireMr.gameObject); _wireMr = null; }
-        if (_wireMesh != null) { Destroy(_wireMesh); _wireMesh = null; }   // per-rig mesh (gear mesh is shared, never destroyed)
+        if (_wireMesh != null) { Destroy(_wireMesh); _wireMesh = null; }   // per-rig mesh (gear/node meshes are shared, never destroyed)
     }
 
     // ── Shared (static) assets ───────────────────────────────────────────────
     static Material _lineMat;
     static Material _fillMat;
+    static Material _holoMat;
     static Material _outlineMat;
     static readonly Dictionary<int, Mesh> _gearMeshes = new();
 
@@ -438,6 +650,35 @@ public class OrderRig : MonoBehaviour
         return _fillMat;
     }
 
+    // Translucent additive fill for holographic cogs so overlapping cogs
+    // read as light rather than solid metal. Color/alpha come per-cog from
+    // MPB. Additive means alpha scales brightness, so flicker reads as an
+    // unstable projection.
+    static Material GetHoloMaterial()
+    {
+        if (_holoMat != null) return _holoMat;
+        var sh = Shader.Find("Universal Render Pipeline/Unlit");
+        if (sh != null)
+        {
+            _holoMat = new Material(sh) { hideFlags = HideFlags.DontSave };
+            _holoMat.SetFloat("_Surface", 1f);          // transparent
+            _holoMat.SetFloat("_Blend", 1f);            // additive
+            _holoMat.SetFloat("_SrcBlend", (float)UnityEngine.Rendering.BlendMode.SrcAlpha);
+            _holoMat.SetFloat("_DstBlend", (float)UnityEngine.Rendering.BlendMode.One);
+            _holoMat.SetFloat("_ZWrite", 0f);
+            _holoMat.SetFloat("_Cull", 0f);             // both sides
+            _holoMat.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent;
+            _holoMat.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
+            _holoMat.EnableKeyword("_ALPHAPREMULTIPLY_ON");
+        }
+        else
+        {
+            sh = Shader.Find("Sprites/Default");
+            _holoMat = new Material(sh) { hideFlags = HideFlags.DontSave };
+        }
+        return _holoMat;
+    }
+
     // The same bold inverse-hull cartoon outline the blocks wear (2nd slot).
     // Returns null if the shader is missing → cogs render fill-only.
     static Material GetGearOutlineMaterial()
@@ -447,6 +688,47 @@ public class OrderRig : MonoBehaviour
         if (sh == null) return null;
         _outlineMat = new Material(sh) { hideFlags = HideFlags.DontSave };
         return _outlineMat;
+    }
+
+    // Small octahedron (unit half-extent) — the circuit-runner node. Reads as a
+    // point of energy without needing emissive materials.
+    static Mesh _nodeMesh;
+    static Mesh GetNodeMesh()
+    {
+        if (_nodeMesh != null) return _nodeMesh;
+
+        var verts = new List<Vector3>();
+        var norms = new List<Vector3>();
+        var tris  = new List<int>();
+
+        Vector3 top = Vector3.up, bot = Vector3.down;
+        Vector3[] eq =
+        {
+            Vector3.right, Vector3.forward, Vector3.left, Vector3.back,
+        };
+
+        void Tri(Vector3 a, Vector3 b, Vector3 c)
+        {
+            Vector3 n = Vector3.Cross(b - a, c - a).normalized;
+            int s = verts.Count;
+            verts.Add(a); verts.Add(b); verts.Add(c);
+            norms.Add(n); norms.Add(n); norms.Add(n);
+            tris.Add(s); tris.Add(s + 1); tris.Add(s + 2);
+        }
+
+        for (int i = 0; i < 4; i++)
+        {
+            Vector3 a = eq[i], b = eq[(i + 1) % 4];
+            Tri(top, a, b);
+            Tri(bot, b, a);
+        }
+
+        _nodeMesh = new Mesh { name = "OrderRunnerNode" };
+        _nodeMesh.SetVertices(verts);
+        _nodeMesh.SetNormals(norms);
+        _nodeMesh.SetTriangles(tris, 0);
+        _nodeMesh.bounds = new Bounds(Vector3.zero, Vector3.one * 1000f);
+        return _nodeMesh;
     }
 
     // Solid extruded gear (unit outer radius = 1) lying flat in the XZ plane,
