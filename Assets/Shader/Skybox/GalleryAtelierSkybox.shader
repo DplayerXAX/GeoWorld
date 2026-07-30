@@ -106,32 +106,27 @@ Shader "Custom/GalleryAtelierSky"
                 return saturate(mul(m, rgb));
             }
 
-            // Hollow rectangle "picture frames" hung on an abstract wall plane.
-            // uv = planar coords, returns 0..1 frame line mask + gilded flag.
-            float Frames(float2 uv, float t, out float gilded)
+            // SOLID drifting squares (stained glass) on an abstract wall plane.
+            // Equal margins on both axes → squares (no landscape rectangles). uv =
+            // planar coords; returns 0..1 filled mask + the pane's glass colour.
+            float Frames(float2 uv, float t, out half3 tint)
             {
-                uv   += float2(t, t * 0.4);            // whole wall drifts slowly
+                uv   += float2(t, t * 0.4);            // whole wall drifts slowly (flow)
                 float2 cell = floor(uv);
                 float2 f    = frac(uv);
                 float  h    = Hash2(cell);
-                gilded      = step(0.72, h);           // ~28% of frames are gold
 
-                // Per-cell margin (frame size varies), aspect via second hash.
-                float  h2   = Hash2(cell + 17.31);
-                float2 lo   = float2(0.14 + h  * 0.10, 0.18 + h2 * 0.12);
-                float2 hi   = 1.0 - lo.yx * (0.8 + h2 * 0.4);
+                // Per-cell stained-glass colour from the palette.
+                float pick = Hash2(cell + 5.1);
+                tint = pick < 0.33 ? _Gold.rgb : (pick < 0.66 ? _Signal.rgb : _MistCool.rgb);
 
-                // Distance to the rectangle border → thin line.
-                float2 dLo  = abs(f - lo);
-                float2 dHi  = abs(f - hi);
-                float  inX  = step(lo.x, f.x) * step(f.x, hi.x);
-                float  inY  = step(lo.y, f.y) * step(f.y, hi.y);
-                float  edge = min(min(dLo.x, dHi.x) * inY + (1.0 - inY),
-                                  min(dLo.y, dHi.y) * inX + (1.0 - inX));
-                float  stroke = 1.0 - smoothstep(0.008, 0.02, edge);
+                // Uniform per-cell margin → always a square, size varies by hash.
+                float  m    = 0.16 + h * 0.12;
+                float2 d    = min(f - m, (1.0 - m) - f);   // signed dist inside the square
+                float  fill = smoothstep(0.0, 0.03, min(d.x, d.y));
 
-                // Only some cells hold a frame at all (~55%) — sparse, not a grid.
-                return stroke * step(0.45, Hash2(cell + 3.7));
+                // Only some cells hold a square at all (~55%) — sparse, not a grid.
+                return fill * step(0.45, Hash2(cell + 3.7));
             }
 
             half4 frag(Varyings IN) : SV_Target
@@ -151,24 +146,19 @@ Shader "Custom/GalleryAtelierSky"
                 float mist = smoothstep(0.35, 0.85, field) * (1.0 - up * 0.45);
                 col = lerp(col, mistCol, saturate(mist * _Intensity * 0.5));
 
-                // ── Floating picture frames on two abstract walls ───────────────
-                // Wall A faces ±Z, wall B faces ±X; fade each in by facing so the
-                // frames read as hung around you, dissolving at grazing angles.
+                // ── Drifting stained-glass squares on the ±X wall only ──────────
+                // (The ±Z wall was removed — one wall of works, not a box.)
                 float tF = _Time.y * _FrameDrift;
-                float gildA, gildB;
-                float2 uvA = float2(dir.x, dir.y) / max(0.35, abs(dir.z)) * _FrameScale;
+                half3 glassTint;
                 float2 uvB = float2(dir.z, dir.y) / max(0.35, abs(dir.x)) * _FrameScale;
-                float frameA = Frames(uvA, tF, gildA)        * smoothstep(0.25, 0.6, abs(dir.z));
-                float frameB = Frames(uvB + 31.7, tF, gildB) * smoothstep(0.25, 0.6, abs(dir.x));
+                float frameB = Frames(uvB, tF, glassTint) * smoothstep(0.25, 0.6, abs(dir.x));
 
-                // Frames thin out toward the zenith/nadir — hung at eye height.
+                // Squares thin out toward the zenith/nadir — hung at eye height.
                 float belt = 1.0 - smoothstep(0.35, 0.8, abs(dir.y));
-                frameA *= belt; frameB *= belt;
+                frameB *= belt;
 
-                half3 frameColA = lerp(_Ink.rgb, _Gold.rgb, gildA);
-                half3 frameColB = lerp(_Ink.rgb, _Gold.rgb, gildB);
-                col = lerp(col, frameColA, frameA * _FrameAlpha);
-                col = lerp(col, frameColB, frameB * _FrameAlpha * 0.8);
+                // Translucent blend so the sky reads through, like coloured glass.
+                col = lerp(col, glassTint, frameB * _FrameAlpha * 0.6);
 
                 // ── One quiet signal-red diagonal band (Title's sweep, stilled) ─
                 float band = sin(dir.x * 2.0 + dir.y * 4.5 + t * 1.5);

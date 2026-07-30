@@ -629,7 +629,56 @@ public partial class PlacementController : MonoBehaviour
             world = r.origin + r.direction * _depth;
         }
 
-        baseGridPos = grid.WorldToGrid(world);
+        Vector3Int raw = grid.WorldToGrid(world);
+
+        // Snapping placement (GameSettings.FreeMove == false, the default): the mouse
+        // still moves the ghost freely, but the cell it lands on is pulled to the
+        // nearest one where the held block's shape actually has support — so you
+        // can't leave it hanging in empty space far from the build, only ever
+        // riding the surface of what's already there. WASDQE/scroll still nudge
+        // it further from wherever it snaps to.
+        baseGridPos = (mode == PlacementMode.Edit && !GameSettings.FreeMove)
+            ? SnapToNearestSupported(raw)
+            : raw;
+    }
+
+    // Last cell SnapToNearestSupported actually resolved to. Doubles as the "stay
+    // put" fallback when the mouse (or a scroll depth change) moves `raw` outside
+    // snapGridRadius of anything supported — without this the ghost would jump to
+    // the unsnapped raw position instead, which is exactly the "runs off the edge"
+    // escape the radius search was supposed to prevent.
+    Vector3Int _lastSnappedBaseGridPos;
+
+    // Searches a small cube of cells around `raw` for the nearest one where the
+    // currently-held block (its rotated shape, offset by the existing manualOffset
+    // nudge) would actually be a valid, supported placement — i.e. touches an
+    // existing block/endpoint and doesn't overlap anything. If nothing in range
+    // qualifies, holds at the last cell that DID qualify instead of snapping back
+    // to the raw (unsupported) mouse position — the mouse can keep moving, but the
+    // ghost simply won't follow it off into empty space.
+    Vector3Int SnapToNearestSupported(Vector3Int raw)
+    {
+        var cells = GetRotatedCells();
+        if (cells.Length == 0) return raw;
+        if (CanPlace(raw + manualOffset, cells)) return _lastSnappedBaseGridPos = raw;
+
+        int cellRadius = Mathf.Max(1, Mathf.CeilToInt(snapGridRadius / Mathf.Max(0.01f, grid.cellSize)));
+        Vector3Int best = _lastSnappedBaseGridPos;
+        int bestSqr = int.MaxValue;
+        bool found = false;
+
+        for (int dx = -cellRadius; dx <= cellRadius; dx++)
+        for (int dy = -cellRadius; dy <= cellRadius; dy++)
+        for (int dz = -cellRadius; dz <= cellRadius; dz++)
+        {
+            if (dx == 0 && dy == 0 && dz == 0) continue;
+            var cand = raw + new Vector3Int(dx, dy, dz);
+            if (!CanPlace(cand + manualOffset, cells)) continue;
+            int sqr = dx * dx + dy * dy + dz * dz;
+            if (sqr < bestSqr) { bestSqr = sqr; best = cand; found = true; }
+        }
+        if (found) _lastSnappedBaseGridPos = best;
+        return _lastSnappedBaseGridPos;
     }
 
     // Edit mode only.
@@ -1257,6 +1306,11 @@ public partial class PlacementController : MonoBehaviour
         SetTrayVisible(false);  // hide tokens while placing so they don't clutter the view
         previewParent.gameObject.SetActive(currentBlock != null);
         if (focusPos == null) manualOffset = Vector3Int.zero;
+        // Seed the snap anchor at wherever the mouse/pickup already put baseGridPos
+        // (HandleMouseMove keeps updating it even in Select mode) — otherwise the
+        // very first snap search this hold would fall back to a stale cell left
+        // over from a previous hold instead of somewhere near the cursor.
+        _lastSnappedBaseGridPos = baseGridPos;
         UpdateHighlight(null);
 
         if (focusPos.HasValue)

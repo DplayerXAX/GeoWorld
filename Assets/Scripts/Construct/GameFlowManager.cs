@@ -419,7 +419,9 @@ public class GameFlowManager : MonoBehaviour
 
         if (addStart)
         {
-            var cell = endpoints.GenerateSinglePoint(allStarts, true);
+            // allEnds constrains the new start to the union of the existing
+            // starts' reach circles — see LevelEndpointGenerator.SampleStartInsideReach.
+            var cell = endpoints.GenerateSinglePoint(allStarts, true, allEnds);
             if (cell != Vector3Int.zero)
             {
                 allStarts.Add(cell);

@@ -7,13 +7,17 @@
 					<ObjectInclusionList>
 						<ObjectRef Name="Bdim" ID="{9110F51A-9829-4003-8E86-C8B03507BD5F}" WorkUnitID="{FD1D3805-1493-4712-94C6-0E6DB7322D3D}" Origin="Manual" Filter="7"/>
 						<ObjectRef Name="G" ID="{9420A9D8-1D35-4034-92CB-9D66018FFC56}" WorkUnitID="{FD1D3805-1493-4712-94C6-0E6DB7322D3D}" Origin="Manual" Filter="7"/>
+						<ObjectRef Name="Idle_Loop" ID="{0B040373-40A3-4150-A014-B9601F6A69C9}" WorkUnitID="{FD1D3805-1493-4712-94C6-0E6DB7322D3D}" Origin="Manual" Filter="7"/>
+						<ObjectRef Name="Battle_Loop" ID="{6E21EF0F-E595-4270-976A-19DECCBC9F2C}" WorkUnitID="{FD1D3805-1493-4712-94C6-0E6DB7322D3D}" Origin="Manual" Filter="7"/>
 						<ObjectRef Name="rotate" ID="{9F0FC09E-EFE1-4273-BE8D-938E9B2D5ABB}" WorkUnitID="{FD1D3805-1493-4712-94C6-0E6DB7322D3D}" Origin="Manual" Filter="7"/>
 						<ObjectRef Name="scroll" ID="{C4CD9B9D-4062-4426-94CD-EE02F46401EE}" WorkUnitID="{FD1D3805-1493-4712-94C6-0E6DB7322D3D}" Origin="Manual" Filter="7"/>
+						<ObjectRef Name="Piece_Normal" ID="{FFFC71CD-910F-4439-A444-F74F4054F8BC}" WorkUnitID="{FD1D3805-1493-4712-94C6-0E6DB7322D3D}" Origin="Manual" Filter="7"/>
 						<ObjectRef Name="Play_Arp_Note" ID="{35F24250-09C5-4512-93E3-DA3812BA0D80}" WorkUnitID="{FD1D3805-1493-4712-94C6-0E6DB7322D3D}" Origin="Manual" Filter="7"/>
 						<ObjectRef Name="Am" ID="{BB56AD18-4D11-459E-BE7C-D7C7C8E259C3}" WorkUnitID="{FD1D3805-1493-4712-94C6-0E6DB7322D3D}" Origin="Manual" Filter="7"/>
 						<ObjectRef Name="BGM_event" ID="{5D34EB93-16B4-45EF-A43E-418990DD278C}" WorkUnitID="{FD1D3805-1493-4712-94C6-0E6DB7322D3D}" Origin="Manual" Filter="7"/>
 						<ObjectRef Name="Select" ID="{1B5B7CDE-BAF8-4611-AAA9-532EB27502B4}" WorkUnitID="{FD1D3805-1493-4712-94C6-0E6DB7322D3D}" Origin="Manual" Filter="7"/>
 						<ObjectRef Name="C" ID="{9E235787-7790-47A5-BB82-21A19C922CA0}" WorkUnitID="{FD1D3805-1493-4712-94C6-0E6DB7322D3D}" Origin="Manual" Filter="7"/>
+						<ObjectRef Name="Ending_Loop" ID="{DFE390B2-FB1A-47F1-98F5-5F86CB97A85F}" WorkUnitID="{FD1D3805-1493-4712-94C6-0E6DB7322D3D}" Origin="Manual" Filter="7"/>
 						<ObjectRef Name="Shop_open" ID="{D8D4E37E-6751-48CA-9E5B-ADE35555A299}" WorkUnitID="{FD1D3805-1493-4712-94C6-0E6DB7322D3D}" Origin="Manual" Filter="7"/>
 						<ObjectRef Name="Shop_close" ID="{A67B7153-8708-4B2D-8F3D-CB7944250760}" WorkUnitID="{FD1D3805-1493-4712-94C6-0E6DB7322D3D}" Origin="Manual" Filter="7"/>
 						<ObjectRef Name="TimeDrain" ID="{E43C13E8-CAF7-4BCA-BA8F-99755EFA551A}" WorkUnitID="{FD1D3805-1493-4712-94C6-0E6DB7322D3D}" Origin="Manual" Filter="7"/>
@@ -22,6 +26,7 @@
 						<ObjectRef Name="fight_finish" ID="{F86A791E-8754-4CBE-BDA1-C0642D056C88}" WorkUnitID="{FD1D3805-1493-4712-94C6-0E6DB7322D3D}" Origin="Manual" Filter="7"/>
 						<ObjectRef Name="F" ID="{C4D722D4-568A-4DFD-8E50-A6150E4B218B}" WorkUnitID="{FD1D3805-1493-4712-94C6-0E6DB7322D3D}" Origin="Manual" Filter="7"/>
 						<ObjectRef Name="TextBlip" ID="{DA006521-4F4D-4E2A-9B6E-AF0402E7BF32}" WorkUnitID="{FD1D3805-1493-4712-94C6-0E6DB7322D3D}" Origin="Manual" Filter="7"/>
+						<ObjectRef Name="title_Loop" ID="{F41BB254-1CE3-4FFB-8FF6-585EE39774F9}" WorkUnitID="{FD1D3805-1493-4712-94C6-0E6DB7322D3D}" Origin="Manual" Filter="7"/>
 					</ObjectInclusionList>
 					<ObjectExclusionList/>
 					<GameSyncExclusionList/>

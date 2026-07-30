@@ -6,9 +6,9 @@ using UnityEngine.UI;
 // Renders an enemy prefab to a small sprite for UI rosters (level-select intel).
 //
 // Has to be done at RUNTIME rather than with a stored icon or an editor asset
-// preview: these prefabs carry no mesh at all. EnemyChaoticVisual builds their
-// shards procedurally on Awake, so a prefab preview would come out empty — the
-// enemy only exists once it's instantiated and given a frame to assemble itself.
+// preview: several of these prefabs carry no mesh at all — EnemyChaoticVisual
+// builds their shards procedurally on Start, so a prefab preview would come out
+// empty. The enemy only exists once instantiated and given a frame to assemble.
 //
 // Works by parking an instance in an empty pocket of the world far from the map
 // and photographing it with a throwaway camera, so no dedicated layer or scene
@@ -20,6 +20,15 @@ public class EnemyThumbnail : MonoBehaviour
 
     static EnemyThumbnail _inst;
     static readonly Dictionary<EnemySurfaceUnit, Sprite> _cache = new();
+    // Booth slots are handed out when a shoot STARTS, not when it finishes.
+    // Deriving the spot from _cache.Count instead meant every request issued in
+    // the same frame (a whole roster is requested at once) read the same count,
+    // parked every subject on the identical spot, and photographed the pile —
+    // so all portraits came out showing whichever enemy was rendered in front.
+    static int _nextSlot;
+    // In-flight shoots, so two requests for the same prefab share one booth run
+    // instead of racing each other.
+    static readonly Dictionary<EnemySurfaceUnit, List<System.Action<Sprite>>> _pending = new();
 
     static void Ensure()
     {
@@ -49,8 +58,16 @@ public class EnemyThumbnail : MonoBehaviour
             return;
         }
 
+        // Already being photographed — ride along on that shoot.
+        if (_pending.TryGetValue(prefab, out var waiting))
+        {
+            waiting.Add(onReady);
+            return;
+        }
+        _pending[prefab] = new List<System.Action<Sprite>> { onReady };
+
         Ensure();
-        _inst.StartCoroutine(_inst.Shoot(prefab, onReady));
+        _inst.StartCoroutine(_inst.Shoot(prefab));
     }
 
     static void Apply(Image target, Sprite s)
@@ -62,11 +79,13 @@ public class EnemyThumbnail : MonoBehaviour
         target.enabled        = true;
     }
 
-    IEnumerator Shoot(EnemySurfaceUnit prefab, System.Action<Sprite> deliver)
+    IEnumerator Shoot(EnemySurfaceUnit prefab)
     {
         // Park each subject at its own spot so two concurrent requests can't
-        // photobomb each other.
-        Vector3 spot = BoothOrigin + Vector3.right * (_cache.Count * 50f);
+        // photobomb each other. The slot is claimed up front — a counter that
+        // only moves once the sprite is cached would hand the same spot to every
+        // request made before the first one finished.
+        Vector3 spot = BoothOrigin + Vector3.right * (_nextSlot++ * 50f);
 
         var go = Instantiate(prefab.gameObject, spot, Quaternion.identity);
         // Visual only: no pathing, no physics, no gameplay behaviours.
@@ -119,7 +138,11 @@ public class EnemyThumbnail : MonoBehaviour
         sprite.hideFlags = HideFlags.DontSave;
         _cache[prefab] = sprite;
 
-        deliver?.Invoke(sprite);
+        if (_pending.TryGetValue(prefab, out var waiting))
+        {
+            _pending.Remove(prefab);
+            for (int i = 0; i < waiting.Count; i++) waiting[i]?.Invoke(sprite);
+        }
     }
 
     // Radius of the built visual around `centre`, from renderer bounds.

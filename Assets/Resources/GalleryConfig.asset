@@ -1,0 +1,54 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 25dba5363ba18044eb12c6e7392b3403, type: 3}
+  m_Name: GalleryConfig
+  m_EditorClassIdentifier: Assembly-CSharp::GalleryConfig
+  music:
+  - title: Wanderer
+    description: 
+    track:
+      idInternal: 0
+      valueGuidInternal: 
+      WwiseObjectReference: {fileID: 11400000, guid: 8c498a8900833f5499c799644afeecbf, type: 2}
+  - title: Time Draining
+    description: A song that's hard to predict.
+    track:
+      idInternal: 0
+      valueGuidInternal: 
+      WwiseObjectReference: {fileID: 11400000, guid: 52054f8a490aa594fbe07f471ed6fe84, type: 2}
+  - title: Another Dimension Invades
+    description: Battle song for regular game play. Annoying creatures are messing
+      up with the rhythm.
+    track:
+      idInternal: 0
+      valueGuidInternal: 
+      WwiseObjectReference: {fileID: 11400000, guid: 9c4b2b7423b8ea64589b56f8df68804a, type: 2}
+  - title: Piecing together
+    description: 'Idle song for regular game play. '
+    track:
+      idInternal: 0
+      valueGuidInternal: 
+      WwiseObjectReference: {fileID: 11400000, guid: 26c61ff29d35a9d4d9b143d2185c8afa, type: 2}
+  - title: Piecing together (no remix)
+    description: It feels even more intense.
+    track:
+      idInternal: 0
+      valueGuidInternal: 
+      WwiseObjectReference: {fileID: 11400000, guid: 6f9ed0260b4d5f54ea3f72d2f322ceb9, type: 2}
+  - title: Firmament's Farewell (Unfinished)
+    description: Too soon to say goodbye.
+    track:
+      idInternal: 0
+      valueGuidInternal: 
+      WwiseObjectReference: {fileID: 11400000, guid: 85e3c987bf05d7640b116fb01bd2dd11, type: 2}
+  shaders: []
+  monsters: []
