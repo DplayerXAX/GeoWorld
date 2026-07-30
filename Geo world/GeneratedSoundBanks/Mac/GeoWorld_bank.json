@@ -10,7 +10,7 @@
     "Type": "User",
     "GUID": "{FBAC0406-FA36-4CC0-8121-80F7B6376C7E}",
     "Language": "SFX",
-    "Hash": "{D1AC9A8A-1FAC-3472-64B0-A89CC146ACDA}",
+    "Hash": "{2D37EA41-B34D-B514-45E5-C724D0DFDBA0}",
     "ObjectPath": "\\SoundBanks\\Default Work Unit\\GeoWorld_bank",
     "ShortName": "GeoWorld_bank",
     "Path": "GeoWorld_bank.bnk",
@@ -168,6 +168,14 @@
       "CachePath": "3B/{3B77E4F8-81DB-8B8A-6735-C4CB80FC8E9C}.wem"
      },
      {
+      "Id": "566543099",
+      "Language": "SFX",
+      "Streaming": "false",
+      "Location": "Memory",
+      "ShortName": "bgm_Jump.wav",
+      "CachePath": "28/{28D4672F-2484-1CD6-8135-CDAD372308AD}.wem"
+     },
+     {
       "Id": "574625576",
       "Language": "SFX",
       "Streaming": "false",
@@ -184,12 +192,28 @@
       "CachePath": "7D/{7D33FDDD-17CE-8BDA-C0FB-75D5FB7BA202}.wem"
      },
      {
+      "Id": "759153527",
+      "Language": "SFX",
+      "Streaming": "false",
+      "Location": "Memory",
+      "ShortName": "ambient bgm.wav",
+      "CachePath": "EA/{EAE24123-C675-595C-B50B-C5C8DBB2DC3C}.wem"
+     },
+     {
       "Id": "799708269",
       "Language": "SFX",
       "Streaming": "false",
       "Location": "Memory",
       "ShortName": "solo_g.wav",
       "CachePath": "19/{1911F0A7-4D8E-A328-97B7-A96A592875B7}.wem"
+     },
+     {
+      "Id": "888948449",
+      "Language": "SFX",
+      "Streaming": "false",
+      "Location": "Memory",
+      "ShortName": "bgm_bright.wav",
+      "CachePath": "80/{802F01CA-1B7C-C650-FF9E-451F3BE2007C}.wem"
      },
      {
       "Id": "910080498",
@@ -206,6 +230,14 @@
       "Location": "Memory",
       "ShortName": "Piecing together.wav",
       "CachePath": "07/{07380261-5851-21B4-FB73-0AA3725DE03D}.wem"
+     },
+     {
+      "Id": "1041853334",
+      "Language": "SFX",
+      "Streaming": "false",
+      "Location": "Memory",
+      "ShortName": "Geo world\\Originals\\SFX\\Firmament's Farewell.wav",
+      "CachePath": "05/{05699BA4-CFCD-889D-F3BE-AFA55F83C841}.wem"
      },
      {
       "Id": "1062488858",
@@ -242,6 +274,18 @@
        },
        {
         "Id": "397057705"
+       }
+      ]
+     },
+     {
+      "Id": "316156164",
+      "Name": "Battle_Loop",
+      "ObjectPath": "\\Events\\Default Work Unit\\Battle_Loop",
+      "GUID": "{6E21EF0F-E595-4270-976A-19DECCBC9F2C}",
+      "DurationType": "Infinite",
+      "MediaRefs": [
+       {
+        "Id": "910080498"
        }
       ]
      },
@@ -341,6 +385,20 @@
       ]
      },
      {
+      "Id": "2833906173",
+      "Name": "Ending_Loop",
+      "ObjectPath": "\\Events\\Default Work Unit\\Ending_Loop",
+      "GUID": "{DFE390B2-FB1A-47F1-98F5-5F86CB97A85F}",
+      "DurationType": "OneShot",
+      "DurationMin": "0",
+      "DurationMax": "0",
+      "MediaRefs": [
+       {
+        "Id": "1041853334"
+       }
+      ]
+     },
+     {
       "Id": "84696441",
       "Name": "F",
       "ObjectPath": "\\Events\\Default Work Unit\\F",
@@ -405,6 +463,30 @@
        },
        {
         "Id": "799708269"
+       }
+      ]
+     },
+     {
+      "Id": "240925188",
+      "Name": "Idle_Loop",
+      "ObjectPath": "\\Events\\Default Work Unit\\Idle_Loop",
+      "GUID": "{0B040373-40A3-4150-A014-B9601F6A69C9}",
+      "DurationType": "Infinite",
+      "MediaRefs": [
+       {
+        "Id": "969998505"
+       }
+      ]
+     },
+     {
+      "Id": "4131907033",
+      "Name": "Piece_Normal",
+      "ObjectPath": "\\Events\\Default Work Unit\\Piece_Normal",
+      "GUID": "{FFFC71CD-910F-4439-A444-F74F4054F8BC}",
+      "DurationType": "Infinite",
+      "MediaRefs": [
+       {
+        "Id": "969998505"
        }
       ]
      },
@@ -607,6 +689,24 @@
         "Id": "265774773"
        }
       ]
+     },
+     {
+      "Id": "966390882",
+      "Name": "title_Loop",
+      "ObjectPath": "\\Events\\Default Work Unit\\title_Loop",
+      "GUID": "{F41BB254-1CE3-4FFB-8FF6-585EE39774F9}",
+      "DurationType": "Infinite",
+      "MediaRefs": [
+       {
+        "Id": "566543099"
+       },
+       {
+        "Id": "759153527"
+       },
+       {
+        "Id": "888948449"
+       }
+      ]
      }
     ],
     "GameParameters": [
@@ -708,6 +808,6 @@
     ]
    }
   ],
-  "FileHash": "{C873ED36-6EF7-4EBF-8053-F1C5EB635A64}"
+  "FileHash": "{9ABBA18E-ACF2-935F-89AA-49FC9E3EB992}"
  }
 }

@@ -133,6 +133,12 @@ public class EnemySurfaceUnit : MonoBehaviour
         _temporarySpeedMultiplier = Mathf.Max(0.01f, multiplier);
     }
 
+    // The reversible slow/haste channel on its own (1 = untouched). Read by
+    // StatusEffectWatcher to decide whether to show buff / debuff arrows —
+    // baseSpeedMultiplier is deliberately excluded, since that's the archetype's
+    // authored speed, not a status effect.
+    public float TemporarySpeedMultiplier => _temporarySpeedMultiplier;
+
     public void AddExternalDisplacement(Vector3 delta)
     {
         if (_health <= 0 || delta.sqrMagnitude <= 0.000001f) return;

@@ -83,7 +83,7 @@ public class SettingsScreen : MonoBehaviour
 
     // ── Live-refresh widgets from GameSettings (called on open + after Reset) ──
     Slider _masterSlider, _musicSlider, _sfxSlider, _panSlider, _lookSlider;
-    Toggle _fullscreenToggle, _vsyncToggle, _smoothEditToggle;
+    Toggle _fullscreenToggle, _vsyncToggle, _smoothEditToggle, _freeMoveToggle;
     TMP_Text _qualityLabel, _frameCapLabel;
     int _qualityIndex, _frameCapIndex;
 
@@ -97,6 +97,7 @@ public class SettingsScreen : MonoBehaviour
         _fullscreenToggle.SetIsOnWithoutNotify(GameSettings.Fullscreen);
         _vsyncToggle.SetIsOnWithoutNotify(GameSettings.VSync);
         _smoothEditToggle.SetIsOnWithoutNotify(GameSettings.SmoothBlockEditing);
+        _freeMoveToggle.SetIsOnWithoutNotify(GameSettings.FreeMove);
 
         _qualityIndex = Mathf.Clamp(GameSettings.QualityLevel, 0, QualitySettings.names.Length - 1);
         _qualityLabel.text = QualitySettings.names.Length > 0 ? QualitySettings.names[_qualityIndex] : "-";
@@ -212,8 +213,8 @@ public class SettingsScreen : MonoBehaviour
         vlg.childControlWidth = vlg.childControlHeight = true;
         vlg.childForceExpandWidth = true; vlg.childForceExpandHeight = false;
 
-        _fullscreenToggle = BuildToggleRow(root, "Fullscreen", v => { GameSettings.Fullscreen = v; GameSettings.ApplyDisplay(); GameSettings.Save(); });
-        _vsyncToggle      = BuildToggleRow(root, "V-Sync",     v => { GameSettings.VSync      = v; GameSettings.ApplyDisplay(); GameSettings.Save(); });
+        _fullscreenToggle = BuildToggleRow(root, "Fullscreen", null, v => { GameSettings.Fullscreen = v; GameSettings.ApplyDisplay(); GameSettings.Save(); });
+        _vsyncToggle      = BuildToggleRow(root, "V-Sync",     null, v => { GameSettings.VSync      = v; GameSettings.ApplyDisplay(); GameSettings.Save(); });
 
         BuildChoiceRow(root, "Quality", out _qualityLabel,
             () => { _qualityIndex = (_qualityIndex - 1 + QualitySettings.names.Length) % QualitySettings.names.Length; ApplyQuality(); },
@@ -252,7 +253,12 @@ public class SettingsScreen : MonoBehaviour
 
         _panSlider  = BuildSliderRow(root, "Camera pan speed", 2f, 20f,  v => { GameSettings.CameraPanSpeed  = v; GameSettings.ApplyInput(); GameSettings.Save(); });
         _lookSlider = BuildSliderRow(root, "Look sensitivity", 40f, 300f, v => { GameSettings.LookSensitivity = v; GameSettings.ApplyInput(); GameSettings.Save(); });
-        _smoothEditToggle = BuildToggleRow(root, "Smooth block editing", v => { GameSettings.SmoothBlockEditing = v; GameSettings.Save(); });
+        _smoothEditToggle = BuildToggleRow(root, "Smooth block editing",
+            "Held blocks glide between cells instead of snapping instantly.",
+            v => { GameSettings.SmoothBlockEditing = v; GameSettings.Save(); });
+        _freeMoveToggle   = BuildToggleRow(root, "Free move",
+            "Off: the held block snaps to the nearest cell touching your build. On: it follows the mouse freely.",
+            v => { GameSettings.FreeMove = v; GameSettings.Save(); });
 
         _firstControlControls = _panSlider.gameObject;
         return root.gameObject;
@@ -288,18 +294,34 @@ public class SettingsScreen : MonoBehaviour
         return slider;
     }
 
-    Toggle BuildToggleRow(RectTransform parent, string label, System.Action<bool> onChanged)
+    Toggle BuildToggleRow(RectTransform parent, string label, string description, System.Action<bool> onChanged)
     {
         var row = NewRect("Row", parent);
-        row.gameObject.AddComponent<LayoutElement>().minHeight = 46f;
+        row.gameObject.AddComponent<LayoutElement>().minHeight = string.IsNullOrEmpty(description) ? 46f : 62f;
         var hlg = row.gameObject.AddComponent<HorizontalLayoutGroup>();
         hlg.spacing = 16f; hlg.childAlignment = TextAnchor.MiddleLeft;
         hlg.childControlWidth = hlg.childControlHeight = true;
         hlg.childForceExpandWidth = false; hlg.childForceExpandHeight = false;
 
-        var labelT = NewText("Label", row, 22f, GeoPalette.Ink, FontStyles.Bold, TextAlignmentOptions.MidlineLeft);
+        // Text block takes all the flexible space, which is what actually pushes
+        // the toggle to sit flush against the row's right edge instead of right
+        // after a fixed-width label.
+        var textBlock = NewRect("Text", row);
+        textBlock.gameObject.AddComponent<LayoutElement>().flexibleWidth = 1f;
+        var vlg = textBlock.gameObject.AddComponent<VerticalLayoutGroup>();
+        vlg.spacing = 2f; vlg.childAlignment = TextAnchor.MiddleLeft;
+        vlg.childControlWidth = vlg.childControlHeight = true;
+        vlg.childForceExpandWidth = true; vlg.childForceExpandHeight = false;
+
+        var labelT = NewText("Label", textBlock, 22f, GeoPalette.Ink, FontStyles.Bold, TextAlignmentOptions.MidlineLeft);
         labelT.text = label;
-        labelT.gameObject.AddComponent<LayoutElement>().preferredWidth = 260f;
+
+        if (!string.IsNullOrEmpty(description))
+        {
+            var descT = NewText("Desc", textBlock, 15f, GeoPalette.WithAlpha(GeoPalette.Ink, 0.6f), FontStyles.Normal, TextAlignmentOptions.MidlineLeft);
+            descT.text = description;
+            descT.textWrappingMode = TextWrappingModes.Normal;
+        }
 
         var toggleRt = NewRect("Toggle", row);
         toggleRt.gameObject.AddComponent<LayoutElement>().preferredWidth = 60f;

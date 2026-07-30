@@ -25,3 +25,4 @@ MonoBehaviour:
   - Long press R to restart the level if you get stuck.
   - You may place new turrets and blocks during combat, but you can't edit the existed
     ones.
+  - You may also place block and turret when pausing.

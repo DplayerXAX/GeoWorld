@@ -284,7 +284,7 @@ public partial class PlacementController
         while (elapsed < dur)
         {
             if (obj == null) yield break;
-            elapsed += Time.deltaTime;
+            elapsed += Time.unscaledDeltaTime;   // must still play during the planning pause (timeScale = 0)
             float t = Mathf.Clamp01(elapsed / dur);
 
             float scale;

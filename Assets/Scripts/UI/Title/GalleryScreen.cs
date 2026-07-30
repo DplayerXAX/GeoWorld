@@ -56,6 +56,8 @@ public class GalleryScreen : MonoBehaviour
     public float cubePlinthDrop = 0.86f;
     [Tooltip("Keep the monster card visibly raised above its plinth without moving the plinth.")]
     public float monsterPlinthDrop = 0.68f;
+    [Tooltip("World-space size every monster model is normalised to, so a tiny prefab and a huge one both read the same on the pedestal.")]
+    public float monsterDisplaySize = 1f;
 
     [Header("Atelier materials")]
     [Tooltip("A cool graphite blue makes the desk recess while the exhibit accents stay vivid.")]
@@ -64,17 +66,54 @@ public class GalleryScreen : MonoBehaviour
     [Header("Camera poses")]
     public Vector3 overviewCamPos  = new Vector3(0.78f, 4.25f, -5.7f);
     public Vector3 overviewLookAt  = new Vector3(0f, 1.5f, 0.28f);
-    [Tooltip("Detail camera position = focused object + this.")]
-    public Vector3 detailCamOffset = new Vector3(2.7f, 1.05f, -3.05f);
-    [Tooltip("Detail camera looks at focused object + this. Non-zero X pushes the object off-centre (right) so the left menu has room.")]
-    public Vector3 detailLookOffset = new Vector3(-3.35f, -0.95f, 0.18f);
-    public float   camGlide = 8f;
+    [Tooltip("Fallback detail camera position = focused object + this. Used only for a section with no Transform assigned below.")]
+    public Vector3 detailCamOffset = new Vector3(0.1f, 2.95f, -2.5f);
+    [Tooltip("Fallback detail camera look-at = focused object + this. Only consulted when a section has no Transform AND aimFromSubject is off — a world-space offset is correct at exactly one aspect ratio.")]
+    public Vector3 detailLookOffset = new Vector3(-1.9f, -0.85f, 2f);
+
+    [Header("Detail camera poses (per section)")]
+    [Tooltip("Hand-position this Transform in the Scene view to set where the lens STANDS for Music. Its rotation is used as the aim only if you actually rotated it (see aimFromSubject).")]
+    public Transform musicDetailCam;
+    [Tooltip("Hand-position this Transform for the Shaders zoom-in camera.")]
+    public Transform shaderDetailCam;
+    [Tooltip("Hand-position this Transform for the Monster zoom-in camera.")]
+    public Transform monsterDetailCam;
+    [Tooltip("An un-rotated mark was dragged into place but never aimed, so its rotation points flat down world +Z instead of at the exhibit. On (recommended): solve the aim from where the exhibit actually is. Off: use the mark's raw rotation, whatever it is.")]
+    public bool aimFromSubject = true;
+
+    [Header("Camera transition")]
+    [Tooltip("Seconds for a view change to essentially land. The move is a critically damped spring — ~91% there at 2x this, ~98% at 3x — scaled per move by travel distance and turn angle.")]
+    [Min(0.05f)] public float camSettleTime = 0.34f;
+    [Tooltip("Detail-to-overview moves run this much faster than the way in. The player already knows the wide, so lingering on the way out is dead air.")]
+    [Range(0.5f, 1f)] public float returnSpeedUp = 0.85f;
+    [Tooltip("How far the aim runs ahead of the dolly. Above 1 the framing locks before the camera stops — an operator's head arrives before his body. Also raises peak turn rate, so keep it small.")]
+    [Range(1f, 1.4f)] public float aimLead = 1.12f;
+    [Tooltip("0 = the camera travels in a straight line, 1 = it swings around the exhibit on an arc that can't dive through the desk.")]
+    [Range(0f, 1f)] public float camArc = 1f;
+    [Tooltip("Camera positions are never allowed below this Y. The plinth top sits at 0 and the floor at -0.38.")]
+    public float deskClearance = 0.55f;
+    [Tooltip("Degrees the lens narrows when zoomed in. The camera backs off by exactly the amount that holds the subject the same size, so only the compression changes — the hand-tuned framing is never re-cropped.")]
+    public float detailFovDrop = 8f;
+    [Tooltip("Where the exhibit sits on screen, 0-1 from the bottom-left. Leave at zero to derive it from the live menu strip / caption plaque / title band, which is the only version that survives an ultrawide.")]
+    public Vector2 detailFraming = Vector2.zero;
+    [Tooltip("Move progress (0-1) at which the detail panel begins to fade in. Late on purpose: a panel that arrives before the camera drains the destination of its reveal.")]
+    [Range(0f, 1f)] public float panelCueIn = 0.55f;
+    [Tooltip("Move progress at which the overview panel begins to fade in. Early, so coming back is never a bare frame while the camera retreats.")]
+    [Range(0f, 1f)] public float panelCueOut = 0.22f;
+    [Tooltip("Accessibility: zeroes the path arc and the lens change, and stops the aim leading the body. The move still eases and still lands — it just stops being vestibular.")]
+    public bool reducedCameraMotion = false;
 
     [Header("Atelier presentation")]
     [Tooltip("Subtle movement applied to the complete exhibit composition as the pointer explores the screen.")]
     public float exhibitParallax = 0.11f;
     [Tooltip("How quickly the composition catches up to the pointer.")]
     public float parallaxGlide = 5f;
+    [Tooltip("Multiplier on the composition's pointer TILT while zoomed in. The rig's translation is followed exactly by the live camera target and costs the subject nothing, but a rotation about the world origin isn't cancelled that way.")]
+    [Range(0f, 1f)] public float detailParallaxTilt = 0.35f;
+    [Tooltip("Degrees per second the record turns while it's being inspected. The overview's 35 is a turntable seen across a room — far too fast to actually look at.")]
+    public float detailRecordSpin = 12f;
+    [Tooltip("Swell held by a hovered exhibit, and by the focused one for the whole flight in — otherwise it deflates the instant you click and reads as the subject retreating from you.")]
+    [Range(1f, 1.3f)] public float focusHoldScale = 1.12f;
     [Tooltip("Seconds used by the overview/detail information crossfade.")]
     [Min(0.05f)] public float panelFadeTime = 0.32f;
 
@@ -85,19 +124,33 @@ public class GalleryScreen : MonoBehaviour
     Cat  _cat;
     int  _index;
 
-    Camera _cam;
-    Vector3    _camPosTarget;
-    Quaternion _camRotTarget;
+    Camera     _cam;
+    float      _baseFov = 60f;   // adopted from the scene camera, never imposed
     Transform  _galleryRig;
     Vector2    _parallax;
     readonly List<Transform> _orbitAccents = new();
+
+    // The whole camera move is this: one normalised progress scalar plus its
+    // velocity, and the pose we launched from. Everything else is derived.
+    float   _s = 1f, _sVel, _smoothTime = 0.34f;
+    Vector3 _posFrom, _aimFrom, _pivot, _camVel;
+    float   _fovFrom;
+
+    // The incoming panel is armed rather than shown, and released by the shot clock.
+    CanvasGroup _panelArmed;
+    float _panelCue = 2f;   // > 1 = nothing armed
+
+    // Cached screen-space framing point, re-derived whenever the window changes.
+    Vector2 _framing = new Vector2(0.6f, 0.53f);
+    int   _framingW, _framingH;
+    float _framingScale = -1f;
 
     // Desk objects
     GameObject        _recordObj;
     GameObject        _cubeObj;
     TitleCubeShowcase _showcase;
-    GameObject        _monsterObj;
-    SpriteRenderer    _monsterSprite;
+    GameObject        _monsterObj;        // pedestal / click target — never swapped
+    GameObject        _monsterInstance;   // the live enemy prefab standing on it
     readonly List<TextMeshPro> _worldLabels = new();
 
     // Hover state (overview): the hovered pick swells slightly and its label gilds.
@@ -105,8 +158,8 @@ public class GalleryScreen : MonoBehaviour
     readonly Dictionary<GalleryPick, Vector3> _baseScales = new();
     readonly Dictionary<GalleryPick, TextMeshPro> _pickLabels = new();
 
-    // Data
-    static readonly (string file, string label, string desc)[] Shaders =
+    // Built-in shader fallback (used only when GalleryConfig has no shaders).
+    static readonly (string file, string label, string desc)[] ShadersFallback =
     {
         ("Gallery_M_Order",           "Order — Grid",       "The lawful lattice. Same-color pieces in a line debuff every enemy that crosses the path."),
         ("Gallery_M_HarmonyWood",     "Harmony — Flow",     "All same-color pieces joined as one — a standing buff to every turret touching the weave."),
@@ -118,14 +171,18 @@ public class GalleryScreen : MonoBehaviour
         ("Gallery_glass",            "Glass Box",           "Refractive casing — the game's translucent block finish."),
     };
 
-    static readonly (string name, string desc)[] Music =
-    {
-        ("Calm",   "The build phase. Quiet, patient, room to think between the tides of chaos."),
-        ("Battle", "The wave. The score sharpens as the horde marches on your Core."),
-    };
-
-    struct MonsterEntry { public string name; public EnemySurfaceUnit prefab; public string desc; }
-    readonly List<MonsterEntry> _monsters = new();
+    // Runtime data, populated from GalleryConfig (Resources/GalleryConfig) or the
+    // built-in fallbacks in LoadConfig().
+    GalleryConfig _config;
+    struct ShaderItem  { public string title; public string desc; public Material mat; }
+    struct MusicItem   { public string title; public string desc; public AK.Wwise.Event evt; }
+    struct MonsterItem { public string name;  public string desc; public EnemySurfaceUnit prefab; }
+    readonly List<ShaderItem>  _shaderItems = new();
+    readonly List<MusicItem>   _musicItems  = new();
+    readonly List<MonsterItem> _monsters    = new();
+    bool _configMusic;      // true = play Wwise tracks; false = Calm/Battle mood fallback
+    uint _musicPlayingId;   // currently-playing config track (0 = none)
+    int  _musicIndex;       // the track actually playing — persists across overview/detail nav
 
     // Detail UI
     Canvas   _canvas;
@@ -136,42 +193,70 @@ public class GalleryScreen : MonoBehaviour
     bool _detailVisible;
     bool _overviewVisible;
     RectTransform _menuList;
+    // The detail framing point is derived from these two rather than hard-coded, so
+    // the composition survives an ultrawide (the 380px strip is a fifth of a 1920
+    // frame and only an eighth of a 3440 one).
+    RectTransform _menuStrip;
+    RectTransform _plaqueRect;
     TMP_Text _titleText, _descText, _menuHeading, _detailIndexText, _overviewStatus;
     readonly List<Button> _menuButtons = new();
 
     void Awake()
     {
         _cam = Camera.main;
-        if (_cam != null && (_cam.clearFlags != CameraClearFlags.Skybox || RenderSettings.skybox == null))
+        if (_cam != null)
         {
-            // Default to a paper-white room, while respecting a Gallery scene that
-            // intentionally supplies its own atelier skybox material.
-            _cam.clearFlags = CameraClearFlags.SolidColor;
-            _cam.backgroundColor = GeoPalette.Paper;
+            // Adopt whatever focal length the scene ships with rather than imposing
+            // one: overviewCamPos was framed against it, and a serialized default
+            // here would silently re-crop the establishing wide.
+            _baseFov = _cam.fieldOfView;
+            if (_cam.clearFlags != CameraClearFlags.Skybox || RenderSettings.skybox == null)
+            {
+                // Default to a paper-white room, while respecting a Gallery scene that
+                // intentionally supplies its own atelier skybox material.
+                _cam.clearFlags = CameraClearFlags.SolidColor;
+                _cam.backgroundColor = GeoPalette.Paper;
+            }
         }
-        LoadMonsters();
+        LoadConfig();
         BuildDesk();
         BuildObjects();
         BuildUI();
         GoOverview(instant: true);
+        PlayMusic(_musicIndex);   // starts the instant the Gallery loads; keeps running across nav
     }
 
     void Update()
     {
-        // Camera glide
-        if (_cam != null)
-        {
-            float k = 1f - Mathf.Exp(-camGlide * Time.deltaTime);
-            _cam.transform.position = Vector3.Lerp(_cam.transform.position, _camPosTarget, k);
-            _cam.transform.rotation = Quaternion.Slerp(_cam.transform.rotation, _camRotTarget, k);
-        }
-
+        // Order matters, and it's the reverse of what shipped. The detail target is
+        // re-solved every frame from FocusPos(), which reads a child of _galleryRig,
+        // so the rig has to move FIRST — otherwise the camera is permanently framed
+        // against last frame's parallax.
         UpdateAtelierMotion();
+        UpdateCamera();
+
+        // The incoming panel was armed by GoOverview/EnterDetail; the shot clock
+        // releases it. Slaving the crossfade to the camera is what stops the caption
+        // card arriving three quarters of a second before the picture does.
+        if (_panelArmed != null && _s >= _panelCue)
+        {
+            SetPanelVisible(_panelArmed, true, false);
+            _panelArmed = null;
+        }
         UpdatePanelTransitions();
 
-        // Idle spin for record + billboard sprite / labels
-        if (_recordObj != null) _recordObj.transform.Rotate(0f, 35f * Time.deltaTime, 0f, Space.Self);
-        BillboardToCamera(_monsterSprite != null ? _monsterSprite.transform : null);
+        // The three world titles dissolve on the camera's own curve. SetActive was
+        // the last hard cut left anywhere in the transition.
+        float labelAlpha = _view == View.Overview ? _s : 1f - _s;
+        foreach (var kv in _pickLabels)
+            if (kv.Value != null) kv.Value.alpha = labelAlpha;
+
+        // Idle spin for the record — much slower while it's actually being inspected.
+        if (_recordObj != null)
+            _recordObj.transform.Rotate(0f,
+                (_view == View.Detail ? detailRecordSpin : 35f) * Time.deltaTime, 0f, Space.Self);
+        // The monster is a real model now — it spins on its own (TurretBeacon /
+        // EnemyChaoticVisual) instead of being billboarded like the old sprite card.
         for (int i = 0; i < _worldLabels.Count; i++) BillboardToCamera(_worldLabels[i] != null ? _worldLabels[i].transform : null);
 
         // Overview hover + click-to-zoom
@@ -209,9 +294,20 @@ public class GalleryScreen : MonoBehaviour
             Vector2 pointer = new Vector2(
                 Input.mousePosition.x / Mathf.Max(1f, Screen.width),
                 Input.mousePosition.y / Mathf.Max(1f, Screen.height)) * 2f - Vector2.one;
-            _parallax = Vector2.Lerp(_parallax, pointer, 1f - Mathf.Exp(-parallaxGlide * Time.deltaTime));
+            // Unscaled, to match the camera clock. The detail target is resolved from
+            // a rig child every frame, so if the two ever advanced on different time
+            // sources the camera would chase a rig that had moved by a different
+            // amount. 1-exp(-k*dt) is frame-rate independent either way.
+            _parallax = Vector2.Lerp(_parallax, pointer, 1f - Mathf.Exp(-parallaxGlide * Time.unscaledDeltaTime));
             _galleryRig.localPosition = new Vector3(_parallax.x, _parallax.y * 0.45f, 0f) * exhibitParallax;
-            _galleryRig.localRotation = Quaternion.Euler(-_parallax.y * 1.3f, _parallax.x * 1.8f, 0f);
+            // Only the TILT is scaled back in detail. The rig's translation is followed
+            // exactly by the live camera target, so it costs the subject nothing and
+            // buys real differential parallax against the neighbouring plinths — but a
+            // rotation about the world origin is NOT cancelled that way: at the
+            // record's ~2.9m radius the full yaw swings it across the frame while the
+            // player is trying to read the caption.
+            float tilt = _view == View.Detail ? detailParallaxTilt : 1f;
+            _galleryRig.localRotation = Quaternion.Euler(-_parallax.y * 1.3f * tilt, _parallax.x * 1.8f * tilt, 0f);
         }
 
         for (int i = 0; i < _orbitAccents.Count; i++)
@@ -236,7 +332,11 @@ public class GalleryScreen : MonoBehaviour
         float k = 1f - Mathf.Exp(-speed * Time.unscaledDeltaTime);
         group.alpha = Mathf.Lerp(group.alpha, visible ? 1f : 0f, k);
         // The outgoing panel remains visible while it fades but never catches a click.
-        bool interactive = visible && group.alpha > 0.96f;
+        // 0.96 against an exponential fade was a bug: ln(25)/(1/0.32) = 1.03s in which
+        // NEITHER panel accepted input, so BACK was dead for a full second after every
+        // view change. Half opacity is reached in 0.22s and is still far too solid for
+        // an invisible panel to swallow anything.
+        bool interactive = visible && group.alpha > 0.5f;
         group.interactable = interactive;
         group.blocksRaycasts = interactive;
     }
@@ -282,12 +382,21 @@ public class GalleryScreen : MonoBehaviour
             if (pick == null) continue;
             // In shader-detail the showcase's own swap "punch" owns the cube's scale.
             if (_view == View.Detail && pick.gameObject == _cubeObj) continue;
-            Vector3 target = kv.Value * (pick == _hovered ? 1.12f : 1f);
+            // The clicked exhibit HOLDS its swell for the whole flight. Easing it back
+            // the instant _hovered cleared — the same frame EnterDetail fires — made
+            // the object visibly shrink while the camera flew toward it, which read as
+            // the subject retreating from the player.
+            bool held = _view == View.Detail && pick.gameObject == FocusObject(_cat);
+            Vector3 target = kv.Value * (pick == _hovered || held ? focusHoldScale : 1f);
             pick.transform.localScale = Vector3.Lerp(pick.transform.localScale, target, k);
 
             if (_pickLabels.TryGetValue(pick, out var label) && label != null)
-                label.color = Color.Lerp(label.color,
-                    pick == _hovered ? GeoPalette.Gold : GeoPalette.Ink, k);
+            {
+                // Lerp the hue only — the overview/detail dissolve owns the alpha now.
+                Color c = Color.Lerp(label.color, pick == _hovered ? GeoPalette.Gold : GeoPalette.Paper, k);
+                c.a = label.color.a;
+                label.color = c;
+            }
         }
     }
 
@@ -349,7 +458,10 @@ public class GalleryScreen : MonoBehaviour
         labelRend.sharedMaterial = SolidMaterial();
         MpbColor.Set(labelRend, GeoPalette.Signal);
         var recordPick = MakePickable(_recordObj, Cat.Music);
-        _pickLabels[recordPick] = AddWorldLabel(_galleryRig, recordPos + Vector3.down * 0.9f, "MUSIC");
+        // The record sits much lower (y ~0.85) than the cube/monster, so the same
+        // -0.9 drop the other two use would land the label inside the desk plinth
+        // (top surface at y=0) — a smaller drop keeps it clear above the desk.
+        _pickLabels[recordPick] = AddWorldLabel(_galleryRig, recordPos + Vector3.down * 0.45f + Vector3.back * 0.7f, "MUSIC");
         BuildExhibitBase(recordPos, GeoPalette.Signal, "01");
 
         // Cube (Shaders) — the TitleCubeShowcase.
@@ -359,30 +471,27 @@ public class GalleryScreen : MonoBehaviour
         _cubeObj.transform.position   = cubePos;
         _cubeObj.transform.localScale = Vector3.one * 1.3f;
         var mats = new List<Material>();
-        foreach (var s in Shaders)
-        {
-            var m = Resources.Load<Material>($"Gallery/Shaders/{s.file}");
-            if (m != null) mats.Add(m);
-        }
+        foreach (var s in _shaderItems) if (s.mat != null) mats.Add(s.mat);
         _showcase = _cubeObj.AddComponent<TitleCubeShowcase>();
         _showcase.materials = mats;
         _showcase.autoAdvance = false;   // never auto-cycles — only the detail ‹ / › arrows change it
         _showcase.ShowIndex(0);
         var cubePick = MakePickable(_cubeObj, Cat.Shaders);
-        _pickLabels[cubePick] = AddWorldLabel(_galleryRig, cubePos + Vector3.down * 1.2f, "SHADERS");
+        _pickLabels[cubePick] = AddWorldLabel(_galleryRig, cubePos + Vector3.down * 1.2f + Vector3.back * 0.7f, "SHADERS");
         BuildExhibitBase(cubePos + Vector3.down * cubePlinthDrop, GeoPalette.Blue, "02");
 
-        // Monster — a billboarded portrait card standing on the desk.
+        // Monster — the real prefab on a pedestal, not a photographed card, so the
+        // model reads in 3D like the other two exhibits. `_monsterObj` is just the
+        // mount: it keeps the click collider and the pick/label bookkeeping stable
+        // while the actual creature underneath is swapped per menu selection.
         _monsterObj = new GameObject("Monster");
         _monsterObj.transform.SetParent(_galleryRig, false);
         _monsterObj.transform.position = monsterPos;
-        _monsterSprite = _monsterObj.AddComponent<SpriteRenderer>();
         var box = _monsterObj.AddComponent<BoxCollider>();
-        box.size = new Vector3(1.4f, 1.4f, 0.2f);
-        if (_monsters.Count > 0)
-            EnemyThumbnail.Request(_monsters[0].prefab, s => ApplyMonsterSprite(s));
+        box.size = new Vector3(1.4f, 1.4f, 1.4f);
+        if (_monsters.Count > 0) ShowMonster(_monsters[0].prefab);
         var monsterPick = MakePickable(_monsterObj, Cat.Monster);
-        _pickLabels[monsterPick] = AddWorldLabel(_galleryRig, monsterPos + Vector3.down * 1.0f, "MONSTER");
+        _pickLabels[monsterPick] = AddWorldLabel(_galleryRig, monsterPos + Vector3.down * 1.0f + Vector3.back * 0.7f, "MONSTER");
         BuildExhibitBase(monsterPos + Vector3.down * monsterPlinthDrop, GeoPalette.Gold, "03");
     }
 
@@ -453,17 +562,64 @@ public class GalleryScreen : MonoBehaviour
         return _solidMat;
     }
 
-    void ApplyMonsterSprite(Sprite s)
+    // Swaps the creature standing on the monster pedestal for a live instance of
+    // `prefab`. Gameplay behaviours are stripped the same way EnemyThumbnail's
+    // photo booth strips them — this is a display case, nothing should path,
+    // collide, heal, seal or split in here. EnemyChaoticVisual is deliberately
+    // LEFT ON: the mesh-less enemies only exist once it has built their shards.
+    void ShowMonster(EnemySurfaceUnit prefab)
     {
-        if (_monsterSprite == null || s == null) return;
-        _monsterSprite.sprite = s;
-        // Scale so the 128px sprite reads ~1.4 world units tall.
-        float h = s.rect.height / s.pixelsPerUnit;
-        Vector3 scale = Vector3.one * (1.4f / Mathf.Max(0.01f, h));
-        _monsterObj.transform.localScale = scale;
-        // Keep the hover system's rest-scale in sync, else it eases back to the old one.
-        var pick = _monsterObj.GetComponent<GalleryPick>();
-        if (pick != null) _baseScales[pick] = scale;
+        if (_monsterObj == null) return;
+
+        if (_monsterInstance != null) Destroy(_monsterInstance);
+        _monsterInstance = null;
+        if (prefab == null) return;
+
+        _monsterInstance = Instantiate(prefab.gameObject, _monsterObj.transform);
+        _monsterInstance.name = "MonsterModel";
+        _monsterInstance.transform.localPosition = Vector3.zero;
+        _monsterInstance.transform.localRotation = Quaternion.identity;
+
+        foreach (var c in _monsterInstance.GetComponentsInChildren<EnemySurfaceUnit>(true))      c.enabled = false;
+        foreach (var c in _monsterInstance.GetComponentsInChildren<EnemyHealerAura>(true))       c.enabled = false;
+        foreach (var c in _monsterInstance.GetComponentsInChildren<EnemyBlockSealer>(true))      c.enabled = false;
+        foreach (var c in _monsterInstance.GetComponentsInChildren<EnemyTurretSuppressor>(true)) c.enabled = false;
+        foreach (var c in _monsterInstance.GetComponentsInChildren<EnemySplitOnAlive>(true))     c.enabled = false;
+        // The pedestal's own BoxCollider is what the click raycast wants to hit —
+        // the model's colliders would sit in front of it and swallow the click.
+        foreach (var c in _monsterInstance.GetComponentsInChildren<Collider>(true))              c.enabled = false;
+        foreach (var c in _monsterInstance.GetComponentsInChildren<Rigidbody>(true))             c.isKinematic = true;
+
+        StartCoroutine(FitMonsterNextFrame(_monsterInstance));
+    }
+
+    // Prefabs vary wildly in authored size (one ships a 34× scaled mesh child),
+    // and the procedural ones have no renderers at all until EnemyChaoticVisual
+    // has run — so normalise to a fixed display height a frame later, once the
+    // visual actually exists and its bounds can be measured.
+    System.Collections.IEnumerator FitMonsterNextFrame(GameObject model)
+    {
+        yield return null;
+        yield return null;
+        if (model == null || _monsterObj == null) yield break;
+
+        var bounds = new Bounds(model.transform.position, Vector3.zero);
+        bool any = false;
+        foreach (var r in model.GetComponentsInChildren<Renderer>())
+        {
+            if (r == null) continue;
+            if (!any) { bounds = r.bounds; any = true; }
+            else bounds.Encapsulate(r.bounds);
+        }
+        if (!any) yield break;
+
+        float height = Mathf.Max(bounds.size.x, Mathf.Max(bounds.size.y, bounds.size.z));
+        if (height < 0.001f) yield break;
+
+        model.transform.localScale = Vector3.one * (monsterDisplaySize / height);
+        // Re-centre on the pedestal: the measured centre is rarely the pivot.
+        Vector3 localCentre = model.transform.parent.InverseTransformPoint(bounds.center);
+        model.transform.localPosition = -localCentre * (monsterDisplaySize / height);
     }
 
     GalleryPick MakePickable(GameObject go, Cat cat)
@@ -486,7 +642,7 @@ public class GalleryScreen : MonoBehaviour
         if (font != null) tmp.font = font;
         tmp.text = text;
         tmp.fontSize = 4f;
-        tmp.color = GeoPalette.Ink;   // ink on the pale atelier sky
+        tmp.color = GeoPalette.Paper;   // white, reads over the dark atelier sky
         tmp.fontStyle = FontStyles.Bold;
         tmp.alignment = TextAlignmentOptions.Center;
         tmp.raycastTarget = false;
@@ -494,15 +650,63 @@ public class GalleryScreen : MonoBehaviour
         return tmp;
     }
 
-    void LoadMonsters()
+    // Populate every section from GalleryConfig (Resources/GalleryConfig) when
+    // present, otherwise from the built-in fallbacks. Each section falls back
+    // independently, so you can author just the music and leave the rest default.
+    void LoadConfig()
     {
-        var balance = Resources.Load<BalanceTable>("Gallery/Gallery_BalanceTable");
-        if (balance?.enemies == null) return;
-        foreach (var rec in balance.enemies)
+        _config = Resources.Load<GalleryConfig>("GalleryConfig");
+
+        // ── Shaders ──
+        _shaderItems.Clear();
+        if (_config != null && _config.shaders != null && _config.shaders.Count > 0)
         {
-            if (rec == null || rec.prefab == null) continue;
-            string desc = $"Health {rec.maxHealth}   ·   Speed {rec.speedMultiplier:0.##}×   ·   Bounty {rec.rewardOnKill}\nFirst appears round {rec.minRound + 1}.";
-            _monsters.Add(new MonsterEntry { name = rec.name, prefab = rec.prefab, desc = desc });
+            foreach (var s in _config.shaders)
+                if (s != null && s.material != null)
+                    _shaderItems.Add(new ShaderItem { title = s.title, desc = s.description, mat = s.material });
+        }
+        if (_shaderItems.Count == 0)
+        {
+            foreach (var s in ShadersFallback)
+            {
+                var m = Resources.Load<Material>($"Gallery/Shaders/{s.file}");
+                if (m != null) _shaderItems.Add(new ShaderItem { title = s.label, desc = s.desc, mat = m });
+            }
+        }
+
+        // ── Music ──
+        _musicItems.Clear();
+        if (_config != null && _config.music != null && _config.music.Count > 0)
+        {
+            _configMusic = true;
+            foreach (var t in _config.music)
+                if (t != null) _musicItems.Add(new MusicItem { title = t.title, desc = t.description, evt = t.track });
+        }
+        else
+        {
+            _configMusic = false;   // no authored tracks → the old Calm/Battle switcher
+            _musicItems.Add(new MusicItem { title = "Calm",   desc = "The build phase. Quiet, patient, room to think between the tides of chaos." });
+            _musicItems.Add(new MusicItem { title = "Battle", desc = "The wave. The score sharpens as the horde marches on your Core." });
+        }
+
+        // ── Monsters ──
+        _monsters.Clear();
+        if (_config != null && _config.monsters != null && _config.monsters.Count > 0)
+        {
+            foreach (var m in _config.monsters)
+                if (m != null && m.prefab != null)
+                    _monsters.Add(new MonsterItem { name = m.title, prefab = m.prefab, desc = m.description });
+        }
+        if (_monsters.Count == 0)
+        {
+            var balance = Resources.Load<BalanceTable>("Gallery/Gallery_BalanceTable");
+            if (balance?.enemies != null)
+                foreach (var rec in balance.enemies)
+                {
+                    if (rec == null || rec.prefab == null) continue;
+                    string desc = $"Health {rec.maxHealth}   ·   Speed {rec.speedMultiplier:0.##}×   ·   Bounty {rec.rewardOnKill}\nFirst appears round {rec.minRound + 1}.";
+                    _monsters.Add(new MonsterItem { name = rec.name, prefab = rec.prefab, desc = desc });
+                }
         }
     }
 
@@ -511,12 +715,24 @@ public class GalleryScreen : MonoBehaviour
     void GoOverview(bool instant)
     {
         _view = View.Overview;
-        if (_battleMood) SetMood(false);
+        // Music keeps playing across overview/detail — only OnDestroy (leaving the
+        // Gallery) actually stops it.
         SetPanelVisible(_detailGroup, false, instant);
-        SetPanelVisible(_overviewGroup, true, instant);
+        if (instant)
+        {
+            SetPanelVisible(_overviewGroup, true, true);
+            _panelArmed = null;
+        }
+        else
+        {
+            // Early on the way out: a bare frame while the camera retreats reads as a
+            // hitch, whereas going in the reveal wants the screen to itself.
+            _panelArmed = _overviewGroup;
+            _panelCue   = panelCueOut;
+        }
         if (_overviewStatus != null) _overviewStatus.text = "THREE STUDIES  /  SELECT AN EXHIBIT";
 
-        SetCameraPose(overviewCamPos, Quaternion.LookRotation(overviewLookAt - overviewCamPos, Vector3.up), instant);
+        RetargetCamera(instant);
     }
 
     void EnterDetail(Cat cat)
@@ -524,19 +740,29 @@ public class GalleryScreen : MonoBehaviour
         AudioManager.Instance?.PlayUISound();
         _view = View.Detail;
         _cat  = cat;
-        _index = 0;
-        if (cat != Cat.Music && _battleMood) SetMood(false);
+        // Music resumes on whichever track is already playing rather than restarting
+        // from the top; the other categories always start browsing from the first item.
+        _index = cat == Cat.Music ? _musicIndex : 0;
         SetPanelVisible(_overviewGroup, false, false);
-        SetPanelVisible(_detailGroup, true, false);
+        // Armed, not shown. UpdateCamera releases it at panelCueIn so the plaque lands
+        // a beat before the frame stops instead of well ahead of it.
+        _panelArmed = _detailGroup;
+        _panelCue   = panelCueIn;
 
-        Vector3 focus = FocusPos(cat);
-        Vector3 pos = focus + detailCamOffset;
-        Vector3 look = focus + detailLookOffset;
-        SetCameraPose(pos, Quaternion.LookRotation(look - pos, Vector3.up), instant: false);
+        RetargetCamera(instant: false);
 
         RebuildMenu();
         ApplyItem();
     }
+
+    // A hand-positioned Transform per section takes priority; falls back to the
+    // shared offset-from-object math when a section has no Transform assigned.
+    Transform DetailCamFor(Cat cat) => cat switch
+    {
+        Cat.Music   => musicDetailCam,
+        Cat.Monster => monsterDetailCam,
+        _           => shaderDetailCam,
+    };
 
     Vector3 FocusPos(Cat cat) => cat switch
     {
@@ -545,11 +771,20 @@ public class GalleryScreen : MonoBehaviour
         _           => _cubeObj    != null ? _cubeObj.transform.position    : cubePos,
     };
 
+    // The clickable object behind a section — used to hold its hover swell while the
+    // camera flies toward it.
+    GameObject FocusObject(Cat cat) => cat switch
+    {
+        Cat.Music   => _recordObj,
+        Cat.Monster => _monsterObj,
+        _           => _cubeObj,
+    };
+
     int ItemCount() => _cat switch
     {
-        Cat.Music   => Music.Length,
+        Cat.Music   => _musicItems.Count,
         Cat.Monster => _monsters.Count,
-        _           => Shaders.Length,
+        _           => _shaderItems.Count,
     };
 
     void Step(int dir)
@@ -573,25 +808,58 @@ public class GalleryScreen : MonoBehaviour
         switch (_cat)
         {
             case Cat.Music:
-                _titleText.text = Music[_index].name;
-                _descText.text  = Music[_index].desc;
-                SetMood(_index == 1);
+                _titleText.text = _musicItems[_index].title;
+                _descText.text  = _musicItems[_index].desc;
+                // Only switch the playing track when browsing actually picked a
+                // different one — entering the Music detail view (or arriving on
+                // the currently-playing item) must not restart it.
+                if (_index != _musicIndex) { _musicIndex = _index; PlayMusic(_musicIndex); }
                 break;
             case Cat.Monster:
                 var m = _monsters[_index];
                 _titleText.text = m.name;
                 _descText.text  = m.desc;
-                EnemyThumbnail.Request(m.prefab, s => ApplyMonsterSprite(s));
+                ShowMonster(m.prefab);
                 break;
             default:
-                _titleText.text = Shaders[_index].label;
-                _descText.text  = Shaders[_index].desc;
+                _titleText.text = _shaderItems[_index].title;
+                _descText.text  = _shaderItems[_index].desc;
                 if (_showcase != null) _showcase.ShowIndex(_index);
                 break;
         }
     }
 
     bool _battleMood;
+
+    // Config path: post the selected Wwise track (stopping the previous). Fallback
+    // path (no authored tracks): the two entries drive AudioManager's Calm/Battle mood.
+    void PlayMusic(int index)
+    {
+        if (_configMusic)
+        {
+            StopMusic();
+            var evt = index >= 0 && index < _musicItems.Count ? _musicItems[index].evt : null;
+            if (evt != null && evt.IsValid()) _musicPlayingId = evt.Post(gameObject);
+        }
+        else
+        {
+            SetMood(index == 1);
+        }
+    }
+
+    void StopMusic()
+    {
+        if (_musicPlayingId != 0)
+        {
+            AkUnitySoundEngine.StopPlayingID(_musicPlayingId, 300,
+                AkCurveInterpolation.AkCurveInterpolation_Linear);
+            _musicPlayingId = 0;
+        }
+        if (!_configMusic && _battleMood) SetMood(false);
+    }
+
+    void OnDestroy() => StopMusic();   // don't leave a track ringing after leaving the Gallery
+
     void SetMood(bool battle)
     {
         _battleMood = battle;
@@ -725,6 +993,7 @@ public class GalleryScreen : MonoBehaviour
 
         // Left menu strip.
         var strip = NewRect("MenuStrip", _detailRoot);
+        _menuStrip = strip;    // its live width is one edge of the detail framing box
         strip.anchorMin = new Vector2(0f, 0f); strip.anchorMax = new Vector2(0f, 1f);
         strip.pivot = new Vector2(0f, 0.5f);
         strip.sizeDelta = new Vector2(380f, 0f);
@@ -796,6 +1065,7 @@ public class GalleryScreen : MonoBehaviour
         // Description (bottom centre) — paper text on a translucent ink plaque,
         // like a caption card beside a hung work.
         var plaque = NewRect("Plaque", _detailRoot);
+        _plaqueRect = plaque;  // and the caption card's height is the lower edge
         plaque.anchorMin = new Vector2(0.34f, 0f); plaque.anchorMax = new Vector2(0.98f, 0f); plaque.pivot = new Vector2(0.5f, 0f);
         plaque.anchoredPosition = new Vector2(0f, 44f); plaque.sizeDelta = new Vector2(0f, 170f);
         var plaqueImg = plaque.gameObject.AddComponent<Image>();
@@ -835,9 +1105,9 @@ public class GalleryScreen : MonoBehaviour
         {
             string name = _cat switch
             {
-                Cat.Music   => Music[i].name,
+                Cat.Music   => _musicItems[i].title,
                 Cat.Monster => _monsters[i].name,
-                _           => Shaders[i].label,
+                _           => _shaderItems[i].title,
             };
             int captured = i;
             var btn = BuildMenuRow(_menuList, name, () => { _index = captured; AudioManager.Instance?.PlayUISound(); ApplyItem(); HighlightMenu(); });
@@ -916,15 +1186,274 @@ public class GalleryScreen : MonoBehaviour
 
     // ── Camera ───────────────────────────────────────────────────────────────
 
-    void SetCameraPose(Vector3 pos, Quaternion rot, bool instant)
+    // One critically damped scalar drives the whole move, and the camera's ROTATION
+    // is never authored or interpolated — it's derived every frame from where the
+    // subject physically is. That pair of decisions is the entire fix:
+    //
+    //   · a spring eases IN as well as out. The old 1-exp(-camGlide*dt) chase left
+    //     at maximum speed on frame one and then crawled, never quite arriving —
+    //     which is also why nothing else on screen had anything to synchronise to;
+    //   · a spring survives interruption as a PROPERTY, because it carries velocity.
+    //     BACK pressed mid-push-in decelerates, turns and leaves;
+    //   · a derived aim keeps the subject framed for every frame of the move.
+    //     Slerping two quaternions walks the geodesic through orientation space,
+    //     which has no relationship to where the exhibit actually is, so the subject
+    //     swims out of frame mid-move and drifts back;
+    //   · and because the target is re-solved every frame instead of baked at click
+    //     time, the pointer parallax under _galleryRig stops fighting the camera:
+    //     the subject stays pinned while its neighbours slide past it. That's the
+    //     answer to "dead once it arrives", and it beats authored idle noise because
+    //     the player causes it.
+
+    // Reference travel and turn for the pacing law. Distance scales as a SQRT, so a
+    // 6m move is quicker than a 3m one but not twice as quick; ANGLE scales linearly,
+    // which pins peak turn rate regardless of how far apart the two poses are. Turn
+    // rate — not linear speed — is what decides whether a move is comfortable.
+    const float RefDist  = 4.5f;
+    const float RefAngle = 18f;
+
+    // Starts a new move. Safe to call at any point during another one.
+    void RetargetCamera(bool instant)
     {
-        _camPosTarget = pos;
-        _camRotTarget = rot;
-        if (instant && _cam != null)
+        if (_cam == null) return;
+        ResolveTarget(out Vector3 eyeTo, out Vector3 aimTo, out float fovTo);
+
+        // ALWAYS re-launch from where the lens actually is. Restarting from the pose
+        // we happened to be aiming at is what teleports a camera on an interrupt.
+        _posFrom = _cam.transform.position;
+        _fovFrom = _cam.fieldOfView;
+        _pivot   = aimTo;   // frozen for the duration: the point the arc swings around
+
+        // Deriving the outgoing aim from the LIVE rotation rather than caching the
+        // last one makes the hand-off exactly continuous even if something else moved
+        // the camera, and costs one distance.
+        float aimDepth = Mathf.Max(0.5f, Vector3.Distance(_posFrom, aimTo));
+        _aimFrom = _posFrom + _cam.transform.forward * aimDepth;
+
+        Vector3 seg = eyeTo - _posFrom;
+        float segLen = Mathf.Max(0.05f, seg.magnitude);
+        float angle  = Quaternion.Angle(_cam.transform.rotation, LookSafe(aimTo - eyeTo));
+
+        float pace = Mathf.Clamp(Mathf.Max(Mathf.Sqrt(segLen / RefDist), angle / RefAngle), 0.8f, 1.75f);
+        _smoothTime = Mathf.Max(0.05f, camSettleTime * pace
+                    * (_view == View.Overview ? returnSpeedUp : 1f));
+
+        // Keep only the part of the current motion that still points at the new
+        // target — carrying raw speed through a reversal would be an instant velocity
+        // flip. The cap is 2/smoothTime, exactly the initial velocity at which a
+        // critically damped step stops overshooting: an interrupt (or a frame hitch's
+        // velocity spike) can bend the move, but can never make it fly past its mark.
+        float carried = Vector3.Dot(_camVel, seg / segLen) / segLen;
+        _sVel = Mathf.Clamp(carried, 0f, 2f / _smoothTime);
+        _s = 0f;
+
+        if (instant)
         {
-            _cam.transform.position = pos;
-            _cam.transform.rotation = rot;
+            // Awake calls this before the first Update, so it must leave no scrap of
+            // in-flight state behind.
+            _s = 1f; _sVel = 0f; _camVel = Vector3.zero;
+            _posFrom = eyeTo; _aimFrom = aimTo; _fovFrom = fovTo;
+            Vector3 look = aimTo - eyeTo;
+            if (look.sqrMagnitude > 1e-8f) _cam.transform.SetPositionAndRotation(eyeTo, LookSafe(look));
+            else                           _cam.transform.position = eyeTo;
+            _cam.fieldOfView = fovTo;
         }
+    }
+
+    void UpdateCamera()
+    {
+        if (_cam == null) return;
+
+        // Unscaled throughout. The panel crossfade already is, and a menu camera has
+        // no business freezing because something elsewhere left timeScale at 0.
+        // Mathf.SmoothDamp integrates the spring analytically per step, so this is
+        // frame-rate independent with no fixed-step bookkeeping.
+        float dt = Time.unscaledDeltaTime;
+
+        ResolveTarget(out Vector3 eyeTo, out Vector3 aimTo, out float fovTo);
+
+        _s = Mathf.Clamp01(Mathf.SmoothDamp(_s, 1f, ref _sVel, _smoothTime, Mathf.Infinity, dt));
+
+        // The aim runs ahead of the body and locks before the dolly stops — an
+        // operator frames first and finishes moving second. Clamping the lead BEFORE
+        // the warp means the framing is genuinely locked for the last stretch while
+        // the camera coasts in, and (1-x)² still has zero slope at x=1 so it settles
+        // rather than snapping.
+        float lead = Mathf.Clamp01(_s * (reducedCameraMotion ? 1f : Mathf.Max(1f, aimLead)));
+        Vector3 aim = Vector3.Lerp(_aimFrom, aimTo, 1f - (1f - lead) * (1f - lead));
+
+        Vector3 eye = ArcLerp(_posFrom, eyeTo, _pivot, _s, reducedCameraMotion ? 0f : camArc);
+
+        // Measured from the commanded delta, so it's exact and free. RetargetCamera
+        // projects it onto the next segment; that projection is the whole interrupt story.
+        _camVel = dt > 1e-5f ? (eye - _cam.transform.position) / dt : Vector3.zero;
+
+        Vector3 look = aim - eye;
+        if (look.sqrMagnitude > 1e-8f) _cam.transform.SetPositionAndRotation(eye, LookSafe(look));
+        else                           _cam.transform.position = eye;
+        // Degrees, on the same scalar as everything else. What matters is that the
+        // lens has no clock of its own — a FOV excursion the player can't attribute to
+        // anything is a dolly zoom, and it's the one camera trick people consciously notice.
+        _cam.fieldOfView = Mathf.Lerp(_fovFrom, fovTo, _s);
+    }
+
+    // Where the lens wants to be RIGHT NOW. Called every frame, not cached at click
+    // time: FocusPos() reads a rig child, so a baked pose would leave the subject
+    // sliding under a dead camera as the pointer parallax breathes.
+    void ResolveTarget(out Vector3 eye, out Vector3 aim, out float fov)
+    {
+        if (_view == View.Overview)
+        {
+            eye = overviewCamPos;
+            aim = overviewLookAt;
+            fov = _baseFov;
+            return;
+        }
+
+        Vector3 focus  = FocusPos(_cat);
+        Transform mark = DetailCamFor(_cat);
+
+        if (mark != null)
+        {
+            // The hand-placed mark decides where the lens STANDS — that's the whole
+            // point of the per-section Transforms and it stays authoritative.
+            eye = mark.position;
+
+            // Its ROTATION is only trusted if it was actually aimed. All three marks
+            // in Gallery.unity carry an identity rotation, so every detail shot was
+            // pointing flat down world +Z rather than at its exhibit — which is why
+            // the Music view framed empty air with the record below the bottom edge.
+            float depth = Vector3.Dot(focus - eye, mark.forward);
+            if (!aimFromSubject && depth > 0.35f)
+            {
+                // Project the subject onto the view axis rather than aiming straight
+                // at it, so a deliberately off-centre composition survives intact.
+                eye.y = Mathf.Max(eye.y, deskClearance);
+                aim   = eye + mark.forward * depth;
+                fov   = _baseFov;   // composed at the scene's own lens — don't re-crop it
+                return;
+            }
+
+            fov = LensFor(ref eye, focus);
+            eye.y = Mathf.Max(eye.y, deskClearance);
+            aim = AimPoint(eye, focus, fov, DetailFraming());
+            return;
+        }
+
+        // No mark for this section — the original offset-from-object fallback, with
+        // the framing solved the same way so it benefits from the fix too.
+        eye = focus + detailCamOffset;
+        fov = LensFor(ref eye, focus);
+        eye.y = Mathf.Max(eye.y, deskClearance);
+        aim = aimFromSubject ? AimPoint(eye, focus, fov, DetailFraming())
+                             : focus + detailLookOffset;
+    }
+
+    // Narrowing the lens would crop the hand-tuned framing tighter, so back the camera
+    // off along its own view axis by exactly the amount that holds the subject the same
+    // apparent size. Only the compression changes — which is the entire point of
+    // reaching for a longer lens, and it's what makes detailFovDrop free.
+    float LensFor(ref Vector3 eye, Vector3 focus)
+    {
+        float fov = Mathf.Clamp(_baseFov - (reducedCameraMotion ? 0f : detailFovDrop), 12f, 170f);
+        Vector3 back = eye - focus;
+        float d = back.magnitude;
+        if (d < 1e-3f) return fov;
+
+        float t0 = Mathf.Tan(Mathf.Clamp(_baseFov, 5f, 170f) * 0.5f * Mathf.Deg2Rad);
+        float t1 = Mathf.Tan(fov * 0.5f * Mathf.Deg2Rad);
+        if (t1 > 1e-4f) eye = focus + back / d * (d * t0 / t1);
+        return fov;
+    }
+
+    // The rotation that puts `focus` at normalised screen point `framing`, expressed
+    // as the world point the frame CENTRE must sit on. Interpolating an aim point
+    // rather than a quaternion is what keeps the subject nailed for every frame of the
+    // move; asking for a screen position rather than a world offset is what keeps it
+    // framed on a display that isn't 16:9.
+    Vector3 AimPoint(Vector3 eye, Vector3 focus, float fov, Vector2 framing)
+    {
+        Vector3 to = focus - eye;
+        float dist = to.magnitude;
+        if (dist < 1e-3f) return focus + Vector3.forward;
+
+        // Camera.fieldOfView is the VERTICAL angle, hence the aspect only on yaw.
+        float tanH   = Mathf.Tan(Mathf.Clamp(fov, 5f, 170f) * 0.5f * Mathf.Deg2Rad);
+        float aspect = _cam != null && _cam.aspect > 0.01f ? _cam.aspect : 16f / 9f;
+        float yaw    = -Mathf.Atan((framing.x * 2f - 1f) * tanH * aspect) * Mathf.Rad2Deg;  // yaw left → subject moves right
+        float pitch  =  Mathf.Atan((framing.y * 2f - 1f) * tanH)          * Mathf.Rad2Deg;  // nose down → subject moves up
+        return eye + LookSafe(to) * Quaternion.Euler(pitch, yaw, 0f) * Vector3.forward * dist;
+    }
+
+    // The exhibit belongs in the middle of the area the detail UI does NOT occupy. A
+    // hard-coded point is right at 1920x1080 and drifts everywhere else; deriving it
+    // from the live rects also means it re-derives itself if anyone resizes the menu
+    // strip or the caption plaque.
+    Vector2 DetailFraming()
+    {
+        if (detailFraming.x > 0f && detailFraming.y > 0f) return detailFraming;   // inspector override
+
+        float scale = _canvas != null ? _canvas.scaleFactor : 1f;
+        // scaleFactor isn't final until the canvas has run once, so key the cache on it
+        // as well as on the resolution rather than solving a single time at Awake.
+        if (Screen.width != _framingW || Screen.height != _framingH
+            || !Mathf.Approximately(scale, _framingScale))
+        {
+            _framingW = Screen.width; _framingH = Screen.height; _framingScale = scale;
+            _framing = SolveFramingFromUI(scale);
+        }
+        return _framing;
+    }
+
+    Vector2 SolveFramingFromUI(float scale)
+    {
+        float w = Mathf.Max(1f, Screen.width);
+        float h = Mathf.Max(1f, Screen.height);
+
+        float left = _menuStrip != null
+            ? Mathf.Clamp(_menuStrip.rect.width * scale / w, 0f, 0.5f) : 0.2f;
+        float bottom = _plaqueRect != null
+            ? Mathf.Clamp((_plaqueRect.anchoredPosition.y + _plaqueRect.sizeDelta.y) * scale / h, 0f, 0.45f) : 0.2f;
+        float top = _titleText != null
+            ? Mathf.Clamp((-_titleText.rectTransform.anchoredPosition.y + _titleText.rectTransform.sizeDelta.y) * scale / h, 0f, 0.45f) : 0.14f;
+
+        return new Vector2(left   + (1f - left) * 0.5f,
+                           bottom + Mathf.Max(0.1f, 1f - bottom - top) * 0.5f);
+    }
+
+    // Orbit-and-dolly rather than a straight chord. The point isn't the swoop — at
+    // these distances the arc departs from the line by about 20cm — it's the RADIUS
+    // LAW: apparent size goes as 1/d, so a linear position lerp on the Music approach
+    // (7.5m → 2.9m) puts the halfway point at 5.2m, only 1.44× the start, and more
+    // than half the perceived approach happens in the last quarter of the move. A
+    // geometric radius puts it at sqrt(7.5*2.9) = 4.67m, the true perceptual middle.
+    static Vector3 ArcLerp(Vector3 a, Vector3 b, Vector3 pivot, float s, float amount)
+    {
+        Vector3 straight = Vector3.Lerp(a, b, s);
+        if (amount <= 0.001f) return straight;
+
+        Vector3 oa = a - pivot, ob = b - pivot;
+        float ra = oa.magnitude, rb = ob.magnitude;
+        // Both guards are load-bearing, not tidiness: Vector3.Slerp with near-zero or
+        // near-antiparallel inputs returns NaN, and a NaN written into a camera
+        // transform is permanent — the view never comes back.
+        if (ra < 0.05f || rb < 0.05f) return straight;
+        Vector3 na = oa / ra, nb = ob / rb;
+        if (Vector3.Dot(na, nb) < -0.98f) return straight;
+
+        // Vector3.Slerp interpolates magnitude linearly, so feed it unit vectors and
+        // carry the radius separately.
+        Vector3 arc = pivot + Vector3.Slerp(na, nb, s) * (ra * Mathf.Pow(rb / ra, s));
+        return Vector3.Lerp(straight, arc, Mathf.Clamp01(amount));
+    }
+
+    // Vector3.up is degenerate for a shot looking straight down — no pose here comes
+    // close, but a hand-placed mark overhead would spam LookRotation errors.
+    static Quaternion LookSafe(Vector3 dir)
+    {
+        if (dir.sqrMagnitude < 1e-8f) return Quaternion.identity;
+        dir.Normalize();
+        return Quaternion.LookRotation(dir, Mathf.Abs(dir.y) > 0.999f ? Vector3.forward : Vector3.up);
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────

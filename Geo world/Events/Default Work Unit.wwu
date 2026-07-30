@@ -201,6 +201,61 @@
 						</Action>
 					</ChildrenList>
 				</Event>
+				<Event Name="Battle_Loop" ID="{6E21EF0F-E595-4270-976A-19DECCBC9F2C}">
+					<ChildrenList>
+						<Action Name="" ID="{62487C45-2227-4CCD-BE15-8371A8B1F3EC}" ShortID="853080396">
+							<ReferenceList>
+								<Reference Name="Target">
+									<ObjectRef Name="Battle_BGM" ID="{F58F28CD-1C24-4E26-9833-0B2D0400D14D}" WorkUnitID="{48502AC3-EE10-4952-8017-84D50D1C5C35}"/>
+								</Reference>
+							</ReferenceList>
+						</Action>
+					</ChildrenList>
+				</Event>
+				<Event Name="Idle_Loop" ID="{0B040373-40A3-4150-A014-B9601F6A69C9}">
+					<ChildrenList>
+						<Action Name="" ID="{CE4D1BD3-72B2-47C6-BFE1-288C458B18F8}" ShortID="464962413">
+							<ReferenceList>
+								<Reference Name="Target">
+									<ObjectRef Name="Piece_BGM" ID="{1ADB3116-59D9-49B5-BDAE-EDC5D67F9BDE}" WorkUnitID="{48502AC3-EE10-4952-8017-84D50D1C5C35}"/>
+								</Reference>
+							</ReferenceList>
+						</Action>
+					</ChildrenList>
+				</Event>
+				<Event Name="title_Loop" ID="{F41BB254-1CE3-4FFB-8FF6-585EE39774F9}">
+					<ChildrenList>
+						<Action Name="" ID="{3AB154CA-0319-4094-B210-847E5378E15C}" ShortID="1069711765">
+							<ReferenceList>
+								<Reference Name="Target">
+									<ObjectRef Name="Calm_BGM" ID="{A2518408-A2B6-47F4-9EA9-BF1874DBA83C}" WorkUnitID="{48502AC3-EE10-4952-8017-84D50D1C5C35}"/>
+								</Reference>
+							</ReferenceList>
+						</Action>
+					</ChildrenList>
+				</Event>
+				<Event Name="Piece_Normal" ID="{FFFC71CD-910F-4439-A444-F74F4054F8BC}">
+					<ChildrenList>
+						<Action Name="" ID="{6EC3A903-097F-4A45-B54F-F5B8EF99F9B9}" ShortID="658224977">
+							<ReferenceList>
+								<Reference Name="Target">
+									<ObjectRef Name="Piece" ID="{1ABBFEFA-9E75-4CCB-A67C-0FCB7FCE1D20}" WorkUnitID="{48502AC3-EE10-4952-8017-84D50D1C5C35}"/>
+								</Reference>
+							</ReferenceList>
+						</Action>
+					</ChildrenList>
+				</Event>
+				<Event Name="Ending_Loop" ID="{DFE390B2-FB1A-47F1-98F5-5F86CB97A85F}">
+					<ChildrenList>
+						<Action Name="" ID="{F41B0B14-8B6E-4224-82D3-9C22171C7DDC}" ShortID="357434010">
+							<ReferenceList>
+								<Reference Name="Target">
+									<ObjectRef Name="Ending song" ID="{098EA6AC-01E2-439A-A4AB-EF30D3C5042E}" WorkUnitID="{48502AC3-EE10-4952-8017-84D50D1C5C35}"/>
+								</Reference>
+							</ReferenceList>
+						</Action>
+					</ChildrenList>
+				</Event>
 			</ChildrenList>
 		</WorkUnit>
 	</Events>

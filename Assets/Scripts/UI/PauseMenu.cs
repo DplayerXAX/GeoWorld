@@ -228,15 +228,16 @@ public class PauseMenu : MonoBehaviour
         _overlayGo.SetActive(false);
 
         // Paper panel (system menu).
+        const float buttonSpacing = 6f;   // tighter gap between menu buttons
         var panel = NewRect("Panel", canvasGo.transform);
         panel.anchorMin = panel.anchorMax = panel.pivot = new Vector2(0.5f, 0.5f);
-        panel.sizeDelta = new Vector2(panelWidth, 6f * (buttonHeight + 14f) + 90f);
+        panel.sizeDelta = new Vector2(panelWidth, 6f * (buttonHeight + buttonSpacing) + 90f);
         _panelGo = panel.gameObject;
         panel.gameObject.AddComponent<Image>().color = GeoPalette.Paper;
 
         var vlg = panel.gameObject.AddComponent<VerticalLayoutGroup>();
         vlg.padding = new RectOffset(28, 28, 26, 26);
-        vlg.spacing = 12f;
+        vlg.spacing = buttonSpacing;
         vlg.childControlWidth = vlg.childControlHeight = true;
         vlg.childForceExpandWidth = true; vlg.childForceExpandHeight = false;
         vlg.childAlignment = TextAnchor.UpperCenter;
@@ -278,7 +279,7 @@ public class PauseMenu : MonoBehaviour
     }
 
     const float ChipSize     = 80f;
-    const float ChipGap      = 12f;
+    const float ChipGap      = 4f;
     const float PipGap       = -4f;
     const float PipRowHeight = 16f;
 

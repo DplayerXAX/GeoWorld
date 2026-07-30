@@ -22,6 +22,12 @@ public static class GameSettings
     // On: held-block ghosts glide between cells (both PlacementController in gameplay
     // and LevelMapController in LevelSelect). Off: both snap instantly, cell to cell.
     public static bool SmoothBlockEditing = true;
+    // Off (default): the mouse still moves the held block freely in Edit mode, but
+    // the cell it lands on is pulled to the nearest one actually touching the
+    // existing build (see PlacementController.SnapToNearestSupported) — WASDQE/
+    // scroll nudge it further from there. On: the raw mouse-projected cell is used
+    // directly with no snap search, the original free-floating behavior.
+    public static bool FreeMove = false;
 
     public static readonly int[] FrameCaps = { 0, 30, 60, 120, 144 };
 
@@ -48,6 +54,7 @@ public static class GameSettings
         CameraPanSpeed  = PlayerPrefs.GetFloat("set.panspeed", CameraPanSpeed);
         LookSensitivity = PlayerPrefs.GetFloat("set.looksens", LookSensitivity);
         SmoothBlockEditing = PlayerPrefs.GetInt("set.smoothedit", SmoothBlockEditing ? 1 : 0) == 1;
+        FreeMove           = PlayerPrefs.GetInt("set.freemove",   FreeMove ? 1 : 0) == 1;
     }
 
     public static void Save()
@@ -62,6 +69,7 @@ public static class GameSettings
         PlayerPrefs.SetFloat("set.panspeed", CameraPanSpeed);
         PlayerPrefs.SetFloat("set.looksens", LookSensitivity);
         PlayerPrefs.SetInt("set.smoothedit", SmoothBlockEditing ? 1 : 0);
+        PlayerPrefs.SetInt("set.freemove",   FreeMove ? 1 : 0);
         PlayerPrefs.Save();
     }
 
@@ -112,6 +120,7 @@ public static class GameSettings
         QualityLevel = QualitySettings.GetQualityLevel(); FrameCap = 0;
         CameraPanSpeed = 8f; LookSensitivity = 120f;
         SmoothBlockEditing = true;
+        FreeMove = false;
         Save(); ApplyAll();
     }
 }

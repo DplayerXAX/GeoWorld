@@ -76,13 +76,26 @@ public class LevelEndpointGenerator : MonoBehaviour
         endCell   = Vector3Int.zero;
     }
 
-    public Vector3Int GenerateSinglePoint(List<Vector3Int> existingPoints, bool isStart)
+    // `reachEnds`: pass the level's end cells to constrain a NEW START to the
+    // union of the existing starts' reach circles (see SampleStartInsideReach).
+    // Null / empty (and every end-point call) keeps the plain shell sampling.
+    public Vector3Int GenerateSinglePoint(List<Vector3Int> existingPoints, bool isStart,
+                                          List<Vector3Int> reachEnds = null)
     {
         if (existingPoints == null || existingPoints.Count == 0) return Vector3Int.zero;
 
-        var anchor = existingPoints[Random.Range(0, existingPoints.Count)];
-        var cell   = ShellSample(anchor, minDistance, maxDistance);
-        if (cell == anchor) return Vector3Int.zero;
+        Vector3Int cell;
+        if (isStart && reachEnds != null && reachEnds.Count > 0)
+        {
+            cell = SampleStartInsideReach(existingPoints, reachEnds);
+            if (cell == Vector3Int.zero) return Vector3Int.zero;
+        }
+        else
+        {
+            var anchor = existingPoints[Random.Range(0, existingPoints.Count)];
+            cell = ShellSample(anchor, minDistance, maxDistance);
+            if (cell == anchor) return Vector3Int.zero;
+        }
 
         var prefab = isStart ? startPrefab : endPrefab;
         if (prefab != null)
@@ -96,6 +109,87 @@ public class LevelEndpointGenerator : MonoBehaviour
         }
 
         return cell;
+    }
+
+    // ── Start-point reach circles ────────────────────────────────────────────
+    // A new spawn point may only appear within "reach" of the existing ones:
+    // every existing start draws a circle centred on itself whose radius is its
+    // OWN distance to the end, and the new start has to land inside at least one
+    // of them. Union, not intersection — the circles don't have to overlap, the
+    // cell just has to be covered by one. Keeps later spawns from drifting out
+    // past the frontier the player has actually had to defend.
+    //
+    // All distances are horizontal (XZ), matching ShellSample's metric.
+
+    static float HorizDist(Vector3Int a, Vector3Int b)
+    {
+        float dx = a.x - b.x, dz = a.z - b.z;
+        return Mathf.Sqrt(dx * dx + dz * dz);
+    }
+
+    // Radius of `start`'s circle — its horizontal distance to the NEAREST end,
+    // so a level with several ends measures each start against the one it
+    // actually feeds. 0 when there are no ends (caller skips the constraint).
+    static float ReachRadius(Vector3Int start, List<Vector3Int> ends)
+    {
+        float best = 0f;
+        if (ends == null) return best;
+        for (int i = 0; i < ends.Count; i++)
+        {
+            float d = HorizDist(start, ends[i]);
+            if (best == 0f || d < best) best = d;
+        }
+        return best;
+    }
+
+    static bool InsideAnyReach(Vector3Int cell, List<Vector3Int> starts, List<Vector3Int> ends)
+    {
+        if (starts == null || ends == null || ends.Count == 0) return true;   // nothing to constrain against
+        for (int i = 0; i < starts.Count; i++)
+            if (HorizDist(cell, starts[i]) <= ReachRadius(starts[i], ends)) return true;
+        return false;
+    }
+
+    // Returns Vector3Int.zero when no cell could be found (caller treats that as
+    // "skip this round's endpoint", same as the other failure paths).
+    Vector3Int SampleStartInsideReach(List<Vector3Int> starts, List<Vector3Int> ends)
+    {
+        // Pass 1: ordinary shell sampling around a random existing start, keeping
+        // only candidates covered by SOME circle. Reaches the whole union region,
+        // not just the anchor's own circle.
+        for (int attempt = 0; attempt < shellSampleAttempts; attempt++)
+        {
+            var anchor = starts[Random.Range(0, starts.Count)];
+            var cell   = ShellSample(anchor, minDistance, maxDistance);
+            if (cell == anchor) continue;
+            if (InsideAnyReach(cell, starts, ends)) return cell;
+        }
+
+        // Pass 2: build the cell INSIDE one chosen circle instead of testing after
+        // the fact, so a valid answer still exists when the [minDistance,
+        // maxDistance] shell mostly falls outside every circle (small radius or a
+        // widened distance window late in a run). Distance is clamped into the
+        // radius, so the reach rule wins over the distance window when they clash.
+        for (int attempt = 0; attempt < shellSampleAttempts; attempt++)
+        {
+            var anchor = starts[Random.Range(0, starts.Count)];
+            float r = ReachRadius(anchor, ends);
+            if (r < 1f) continue;   // degenerate circle — a start sitting on an end
+
+            float d   = Random.Range(Mathf.Min(minDistance, r), Mathf.Min(maxDistance, r));
+            float ang = Random.Range(0f, Mathf.PI * 2f);
+            var cell = new Vector3Int(
+                anchor.x + Mathf.RoundToInt(Mathf.Cos(ang) * d),
+                Mathf.Clamp(Random.Range(0, yMax + 1), 0, yMax),
+                anchor.z + Mathf.RoundToInt(Mathf.Sin(ang) * d));
+
+            if (cell == anchor) continue;
+            if (gridSystem.IsOccupied(cell)) continue;
+            if (!InsideAnyReach(cell, starts, ends)) continue;   // integer rounding can nudge it just outside
+            return cell;
+        }
+
+        return Vector3Int.zero;
     }
 
     Vector3Int SampleFirstStart()
