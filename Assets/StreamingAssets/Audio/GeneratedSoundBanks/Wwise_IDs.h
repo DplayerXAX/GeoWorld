@@ -36,6 +36,7 @@ namespace AK
         static const AkUniqueID TEXTBLIP = 1387752797U;
         static const AkUniqueID TIMEDRAIN = 3258153068U;
         static const AkUniqueID TITLE_LOOP = 966390882U;
+        static const AkUniqueID VICTORY_LOOP = 301972542U;
     } // namespace EVENTS
 
     namespace STATES
@@ -107,6 +108,7 @@ namespace AK
         static const AkUniqueID SFX_AUDIO_BUS = 4084199202U;
         static const AkUniqueID SFX_AUDIO_BUS_ = 1530229465U;
         static const AkUniqueID SPACIAL = 4054672182U;
+        static const AkUniqueID SPACIAL_AUDIO_BUS = 455295034U;
     } // namespace BUSSES
 
     namespace AUDIO_DEVICES

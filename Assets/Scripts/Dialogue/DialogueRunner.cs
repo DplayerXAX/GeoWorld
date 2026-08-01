@@ -39,11 +39,8 @@ public class DialogueRunner : MonoBehaviour
     public KeyCode advanceKey  = KeyCode.Space;
     [Tooltip("Opacity the passive tutorial dialogue box fades to while the shop is expanded (F).")]
     [Range(0f, 1f)] public float passiveShopDim = 0.25f;
-
-    [Header("Advance / action indicators")]
-    [Tooltip("Glyph shown instead of the light bar when the line is PASSIVE (a tutorial step waiting on a real action, not a click) — signals \"go do the thing\" rather than \"click to continue\".")]
-    public string actionGlyph = "☝";   // ☝
-    public Color  actionColor = new Color(0.910f, 0.698f, 0.227f);          // gold — distinct from the bar's accent
+    [Tooltip("Opacity the box fades to while the player is placing a block — gameplay's PlacementMode.Edit or LevelSelect's build mode. Applies to ALL dialogue, not just passive/gated lines.")]
+    [Range(0f, 1f)] public float editDim = 0.3f;
 
     // ── Events (for game hooks) ──────────────────────────────────────────────────
     public event Action<DialogueConversation> OnFinished;
@@ -73,8 +70,8 @@ public class DialogueRunner : MonoBehaviour
     Image[]       _portraits;       // indexed by PortraitSlot
     Image         _nameBg;
     TMP_Text      _nameText, _topicText, _bodyText;
-    Image         _continueBar;   // "光条" — glowing bar, click-to-continue is available
-    TMP_Text      _actionIcon;      // shown instead of the bar on a passive/action-required line
+    Image         _continueBar;   // "光条" — the round pulsing ball planted after the last character
+    TMP_Text      _peekHint;      // bottom-right small print advertising the Shift-peek
     Button        _skipButton;
     RectTransform _choiceBox;
     readonly List<GameObject> _choiceButtons = new();
@@ -165,6 +162,17 @@ public class DialogueRunner : MonoBehaviour
 
     public void Stop() => Finish(_convo);
 
+    // Is the player mid block-placement, in either scene that has one? Both are
+    // singletons that only exist in their own scene, so the null checks double as
+    // the "which scene am I in" test.
+    static bool EditingAnywhere()
+    {
+        var pc = PlacementController.Instance;
+        if (pc != null && pc.mode == PlacementMode.Edit) return true;
+        var map = LevelMapController.Instance;
+        return map != null && map.BuildMode;
+    }
+
     // ── Loop ──────────────────────────────────────────────────────────────────────
 
     void Update()
@@ -178,14 +186,26 @@ public class DialogueRunner : MonoBehaviour
         if (Gated && ShopController.Instance != null && ShopController.Instance.IsExpanded)
             dimMul = passiveShopDim;
 
-        float targetAlpha = _alphaTarget * dimMul;
+        // Placing a block is a spatial, whole-screen activity — the player is judging
+        // fit against geometry the box sits on top of. Unlike the shop dim above this
+        // is NOT limited to gated lines: any dialogue is in the way while editing.
+        bool editing = EditingAnywhere();
+        if (editing) dimMul = Mathf.Min(dimMul, editDim);
+
+        // Hold Shift to peek at the world behind the box — see PeekWorld. The box
+        // sits across the bottom third of the screen, which is exactly where a
+        // tutorial's own subject often is.
+        bool peeking = PeekWorld.Held;
+
+        float targetAlpha = peeking ? 0f : _alphaTarget * dimMul;
         _group.alpha = Mathf.MoveTowards(_group.alpha, targetAlpha, fadeSpeed * Time.unscaledDeltaTime);
 
         // Gated dialogue must NOT block the game — the player needs to interact
         // with the real world (click a block, press F, ...) to complete the step
         // that advances it, and the dialogue box can't be sitting there eating
-        // that click.
-        _group.blocksRaycasts = _group.interactable = !Gated && _alphaTarget > 0.5f;
+        // that click. A peek is invisible, so it mustn't eat clicks either — and
+        // neither may a dimmed box while the player is placing blocks through it.
+        _group.blocksRaycasts = _group.interactable = !Gated && !peeking && !editing && _alphaTarget > 0.5f;
 
         if (!IsPlaying) return;
 
@@ -202,14 +222,15 @@ public class DialogueRunner : MonoBehaviour
             }
         }
 
-        // Two mutually exclusive indicators, both hidden while typing or choosing:
-        //   • the light bar — a click (or advanceKey) will move to the next line
-        //   • the action icon — this line is PASSIVE; nothing you click here will
-        //     advance it, only completing whatever the game is asking for will.
-        // Showing NOTHING for passive lines (the old behaviour) read as the dialogue
-        // being stuck; the icon at least tells the player where to look next.
-        bool showBar    = !_typing && !_choiceMode && !Gated;
-        bool showAction = !_typing && !_choiceMode &&  Gated;
+        // ONE indicator for every finished line — the round ball planted after the
+        // last character (see PositionContinueBar). Gated lines used to get a
+        // separate glyph icon in the corner instead, which had two problems: the
+        // glyph wasn't in the project's TMP atlas so it rendered as a placeholder
+        // SQUARE, and it sat in a corner rather than where the player's eye already
+        // was. The "is this line waiting on me?" distinction it carried is already
+        // told better elsewhere — gated steps have the world-space arrow, the
+        // suggestion box, and the hint text all pointing at what to do.
+        bool showBar = !_typing && !_choiceMode;
         _blink += Time.unscaledDeltaTime;
 
         // Three sine waves at incommensurate frequencies/phases, summed rather than
@@ -237,12 +258,6 @@ public class DialogueRunner : MonoBehaviour
             _continueBar.rectTransform.sizeDelta = new Vector2(d, d);
         }
 
-        _actionIcon.gameObject.SetActive(showAction);
-        if (showAction)
-        {
-            var c = actionColor; c.a = pulse; _actionIcon.color = c;
-        }
-
         // Skip button: only for conversations the author explicitly marked skippable,
         // and never on gated dialogue — the player has no other way back into a
         // tutorial step's dialogue, so skipping it here would strand the step with
@@ -256,7 +271,9 @@ public class DialogueRunner : MonoBehaviour
         // Skip the very frame a line opened, so the click that triggered this
         // conversation (e.g. a tutorial Input step's Mouse0) doesn't instantly
         // advance/dismiss the line it just brought up.
-        if (!Gated && !_choiceMode && Time.frameCount != _lineFrame
+        // `!peeking`: while the box is hidden to look at the world, a click is aimed
+        // at the world, not at dismissing a line the player can't currently read.
+        if (!Gated && !_choiceMode && !peeking && Time.frameCount != _lineFrame
             && (Input.GetMouseButtonDown(0) || (advanceKey != KeyCode.None && Input.GetKeyDown(advanceKey))
                 || GamepadInput.ConfirmDown))
         {
@@ -418,7 +435,6 @@ public class DialogueRunner : MonoBehaviour
     {
         _choiceMode = true;
         _continueBar.gameObject.SetActive(false);
-        _actionIcon.gameObject.SetActive(false);
         _skipButton.gameObject.SetActive(false);   // choosing IS the way forward now — nothing left to skip
         ClearChoices();
 
@@ -627,25 +643,29 @@ public class DialogueRunner : MonoBehaviour
         crt.sizeDelta = new Vector2(24f, 24f);
         _continueBar.gameObject.SetActive(false);
 
-        // Action icon — same corner, mutually exclusive with the bar. Only shown on
-        // PASSIVE lines (tutorial steps waiting on a real action, not a click), so
-        // the player isn't left staring at a box with no indicator at all.
-        _actionIcon = NewText("ActionIcon", box, textSize * 1.6f, actionColor, FontStyles.Bold, TextAlignmentOptions.Center);
-        _actionIcon.text = actionGlyph;
-        var art = _actionIcon.rectTransform;
-        art.anchorMin = new Vector2(1f, 0f); art.anchorMax = new Vector2(1f, 0f); art.pivot = new Vector2(1f, 0f);
-        art.sizeDelta = new Vector2(68f, 68f); art.anchoredPosition = new Vector2(-24f, -14f);
-        _actionIcon.gameObject.SetActive(false);
-
         // Skip — bare text, no button chrome. Opposite corner from the continue/
         // action indicators so it never fights them for attention. Only ever shown
         // for conversations authored skippable=true (see DialogueConversation) and
         // never on passive dialogue. The hit target (skipImg) is fully transparent —
         // it exists only so Button has something to raycast against, not to draw a
         // frame around the text.
+        // Small print, flush into the box's bottom-right corner — the Shift-peek
+        // (see PeekWorld) is otherwise undiscoverable, and this is the surface it
+        // matters most on: a gated tutorial line is exactly when the player wants
+        // the box out of the way. Same corner and same register as the block detail
+        // panel's own footnote, so it reads as one feature, not two.
+        _peekHint = NewText("PeekHint", box, textSize * 0.6f,
+            new Color(textColor.r, textColor.g, textColor.b, 0.5f),
+            FontStyles.Italic, TextAlignmentOptions.BottomRight);
+        _peekHint.text = "Hold Left Shift to hide";
+        var phrt = _peekHint.rectTransform;
+        phrt.anchorMin = new Vector2(1f, 0f); phrt.anchorMax = new Vector2(1f, 0f); phrt.pivot = new Vector2(1f, 0f);
+        phrt.sizeDelta = new Vector2(420f, 26f); phrt.anchoredPosition = new Vector2(-24f, 6f);
+
         var skipRt = NewRect("Skip", box);
         skipRt.anchorMin = new Vector2(1f, 0f); skipRt.anchorMax = new Vector2(1f, 0f); skipRt.pivot = new Vector2(1f, 0f);
-        skipRt.sizeDelta = new Vector2(152f, 64f); skipRt.anchoredPosition = new Vector2(-24f, 18f);
+        // y raised clear of the peek-hint line above — skip and the hint share this corner.
+        skipRt.sizeDelta = new Vector2(152f, 64f); skipRt.anchoredPosition = new Vector2(-24f, 34f);
         var skipImg = skipRt.gameObject.AddComponent<Image>();
         skipImg.color = new Color(0f, 0f, 0f, 0f);
         _skipButton = skipRt.gameObject.AddComponent<Button>();

@@ -110,6 +110,12 @@ public class DevPanel : MonoBehaviour
 
         GUILayout.Space(6);
 
+        GUILayout.Label("Save", _label);
+        if (GUILayout.Button($"Reset Active Slot ({SaveSystem.ActiveSlot + 1})", _btn))
+            ResetActiveSlot();
+
+        GUILayout.Space(6);
+
         GUILayout.Label($"Time scale: {Time.timeScale:F2}x  (F2/F3/F4)", _label);
         GUILayout.BeginHorizontal();
         if (GUILayout.Button("0.25x", _btn)) Time.timeScale = 0.25f;
@@ -230,6 +236,15 @@ public class DevPanel : MonoBehaviour
         _label.normal.textColor = Color.white;
         _header = new GUIStyle(GUI.skin.label) { fontSize = 14, fontStyle = FontStyle.Bold };
         _header.normal.textColor = new Color(0.6f, 0.95f, 1f);
+    }
+
+    // Wipes the CURRENTLY SELECTED slot's save file + in-memory cache. Doesn't
+    // rebuild anything live (nothing currently listens for the profile changing
+    // mid-scene) — reload the scene (or restart) to see the reset reflected.
+    void ResetActiveSlot()
+    {
+        SaveSystem.ResetProfile();
+        _lastStatus = $"slot {SaveSystem.ActiveSlot + 1} reset — reload the scene to see it";
     }
 
     static void ClearAllBlocks()

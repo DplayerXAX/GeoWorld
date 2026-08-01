@@ -33,14 +33,15 @@ public class TitleFlow : MonoBehaviour
     void Awake() => Instance = this;
     void Start()
     {
+        // Volume is pushed to Wwise by AudioSettingsReapplier (GameSettings.cs),
+        // which re-applies after every scene load — Title needs no special case.
         WireSaveSlots();
         GoToTitle();
     }
 
     // Attach a SaveSlotButton to each save button under savePanel, in order, so
-    // hovering shows that slot's stats and clicking selects it. The buttons keep
-    // their existing onClick (LoadLevelSelect) — the slot is selected on the
-    // pointer-DOWN that precedes it.
+    // HOVERING shows that slot's stats (SaveSlotInfoDisplay). Selecting the slot
+    // is NOT done here — see SelectSlotAndPlay below and the class comment on why.
     void WireSaveSlots()
     {
         if (savePanel == null) return;
@@ -53,6 +54,17 @@ public class TitleFlow : MonoBehaviour
             if (comp == null) comp = go.AddComponent<SaveSlotButton>();
             comp.Init(i);
         }
+    }
+
+    // Each of the 3 save-slot buttons' onClick() calls THIS directly with its own
+    // slot number (0/1/2), wired explicitly in the Title scene's Inspector — NOT
+    // via a runtime-attached component, so the per-slot wiring is visible and
+    // editable right there in onClick() instead of depending on Save-panel child
+    // order matching what SaveSlotButton.Init() assumed at Start().
+    public void SelectSlotAndPlay(int slot)
+    {
+        SaveSystem.SelectSlot(slot);
+        LoadLevelSelect();
     }
 
     void Update()

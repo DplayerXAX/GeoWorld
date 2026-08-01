@@ -5,20 +5,23 @@ using UnityEngine.EventSystems;
 using TMPro;
 
 // Attached at runtime (by TitleFlow.WireSaveSlots) to each save-slot button on
-// the Title save-select panel. Two jobs:
-//   • Selects its slot on pointer-DOWN — before the button's existing onClick
-//     loads the level-select scene — so gameplay reads/writes the right slot
-//     without any change to the scene's onClick wiring.
-//   • On hover, shows that slot's saved stats floating over the RIGHT-SIDE
-//     TitleCube (the 3-D block that slides right on the save face), via the
-//     shared SaveSlotInfoDisplay.
-public class SaveSlotButton : MonoBehaviour, IPointerEnterHandler, IPointerExitHandler, IPointerDownHandler
+// the Title save-select panel. HOVER ONLY: shows that slot's saved stats
+// floating over the RIGHT-SIDE TitleCube (the 3-D block that slides right on
+// the save face), via the shared SaveSlotInfoDisplay.
+//
+// Slot SELECTION is deliberately NOT here — it used to fire from OnPointerDown,
+// which meant "which slot did clicking this button pick" depended on
+// GetComponentsInChildren<Button> returning the buttons in the same order the
+// screen shows them, an assumption with no enforcement and nothing to check it
+// against short of testing every build. Each button's onClick() now calls
+// TitleFlow.SelectSlotAndPlay(slot) directly with its own slot baked in in the
+// Inspector, so the slot a button picks is exactly what onClick() shows, not
+// something inferred from sibling order at Start().
+public class SaveSlotButton : MonoBehaviour, IPointerEnterHandler, IPointerExitHandler
 {
     int _slot;
 
     public void Init(int slot) => _slot = slot;
-
-    public void OnPointerDown(PointerEventData e) => SaveSystem.SelectSlot(_slot);
 
     public void OnPointerEnter(PointerEventData e)
     {

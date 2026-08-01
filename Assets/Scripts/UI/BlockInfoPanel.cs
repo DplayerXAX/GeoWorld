@@ -48,7 +48,7 @@ public class BlockInfoPanel : MonoBehaviour
     Canvas        _canvas;
     CanvasGroup   _cg;
     RectTransform _panel;
-    TMP_Text      _titleText, _bodyText, _lockedNote, _sellLabel;
+    TMP_Text      _titleText, _bodyText, _lockedNote, _sellLabel, _shiftHint;
     Button        _pickUpButton, _sellButton;
     Action        _onPickUp, _onSell;
     Vector3       _anchor;
@@ -109,6 +109,7 @@ public class BlockInfoPanel : MonoBehaviour
         _sellButton.interactable   = canEdit;
         _lockedNote.text = lockedReason;
         _lockedNote.gameObject.SetActive(!canEdit);
+        _shiftHint.gameObject.SetActive(true);   // only this (editable) panel actually responds to Shift — see PlacementController.UpdateInfoPanel
 
         if (_target < 0.5f)
         {
@@ -132,6 +133,7 @@ public class BlockInfoPanel : MonoBehaviour
         _pickUpButton.gameObject.SetActive(false);
         _sellButton.gameObject.SetActive(false);
         _lockedNote.gameObject.SetActive(false);
+        _shiftHint.gameObject.SetActive(false);   // readonly panels (spawn/chaos/shrine) don't hide on Shift
 
         _onPickUp = _onSell = null;
         _target   = 1f;
@@ -207,6 +209,17 @@ public class BlockInfoPanel : MonoBehaviour
         _pickUpButton.onClick.AddListener(() => _onPickUp?.Invoke());
         _sellButton   = NewButton(row, "Sell",    sellColor,   buttonTextColor, out _sellLabel);
         _sellButton.onClick.AddListener(() => _onSell?.Invoke());
+
+        // Small print — the Shift-peek this panel responds to (see
+        // PlacementController.UpdateInfoPanel) isn't otherwise discoverable. Last
+        // row of the vertical layout and right-aligned, so it sits in the panel's
+        // bottom-right corner: present enough to be found, tucked far enough out of
+        // the reading path that it doesn't compete with the title/body/buttons.
+        _shiftHint = NewText("ShiftHint", _panel, bodySize * 0.7f,
+            new Color(bodyColor.r, bodyColor.g, bodyColor.b, 0.55f),
+            FontStyles.Italic, TextAlignmentOptions.BottomRight);
+        _shiftHint.text = "Long press Left Shift to hide it temporarily";
+        _shiftHint.textWrappingMode = TextWrappingModes.Normal;
 
         if (renderOnTop) ApplyRenderOnTop(gameObject);
     }

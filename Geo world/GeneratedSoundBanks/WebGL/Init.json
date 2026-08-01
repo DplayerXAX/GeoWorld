@@ -10,7 +10,7 @@
     "Type": "User",
     "GUID": "{701ECBBD-9C7B-4030-8CDB-749EE5D1C7B9}",
     "Language": "SFX",
-    "Hash": "{EC880201-2D4C-B732-6156-B3F8C0F04D36}",
+    "Hash": "{BD6098D2-B4FB-341A-935C-583482197D5E}",
     "ObjectPath": "Init",
     "ShortName": "Init",
     "Path": "Init.bnk",
@@ -45,6 +45,19 @@
      ]
     },
     "Busses": [
+     {
+      "Id": "455295034",
+      "Name": "Spacial Audio Bus",
+      "ObjectPath": "\\Busses\\Default Work Unit\\Master Audio Bus\\Music Audio Bus\\Spacial Audio Bus",
+      "GUID": "{47D1AD1D-1E93-4E55-BEC8-8ADFCACAA172}",
+      "PluginRefs": {
+       "ShareSets": [
+        {
+         "Id": "3216246379"
+        }
+       ]
+      }
+     },
      {
       "Id": "493417818",
       "Name": "Music Audio Bus",
@@ -743,6 +756,6 @@
     ]
    }
   ],
-  "FileHash": "{7727BD24-66B5-5779-091A-6385F4C7BF8D}"
+  "FileHash": "{CF82B9A2-C764-01BA-897E-68FB15EC96E2}"
  }
 }

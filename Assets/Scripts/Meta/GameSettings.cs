@@ -37,6 +37,26 @@ public static class GameSettings
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
     static void Boot() { Load(); ApplyDisplay(); }
 
+    // Volume lives in GLOBAL Wwise RTPCs, which are NOT durable across scene loads:
+    // loading a SoundBank re-initializes every RTPC that bank declares back to its
+    // authored default. gamePlay's AudioManager carries an AkBank component, so
+    // entering a level wipes whatever the sliders set in LevelSelect/Title — the
+    // value is still correct in GameSettings and in PlayerPrefs, it just stopped
+    // being the value the sound engine is using.
+    //
+    // Pushing once from some scene's Start() can't fix that (it races the bank
+    // load), so instead re-push after EVERY scene load, a few frames late. Cheap
+    // (three SetRTPCValue calls) and it makes "the sliders are the truth" hold no
+    // matter which scene loaded what.
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
+    static void HookAudioReapply()
+    {
+        if (Object.FindFirstObjectByType<AudioSettingsReapplier>() != null) return;
+        var go = new GameObject("GameSettingsAudioReapplier");
+        Object.DontDestroyOnLoad(go);
+        go.AddComponent<AudioSettingsReapplier>();
+    }
+
     public static void Load()
     {
         if (_loaded) return;
@@ -122,5 +142,33 @@ public static class GameSettings
         SmoothBlockEditing = true;
         FreeMove = false;
         Save(); ApplyAll();
+    }
+}
+
+// Re-pushes the saved volumes into Wwise after every scene load. See the comment
+// on GameSettings.HookAudioReapply for why this can't just be a one-shot call in
+// some scene's Start(). Auto-spawned + DontDestroyOnLoad — no scene wiring.
+[DisallowMultipleComponent]
+public class AudioSettingsReapplier : MonoBehaviour
+{
+    void OnEnable()  => UnityEngine.SceneManagement.SceneManager.sceneLoaded += HandleSceneLoaded;
+    void OnDisable() => UnityEngine.SceneManagement.SceneManager.sceneLoaded -= HandleSceneLoaded;
+
+    // The scene this component spawned into is already loaded by the time the
+    // event is subscribed, so the first push is kicked off directly.
+    void Start() => StartCoroutine(ReapplySoon());
+
+    void HandleSceneLoaded(UnityEngine.SceneManagement.Scene s, UnityEngine.SceneManagement.LoadSceneMode m)
+        => StartCoroutine(ReapplySoon());
+
+    // Waits for the new scene's own Awake/Start pass (AudioManager registering its
+    // Instance, AkBank kicking off its load) to finish before pushing, so this
+    // always lands AFTER the bank's default-value initialization rather than
+    // racing it. Frame-based rather than a Wwise readiness API so it doesn't
+    // depend on a specific Wwise version's surface.
+    System.Collections.IEnumerator ReapplySoon()
+    {
+        for (int i = 0; i < 12; i++) yield return null;
+        GameSettings.ApplyAudio();
     }
 }

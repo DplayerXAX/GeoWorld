@@ -181,17 +181,31 @@ MonoBehaviour:
   monsterPos: {x: 2.8, y: 1.48, z: 0.52}
   cubePlinthDrop: 0.86
   monsterPlinthDrop: 0.68
+  monsterDisplaySize: 1
   deskColor: {r: 0.99371064, g: 0.8867204, b: 0.6593488, a: 1}
   overviewCamPos: {x: 0.78, y: 5, z: -4.5}
   overviewLookAt: {x: 0, y: 1.5, z: 0.28}
   detailCamOffset: {x: 0.1, y: 2.95, z: -2.5}
   detailLookOffset: {x: -1.9, y: -2, z: 2}
-  camGlide: 8
   musicDetailCam: {fileID: 1054832160}
   shaderDetailCam: {fileID: 414575157}
   monsterDetailCam: {fileID: 1629149893}
+  aimFromSubject: 1
+  camSettleTime: 0.34
+  returnSpeedUp: 0.85
+  aimLead: 1.12
+  camArc: 1
+  deskClearance: 0.55
+  detailFovDrop: 8
+  detailFraming: {x: 0, y: 0}
+  panelCueIn: 0.55
+  panelCueOut: 0.22
+  reducedCameraMotion: 0
   exhibitParallax: 0.04
   parallaxGlide: 5
+  detailParallaxTilt: 0.35
+  detailRecordSpin: 12
+  focusHoldScale: 1.12
   panelFadeTime: 0.32
 --- !u!4 &84760215
 Transform:
@@ -476,7 +490,7 @@ MonoBehaviour:
   m_VolumeTrigger: {fileID: 0}
   m_VolumeFrameworkUpdateModeOption: 2
   m_RenderPostProcessing: 1
-  m_Antialiasing: 0
+  m_Antialiasing: 2
   m_AntialiasingQuality: 2
   m_StopNaN: 0
   m_Dithering: 0

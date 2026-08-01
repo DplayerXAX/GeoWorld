@@ -37,6 +37,10 @@ public class AudioManager : MonoBehaviour
     public AK.Wwise.Event ShopExpand;
     [Tooltip("Posted when the shop rift closes.")]
     public AK.Wwise.Event ShopCollapse;
+    [Tooltip("Posted when a level is cleared (GameFlowManager.DoLevelClear) — the moment a run is actually won.")]
+    public AK.Wwise.Event Victory;
+    [Tooltip("Posted when the player runs out of lives (GameFlowManager.HandleGameOver).")]
+    public AK.Wwise.Event Defeat;
     [Header("Volume RTPCs (Wwise global, 0..100)")]
     [Tooltip("Global Wwise RTPC names bound to your bus volumes. SettingsScreen drives these 0..1 → 0..100. Set them up on the Master / Music / SFX buses in Wwise.")]
     public string masterVolumeRtpc = "MasterVolume";
@@ -95,6 +99,16 @@ public class AudioManager : MonoBehaviour
         if (e != null && e.IsValid()) e.Post(this.gameObject);
     }
 
+    public void PlayVictory()
+    {
+        if (Victory != null && Victory.IsValid()) Victory.Post(this.gameObject);
+    }
+
+    public void PlayDefeat()
+    {
+        if (Defeat != null && Defeat.IsValid()) Defeat.Post(this.gameObject);
+    }
+
     // Call once when a typewriter starts revealing a new line/hint.
     public void StartTextBlip()
     {
@@ -118,7 +132,11 @@ public class AudioManager : MonoBehaviour
 
         StartCoroutine(PostBgmAfterIntro());
 
-        GameSettings.ApplyAudio();   // push saved volumes once the engine is up
+        // Best-effort early push so there's no audible full-volume frame. It may
+        // race this object's own AkBank load (which resets RTPCs to their authored
+        // defaults) — AudioSettingsReapplier re-pushes a few frames later and is
+        // the actual guarantee. See GameSettings.HookAudioReapply.
+        GameSettings.ApplyAudio();
     }
 
     // In the gameplay scene, IntroDirector plays a short reveal before the player can
@@ -213,7 +231,6 @@ public class AudioManager : MonoBehaviour
     {
         if (string.IsNullOrEmpty(rtpc)) return;
         AkUnitySoundEngine.SetRTPCValue(rtpc, Mathf.Clamp01(v01) * 100f);
-        Debug.Log("Setting!");
     }
 
     public void PlayRotate()

@@ -134,7 +134,7 @@ Material:
     - _ZWrite: 1
     m_Colors:
     - _BaseColor: {r: 1, g: 1, b: 1, a: 1}
-    - _BgColor: {r: 0, g: 0.30718705, b: 0.42138356, a: 1}
+    - _BgColor: {r: 1, g: 1, b: 1, a: 0}
     - _Color: {r: 1, g: 1, b: 1, a: 1}
     - _ColorDark: {r: 0.079999976, g: 0.089999996, b: 0.12999997, a: 1}
     - _ColorLight: {r: 0.95, g: 0.96, b: 1, a: 1}
