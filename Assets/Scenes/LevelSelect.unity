@@ -1261,7 +1261,14 @@ MonoBehaviour:
   cameraFocus: 1
   cameraLerp: 4
   focusViewportX: 0.4
-  focusViewportY: 0.35
+  focusViewportY: 0.45
+  middleDragAdjustsFocus: 1
+  focusDragSpeed: 0.6
+  scrollZoomsFov: 1
+  minFov: 25
+  maxFov: 100
+  fovScrollSpeed: 60
+  fovSmoothSpeed: 8
   buildableBlocks:
   - {fileID: 11400000, guid: 7d867ce72998a0f4689850dd5dd2258e, type: 2}
   - {fileID: 11400000, guid: 6eeb6b311184fcb40be187ae07e15da1, type: 2}
@@ -1274,7 +1281,7 @@ MonoBehaviour:
   ghostInvalidColor: {r: 1, g: 0.3, b: 0.3, a: 0.55}
   playerBuiltColor: {r: 0.55, g: 0.85, b: 0.95, a: 1}
   pawnScale: 1.1
-  resetSaveOnStart: 0
+  resetSaveOnStart: 1
   autoFill: 0
   autoReward: 0
   editorAutoFillBlocks:
@@ -1304,6 +1311,44 @@ MonoBehaviour:
     rotation: {x: 0, y: 0, z: 0, w: 1}
   trayExpandSpeed: 9
   defaultCharacter: {fileID: 11400000, guid: 80993e3c86b4337429c2d6273c8eedc2, type: 2}
+  rewardSuggestColor: {r: 1, g: 1, b: 1, a: 0.6}
+  rewardSuggestOverscale: 1.08
+  rewardSuggestZoom: 5
+  decorEnabled: 1
+  decorGateLevelId: 1-1
+  decorOrigin: {x: -10, y: 2, z: 0}
+  decorSize: {x: 12, y: 11}
+  decorRotationSteps: 3
+  decorCoverage: 0.82
+  decorTerrace: 1
+  decorSoilColor: {r: 0.34, g: 0.26, b: 0.18, a: 1}
+  decorSoilJitter: 0.12
+  decorPathRowEvery: 3
+  decorPathRowExtraCoverage: 0.18
+  decorBloomChance: 0.8
+  decorMaxFlowers: 170
+  decorStalksPerCell: 4
+  decorStalkHeight: 0.75
+  decorCropColor: {r: 0.62, g: 0.58, b: 0.24, a: 1}
+  decorFenceEnabled: 1
+  decorFenceCoverage: 0.78
+  decorFenceHeight: 0.55
+  decorFenceColor: {r: 0.55, g: 0.4, b: 0.26, a: 1}
+  decorWindmillEnabled: 1
+  decorWindmillHeight: 2.6
+  decorWindmillSpin: 26
+  decorTowerColor: {r: 0.88, g: 0.85, b: 0.78, a: 1}
+  decorAccentColor: {r: 0.98, g: 0.8, b: 0.3, a: 1}
+  decorSignCount: 4
+  decorGrowRiseHeight: 3
+  decorGrowRiseDuration: 1.8
+  decorGrowHoldSeconds: 1.4
+  decorGrowZoom: 0
+  decorGrowYawOffset: -90
+  decorTransitionFadeDuration: 0.6
+  decorGrowAsideText: As Abundance returned, a small farm blossomed where countless
+    wishes had been sown.
+  decorGrowAsideSeconds: 4.5
   monumentMaterial: {fileID: 0}
   monumentScale: 1
   monumentLight: 1.6
@@ -1396,7 +1441,7 @@ Camera:
     height: 1
   near clip plane: 0.3
   far clip plane: 1000
-  field of view: 45
+  field of view: 65
   orthographic: 0
   orthographic size: 5
   m_Depth: -1

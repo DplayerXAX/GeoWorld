@@ -18,7 +18,9 @@ MonoBehaviour:
   runSeed: 1
   blocksPerTurn: 3
   turretsPerTurn: 3
+  synergyEnabled: 1
   allowedColors: 0100000004000000
+  startingShop: []
   waves:
   - {fileID: 11400000, guid: 080e4b2a67c19904bbbfdce56bfad1ae, type: 2}
   - {fileID: 11400000, guid: c82062cbbf585cf4682eb33064d8a19e, type: 2}
@@ -48,9 +50,12 @@ MonoBehaviour:
   mapBlockRewards:
   - {fileID: 11400000, guid: 7d867ce72998a0f4689850dd5dd2258e, type: 2}
   rewardConversation: {fileID: 11400000, guid: d7f3117c472edc0489f5ccda3a1f1e1a, type: 2}
+  rewardSuggestCubeSide: 1
+  rewardSuggestOrigin: {x: 4, y: 2, z: 7}
+  rewardSuggestRotation90: {x: 0, y: 0, z: 90}
   isTutorial: 1
   fixedEndpoints: 1
-  startCell: {x: 0, y: 2, z: 1}
+  startCell: {x: -3, y: 2, z: -1}
   endCell: {x: 2, y: 3, z: 4}
   tutorialSteps:
   - kind: 5
@@ -70,6 +75,11 @@ MonoBehaviour:
     focusZoom: 0
     hint: ...More Rift and Portals appear to be opening across our dimension. We
       need to prepare for what's coming.
+    suggestCubeSide: 0
+    suggestOrigin: {x: 0, y: 0, z: 0}
+    suggestCubeSide2: 0
+    suggestOrigin2: {x: 0, y: 0, z: 0}
+    asideText: 
     conversation: {fileID: 0}
     speaker: {fileID: 11400000, guid: 80993e3c86b4337429c2d6273c8eedc2, type: 2}
     speakerSlot: 1
@@ -90,6 +100,11 @@ MonoBehaviour:
     cameraFocus: 0
     focusZoom: 0
     hint: Our faith in you reaches through all blocks, bestowing strength upon you.
+    suggestCubeSide: 0
+    suggestOrigin: {x: 0, y: 0, z: 0}
+    suggestCubeSide2: 0
+    suggestOrigin2: {x: 0, y: 0, z: 0}
+    asideText: 
     conversation: {fileID: 0}
     speaker: {fileID: 11400000, guid: 80993e3c86b4337429c2d6273c8eedc2, type: 2}
     speakerSlot: 1
@@ -111,6 +126,11 @@ MonoBehaviour:
     focusZoom: 0
     hint: My Lord, purchase an ORANGE block from the shop to prepare for awakening
       ABUNDANCE.
+    suggestCubeSide: 0
+    suggestOrigin: {x: 0, y: 0, z: 0}
+    suggestCubeSide2: 0
+    suggestOrigin2: {x: 0, y: 0, z: 0}
+    asideText: 
     conversation: {fileID: 0}
     speaker: {fileID: 11400000, guid: 80993e3c86b4337429c2d6273c8eedc2, type: 2}
     speakerSlot: 1
@@ -131,6 +151,11 @@ MonoBehaviour:
     cameraFocus: 0
     focusZoom: 0
     hint: My Lord, place an ORANGE block where indicated to awaken the power of ABUNDANCE.
+    suggestCubeSide: 0
+    suggestOrigin: {x: 0, y: 0, z: 0}
+    suggestCubeSide2: 0
+    suggestOrigin2: {x: 0, y: 0, z: 0}
+    asideText: 
     conversation: {fileID: 0}
     speaker: {fileID: 11400000, guid: 80993e3c86b4337429c2d6273c8eedc2, type: 2}
     speakerSlot: 1
@@ -152,6 +177,11 @@ MonoBehaviour:
     focusZoom: 0
     hint: After a block loop is connected, Abundance is activated on this set of
       blocks.
+    suggestCubeSide: 0
+    suggestOrigin: {x: 0, y: 0, z: 0}
+    suggestCubeSide2: 0
+    suggestOrigin2: {x: 0, y: 0, z: 0}
+    asideText: 
     conversation: {fileID: 0}
     speaker: {fileID: 11400000, guid: 80993e3c86b4337429c2d6273c8eedc2, type: 2}
     speakerSlot: 1
@@ -172,6 +202,11 @@ MonoBehaviour:
     cameraFocus: 0
     focusZoom: 0
     hint: Abundance grant us resources for building up blocks periodly.
+    suggestCubeSide: 0
+    suggestOrigin: {x: 0, y: 0, z: 0}
+    suggestCubeSide2: 0
+    suggestOrigin2: {x: 0, y: 0, z: 0}
+    asideText: 
     conversation: {fileID: 0}
     speaker: {fileID: 11400000, guid: 80993e3c86b4337429c2d6273c8eedc2, type: 2}
     speakerSlot: 1
@@ -192,6 +227,11 @@ MonoBehaviour:
     cameraFocus: 0
     focusZoom: 0
     hint: Select a block to see how the power is activated and its benefit.
+    suggestCubeSide: 0
+    suggestOrigin: {x: 0, y: 0, z: 0}
+    suggestCubeSide2: 0
+    suggestOrigin2: {x: 0, y: 0, z: 0}
+    asideText: 
     conversation: {fileID: 0}
     speaker: {fileID: 11400000, guid: 80993e3c86b4337429c2d6273c8eedc2, type: 2}
     speakerSlot: 1
@@ -213,6 +253,11 @@ MonoBehaviour:
     focusZoom: 5
     hint: A draining portal appears. It would steal our block currency each time
       we finish a fight wave......
+    suggestCubeSide: 0
+    suggestOrigin: {x: 0, y: 0, z: 0}
+    suggestCubeSide2: 0
+    suggestOrigin2: {x: 0, y: 0, z: 0}
+    asideText: 
     conversation: {fileID: 0}
     speaker: {fileID: 11400000, guid: 80993e3c86b4337429c2d6273c8eedc2, type: 2}
     speakerSlot: 1
@@ -234,6 +279,11 @@ MonoBehaviour:
     focusZoom: 0
     hint: Build your path to reach the portal and set up turret there. Turret will
       attack them durring combat, and thus preventing the lost.
+    suggestCubeSide: 0
+    suggestOrigin: {x: 0, y: 0, z: 0}
+    suggestCubeSide2: 0
+    suggestOrigin2: {x: 0, y: 0, z: 0}
+    asideText: 
     conversation: {fileID: 0}
     speaker: {fileID: 11400000, guid: 80993e3c86b4337429c2d6273c8eedc2, type: 2}
     speakerSlot: 1
@@ -255,6 +305,11 @@ MonoBehaviour:
     focusZoom: 0
     hint: (If you ever find yourself unable to build path with all your currency,
       press 'R' to restart the level...)
+    suggestCubeSide: 0
+    suggestOrigin: {x: 0, y: 0, z: 0}
+    suggestCubeSide2: 0
+    suggestOrigin2: {x: 0, y: 0, z: 0}
+    asideText: 
     conversation: {fileID: 0}
     speaker: {fileID: 0}
     speakerSlot: 1
@@ -276,6 +331,11 @@ MonoBehaviour:
     focusZoom: 0
     hint: A new rift appears. Enemy will also appear and attack the core. Try connecting
       this to the path.
+    suggestCubeSide: 0
+    suggestOrigin: {x: 0, y: 0, z: 0}
+    suggestCubeSide2: 0
+    suggestOrigin2: {x: 0, y: 0, z: 0}
+    asideText: 
     conversation: {fileID: 0}
     speaker: {fileID: 11400000, guid: 80993e3c86b4337429c2d6273c8eedc2, type: 2}
     speakerSlot: 1
@@ -297,6 +357,11 @@ MonoBehaviour:
     focusZoom: 0
     hint: As we proceed, chaotic threats and dynamics like this would occur, please
       don't stress yourself too much my lord.
+    suggestCubeSide: 0
+    suggestOrigin: {x: 0, y: 0, z: 0}
+    suggestCubeSide2: 0
+    suggestOrigin2: {x: 0, y: 0, z: 0}
+    asideText: 
     conversation: {fileID: 0}
     speaker: {fileID: 11400000, guid: 80993e3c86b4337429c2d6273c8eedc2, type: 2}
     speakerSlot: 1
@@ -319,6 +384,11 @@ MonoBehaviour:
     hint: A new core endpoint shall emerge in two waves, drawing enemy forces away
       and restoring balance. My Lord, manage our resources wisely, for every placement
       carries weight.
+    suggestCubeSide: 0
+    suggestOrigin: {x: 0, y: 0, z: 0}
+    suggestCubeSide2: 0
+    suggestOrigin2: {x: 0, y: 0, z: 0}
+    asideText: 
     conversation: {fileID: 0}
     speaker: {fileID: 11400000, guid: 80993e3c86b4337429c2d6273c8eedc2, type: 2}
     speakerSlot: 1
@@ -340,6 +410,11 @@ MonoBehaviour:
     focusZoom: 0
     hint: The final trial is upon us. Our faith in you remains unwavering, My Lord.
       Lead us to victory.
+    suggestCubeSide: 0
+    suggestOrigin: {x: 0, y: 0, z: 0}
+    suggestCubeSide2: 0
+    suggestOrigin2: {x: 0, y: 0, z: 0}
+    asideText: 
     conversation: {fileID: 0}
     speaker: {fileID: 11400000, guid: 80993e3c86b4337429c2d6273c8eedc2, type: 2}
     speakerSlot: 1
@@ -348,5 +423,11 @@ MonoBehaviour:
   overrideEndpointDistance: 0
   endpointMinDistance: 5
   endpointMaxDistance: 10
+  overrideInitialCamera: 1
+  initialCameraFocus: {x: 0, y: 4, z: 0}
+  initialCameraYaw: 45
+  initialCameraPitch: 35
+  initialCameraDistance: 15
+  initialCameraFov: 60
   mechanics:
   - {fileID: 11400000, guid: 49e6eb7ca9c24522886d1aeaa87d2cfa, type: 2}

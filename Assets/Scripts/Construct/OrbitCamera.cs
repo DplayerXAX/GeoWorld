@@ -49,6 +49,31 @@ public class OrbitCamera : MonoBehaviour
     public float   Yaw        => yaw;
     public float   Pitch      => pitch;
 
+    // Bumps yaw by a relative amount (e.g. a cutscene wanting "turn 90° right" from
+    // whatever angle the player was already looking from). Doesn't touch focus/
+    // distance/panOffset — transform.position still eases toward the new angle via
+    // LateUpdate's own Lerp, so this reads as a smooth swing, not a snap, even
+    // though yaw itself changes in one frame.
+    public void AddYaw(float degrees) => yaw += degrees;
+
+    // In ortho the rig's actual world heading is `yaw + orthoAngle.y` (see the rot
+    // build in LateUpdate) — the isometric 45° bias. Anything reasoning in WORLD
+    // axes (AxisGizmo) has to go through this rather than touching `yaw` directly,
+    // or its "look down +X" lands 45° off in ortho and correct in perspective.
+    public float YawOffset => useOrthographic ? orthoAngle.y : 0f;
+    public float WorldYaw  => yaw + YawOffset;
+
+    // Point the rig along a world-space heading/elevation, keeping the current
+    // focus point, distance and pan. Pitch is clamped to the SAME range the
+    // right-drag path uses, so a snapped view can't sit somewhere the player's
+    // very next drag would immediately jump away from.
+    public void SetWorldYawPitch(float worldYaw, float newPitch)
+    {
+        yaw   = worldYaw - YawOffset;
+        pitch = useOrthographic ? Mathf.Clamp(newPitch, 10f, 80f)
+                                : Mathf.Clamp(newPitch, minPitch, maxPitch);
+    }
+
     // Hard-reset orbit state. Used by snapshot restore.
     public void ApplyState(Vector3 focus, float dist, float newYaw, float newPitch)
     {

@@ -146,6 +146,21 @@
 					</ReferenceList>
 					<ChildrenList>
 						<Bus Name="Music Audio Bus" ID="{70C2307A-1E32-4D4D-8E87-001C15FD39EB}">
+							<ChildrenList>
+								<Bus Name="Spacial Audio Bus" ID="{47D1AD1D-1E93-4E55-BEC8-8ADFCACAA172}">
+									<ObjectLists>
+										<ObjectList Name="Effects">
+											<EffectSlot Name="" ID="{2FCBB7B6-43D7-48CA-9B8A-F538C9772A13}" ShortID="792737062">
+												<ReferenceList>
+													<Reference Name="Effect" PluginName="Wwise RoomVerb" CompanyID="0" PluginID="118" PluginType="3">
+														<ObjectRef Name="Space_Dreaming" ID="{4FF7C4B2-37B0-4DFF-8E8A-1420102AE2DD}" WorkUnitID="{E8613F7D-BAD3-45CD-A3ED-505576F31277}"/>
+													</Reference>
+												</ReferenceList>
+											</EffectSlot>
+										</ObjectList>
+									</ObjectLists>
+								</Bus>
+							</ChildrenList>
 							<ObjectLists>
 								<ObjectList Name="RTPC">
 									<RTPC Name="" ID="{E725792C-84D2-4BD0-BE11-BFABE03C2A59}" ShortID="225373494">

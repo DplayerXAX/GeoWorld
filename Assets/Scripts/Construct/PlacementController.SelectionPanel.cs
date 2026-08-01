@@ -71,6 +71,19 @@ public partial class PlacementController
             return;
         }
 
+        // Hold Shift to peek past the detail panel at whatever it's covering.
+        // Deliberately does NOT touch UpdateRangeIndicator (a separate system) —
+        // a turret's attack-range sphere/shadow volume keeps showing, so aiming
+        // sightlines stay visible while just the info/upgrade cards get out of
+        // the way. Selection itself is untouched, so releasing Shift brings the
+        // same panel straight back.
+        if (Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift))
+        {
+            infoPanel.Hide();
+            upgradePanel?.Hide();
+            return;
+        }
+
         bool   isTurret = TurretTypes.Is(ins.data.blockType);
         string title    = isTurret ? TurretTypes.DisplayName(ins.data.blockType) : ins.data.DisplayName;
         string body     = BuildInfoBody(ins, isTurret);

@@ -66,6 +66,13 @@ public class LevelDefinition : ScriptableObject
     [Tooltip("Played once, back on LevelSelect, right after this level's FIRST clear (same one-time gate as the tech/unlock/map-block rewards above). Author it like any other DialogueConversation asset. Leave null for no conversation.")]
     public DialogueConversation rewardConversation;
 
+    [Tooltip("Shows a translucent suggestion box on the LevelSelect map — a non-binding hint for where to place the earned reward block — while the build-tutorial gate (LevelMapController's ls.openbuild/ls.place) is active for THIS level's reward. Same idea as TutorialStep.suggestCubeSide in gameplay. 0 = no suggestion shown.")]
+    public int rewardSuggestCubeSide = 0;
+    [Tooltip("Grid cell at the suggestion box's minimum corner, on the LevelSelect map (not the gameplay grid).")]
+    public Vector3Int rewardSuggestOrigin;
+    [Tooltip("Required rotation in 90° turns around X / Y / Z, applied to the reward block's shape before offsetting by rewardSuggestOrigin. Same convention as TutorialStep.rotation90.")]
+    public Vector3Int rewardSuggestRotation90;
+
     [Header("Tutorial")]
     [Tooltip("Marks this level as a tutorial — TutorialDirector takes over (fixed endpoints + ghost-guided placement).")]
     public bool isTutorial;
@@ -91,6 +98,20 @@ public class LevelDefinition : ScriptableObject
 
     [Tooltip("Maximum grid-cell distance between a new endpoint and the existing point it's anchored from.")]
     [Min(0f)] public float endpointMaxDistance = 10f;
+
+    [Header("Camera (optional override)")]
+    [Tooltip("Override the level's starting camera pose/zoom instead of the automatic start↔end midpoint framing (GameFlowManager.FocusCameraOnFirstStage). Off = default behavior — leave off unless this level specifically needs a hand-authored opening shot.")]
+    public bool overrideInitialCamera = false;
+    [Tooltip("World point the camera orbits around and looks at.")]
+    public Vector3 initialCameraFocus;
+    [Tooltip("Horizontal orbit angle, degrees — same convention as OrbitCamera's own yaw, so tune this by orbiting the Editor's Game-view camera to the shot you want and reading its values back.")]
+    public float initialCameraYaw = 45f;
+    [Tooltip("Vertical orbit angle, degrees — same convention as OrbitCamera.pitch.")]
+    public float initialCameraPitch = 35f;
+    [Tooltip("Distance from the focus point, world units.")]
+    [Min(0.1f)] public float initialCameraDistance = 15f;
+    [Tooltip("Perspective field of view, degrees.")]
+    [Range(10f, 100f)] public float initialCameraFov = 60f;
 
     [Header("Level Mechanics")]
     [Tooltip("Optional systemic mechanics for this level (Chaos Block, Enlightenment Shrine, ...). Add an asset instance to enable that mechanic for this level with the parameters that instance carries; remove it to disable. Each mechanic's own controller looks itself up via GetMechanic<T>() — see ChaosBlockController / ShrineController.")]

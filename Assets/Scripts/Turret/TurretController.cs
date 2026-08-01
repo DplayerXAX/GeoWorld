@@ -72,7 +72,10 @@ public class TurretController : MonoBehaviour
     public bool BlockedByEnlightenmentGate => TotalUpgradesUsed >= TowerUpgradeGate.AllowedUpgrades;
 
     public bool AoeBurnGroundEnabled => mode == Mode.Aoe && _aoeFirePathLevel >= 1;
-    public float AoeBurnGroundDuration => _aoeFirePathLevel >= 2 ? 3f : 2f;
+    // Level 1's burn was lingering nearly as long as level 2's upgraded one for free —
+    // nerfed the base duration down from 2s so the level-2 upgrade (3s) reads as a
+    // real step up rather than a marginal one.
+    public float AoeBurnGroundDuration => _aoeFirePathLevel >= 2 ? 3f : 1.4f;
     public float AoeBurnTickInterval => 0.75f;
     public int AoeBurnDamagePerTick => Mathf.Max(1, Mathf.CeilToInt(bulletDamage * (_aoeFirePathLevel >= 3 ? 0.67f : 0.34f)));
 

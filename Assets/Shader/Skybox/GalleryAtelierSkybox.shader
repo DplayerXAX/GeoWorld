@@ -1,23 +1,21 @@
 Shader "Custom/GalleryAtelierSky"
 {
-    // The Gallery's sky: an infinite museum atelier. Same family as the other
-    // skyboxes (pale luminous gradient + fbm mist + hue breathing) but speaking
-    // the Title's constructivist paper/ink/gold/signal language — and with its
-    // own signature element none of the others have: hollow "picture frames"
-    // drifting slowly in the haze, as if the hall itself were hanging works.
+    // The Gallery's sky: an infinite luminous museum atelier.
+    // Enhanced for high translucency, curl-like fluid motion, light scattering, and subtle bloom.
+
     Properties
     {
         [Header(Backdrop)]
-        _SkyTop       ("Zenith",  Color) = (0.86, 0.84, 0.79, 1)   // warm paper, dimmed
-        _SkyBottom    ("Horizon", Color) = (0.949, 0.937, 0.902, 1) // paper
-        _HorizonSharp ("Gradient Curve", Range(1, 8)) = 2.5
+        _SkyTop        ("Zenith",  Color) = (0.97, 0.98, 1.0, 1)    // Pure luminous sky
+        _SkyBottom     ("Horizon", Color) = (1.0, 0.995, 0.985, 1) // Warm daylight horizon
+        _HorizonSharp ("Gradient Curve", Range(1, 8)) = 1.6
 
         [Header(Mist)]
-        _MistCool  ("Mist Cool", Color) = (0.80, 0.82, 0.86, 1)
-        _MistWarm  ("Mist Warm", Color) = (0.93, 0.87, 0.74, 1)   // gold-tinged
-        _Scale     ("Mist Scale", Float) = 2.2
-        _Intensity ("Mist Intensity", Range(0, 3)) = 0.65
-        _FlowSpeed ("Flow Speed", Float) = 0.05
+        _MistCool  ("Mist Cool", Color) = (0.88, 0.93, 0.98, 1)
+        _MistWarm  ("Mist Warm", Color) = (1.0, 0.96, 0.90, 1)
+        _Scale     ("Mist Scale", Float) = 1.6
+        _Intensity ("Mist Intensity", Range(0, 3)) = 0.35
+        _FlowSpeed ("Flow Speed", Float) = 0.03
         _HueDrift  ("Hue Drift", Range(0, 0.5)) = 0.04
 
         [Header(Floating Frames)]
@@ -25,11 +23,11 @@ Shader "Custom/GalleryAtelierSky"
         _Gold       ("Frame Gold", Color) = (0.910, 0.698, 0.227, 1)
         _FrameScale ("Frame Density", Float) = 3.0
         _FrameDrift ("Frame Drift Speed", Float) = 0.015
-        _FrameAlpha ("Frame Strength", Range(0, 1)) = 0.5
+        _FrameAlpha ("Frame Strength", Range(0, 1)) = 0.4
 
         [Header(Signal Band)]
         _Signal      ("Signal", Color) = (0.886, 0.141, 0.106, 1)
-        _BandStrength("Band Strength", Range(0, 1)) = 0.18
+        _BandStrength("Band Strength", Range(0, 1)) = 0.15
 
         [Header(Dust)]
         _DustColor   ("Dust Color", Color) = (0.910, 0.698, 0.227, 1)
@@ -107,8 +105,6 @@ Shader "Custom/GalleryAtelierSky"
             }
 
             // SOLID drifting squares (stained glass) on an abstract wall plane.
-            // Equal margins on both axes → squares (no landscape rectangles). uv =
-            // planar coords; returns 0..1 filled mask + the pane's glass colour.
             float Frames(float2 uv, float t, out half3 tint)
             {
                 uv   += float2(t, t * 0.4);            // whole wall drifts slowly (flow)
@@ -134,45 +130,70 @@ Shader "Custom/GalleryAtelierSky"
                 float3 dir = normalize(IN.dir);
                 float  t   = _Time.y * _FlowSpeed;
 
-                // ── Paper gradient, brighter at the horizon like a lit hall ─────
+                // ── 1. Paper Gradient (High Brightness & Translucent Base) ────────
                 float up   = saturate(dir.y * 0.5 + 0.5);
                 half3 col  = lerp(_SkyBottom.rgb, _SkyTop.rgb, pow(up, _HorizonSharp));
 
-                // ── Soft mist veil (family DNA, fewer octaves — calmer) ─────────
+                // ── 2. Fluid Curl-like Motion & Multi-frequency Mist ──────────────
                 float3 p = dir * _Scale;
-                p.xz += t * 0.4;
-                float field = Fbm(p + Fbm(p + t) * 1.5);
-                half3 mistCol = lerp(_MistCool.rgb, _MistWarm.rgb, smoothstep(0.40, 0.70, field));
-                float mist = smoothstep(0.35, 0.85, field) * (1.0 - up * 0.45);
-                col = lerp(col, mistCol, saturate(mist * _Intensity * 0.5));
 
-                // ── Drifting stained-glass squares on the ±X wall only ──────────
-                // (The ±Z wall was removed — one wall of works, not a box.)
+                // Dynamic Curl-like flow offset (air swirling motion)
+                float2 flow;
+                flow.x = Noise(float3(p.xz * 0.7, t * 0.15)) - 0.5;
+                flow.y = Noise(float3(p.zx * 0.7, -t * 0.15)) - 0.5;
+                p.xz += flow * 0.55;
+
+                // Multi-scale FBM detail blending
+                float field = Fbm(p);
+                field += Fbm(p * 3.2 + t) * 0.15;
+                field += Noise(p * 7.5 + t) * 0.04;
+
+                // Light scattering near horizon mist
+                half3 mistCol = lerp(_MistCool.rgb, _MistWarm.rgb, smoothstep(0.40, 0.70, field));
+                float glow = pow(1.0 - up, 4.0);
+                mistCol += float3(1.0, 0.99, 0.96) * glow * 0.18;
+
+                // Clear mist mask calculation
+                float mist = smoothstep(0.35, 0.85, field) * (1.0 - up * 0.45);
+                mist = pow(mist, 1.8);
+                col = lerp(col, mistCol, saturate(mist * _Intensity));
+
+                // ── 3. Drifting Stained-Glass Frames with Breathing Fade ─────────
                 float tF = _Time.y * _FrameDrift;
                 half3 glassTint;
                 float2 uvB = float2(dir.z, dir.y) / max(0.35, abs(dir.x)) * _FrameScale;
                 float frameB = Frames(uvB, tF, glassTint) * smoothstep(0.25, 0.6, abs(dir.x));
 
-                // Squares thin out toward the zenith/nadir — hung at eye height.
+                // Height constraint & soft breathing fade-in/out per cell
                 float belt = 1.0 - smoothstep(0.35, 0.8, abs(dir.y));
-                frameB *= belt;
+                float fade = 0.7 + 0.3 * sin(_Time.y * 0.35 + Hash2(floor(uvB)) * 20.0);
+                frameB *= belt * fade;
 
-                // Translucent blend so the sky reads through, like coloured glass.
                 col = lerp(col, glassTint, frameB * _FrameAlpha * 0.6);
 
-                // ── One quiet signal-red diagonal band (Title's sweep, stilled) ─
-                float band = sin(dir.x * 2.0 + dir.y * 4.5 + t * 1.5);
-                col = lerp(col, _Signal.rgb, smoothstep(0.90, 0.97, band) * _BandStrength * belt);
+                // ── 4. Dynamic Noise Ribbon Signal Band ──────────────────────────
+                float ribbon = Noise(float3(dir.xy * 5.0, t));
+                float band = smoothstep(0.65, 0.92, ribbon);
+                col = lerp(col, _Signal.rgb, band * _BandStrength * belt);
 
-                // ── Gold dust motes (this hall's "stars") ───────────────────────
-                float3 sp = floor(dir * 160.0);
-                float  sh = Hash3(sp);
-                float  mote = smoothstep(0.999 - _DustDensity * 0.008, 1.0, sh);
-                float  tw   = 0.5 + 0.5 * sin(_Time.y * 1.2 + sh * 40.0);   // slow glint
+                // ── 5. Drifting Air Dust Motes ────────────────────────────────────
+                float3 dustPos = dir * 170.0;
+                dustPos.xy += float2(_Time.y * 0.25, _Time.y * 0.17); // Dust drifting in air
+                float sh   = Hash3(floor(dustPos));
+                float mote = smoothstep(0.999 - _DustDensity * 0.008, 1.0, sh);
+                float tw   = 0.5 + 0.5 * sin(_Time.y * 1.2 + sh * 40.0);
                 col += _DustColor.rgb * mote * tw * 0.35;
 
-                // ── Subtle hue breathing (family DNA) ───────────────────────────
-                col = lerp(col, HsvShift(col, sin(t * 0.4) * _HueDrift), 0.3);
+                // ── 6. Large-Scale Atmospheric Breathing & Hue Drift ─────────────
+                float large = Noise(dir * 0.8 + _Time.y * 0.05);
+                half3 airTint = lerp(half3(1.00, 0.99, 0.97), half3(0.96, 0.99, 1.00), large);
+                col *= airTint;
+
+                col = lerp(col, HsvShift(col, sin(t * 0.4) * _HueDrift), 0.25);
+
+                // ── 7. Soft Air Bloom / Radiance ─────────────────────────────────
+                float luma = dot(col, float3(0.299, 0.587, 0.114));
+                col += pow(luma, 3.0) * 0.06;
 
                 return half4(col, 1.0);
             }

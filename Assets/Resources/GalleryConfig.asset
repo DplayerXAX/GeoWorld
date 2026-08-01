@@ -33,12 +33,14 @@ MonoBehaviour:
       valueGuidInternal: 
       WwiseObjectReference: {fileID: 11400000, guid: 9c4b2b7423b8ea64589b56f8df68804a, type: 2}
   - title: Piecing together
-    description: 'Idle song for regular game play. '
+    description: "An idle theme for regular gameplay. The Deity enjoys listening
+      to this melody while contemplating or solving puzzles. \n\"It brings a sense
+      of calm, clarity, and focus.\""
     track:
       idInternal: 0
       valueGuidInternal: 
       WwiseObjectReference: {fileID: 11400000, guid: 26c61ff29d35a9d4d9b143d2185c8afa, type: 2}
-  - title: Piecing together (no remix)
+  - title: Piecing together (fast version)
     description: It feels even more intense.
     track:
       idInternal: 0

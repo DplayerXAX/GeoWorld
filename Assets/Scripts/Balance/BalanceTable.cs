@@ -205,7 +205,7 @@ public class BalanceTable : ScriptableObject
     [Header("Turret — AOE (high DMG, slow fire, radius splash)")]
     public TurretRecord aoeTurret = new()
     {
-        cost = 8, damage = 2.0f, range = 3.5f, fireRate = 0.6f,
+        cost = 8, damage = 1.8f, range = 3.5f, fireRate = 0.6f,
         aoeRadius = 1.5f,
     };
 

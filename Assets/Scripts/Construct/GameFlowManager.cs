@@ -259,6 +259,7 @@ public class GameFlowManager : MonoBehaviour
     {
         if (_levelDone) return;
         _levelDone = true;
+        AudioManager.Instance?.PlayVictory();
 
         if (phase == GamePhase.Running)
         {
@@ -296,7 +297,15 @@ public class GameFlowManager : MonoBehaviour
 
         bool firstClear = SaveSystem.RecordClear(RunConfig.Level, wavesReached, score);
         if (firstClear && RunConfig.Level != null && RunConfig.Level.rewardConversation != null)
+        {
             RunConfig.PendingRewardConversation = RunConfig.Level.rewardConversation;
+            RunConfig.PendingRewardLevelId       = RunConfig.Level.levelId;
+        }
+        // Any level's first clear COULD gate a map decoration (LevelMapController
+        // checks this against its own decorGateLevelId) — harmless to set even for
+        // levels that don't, LevelMapController just won't find a match and ignores it.
+        if (firstClear && RunConfig.Level != null)
+            RunConfig.PendingMapGrowthLevelId = RunConfig.Level.levelId;
 
         LevelClearScreen.Show(RunConfig.Level, wavesReached, lives, maxLives, stars, score, prevBest, isNewBest, objMet, ReturnToMap);
     }
@@ -346,6 +355,7 @@ public class GameFlowManager : MonoBehaviour
         enemyBaseManager?.CancelWave();
         BackgroundReactor.Instance?.SetCombatMode(false);
         AudioManager.Instance?.ExitBattleBGM();   // safety: dropping into Game Over also leaves battle music
+        AudioManager.Instance?.PlayDefeat();
         phase = GamePhase.GameOver;
     }
 
@@ -399,13 +409,27 @@ public class GameFlowManager : MonoBehaviour
         allEnds.Add(endpoints.endCell);
     }
 
-    // Centre the orbit camera on the midpoint of the first start & end endpoints.
+    // Centre the orbit camera on the midpoint of the first start & end endpoints —
+    // unless the level authored its own opening shot (LevelDefinition.overrideInitialCamera).
     void FocusCameraOnFirstStage()
     {
+        var orbit = FindFirstObjectByType<OrbitCamera>();
+        if (orbit == null) return;
+
+        var lv = RunConfig.Mode == GameMode.Level ? RunConfig.Level : null;
+        if (lv != null && lv.overrideInitialCamera)
+        {
+            // ApplyState is the same hard-reset hook snapshot restore uses — it sets
+            // the orbit rig's focus/distance/yaw/pitch directly rather than fighting
+            // the rig's own per-frame position computation with a raw transform write.
+            orbit.ApplyState(lv.initialCameraFocus, lv.initialCameraDistance, lv.initialCameraYaw, lv.initialCameraPitch);
+            if (orbit.myCam != null) orbit.myCam.fieldOfView = lv.initialCameraFov;
+            return;
+        }
+
         if (gridSystem == null || allStarts.Count == 0 || allEnds.Count == 0) return;
         Vector3 mid = (gridSystem.GridToWorld(allStarts[0]) + gridSystem.GridToWorld(allEnds[0])) * 0.5f;
-        var orbit = FindFirstObjectByType<OrbitCamera>();
-        if (orbit != null) orbit.FocusOnPoint(mid);
+        orbit.FocusOnPoint(mid);
     }
 
     // Alternates: even roundIndex → +start, odd → +end.
@@ -448,6 +472,15 @@ public class GameFlowManager : MonoBehaviour
     void Update()
     {
         if (phase == GamePhase.GameOver) return;
+
+#if UNITY_EDITOR
+        // Editor-only cheat: instantly clear the level, bypassing wavesToClear and
+        // any objectives entirely — DoLevelClear() already no-ops if the level is
+        // already cleared, so mashing this is harmless. F12, not P: P is already
+        // "manual re-evaluate" a few lines down, and this needed a free key.
+        if (RunConfig.Mode == GameMode.Level && Input.GetKeyDown(KeyCode.F12))
+            DoLevelClear(_wavesCompleted);
+#endif
 
         // Objective-driven levels clear the instant every required goal is met (any
         // phase), independent of wavesToClear.

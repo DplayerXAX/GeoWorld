@@ -585,11 +585,24 @@ public class TutorialDirector : MonoBehaviour
     // when WE stop/replace it (advancing the step), so just clear the active flag.
     void OnDialogueFinished(DialogueConversation _) => _dialogueActive = false;
 
+    [Header("Camera focus (steps with cameraFocus set)")]
+    [Tooltip("Vertical viewport position the focused subject sits at while a step directs the camera at it — a little above dead-centre so the subject doesn't end up sitting behind the dialogue box's bottom band. 0.5 = screen centre.")]
+    [Range(0.5f, 0.75f)] public float focusViewportY = 0.65f;
+
     // Glide the orbit camera to the start / end point / a live chaos block when
     // the step requests it.
     void FocusCameraForStep(TutorialStep step)
     {
-        if (step == null || step.cameraFocus == TutorialFocus.None) return;
+        var orbit = FindFirstObjectByType<OrbitCamera>();
+        if (orbit == null) return;
+
+        if (step == null || step.cameraFocus == TutorialFocus.None)
+        {
+            // No directed focus this step — clear any bias a PREVIOUS step left
+            // behind so ordinary player-driven orbiting isn't stuck off-centre.
+            orbit.focusViewport = new Vector2(0.5f, 0.5f);
+            return;
+        }
 
         // Every resolver may return null when its subject doesn't exist yet (no
         // synergy active, no enemy alive, ...). That's not an error — the camera
@@ -605,12 +618,11 @@ public class TutorialDirector : MonoBehaviour
         };
         if (p == null) return;
 
-        var orbit = FindFirstObjectByType<OrbitCamera>();
-        if (orbit != null)
-        {
-            orbit.FocusOnPoint(p.Value, snap: false);          // smooth glide
-            if (step.focusZoom > 0f) orbit.SetZoom(step.focusZoom);   // optional zoom-in
-        }
+        // Locked dead-centre horizontally, nudged up vertically — see the
+        // tooltip above for why (keeps the subject clear of the dialogue box).
+        orbit.focusViewport = new Vector2(0.5f, focusViewportY);
+        orbit.FocusOnPoint(p.Value, snap: false);          // smooth glide
+        if (step.focusZoom > 0f) orbit.SetZoom(step.focusZoom);   // optional zoom-in
     }
 
     Vector3Int[] _lastPlacedCells;
@@ -849,14 +861,23 @@ public class TutorialDirector : MonoBehaviour
         _hintText.raycastTarget = false;
         _hintText.richText = true;
 
-        // Continue light bar — bottom-centre of the panel; pulsed when typing finishes.
-        var barRT = NewRect("ContinueBar", _hintPanel);
-        barRT.anchorMin = new Vector2(0.5f, 0f);
-        barRT.anchorMax = new Vector2(0.5f, 0f);
-        barRT.pivot     = new Vector2(0.5f, 0f);
-        barRT.sizeDelta = new Vector2(hintWidth * 0.45f, 4f);
-        barRT.anchoredPosition = new Vector2(0f, 5f);
+        // Continue light — the same round pulsing ball DialogueRunner uses, planted
+        // right after the last visible character rather than pinned to the panel's
+        // bottom edge, so the two dialogue surfaces read identically and the
+        // indicator shows up where the player's eye already is. Parented to the TEXT
+        // (not the panel) so UpdateContinueBall can drive its localPosition straight
+        // off the character's own local coords with no space conversion.
+        //
+        // UIRoundedRect.Get(radius) bakes its texture at radius*2+4, so the sprite is
+        // already a near-perfect circle; Type.Simple scales it whole instead of
+        // 9-slicing borders that would squash unevenly as the ball pulses.
+        var barRT = NewRect("ContinueBall", _hintText.rectTransform);
+        barRT.anchorMin = barRT.anchorMax = Vector2.zero;
+        barRT.pivot     = new Vector2(0f, 0.5f);
+        barRT.sizeDelta = new Vector2(24f, 24f);
         _continueBar = barRT.gameObject.AddComponent<Image>();
+        _continueBar.sprite = UIRoundedRect.Get(16);
+        _continueBar.type   = Image.Type.Simple;
         _continueBar.color = GeoPalette.Signal;
         _continueBar.raycastTarget = false;
         _continueBar.enabled = false;
@@ -869,7 +890,8 @@ public class TutorialDirector : MonoBehaviour
         var    step = Cur;
         string msg  = step != null ? step.hint : null;
         bool   show = !string.IsNullOrEmpty(msg) && step != null && !step.UsesDialogue
-                      && !SettingsScreen.Open && !PauseMenu.Paused && !IntroDirector.Playing;
+                      && !SettingsScreen.Open && !PauseMenu.Paused && !IntroDirector.Playing
+                      && !PeekWorld.Held;   // hold Shift to peek at the world behind it — see PeekWorld
 
         _hintCanvas.enabled = show;
         if (!show)
@@ -911,7 +933,7 @@ public class TutorialDirector : MonoBehaviour
         if (typingDone && _hintShownPrev < _hintCharCount) AudioManager.Instance?.StopTextBlip();
         _hintShownPrev = shown;
 
-        // Continue light bar: pulse once the text is done on a click-to-continue Wait step.
+        // Continue light: pulse once the text is done on a click-to-continue Wait step.
         bool wantBar = typingDone && step.kind == TutorialStepKind.Wait && step.waitSeconds <= 0f;
         _continueBar.enabled = wantBar;
         if (wantBar)
@@ -919,7 +941,31 @@ public class TutorialDirector : MonoBehaviour
             float pulse = 0.35f + 0.65f * Mathf.PingPong(Time.unscaledTime * 2f, 1f);
             Color sig   = GeoPalette.Signal;
             _continueBar.color = new Color(sig.r, sig.g, sig.b, pulse);
+            // Width and height pulse off the same diameter, so it stays a perfect
+            // circle at every point in the breathe — same as DialogueRunner's.
+            float d = Mathf.Lerp(20f, 32f, pulse);
+            _continueBar.rectTransform.sizeDelta = new Vector2(d, d);
+            PositionContinueBall(shown);
         }
+    }
+
+    // Plants the ball just past the last visible glyph of the hint text. Mirrors
+    // DialogueRunner.PositionContinueBar — including walking back over trailing
+    // whitespace / line breaks, which TMP marks not-visible and gives degenerate
+    // geometry, so the ball never lands at a stray (0,0).
+    void PositionContinueBall(int shown)
+    {
+        var ti = _hintText.textInfo;
+        if (ti.characterCount == 0 || shown <= 0) return;
+
+        int idx = Mathf.Clamp(shown - 1, 0, ti.characterCount - 1);
+        var ci  = ti.characterInfo[idx];
+        while (idx > 0 && !ci.isVisible) { idx--; ci = ti.characterInfo[idx]; }
+        if (!ci.isVisible) return;
+
+        const float gapX = 14f, dropY = -2f;
+        _continueBar.rectTransform.localPosition =
+            new Vector3(ci.bottomRight.x + gapX, ci.bottomRight.y + dropY, 0f);
     }
 
     RectTransform NewRect(string name, Transform parent)

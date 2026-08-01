@@ -90,7 +90,7 @@ MonoBehaviour:
     aoeRadius: 0
   aoeTurret:
     cost: 8
-    damage: 2
+    damage: 1.8
     range: 3.5
     fireRate: 0.6
     slowFactor: 1

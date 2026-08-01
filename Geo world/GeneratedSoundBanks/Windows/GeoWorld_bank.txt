@@ -3,6 +3,7 @@ Event	ID	Name			Wwise Object Path	Notes
 	84696441	F			\Default Work Unit\F	
 	84696444	C			\Default Work Unit\C	
 	240925188	Idle_Loop			\Default Work Unit\Idle_Loop	
+	301972542	victory_Loop			\Default Work Unit\victory_Loop	
 	316156164	Battle_Loop			\Default Work Unit\Battle_Loop	
 	454121546	scroll			\Default Work Unit\scroll	
 	839522188	Shop_open			\Default Work Unit\Shop_open	
@@ -52,6 +53,7 @@ In Memory Audio	ID	Name	Audio source file		Wwise Object Path	Notes	Data Size
 	64655033	1	.cache\10\{106A5B23-34ED-F388-6F70-52AFE86A2EE4}.wem		\Containers\Default Work Unit\SC_Note\1		352896
 	104523021	freesound_community-medium-text-blip-14855	.cache\AF\{AFBBD0F8-9787-F038-A381-B14221E65A64}.wem		\Containers\Default Work Unit\textBlip\freesound_community-medium-text-blip-14855		847968
 	135888558	3	.cache\4E\{4EB90DB4-0F73-5D35-95A7-8286A0C58173}.wem		\Containers\Default Work Unit\SC_Note\3		352896
+	176072702	Firmament's Farewell	.cache\EB\{EB6FF9B9-81AF-4EDC-6FA2-00DF9E25375C}.wem		\Containers\Default Work Unit\victory_Loop\Praise Ascends\Firmament's Farewell		5644896
 	205244938	4	.cache\FD\{FDA079BE-5726-49B1-C760-541B3852183F}.wem		\Containers\Default Work Unit\SC_Note\4		352896
 	217994856	2	.cache\5A\{5A86A6C0-68E1-5E45-F13B-F453451E2AC5}.wem		\Containers\Default Work Unit\SC_Note\2		352896
 	265774773	time drain	.cache\83\{8335D484-A790-CAD0-9284-05AC887809DD}.wem		\Containers\Default Work Unit\drainLoop\time drain\time drain		4939296
@@ -68,13 +70,13 @@ In Memory Audio	ID	Name	Audio source file		Wwise Object Path	Notes	Data Size
 	532162984	完璧	.cache\3B\{3B77E4F8-81DB-8B8A-6735-C4CB80FC8E9C}.wem		\Containers\Default Work Unit\完璧\完璧		352896
 	566543099	ambient bgm	.cache\28\{28D4672F-2484-1CD6-8135-CDAD372308AD}.wem		\Containers\Default Work Unit\Music_BGM\Calm_BGM\change bgm\ambient bgm		5644896
 	574625576	select	.cache\9D\{9D399CF8-EE15-22F5-5126-1EAACF32A447}.wem		\Containers\Default Work Unit\select\select		216672
+	577639329	Firmament's Farewell	.cache\78\{789133AD-F88C-D585-E24A-AA2F0F54BD84}.wem		\Containers\Default Work Unit\Ending song\Firmament's Farewell\Firmament's Farewell		28772136
 	633751974	New Music Track_06	.cache\7D\{7D33FDDD-17CE-8BDA-C0FB-75D5FB7BA202}.wem		\Containers\Default Work Unit\Bdim\New Music Track_06		352896
 	759153527	ambient bgm	.cache\EA\{EAE24123-C675-595C-B50B-C5C8DBB2DC3C}.wem		\Containers\Default Work Unit\Music_BGM\Calm_BGM\ambient bgm\ambient bgm		5644896
 	799708269	New Music Track_06	.cache\19\{1911F0A7-4D8E-A328-97B7-A96A592875B7}.wem		\Containers\Default Work Unit\G\New Music Track_06		352896
 	888948449	ambient bgm	.cache\80\{802F01CA-1B7C-C650-FF9E-451F3BE2007C}.wem		\Containers\Default Work Unit\Music_BGM\Calm_BGM\up bgm\ambient bgm		5644896
 	910080498	geo fight	.cache\93\{9315BEBF-32E3-5C09-B5B1-CF8354B77B71}.wem		\Containers\Default Work Unit\Music_BGM\Battle_BGM\geo fight\geo fight		19756896
 	969998505	Piecing together	.cache\07\{07380261-5851-21B4-FB73-0AA3725DE03D}.wem		\Containers\Default Work Unit\Music_BGM\Piece_BGM\Piecing together\Piecing together		7091376
-	1041853334	Firmament's Farewell	.cache\05\{05699BA4-CFCD-889D-F3BE-AFA55F83C841}.wem		\Containers\Default Work Unit\Ending song\Firmament's Farewell\Firmament's Farewell		25118544
 	1062488858	7	.cache\6A\{6AA23FAE-6D57-D56F-8BE8-4188A088EA5D}.wem		\Containers\Default Work Unit\SC_Note\7		352896
 	1072811695	New Music Track_04	.cache\3E\{3E50F188-05FB-4E0D-B3A8-1EB2FC689910}.wem		\Containers\Default Work Unit\Dm\New Music Track_04		352896
 

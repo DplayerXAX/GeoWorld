@@ -254,8 +254,8 @@ public class PauseMenu : MonoBehaviour
             _paused = _menuOpen = false; Paused = false;
             GameFlowManager.Instance?.RestartGame();
         });
-        BuildButton(panel, "Back to Title", GeoPalette.Ink, GoToTitle);
-        BuildButton(panel, "Back to Select Level", GeoPalette.Ink, GoToLevelSelect);
+        BuildButton(panel, "Title", GeoPalette.Ink, GoToTitle);
+        BuildButton(panel, "Select Level", GeoPalette.Ink, GoToLevelSelect);
         BuildButton(panel, "Quit", GeoPalette.Signal, QuitGame);
 
         _panelGo.SetActive(false);

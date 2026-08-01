@@ -10,7 +10,7 @@
     "Type": "User",
     "GUID": "{FBAC0406-FA36-4CC0-8121-80F7B6376C7E}",
     "Language": "SFX",
-    "Hash": "{2D37EA41-B34D-B514-45E5-C724D0DFDBA0}",
+    "Hash": "{3ED913C7-5508-8B86-24CD-18028DA765BD}",
     "ObjectPath": "\\SoundBanks\\Default Work Unit\\GeoWorld_bank",
     "ShortName": "GeoWorld_bank",
     "Path": "GeoWorld_bank.bnk",
@@ -54,6 +54,14 @@
       "Location": "Memory",
       "ShortName": "3.wav",
       "CachePath": "4E/{4EB90DB4-0F73-5D35-95A7-8286A0C58173}.wem"
+     },
+     {
+      "Id": "176072702",
+      "Language": "SFX",
+      "Streaming": "false",
+      "Location": "Memory",
+      "ShortName": "Praise Ascends.wav",
+      "CachePath": "EB/{EB6FF9B9-81AF-4EDC-6FA2-00DF9E25375C}.wem"
      },
      {
       "Id": "205244938",
@@ -184,6 +192,14 @@
       "CachePath": "9D/{9D399CF8-EE15-22F5-5126-1EAACF32A447}.wem"
      },
      {
+      "Id": "577639329",
+      "Language": "SFX",
+      "Streaming": "false",
+      "Location": "Memory",
+      "ShortName": "Firmament's Farewell.wav",
+      "CachePath": "78/{789133AD-F88C-D585-E24A-AA2F0F54BD84}.wem"
+     },
+     {
       "Id": "633751974",
       "Language": "SFX",
       "Streaming": "false",
@@ -230,14 +246,6 @@
       "Location": "Memory",
       "ShortName": "Piecing together.wav",
       "CachePath": "07/{07380261-5851-21B4-FB73-0AA3725DE03D}.wem"
-     },
-     {
-      "Id": "1041853334",
-      "Language": "SFX",
-      "Streaming": "false",
-      "Location": "Memory",
-      "ShortName": "Geo world\\Originals\\SFX\\Firmament's Farewell.wav",
-      "CachePath": "05/{05699BA4-CFCD-889D-F3BE-AFA55F83C841}.wem"
      },
      {
       "Id": "1062488858",
@@ -389,12 +397,10 @@
       "Name": "Ending_Loop",
       "ObjectPath": "\\Events\\Default Work Unit\\Ending_Loop",
       "GUID": "{DFE390B2-FB1A-47F1-98F5-5F86CB97A85F}",
-      "DurationType": "OneShot",
-      "DurationMin": "0",
-      "DurationMax": "0",
+      "DurationType": "Infinite",
       "MediaRefs": [
        {
-        "Id": "1041853334"
+        "Id": "577639329"
        }
       ]
      },
@@ -707,6 +713,18 @@
         "Id": "888948449"
        }
       ]
+     },
+     {
+      "Id": "301972542",
+      "Name": "victory_Loop",
+      "ObjectPath": "\\Events\\Default Work Unit\\victory_Loop",
+      "GUID": "{9373C364-217F-4D05-8F8B-E01201492F4A}",
+      "DurationType": "Infinite",
+      "MediaRefs": [
+       {
+        "Id": "176072702"
+       }
+      ]
      }
     ],
     "GameParameters": [
@@ -808,6 +826,6 @@
     ]
    }
   ],
-  "FileHash": "{476702B5-CDDF-7C3E-747E-BB023AA3E788}"
+  "FileHash": "{BFF8ED92-679C-BAA4-C9B2-035448703D0E}"
  }
 }
