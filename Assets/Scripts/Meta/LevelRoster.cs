@@ -75,6 +75,24 @@ public static class LevelRoster
                 $"Sprouts each round{when} next to your build and grants adjacent turrets a free, reversible upgrade while they stay touching it."));
         }
 
+        var destruction = lv.GetMechanic<RandomBlockDestructionMechanicConfig>();
+        if (destruction != null)
+        {
+            int first    = Mathf.Max(1, destruction.firstTriggerAfterTurn);
+            int interval = Mathf.Max(1, destruction.turnInterval);
+            string target = destruction.canDestroyTurrets
+                ? "a random block or turret"
+                : "a random non-turret block";
+            string support = destruction.preserveTurretSupport
+                ? " Blocks that are another turret's only support are protected."
+                : "";
+
+            list.Add(new MechanicEntry("Structural Instability",
+                $"After turn {first}, and every {interval} turn{(interval == 1 ? "" : "s")} thereafter, "
+              + $"destroys {target} at the start of the next Build phase. Fixed layout blocks are protected."
+              + support));
+        }
+
         if (lv.allowedColors != null && lv.allowedColors.Length > 0)
         {
             var names = new string[lv.allowedColors.Length];
