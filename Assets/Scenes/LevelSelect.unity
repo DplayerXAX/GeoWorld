@@ -1275,7 +1275,7 @@ MonoBehaviour:
   playerBuiltColor: {r: 0.55, g: 0.85, b: 0.95, a: 1}
   pawnScale: 1.1
   resetSaveOnStart: 0
-  autoFill: 1
+  autoFill: 0
   autoReward: 0
   editorAutoFillBlocks:
   - cells:
