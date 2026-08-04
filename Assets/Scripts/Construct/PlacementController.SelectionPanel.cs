@@ -19,6 +19,20 @@ public partial class PlacementController
         && UnityEngine.EventSystems.EventSystem.current != null
         && UnityEngine.EventSystems.EventSystem.current.IsPointerOverGameObject();
 
+    // Generic escape hatch for systems that remove a board object externally.
+    // Owns only this controller's private selection/UI state; the caller owns the
+    // removal and all gameplay consequences.
+    public void ClearBoardSelection()
+    {
+        selectedInstance  = null;
+        _selectedEndpoint = null;
+        _selectedChaos    = null;
+        _selectedShrine   = null;
+        UpdateHighlight(null);
+        HideRangeIndicator();
+        ClearMultiSelection();
+    }
+
     // False only when the level restricts its color pool and excludes
     // Enlightenment — then the turret-upgrade menu is hidden entirely
     // instead of always showing "Locked".
