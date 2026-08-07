@@ -39,7 +39,7 @@ public class DialogueRunner : MonoBehaviour
     public KeyCode advanceKey  = KeyCode.Space;
     [Tooltip("Opacity the passive tutorial dialogue box fades to while the shop is expanded (F).")]
     [Range(0f, 1f)] public float passiveShopDim = 0.25f;
-    [Tooltip("Opacity the box fades to while the player is placing a block — gameplay's PlacementMode.Edit or LevelSelect's build mode. Applies to ALL dialogue, not just passive/gated lines.")]
+    [Tooltip("Opacity while the player is placing a block (any dialogue, not just gated).")]
     [Range(0f, 1f)] public float editDim = 0.3f;
 
     // ── Events (for game hooks) ──────────────────────────────────────────────────
@@ -162,9 +162,7 @@ public class DialogueRunner : MonoBehaviour
 
     public void Stop() => Finish(_convo);
 
-    // Is the player mid block-placement, in either scene that has one? Both are
-    // singletons that only exist in their own scene, so the null checks double as
-    // the "which scene am I in" test.
+    // Is the player mid block-placement, in either scene that has one?
     static bool EditingAnywhere()
     {
         var pc = PlacementController.Instance;
@@ -186,16 +184,11 @@ public class DialogueRunner : MonoBehaviour
         if (Gated && ShopController.Instance != null && ShopController.Instance.IsExpanded)
             dimMul = passiveShopDim;
 
-        // Placing a block is a spatial, whole-screen activity — the player is judging
-        // fit against geometry the box sits on top of. Unlike the shop dim above this
-        // is NOT limited to gated lines: any dialogue is in the way while editing.
+        // Not limited to gated lines — any dialogue is in the way while editing.
         bool editing = EditingAnywhere();
         if (editing) dimMul = Mathf.Min(dimMul, editDim);
 
-        // Hold Shift to peek at the world behind the box — see PeekWorld. The box
-        // sits across the bottom third of the screen, which is exactly where a
-        // tutorial's own subject often is.
-        bool peeking = PeekWorld.Held;
+        bool peeking = PeekWorld.Held;   // Shift held — see PeekWorld
 
         float targetAlpha = peeking ? 0f : _alphaTarget * dimMul;
         _group.alpha = Mathf.MoveTowards(_group.alpha, targetAlpha, fadeSpeed * Time.unscaledDeltaTime);
@@ -203,8 +196,7 @@ public class DialogueRunner : MonoBehaviour
         // Gated dialogue must NOT block the game — the player needs to interact
         // with the real world (click a block, press F, ...) to complete the step
         // that advances it, and the dialogue box can't be sitting there eating
-        // that click. A peek is invisible, so it mustn't eat clicks either — and
-        // neither may a dimmed box while the player is placing blocks through it.
+        // that click. Same for a peek or an edit-mode dim.
         _group.blocksRaycasts = _group.interactable = !Gated && !peeking && !editing && _alphaTarget > 0.5f;
 
         if (!IsPlaying) return;
@@ -222,14 +214,6 @@ public class DialogueRunner : MonoBehaviour
             }
         }
 
-        // ONE indicator for every finished line — the round ball planted after the
-        // last character (see PositionContinueBar). Gated lines used to get a
-        // separate glyph icon in the corner instead, which had two problems: the
-        // glyph wasn't in the project's TMP atlas so it rendered as a placeholder
-        // SQUARE, and it sat in a corner rather than where the player's eye already
-        // was. The "is this line waiting on me?" distinction it carried is already
-        // told better elsewhere — gated steps have the world-space arrow, the
-        // suggestion box, and the hint text all pointing at what to do.
         bool showBar = !_typing && !_choiceMode;
         _blink += Time.unscaledDeltaTime;
 
@@ -649,11 +633,8 @@ public class DialogueRunner : MonoBehaviour
         // never on passive dialogue. The hit target (skipImg) is fully transparent —
         // it exists only so Button has something to raycast against, not to draw a
         // frame around the text.
-        // Small print, flush into the box's bottom-right corner — the Shift-peek
-        // (see PeekWorld) is otherwise undiscoverable, and this is the surface it
-        // matters most on: a gated tutorial line is exactly when the player wants
-        // the box out of the way. Same corner and same register as the block detail
-        // panel's own footnote, so it reads as one feature, not two.
+        // Small print advertising the Shift-peek (PeekWorld) — same corner/register
+        // as the block detail panel's own footnote.
         _peekHint = NewText("PeekHint", box, textSize * 0.6f,
             new Color(textColor.r, textColor.g, textColor.b, 0.5f),
             FontStyles.Italic, TextAlignmentOptions.BottomRight);

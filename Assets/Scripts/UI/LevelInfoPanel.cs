@@ -62,13 +62,8 @@ public class LevelInfoPanel : MonoBehaviour
     // Read by LevelSelectTutorialGuide to anchor its "click here" arrow beside
     // the Enter button during the ls.enter tutorial gate.
     public RectTransform EnterButtonRect => _enter != null ? (RectTransform)_enter.transform : null;
-    // Read by LevelMapController to keep a click that lands on this panel from
-    // ALSO raycasting into the 3D map underneath (see PointerOverInfoPanel there).
-    // Scoped to this panel's own rect specifically rather than a blanket
-    // EventSystem.IsPointerOverGameObject() check — LevelSelect also hosts
-    // DialogueRunner's full-screen CanvasGroup, whose blocksRaycasts toggles
-    // on/off per dialogue line, so a global "is the pointer over ANY UI" query
-    // doesn't reliably isolate "is it over THIS panel".
+    // Read by LevelMapController.PointerOverInfoPanel to keep panel clicks from
+    // also raycasting into the map underneath.
     public RectTransform PanelRect => _panel != null ? _panel : targetPanel;
     public bool IsShown => _cg != null && _cg.blocksRaycasts;
     Action      _onEnter;

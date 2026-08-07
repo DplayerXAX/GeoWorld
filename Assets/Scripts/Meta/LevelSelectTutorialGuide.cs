@@ -2,21 +2,10 @@ using UnityEngine;
 using UnityEngine.SceneManagement;
 using TMPro;
 
-// Visual accompaniment for LevelMapController's existing hands-on tutorial gate
-// system (Walk / EnterLevel / OpenBuild / Place, driven by firstVisitConversation
-// + T_rewardBlock). The dialogue text alone never says WHERE to click — this
-// reacts to LevelMapController.OnTutorialGateChanged and adds:
-//   - Walk / OpenBuild / Place (all anchored to the pawn's current position): a
-//     bobbing world-space arrow over the pawn, plus a single eased camera pan
-//     there (non-blocking — the player can immediately pan away again). Walk
-//     ("You start out at your home block...") also zooms the camera in.
-//   - EnterLevel (a fixed-position UI panel, not a world object): a bouncing
-//     UI arrow beside the panel's Enter button, PLUS a world-space arrow over
-//     enterLevelTargetId's node ("only this one is connected...").
-//
-// Purely additive: never touches gating/dialogue content, only reacts to the
-// event. Auto-spawns — same RuntimeInitializeOnLoadMethod pattern as
-// ChaosBlockController/ShrineController — no scene wiring needed.
+// Visual accompaniment for LevelMapController's hands-on tutorial gates (Walk /
+// EnterLevel / OpenBuild / Place) — the dialogue never says WHERE to click, so
+// this reacts to OnTutorialGateChanged with a bobbing world arrow (+ camera pan,
+// Walk also zooms in) or a UI arrow beside the Enter button. Purely additive.
 [DisallowMultipleComponent]
 public class LevelSelectTutorialGuide : MonoBehaviour
 {
@@ -47,13 +36,13 @@ public class LevelSelectTutorialGuide : MonoBehaviour
     public float arrowSize = 0.5f;
 
     [Header("Walk gate camera zoom-in")]
-    [Tooltip("When the 'start' line (ls.walk gate) fires, the camera zooms to this OrbitCamera distance/orthoSize instead of just panning — reads as a deliberate zoom-in on the home block. LevelSelect's default orbit distance is 10.")]
+    [Tooltip("OrbitCamera zoom when the ls.walk gate fires. Default orbit distance is 10.")]
     public float walkFocusZoom = 5f;
 
     [Header("Tutorial-level arrow (EnterLevel)")]
-    [Tooltip("levelId of the level the EnterLevel gate ('only this one is connected') should point the world arrow at.")]
+    [Tooltip("levelId the EnterLevel gate points the world arrow at.")]
     public string enterLevelTargetId = "Tutorial";
-    [Tooltip("Height for the fixed arrow over enterLevelTargetId's node — taller than arrowHeight since that node sits under floating decor cubes that would otherwise occlude it.")]
+    [Tooltip("Taller than arrowHeight — that node sits under decor that would occlude it.")]
     public float tutorialNodeArrowHeight = 2f;
 
     [Header("UI pointer (EnterLevel)")]
@@ -91,13 +80,8 @@ public class LevelSelectTutorialGuide : MonoBehaviour
             var enterRect = lmc.infoPanel != null ? lmc.infoPanel.EnterButtonRect : null;
             if (enterRect != null) ShowUiPointer(enterRect);
 
-            // "Right now only this one is connected" — also point a world arrow
-            // at the actual level node being talked about, not just the button.
             var targetPos = lmc.FindLevelNodePosition(enterLevelTargetId);
-            if (targetPos.HasValue)
-            {
-                ShowWorldArrow(targetPos.Value, height: tutorialNodeArrowHeight);
-            }
+            if (targetPos.HasValue) ShowWorldArrow(targetPos.Value, height: tutorialNodeArrowHeight);
             return;
         }
 
@@ -158,7 +142,7 @@ public class LevelSelectTutorialGuide : MonoBehaviour
         _uiPointer.sizeDelta = new Vector2(36f, 36f);
 
         var tmp = go.AddComponent<TextMeshProUGUI>();
-        tmp.text = "›";   // same glyph GalleryScreen's ‹ / › arrows use — ▶ isn't in the project's TMP font atlas and rendered as a missing-glyph box
+        tmp.text = "›";   // ▶ isn't in the TMP font atlas — see GalleryScreen's ‹/›
         tmp.fontSize = 30f;
         tmp.fontStyle = FontStyles.Bold;
         tmp.color = uiPointerColor;

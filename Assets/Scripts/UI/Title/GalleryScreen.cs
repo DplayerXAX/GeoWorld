@@ -1228,24 +1228,12 @@ public class GalleryScreen : MonoBehaviour
 
     // ── Camera ───────────────────────────────────────────────────────────────
 
-    // One critically damped scalar drives the whole move, and the camera's ROTATION
-    // is never authored or interpolated — it's derived every frame from where the
-    // subject physically is. That pair of decisions is the entire fix:
-    //
-    //   · a spring eases IN as well as out. The old 1-exp(-camGlide*dt) chase left
-    //     at maximum speed on frame one and then crawled, never quite arriving —
-    //     which is also why nothing else on screen had anything to synchronise to;
-    //   · a spring survives interruption as a PROPERTY, because it carries velocity.
-    //     BACK pressed mid-push-in decelerates, turns and leaves;
-    //   · a derived aim keeps the subject framed for every frame of the move.
-    //     Slerping two quaternions walks the geodesic through orientation space,
-    //     which has no relationship to where the exhibit actually is, so the subject
-    //     swims out of frame mid-move and drifts back;
-    //   · and because the target is re-solved every frame instead of baked at click
-    //     time, the pointer parallax under _galleryRig stops fighting the camera:
-    //     the subject stays pinned while its neighbours slide past it. That's the
-    //     answer to "dead once it arrives", and it beats authored idle noise because
-    //     the player causes it.
+    // One critically damped spring drives the whole move; the camera's rotation is
+    // never authored/interpolated, only derived each frame from where the subject
+    // is. That keeps the subject framed throughout the move (unlike slerping two
+    // quaternions, which drifts off-target mid-flight), eases in as well as out
+    // (the old exp-decay chase left at max speed and crawled), and survives
+    // interruption smoothly since the spring carries real velocity.
 
     // Reference travel and turn for the pacing law. Distance scales as a SQRT, so a
     // 6m move is quicker than a 3m one but not twice as quick; ANGLE scales linearly,

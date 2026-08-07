@@ -4,19 +4,11 @@ using UnityEngine.UI;
 using UnityEngine.EventSystems;
 using TMPro;
 
-// Attached at runtime (by TitleFlow.WireSaveSlots) to each save-slot button on
-// the Title save-select panel. HOVER ONLY: shows that slot's saved stats
-// floating over the RIGHT-SIDE TitleCube (the 3-D block that slides right on
-// the save face), via the shared SaveSlotInfoDisplay.
-//
-// Slot SELECTION is deliberately NOT here — it used to fire from OnPointerDown,
-// which meant "which slot did clicking this button pick" depended on
-// GetComponentsInChildren<Button> returning the buttons in the same order the
-// screen shows them, an assumption with no enforcement and nothing to check it
-// against short of testing every build. Each button's onClick() now calls
-// TitleFlow.SelectSlotAndPlay(slot) directly with its own slot baked in in the
-// Inspector, so the slot a button picks is exactly what onClick() shows, not
-// something inferred from sibling order at Start().
+// Attached at runtime (TitleFlow.WireSaveSlots) to each save-slot button. HOVER
+// ONLY: shows that slot's stats over the right-side TitleCube via
+// SaveSlotInfoDisplay. Slot SELECTION lives in each button's onClick() calling
+// TitleFlow.SelectSlotAndPlay(slot) directly (Inspector-baked), not here —
+// deliberately not inferred from sibling order.
 public class SaveSlotButton : MonoBehaviour, IPointerEnterHandler, IPointerExitHandler
 {
     int _slot;
