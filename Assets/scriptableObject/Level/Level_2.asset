@@ -18,12 +18,14 @@ MonoBehaviour:
   runSeed: 0
   blocksPerTurn: 8
   turretsPerTurn: 3
+  synergyEnabled: 1
   allowedColors: 010000000400000002000000
+  startingShop: []
   waves:
-  - {fileID: 0}
-  - {fileID: 0}
-  - {fileID: 0}
-  - {fileID: 0}
+  - {fileID: 11400000, guid: 080e4b2a67c19904bbbfdce56bfad1ae, type: 2}
+  - {fileID: 11400000, guid: 805195553d7548d7b575d4c0394cb94b, type: 2}
+  - {fileID: 11400000, guid: d54378f6fe064d08ba34d6c8e1f8ff1d, type: 2}
+  - {fileID: 11400000, guid: 936c96e931544f789d15a0b24fa27475, type: 2}
   - {fileID: 0}
   - {fileID: 0}
   - {fileID: 0}
@@ -40,7 +42,7 @@ MonoBehaviour:
     target: 3
     description: 
     optional: 0
-  - type: 5
+  - type: 4
     target: 3
     description: 
     optional: 0
@@ -51,9 +53,15 @@ MonoBehaviour:
   techReward: 1
   mapBlockRewards:
   - {fileID: 11400000, guid: 6eeb6b311184fcb40be187ae07e15da1, type: 2}
+  rewardConversation: {fileID: 0}
   isTutorial: 0
   fixedEndpoints: 0
   startCell: {x: 0, y: 0, z: 0}
   endCell: {x: 0, y: 0, z: 0}
   tutorialSteps: []
   startingLayout: {fileID: 11400000, guid: 38871691a215fd945ae711b604b680e6, type: 2}
+  overrideEndpointDistance: 0
+  endpointMinDistance: 5
+  endpointMaxDistance: 10
+  mechanics:
+  - {fileID: 11400000, guid: ee2ab2f9dff7f574ba705fe2988bd81c, type: 2}
