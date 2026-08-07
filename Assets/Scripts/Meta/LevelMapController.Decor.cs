@@ -1,4 +1,4 @@
-using System.Collections;
+﻿using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
@@ -13,88 +13,83 @@ using UnityEngine.UI;
 // level" — a node with no level attached is simply passable, never enterable.
 //
 
+// Bundled into one field (LevelMapController.decor) instead of ~30 flat fields,
+// so the Abundance farm doesn't dominate the Inspector — collapses to one foldout.
+[System.Serializable]
+public class AbundanceFarmConfig
+{
+    [Header("Plot")]
+    [Tooltip("Off = never build the farm, whatever the save says.")]
+    public bool enabled = true;
+    [Tooltip("The farm appears once THIS level has been cleared. Blank = always on.")]
+    public string gateLevelId = "1-1";
+    [Tooltip("Lowest-x / lowest-z corner of the plot, in grid cells.")]
+    public Vector3Int origin = new Vector3Int(-11, 2, 0);
+    [Tooltip("Plot footprint in cells (x, z) before rotationSteps.")]
+    public Vector2Int size = new Vector2Int(12, 11);
+    [Tooltip("Turns the whole plot 90° clockwise per step (0-3) — layout and props together.")]
+    [Range(0, 3)] public int rotationSteps = 0;
+    [Tooltip("Fraction of plot cells that actually get a block — below 1 the edge frays.")]
+    [Range(0.3f, 1f)] public float coverage = 0.82f;
+    [Tooltip("Cells of height variation the plot terraces over. 0 = perfectly flat.")]
+    [Range(0, 3)] public int terrace = 1;
+    public Color soilColor = new Color(0.34f, 0.26f, 0.18f);
+    [Tooltip("±brightness jitter per soil block.")]
+    [Range(0f, 0.3f)] public float soilJitter = 0.12f;
+
+    [Header("Beds")]
+    [Tooltip("Row cycle along Z: every Nth row is a lane; planted rows alternate flower/crop. 0 = uniform meadow.")]
+    public int pathRowEvery = 3;
+    [Tooltip("Extra coverage for walking lanes over the base coverage.")]
+    [Range(0f, 0.4f)] public float pathRowExtraCoverage = 0.18f;
+    [Tooltip("Chance a flower-bed cell actually blooms.")]
+    [Range(0f, 1f)] public float bloomChance = 0.8f;
+    [Tooltip("Hard cap on flowers — the main cost dial for the whole farm.")]
+    public int maxFlowers = 170;
+
+    [Header("Crops")]
+    [Range(0, 6)] public int stalksPerCell = 4;
+    [Range(0.2f, 1.5f)] public float stalkHeight = 0.75f;
+    public Color cropColor = new Color(0.62f, 0.58f, 0.24f);
+
+    [Header("Fence")]
+    public bool fenceEnabled = true;
+    [Tooltip("Fraction of boundary edges that get a picket — gaps read as entrances.")]
+    [Range(0f, 1f)] public float fenceCoverage = 0.78f;
+    [Range(0.2f, 1.2f)] public float fenceHeight = 0.55f;
+    public Color fenceColor = new Color(0.55f, 0.40f, 0.26f);
+
+    [Header("Landmark")]
+    public bool windmillEnabled = true;
+    [Range(1f, 5f)] public float windmillHeight = 2.6f;
+    public float windmillSpin = 26f;
+    public Color towerColor = new Color(0.88f, 0.85f, 0.78f);
+    public Color accentColor = new Color(0.98f, 0.80f, 0.30f);
+    [Range(0, 10)] public int signCount = 4;
+
+    [Header("Grow-in cutscene")]
+    [Tooltip("How far below its resting position the field starts, on the one grow-in play.")]
+    public float growRiseHeight = 3f;
+    public float growRiseDuration = 1.8f;
+    [Tooltip("Extra camera hold after the field settles, for BloomPatch's own bloom-in.")]
+    public float growHoldSeconds = 1.4f;
+    [Tooltip("Orbit zoom during the reveal. 0 = keep whatever zoom the map had.")]
+    public float growZoom = 0f;
+    [Tooltip("Degrees added to the camera's current yaw for the reveal (positive = turns right).")]
+    public float growYawOffset = 90f;
+    [Tooltip("Fade to/from black for the hand-off out of the reveal.")]
+    public float transitionFadeDuration = 0.6f;
+    [Tooltip("Aside bubble shown once during the reveal. Blank = none.")]
+    [TextArea] public string growAsideText =
+        "As Abundance returned, a small farm blossomed where countless wishes had been sown.";
+    [Tooltip("How long the aside stays up — the camera hold stretches to cover it.")]
+    public float growAsideSeconds = 4.5f;
+}
+
 public partial class LevelMapController : MonoBehaviour
 {
-    [Header("Abundance farm — plot")]
-    [Tooltip("Off = never build the farm, whatever the save says.")]
-    public bool decorEnabled = true;
-    [Tooltip("The farm appears once THIS level has been cleared. Blank = always on.")]
-    public string decorGateLevelId = "1-1";
-    [Tooltip("Lowest-x / lowest-z corner of the plot, in grid cells. Default puts the plot's right edge at x0, one cell clear of 1-1 (which occupies x1..3, y2, z5..6).")]
-    public Vector3Int decorOrigin = new Vector3Int(-11, 2, 0);
-    [Tooltip("Plot footprint in cells (x, z) BEFORE decorRotationSteps. Height comes from decorTerrace.")]
-    public Vector2Int decorSize = new Vector2Int(12, 11);
-    [Tooltip("Turns the whole plot 90° clockwise per step (0-3): crop/lane rows, the windmill's rotor facing and the wheat's sowing line all rotate with it. The rotated footprint is re-anchored so decorOrigin always stays its lowest-x/lowest-z corner — rotating never makes you go hunting for where the farm went.")]
-    [Range(0, 3)] public int decorRotationSteps = 0;
-    [Tooltip("Fraction of plot cells that actually get a block — below 1 the edge frays into the surrounding void instead of ending on a hard rectangle.")]
-    [Range(0.3f, 1f)] public float decorCoverage = 0.82f;
-    [Tooltip("Cells of height variation the plot terraces over. 0 = perfectly flat.")]
-    [Range(0, 3)] public int decorTerrace = 1;
-    [Tooltip("Tint of the soil blocks. A muted earth so the flowers, not the ground, carry the colour.")]
-    public Color decorSoilColor = new Color(0.34f, 0.26f, 0.18f);
-    [Tooltip("±brightness jitter per soil block, so the ground reads as tilled earth rather than one flat slab.")]
-    [Range(0f, 0.3f)] public float decorSoilJitter = 0.12f;
-
-    [Header("Abundance farm — beds")]
-    [Tooltip("Row cycle along Z: every Nth row is a bare walking lane, and the planted rows between lanes alternate flower bed / crop bed. 0 disables row structure (uniform meadow).")]
-    public int decorPathRowEvery = 3;
-    [Tooltip("Walking lanes get this much MORE coverage than decorCoverage, so they read as deliberate solid ground rather than more frayed edge.")]
-    [Range(0f, 0.4f)] public float decorPathRowExtraCoverage = 0.18f;
-    [Tooltip("Chance a flower-bed cell actually blooms. The rest stay bare tilled dirt.")]
-    [Range(0f, 1f)] public float decorBloomChance = 0.8f;
-    [Tooltip("Hard cap on flowers. Each bloom is ~6 GameObjects, so this is the main cost dial for the whole farm.")]
-    public int decorMaxFlowers = 170;
-
-    [Header("Abundance farm — crops")]
-    [Tooltip("Wheat stalks per crop-bed cell, sown in a line across the row.")]
-    [Range(0, 6)] public int decorStalksPerCell = 4;
-    [Tooltip("Stalk height as a fraction of one cell.")]
-    [Range(0.2f, 1.5f)] public float decorStalkHeight = 0.75f;
-    [Tooltip("Wheat stem/leaf green-ochre. The kernels use the gold accent on top of this.")]
-    public Color decorCropColor = new Color(0.62f, 0.58f, 0.24f);
-
-    [Header("Abundance farm — fence")]
-    [Tooltip("Ring the plot's outer edge with pickets and connecting rails.")]
-    public bool decorFenceEnabled = true;
-    [Tooltip("Fraction of boundary edges that get a picket — the rest are gaps, so the fence reads as a working boundary with entrances rather than a solid wall.")]
-    [Range(0f, 1f)] public float decorFenceCoverage = 0.78f;
-    [Tooltip("Picket height as a fraction of one cell.")]
-    [Range(0.2f, 1.2f)] public float decorFenceHeight = 0.55f;
-    [Tooltip("Weathered timber. NOT ink — a black fence around dark soil turns the plot's whole outline into a dead band.")]
-    public Color decorFenceColor = new Color(0.55f, 0.40f, 0.26f);
-
-    [Header("Abundance farm — landmark")]
-    [Tooltip("A windmill at the plot's far corner: the element that makes this read as a farm from across the map.")]
-    public bool decorWindmillEnabled = true;
-    [Tooltip("Windmill height in cells, tower base to hub.")]
-    [Range(1f, 5f)] public float decorWindmillHeight = 2.6f;
-    [Tooltip("Sail rotation, degrees/sec.")]
-    public float decorWindmillSpin = 26f;
-    [Tooltip("Windmill tower body. Cream rather than ink so the landmark reads bright against the dark soil.")]
-    public Color decorTowerColor = new Color(0.88f, 0.85f, 0.78f);
-    [Tooltip("Gold for the sails and the signpost flags — the farm's accent role.")]
-    public Color decorAccentColor = new Color(0.98f, 0.80f, 0.30f);
-    [Tooltip("Signpost flags planted beside the walking lanes, up to this many.")]
-    [Range(0, 10)] public int decorSignCount = 4;
-
-    [Header("Abundance farm — grow-in cutscene")]
-    [Tooltip("How far below its resting position the whole field starts, in world units, the ONE time the grow-in cutscene plays.")]
-    public float decorGrowRiseHeight = 3f;
-    [Tooltip("Seconds for the field to rise from underground into its resting position.")]
-    public float decorGrowRiseDuration = 1.8f;
-    [Tooltip("Extra seconds the camera holds on the field after it settles — gives the flowers' own bloom-in (BloomPatch) time to finish before the camera lets go and dialogue/gameplay resumes.")]
-    public float decorGrowHoldSeconds = 1.4f;
-    [Tooltip("Orbit zoom while the cutscene camera is locked on the field (smaller = closer). 0 = keep whatever zoom the map already had.")]
-    public float decorGrowZoom = 0f;
-    [Tooltip("Degrees added to the camera's current yaw for the reveal shot (positive = turns right). The reveal otherwise just inherits whatever angle the player happened to be looking from.")]
-    public float decorGrowYawOffset = 90f;
-    [Tooltip("Seconds to fade to/from black for the hand-off from the grow-in reveal into whatever dialogue/tutorial plays next (see PlayDecorGrowthCutscene). Hides the camera's own snap-back — focusViewport resets instantly there, and the reward dialogue may immediately re-target the camera again, so trying to keep that cut on-screen always reads as a pop no matter how the camera itself eases.")]
-    public float decorTransitionFadeDuration = 0.6f;
-    [Tooltip("Aside bubble shown once, while the camera holds on the newly grown farm. Blank = no bubble.")]
-    [TextArea] public string decorGrowAsideText =
-        "As Abundance returned, a small farm blossomed where countless wishes had been sown.";
-    [Tooltip("Seconds the aside above stays up. The camera's hold is stretched to cover it when this is longer than decorGrowHoldSeconds, so the line is never cut off mid-read by the fade to black.")]
-    public float decorGrowAsideSeconds = 4.5f;
+    [Header("Abundance farm")]
+    public AbundanceFarmConfig decor = new();
 
     GameObject _decorRoot;
     Vector3    _decorCenter;
@@ -150,29 +145,21 @@ public partial class LevelMapController : MonoBehaviour
 
     RowKind RowKindAt(int localZ)
     {
-        if (decorPathRowEvery <= 0) return RowKind.Flower;
-        if (localZ % decorPathRowEvery == decorPathRowEvery - 1) return RowKind.Lane;
+        if (decor.pathRowEvery <= 0) return RowKind.Flower;
+        if (localZ % decor.pathRowEvery == decor.pathRowEvery - 1) return RowKind.Lane;
         // Band index between lanes — alternate the bands so beds stripe rather
         // than every planted row looking identical.
-        return (localZ / decorPathRowEvery) % 2 == 1 ? RowKind.Crop : RowKind.Flower;
+        return (localZ / decor.pathRowEvery) % 2 == 1 ? RowKind.Crop : RowKind.Flower;
     }
 
     // ── Plot rotation ────────────────────────────────────────────────────────
-    // Everything about the farm is authored in PLOT-LOCAL space: rows run along
-    // local +X and step along local +Z (RowKindAt), wheat is sown in a line along
-    // local +X, and the windmill's rotor faces local -Z. decorRotationSteps turns
-    // that whole local frame, so one number rotates the layout AND the props
-    // together — as opposed to swapping decorSize's components, which only
-    // reshapes the footprint and leaves every directional prop facing its
-    // original way.
-    //
-    // Each step maps local (ix, iz) so the result stays non-negative and anchored
-    // at (0,0), which is what keeps decorOrigin meaning "lowest-x/lowest-z corner"
-    // at every rotation.
-    // Matches Quaternion.Euler(0, steps*90, 0) exactly — a +90° Y turn sends local
-    // +X to world -Z and local +Z to world +X (clockwise seen from above), and the
-    // "+(w-1)" / "+(d-1)" terms are just the re-anchoring back to non-negative.
-    Vector2Int RotateLocal(int ix, int iz, int w, int d) => (decorRotationSteps & 3) switch
+    // Farm content is authored in plot-local space (rows along local +X, stepping
+    // along local +Z, windmill rotor facing local -Z). decor.rotationSteps turns
+    // that whole frame — layout and props together — re-anchored to stay
+    // non-negative so decor.origin keeps meaning "lowest-x/lowest-z corner".
+    // Matches Quaternion.Euler(0, steps*90, 0): a +90° Y turn sends local +X to
+    // world -Z and local +Z to world +X.
+    Vector2Int RotateLocal(int ix, int iz, int w, int d) => (decor.rotationSteps & 3) switch
     {
         1 => new Vector2Int(iz, w - 1 - ix),
         2 => new Vector2Int(w - 1 - ix, d - 1 - iz),
@@ -182,99 +169,74 @@ public partial class LevelMapController : MonoBehaviour
 
     // Footprint extent after rotation — odd steps swap width and depth.
     Vector2Int RotatedExtent(int w, int d) =>
-        (decorRotationSteps & 1) == 1 ? new Vector2Int(d, w) : new Vector2Int(w, d);
+        (decor.rotationSteps & 1) == 1 ? new Vector2Int(d, w) : new Vector2Int(w, d);
 
-    float DecorRotationDegrees => (decorRotationSteps & 3) * 90f;
+    float DecorRotationDegrees => (decor.rotationSteps & 3) * 90f;
 
     // Local +X (the row / sowing direction) expressed in world space.
     Vector3 DecorRowDirWorld => Quaternion.Euler(0f, DecorRotationDegrees, 0f) * Vector3.right;
 
-    // Called from Start() once the map exists. Silent no-op (returns false) until
-    // the gate level has actually been cleared, so a fresh save sees plain empty
-    // ground and the farm is a visible reward for finishing the level. Returns
-    // true only on the ONE visit where the grow-in cutscene should play.
+    // No-op until the gate level is cleared. Returns true only on the one visit
+    // where the grow-in cutscene should play.
     bool TryBuildDecor()
     {
-        if (!decorEnabled || _decorRoot != null) return false;
+        if (!decor.enabled || _decorRoot != null) return false;
         if (gridSystem == null || cubePrefab == null) return false;
 
-        if (!string.IsNullOrEmpty(decorGateLevelId))
+        if (!string.IsNullOrEmpty(decor.gateLevelId))
         {
-            var rec = SaveSystem.Profile.GetRecord(decorGateLevelId);
+            var rec = SaveSystem.Profile.GetRecord(decor.gateLevelId);
             if (rec == null || !rec.cleared) return false;
         }
 
-        // One-shot: only the visit RIGHT AFTER this level's first clear plays the
-        // grow-in cutscene (see RunConfig.PendingMapGrowthLevelId). Every later
-        // revisit — this session or a future one — just silently rebuilds the same
-        // deterministic field instantly, exactly like before this feature existed.
-        bool grow = RunConfig.PendingMapGrowthLevelId == decorGateLevelId;
-        if (grow) RunConfig.PendingMapGrowthLevelId = null;   // consume once regardless of what BuildDecor does below
+        // Only the visit right after first clear plays the cutscene; later revisits
+        // just rebuild the field instantly.
+        bool grow = RunConfig.PendingMapGrowthLevelId == decor.gateLevelId;
+        if (grow) RunConfig.PendingMapGrowthLevelId = null;
 
         BuildDecor(grow);
         return grow;
     }
 
-    // Camera-locked reveal played exactly once, right after this field's gate
-    // level is first cleared — BEFORE any first-visit/reward dialogue (see the
-    // call site in Start()). Blocks player input for its duration (see the
-    // _decorCutscenePlaying check in Update()) so the player can't start walking
-    // or building mid-reveal. The field itself was already sunk below ground by
-    // BuildDecor(grow: true); this just rises it back up while the camera holds.
+    // Camera-locked reveal played once, right after this field's gate level is
+    // first cleared. Blocks player input (_decorCutscenePlaying) for its duration.
     IEnumerator PlayDecorGrowthCutscene()
     {
         _decorCutscenePlaying = true;
 
         if (_orbit != null)
         {
-            _orbit.focusViewport = new Vector2(0.5f, 0.5f);   // dead-centre for the reveal, not the usual left-biased map framing
+            _orbit.focusViewport = new Vector2(0.5f, 0.5f);
             _orbit.FocusOnPoint(_decorCenter, snap: false);
-            if (decorGrowZoom > 0f) _orbit.SetZoom(decorGrowZoom);
-            // Rotates the shot away from whatever angle the player happened to be
-            // looking from before the cutscene started — position eases toward the
-            // new angle every frame regardless (see OrbitCamera.LateUpdate), so this
-            // one-shot yaw bump still reads as a smooth swing, not a snap.
-            _orbit.AddYaw(decorGrowYawOffset);
+            if (decor.growZoom > 0f) _orbit.SetZoom(decor.growZoom);
+            _orbit.AddYaw(decor.growYawOffset);   // position eases to the new angle, so this still reads as a swing
         }
 
-        // Narration rides the reveal rather than following it: the bubble slides in
-        // as the field starts pushing up, so the words and the thing they describe
-        // are one beat instead of a sentence arriving after the show is over.
-        if (!string.IsNullOrEmpty(decorGrowAsideText))
-            AsideBubble.Show(defaultCharacter, "default", decorGrowAsideText, decorGrowAsideSeconds);
+        if (!string.IsNullOrEmpty(decor.growAsideText))
+            AsideBubble.Show(defaultCharacter, "default", decor.growAsideText, decor.growAsideSeconds);
 
         Vector3 sunk = _decorRoot != null ? _decorRoot.transform.position : _decorRestPos;
         float t = 0f;
-        while (t < decorGrowRiseDuration)
+        while (t < decor.growRiseDuration)
         {
             t += Time.deltaTime;
-            float e = 1f - Mathf.Pow(1f - Mathf.Clamp01(t / decorGrowRiseDuration), 3f);   // ease-out cubic, no overshoot
+            float e = 1f - Mathf.Pow(1f - Mathf.Clamp01(t / decor.growRiseDuration), 3f);   // ease-out cubic, no overshoot
             if (_decorRoot != null) _decorRoot.transform.position = Vector3.Lerp(sunk, _decorRestPos, e);
             yield return null;
         }
         if (_decorRoot != null) _decorRoot.transform.position = _decorRestPos;
 
-        // The camera still waits for the line to finish rather than the other way
-        // round — the default hold (~1.4s) is tuned for watching the field settle,
-        // which is shorter than this sentence takes to read, and the fade to black
-        // would otherwise cut it off mid-read. The bubble's clock started back at
-        // the rise, so only what's LEFT of it needs covering here.
-        float hold = decorGrowHoldSeconds;
-        if (!string.IsNullOrEmpty(decorGrowAsideText))
-            hold = Mathf.Max(hold, decorGrowAsideSeconds + AsideBubble.SlideSeconds - decorGrowRiseDuration);
+        // Camera waits for the line to finish (its clock started at the rise, so
+        // only what's left of it needs covering).
+        float hold = decor.growHoldSeconds;
+        if (!string.IsNullOrEmpty(decor.growAsideText))
+            hold = Mathf.Max(hold, decor.growAsideSeconds + AsideBubble.SlideSeconds - decor.growRiseDuration);
         yield return new WaitForSeconds(hold);
 
-        // Fade to black for the hand-off instead of an eased pan — focusViewport
-        // resets synchronously right below (OrbitCamera reads it every frame with
-        // no lerp of its own), and PlayEntryDialogueIfAny() may immediately
-        // re-target the camera AGAIN to the reward's granting level node, so any
-        // attempt to keep this moment on-screen ends up reading as a pop no matter
-        // how the camera position itself eases.
-        yield return FadeScreen(0f, 1f, decorTransitionFadeDuration);
+        // Fade to black for the hand-off — focusViewport resets with no lerp of its
+        // own right below, so an eased pan would still pop.
+        yield return FadeScreen(0f, 1f, decor.transitionFadeDuration);
 
-        // Hand the camera back to wherever the pawn actually is, with the map's
-        // normal left-biased framing, before whatever dialogue/tutorial comes next.
-        // Safe to snap now — it's happening behind the fade.
         if (_orbit != null)
         {
             _orbit.focusViewport = new Vector2(focusViewportX, focusViewportY);
@@ -283,7 +245,7 @@ public partial class LevelMapController : MonoBehaviour
 
         PlayEntryDialogueIfAny();   // may re-focus again (reward conversation) — still hidden
 
-        yield return FadeScreen(1f, 0f, decorTransitionFadeDuration);
+        yield return FadeScreen(1f, 0f, decor.transitionFadeDuration);
         _decorCutscenePlaying = false;
     }
 
@@ -294,13 +256,12 @@ public partial class LevelMapController : MonoBehaviour
         var coveredCols = new HashSet<Vector2Int>();
         var colTop      = new Dictionary<Vector2Int, Vector3Int>();
 
-        int w = Mathf.Max(1, decorSize.x);
-        int d = Mathf.Max(1, decorSize.y);
+        int w = Mathf.Max(1, decor.size.x);
+        int d = Mathf.Max(1, decor.size.y);
         float cs = gridSystem.cellSize;
 
-        // Which row role each world column ended up with. Recorded here rather than
-        // recovered later from the cell's own z: once the plot can be rotated, world
-        // z no longer maps back to the local row index the roles were authored in.
+        // Row role per world column — recorded here since world z no longer maps
+        // back to the local row index once the plot can be rotated.
         var colKind = new Dictionary<Vector2Int, RowKind>();
 
         // ── Ground ───────────────────────────────────────────────────────────
@@ -311,25 +272,25 @@ public partial class LevelMapController : MonoBehaviour
             // Lanes are deliberately MORE likely to be covered — they're the
             // farm's walkways, and a frayed walkway just looks like a mistake.
             float coverageHere = kind == RowKind.Lane
-                ? Mathf.Clamp01(decorCoverage + decorPathRowExtraCoverage)
-                : decorCoverage;
+                ? Mathf.Clamp01(decor.coverage + decor.pathRowExtraCoverage)
+                : decor.coverage;
 
             int hash = DecorHash(ix, iz);
             if (Hash01(hash) > coverageHere) continue;
 
-            // Every column is filled from decorOrigin.y up to its own top, so a
+            // Every column is filled from decor.origin.y up to its own top, so a
             // terraced neighbour never leaves a floating tile.
-            int lift = decorTerrace > 0
-                ? Mathf.FloorToInt(Hash01(hash ^ unchecked((int)0x9e3779b9)) * (decorTerrace + 1))
+            int lift = decor.terrace > 0
+                ? Mathf.FloorToInt(Hash01(hash ^ unchecked((int)0x9e3779b9)) * (decor.terrace + 1))
                 : 0;
 
             var rot = RotateLocal(ix, iz, w, d);
-            var worldCol = new Vector2Int(decorOrigin.x + rot.x, decorOrigin.z + rot.y);
+            var worldCol = new Vector2Int(decor.origin.x + rot.x, decor.origin.z + rot.y);
             coveredCols.Add(worldCol);
             colKind[worldCol] = kind;
             for (int y = 0; y <= lift; y++)
             {
-                var c = new Vector3Int(worldCol.x, decorOrigin.y + y, worldCol.y);
+                var c = new Vector3Int(worldCol.x, decor.origin.y + y, worldCol.y);
                 cells.Add(c);
                 occupied.Add(c);
                 colTop[worldCol] = c;   // last write (highest y) wins
@@ -339,10 +300,10 @@ public partial class LevelMapController : MonoBehaviour
 
         // Centre of the plot's footprint (not its cell centroid, which skews toward
         // wherever coverage happened to roll) — what the grow-in cutscene's camera
-        // frames, so it's stable regardless of decorCoverage/terrace jitter.
+        // frames, so it's stable regardless of decor.coverage/terrace jitter.
         var ext = RotatedExtent(w, d);
         _decorCenter = gridSystem.GridToWorld(new Vector3Int(
-            decorOrigin.x + ext.x / 2, decorOrigin.y, decorOrigin.z + ext.y / 2));
+            decor.origin.x + ext.x / 2, decor.origin.y, decor.origin.z + ext.y / 2));
 
         // Visual root. Deliberately carries NO LevelNode: LevelNode.Refresh()
         // (run by every RefreshNodes(), i.e. whenever ANYTHING changes anywhere
@@ -364,9 +325,9 @@ public partial class LevelMapController : MonoBehaviour
         for (int i = 0; i < soilRenderers.Length && i < cellsArr.Length; i++)
         {
             var c = cellsArr[i];
-            float k = Mathf.Lerp(1f - decorSoilJitter, 1f + decorSoilJitter,
+            float k = Mathf.Lerp(1f - decor.soilJitter, 1f + decor.soilJitter,
                                   Hash01(DecorHash(c.x, c.z) ^ (c.y * 92821)));
-            MpbColor.Set(soilRenderers[i], Tint(decorSoilColor, k));
+            MpbColor.Set(soilRenderers[i], Tint(decor.soilColor, k));
         }
 
         // ── Walkability ──────────────────────────────────────────────────────
@@ -382,29 +343,25 @@ public partial class LevelMapController : MonoBehaviour
         ln.cells      = cellsArr;
         ln.level      = null;
         ln.isStart    = false;
-        ln.themeColor = decorSoilColor;   // never seen (no renderers here) — kept sane regardless
+        ln.themeColor = decor.soilColor;   // never seen (no renderers here) — kept sane regardless
         _nodes.Add(ln);
         LinkAllNodes();
         BuildSurface();
         RefreshNodes();
 
         // ── Props, largest first ─────────────────────────────────────────────
-        if (decorWindmillEnabled) BuildWindmill(coveredCols, colTop, cs);
-        if (decorFenceEnabled)    BuildFence(coveredCols, colTop, cs);
+        if (decor.windmillEnabled) BuildWindmill(coveredCols, colTop, cs);
+        if (decor.fenceEnabled)    BuildFence(coveredCols, colTop, cs);
         PlantBeds(occupied, colKind, cs);
 
         // Sink the WHOLE field below ground — soil, fence, windmill, crops, blooms
         // are all children of _decorRoot, so one offset on the root moves them all
         // together. PlayDecorGrowthCutscene animates this back up to _decorRestPos.
         //
-        // _decorRestPos is the root's REAL resting position, not the world origin:
-        // _decorRoot is parented to this controller, whose GameObject is NOT at the
-        // origin in LevelSelect. Animating back to Vector3.zero (as this first did)
-        // therefore left the whole farm permanently displaced by the controller's own
-        // offset — which is exactly the fractional-cell gap that opened up between
-        // the farm and the rest of the map, and only ever after the cutscene ran.
+        // The controller's own GameObject isn't at the world origin in LevelSelect,
+        // so animating back to Vector3.zero (instead of this) left the farm displaced.
         _decorRestPos = _decorRoot.transform.position;
-        if (grow) _decorRoot.transform.position = _decorRestPos + Vector3.down * decorGrowRiseHeight;
+        if (grow) _decorRoot.transform.position = _decorRestPos + Vector3.down * decor.growRiseHeight;
     }
 
     // Flowers, crops and signposts, driven by each cell's row role. One pass so a
@@ -426,7 +383,7 @@ public partial class LevelMapController : MonoBehaviour
                 case RowKind.Lane:
                     // Walkways stay clear, except for the occasional signpost —
                     // which is exactly where a real farm's markers stand.
-                    if (signTops.Count < decorSignCount
+                    if (signTops.Count < decor.signCount
                         && Hash01(DecorHash(c.x, c.z) ^ 0x27d4eb2d) > 0.88f)
                         signTops.Add(top);
                     break;
@@ -436,7 +393,7 @@ public partial class LevelMapController : MonoBehaviour
                     break;
 
                 default:
-                    if (Hash01(DecorHash(c.x, c.z) ^ 0x5bd1e995) <= decorBloomChance)
+                    if (Hash01(DecorHash(c.x, c.z) ^ 0x5bd1e995) <= decor.bloomChance)
                         flowerTops.Add(top);
                     break;
             }
@@ -463,9 +420,9 @@ public partial class LevelMapController : MonoBehaviour
         patch.bobSpeed       = 0.9f;
         patch.stemHeight     = 0.22f * cs;
 
-        patch.Grow(tops.ToArray(), DecorPetalPalette(), decorAccentColor,
+        patch.Grow(tops.ToArray(), DecorPetalPalette(), decor.accentColor,
                    maxFlowersPerCell: 3, flowerSizeWorld: 0.30f * cs,
-                   scatterWorld: 0.28f * cs, maxFlowers: decorMaxFlowers);
+                   scatterWorld: 0.28f * cs, maxFlowers: decor.maxFlowers);
     }
 
     // Crop beds: wheat sown in a straight line ACROSS each cell (along X, the row
@@ -475,13 +432,13 @@ public partial class LevelMapController : MonoBehaviour
     // component per stalk.
     void BuildCrops(List<Vector3> tops, float cs)
     {
-        if (decorStalksPerCell <= 0) return;
+        if (decor.stalksPerCell <= 0) return;
 
         var root = new GameObject("CropBeds");
         root.transform.SetParent(_decorRoot.transform, false);
         var field = root.AddComponent<FarmCropField>();
 
-        float h = decorStalkHeight * cs;
+        float h = decor.stalkHeight * cs;
 
         // The sowing line follows the plot's rotated row direction, not world X.
         Vector3 along  = DecorRowDirWorld;
@@ -490,11 +447,11 @@ public partial class LevelMapController : MonoBehaviour
         for (int t = 0; t < tops.Count; t++)
         {
             Vector3 top = tops[t];
-            for (int s = 0; s < decorStalksPerCell; s++)
+            for (int s = 0; s < decor.stalksPerCell; s++)
             {
                 // Evenly spaced across the cell, with a hair of jitter so the
                 // line is hand-sown, not machine-printed.
-                float u  = (s + 0.5f) / decorStalksPerCell - 0.5f;
+                float u  = (s + 0.5f) / decor.stalksPerCell - 0.5f;
                 int   hs = DecorHash(t * 31 + s, s * 17);
                 Vector3 pos = top
                             + along  * (u * cs * 0.82f + (Hash01(hs) - 0.5f) * 0.12f * cs)
@@ -504,7 +461,7 @@ public partial class LevelMapController : MonoBehaviour
                 var stalk = MakeMeshProp(root.transform, "Wheat", WheatMesh(), pos,
                                          Quaternion.Euler(0f, Hash01(hs ^ 0x77a1) * 360f, 0f),
                                          new Vector3(sh, sh, sh),
-                                         Tint(decorCropColor, Mathf.Lerp(0.88f, 1.12f, Hash01(hs ^ 0x11b3))));
+                                         Tint(decor.cropColor, Mathf.Lerp(0.88f, 1.12f, Hash01(hs ^ 0x11b3))));
 
                 field.Add(stalk, pos, Hash01(hs ^ 0x1234) * Mathf.PI * 2f);
             }
@@ -513,7 +470,7 @@ public partial class LevelMapController : MonoBehaviour
 
     // ── Fence ────────────────────────────────────────────────────────────────
     // A picket per boundary edge (a covered column whose horizontal neighbour is
-    // NOT covered), gated by decorFenceCoverage so gaps read as entrances. Each
+    // NOT covered), gated by decor.fenceCoverage so gaps read as entrances. Each
     // picket also gets a rail running along the boundary toward the next edge
     // cell — pickets alone read as scattered sticks; the rail says "enclosure".
     void BuildFence(HashSet<Vector2Int> coveredCols, Dictionary<Vector2Int, Vector3Int> colTop, float cs)
@@ -522,7 +479,7 @@ public partial class LevelMapController : MonoBehaviour
         root.transform.SetParent(_decorRoot.transform, false);
 
         Vector2Int[] dirs = { new(1, 0), new(-1, 0), new(0, 1), new(0, -1) };
-        float postH = decorFenceHeight * cs;
+        float postH = decor.fenceHeight * cs;
 
         foreach (var col in coveredCols)
         {
@@ -533,7 +490,7 @@ public partial class LevelMapController : MonoBehaviour
                 if (coveredCols.Contains(ncol)) continue;   // interior — no boundary here
 
                 int gate = DecorHash(col.x * 131 + dir.x * 7, col.y * 131 + dir.y * 7);
-                if (Hash01(gate ^ unchecked((int)0xb5297a4d)) > decorFenceCoverage) continue;
+                if (Hash01(gate ^ unchecked((int)0xb5297a4d)) > decor.fenceCoverage) continue;
 
                 Vector3 edge = gridSystem.GridToWorld(top)
                              + new Vector3(dir.x, 0f, dir.y) * (cs * 0.5f)
@@ -543,7 +500,7 @@ public partial class LevelMapController : MonoBehaviour
                 MakeMeshProp(root.transform, "Picket", PicketMesh(), edge,
                              Quaternion.Euler(lean, Hash01(gate) * 360f, lean * 0.5f),
                              new Vector3(0.16f * cs, postH, 0.16f * cs),
-                             Tint(decorFenceColor, Mathf.Lerp(0.85f, 1.12f, Hash01(gate ^ 0x9f1a))));
+                             Tint(decor.fenceColor, Mathf.Lerp(0.85f, 1.12f, Hash01(gate ^ 0x9f1a))));
 
                 // Rail toward the neighbouring boundary cell along this same
                 // edge. `along` is perpendicular to the outward normal, so it
@@ -563,7 +520,7 @@ public partial class LevelMapController : MonoBehaviour
                 for (int r = 0; r < 2; r++)
                     MakeMeshProp(root.transform, "Rail", RailMesh(), railMid + Vector3.up * (postH * (0.42f + r * 0.32f)),
                                  Quaternion.identity, railScale,
-                                 Tint(decorFenceColor, 0.92f));
+                                 Tint(decor.fenceColor, 0.92f));
             }
         }
     }
@@ -585,14 +542,12 @@ public partial class LevelMapController : MonoBehaviour
         var root = new GameObject("Windmill");
         root.transform.SetParent(_decorRoot.transform, false);
         root.transform.position = basePos;
-        // Turns the rotor to face the plot's rotated frame. Set BEFORE the parts are
-        // made: the tower/plinth/cap below are placed in WORLD space and all sit on
-        // the vertical axis through basePos, so a Y turn can't shift them — while the
-        // hub (localPosition) and its localSpace sails DO ride this rotation, which
-        // is precisely the "windmill facing" that swapping decorSize never touched.
+        // Rotor faces the plot's rotated frame. Set before the parts below — they're
+        // placed in world space on the vertical axis, so a Y turn doesn't shift them,
+        // while the hub/sails (local space) DO ride it.
         root.transform.rotation = Quaternion.Euler(0f, DecorRotationDegrees, 0f);
 
-        float h = decorWindmillHeight * cs;
+        float h = decor.windmillHeight * cs;
 
         // Tapered cream tower — one built mesh rather than stacked boxes, so the
         // batter (the inward slope of the walls) is continuous the way a real
@@ -601,14 +556,14 @@ public partial class LevelMapController : MonoBehaviour
         MakeMeshProp(root.transform, "Plinth", RailMesh(), basePos + Vector3.up * (h * 0.02f),
                      Quaternion.identity, new Vector3(0.62f * cs, h * 0.05f, 0.62f * cs), GeoPalette.Ink);
         MakeMeshProp(root.transform, "Tower", TowerMesh(), basePos + Vector3.up * (h * 0.04f),
-                     Quaternion.identity, new Vector3(0.5f * cs, h * 0.72f, 0.5f * cs), decorTowerColor);
+                     Quaternion.identity, new Vector3(0.5f * cs, h * 0.72f, 0.5f * cs), decor.towerColor);
         MakeMeshProp(root.transform, "Cap", TowerCapMesh(), basePos + Vector3.up * (h * 0.76f),
                      Quaternion.identity, new Vector3(0.46f * cs, h * 0.2f, 0.46f * cs), GeoPalette.Ink);
         // A broad near-up-facing gold collar — the one element guaranteed to
         // print at full gold (≈0.98 shade) regardless of camera yaw, so the
         // landmark still reads gold when the sails happen to be edge-on.
         MakeMeshProp(root.transform, "Collar", RailMesh(), basePos + Vector3.up * (h * 0.745f),
-                     Quaternion.identity, new Vector3(0.54f * cs, h * 0.035f, 0.54f * cs), decorAccentColor);
+                     Quaternion.identity, new Vector3(0.54f * cs, h * 0.035f, 0.54f * cs), decor.accentColor);
 
         // Rotor: four slatted sails on a hub, turning in the vertical plane.
         // Their normals sweep through the emulated light as they turn, so the
@@ -621,12 +576,12 @@ public partial class LevelMapController : MonoBehaviour
             MakeMeshProp(hub, $"Sail_{i}", SailMesh(), Vector3.zero,
                          Quaternion.Euler(0f, 0f, i * 90f),
                          new Vector3(0.9f * cs, 0.9f * cs, 0.9f * cs),
-                         decorAccentColor, localSpace: true);
+                         decor.accentColor, localSpace: true);
 
         MakeMeshProp(hub, "Hub", RailMesh(), Vector3.zero, Quaternion.identity,
                      new Vector3(0.16f * cs, 0.16f * cs, 0.1f * cs), GeoPalette.Ink, localSpace: true);
 
-        root.AddComponent<FarmWindmillSpin>().Init(hub, decorWindmillSpin);
+        root.AddComponent<FarmWindmillSpin>().Init(hub, decor.windmillSpin);
     }
 
     // ── Signpost ─────────────────────────────────────────────────────────────
@@ -644,7 +599,7 @@ public partial class LevelMapController : MonoBehaviour
 
         MakeMeshProp(root.transform, "Post", PicketMesh(), basePos,
                      Quaternion.Euler(0f, yaw, 0f), new Vector3(0.13f * cs, postH, 0.13f * cs),
-                     decorFenceColor);
+                     decor.fenceColor);
         // Thin ink lip under the flag — the silkscreen "printed twice, slightly
         // offset" trick the level badges use, so the gold never looks like it's
         // floating free of the post.
@@ -653,7 +608,7 @@ public partial class LevelMapController : MonoBehaviour
                      GeoPalette.Ink);
         MakeMeshProp(root.transform, "Flag", RailMesh(), basePos + Vector3.up * (postH * 0.94f),
                      Quaternion.Euler(12f, yaw, 0f), new Vector3(0.48f * cs, 0.05f * cs, 0.32f * cs),
-                     decorAccentColor);
+                     decor.accentColor);
     }
 
     // Spawns one shared-mesh prop. Mirrors MakePlate's contract (collider-free,

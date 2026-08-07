@@ -280,28 +280,14 @@ public partial class LevelMapController : MonoBehaviour
             _camReady = true;
         }
 
-        // Two one-time dialogue beats, mutually exclusive on any given Start() (only
-        // one Play() per frame makes sense — a second call would just cut the first
-        // off). In practice they never actually compete: the intro is the very
-        // first thing that can happen on this scene, and nothing can be cleared
-        // (queuing a reward conversation) before the player has already been here
-        // once. Intro still checked first as the deliberate tie-break.
-        //
-        //   1. First-ever visit to LevelSelect — firstVisitConversation, gated on
-        //      SaveSystem.Profile.seenLevelSelectIntro. Flag set the instant it
-        //      plays (not on finish) so it can't replay from a mid-conversation quit.
-        //   2. "You just cleared a level and earned this" — authored per level via
-        //      LevelDefinition.rewardConversation, queued by GameFlowManager right
-        //      after that level's FIRST clear. Consumed immediately so it can never
-        //      replay (re-entering this scene later, reloading a stale RunConfig, …).
-        // Hands-on tutorial gating: DialogueRunner tells us (via OnLineEvent) the
-        // instant a line demanding a real action shows, so we know which one
-        // operation to allow until the player actually does it — see
-        // HandleTutorialGateEvent / CanOpenBuildPanel / CanEnterLevel, and the
-        // CompleteGate(...) calls in WalkCells / EnterBuildMode / CommitPlacement /
-        // EnterLevel. Subscribed once per scene load (DialogueRunner is scene-
-        // scoped, not DontDestroyOnLoad, so both ends die together on unload —
-        // nothing to explicitly unsubscribe).
+        // Two one-time dialogue beats (mutually exclusive per Start, intro wins the
+        // tie-break): (1) firstVisitConversation, gated on seenLevelSelectIntro,
+        // flag set on play not finish so it can't replay from a mid-quit; (2) a
+        // level's rewardConversation, queued by GameFlowManager on first clear,
+        // consumed immediately. Also subscribes the hands-on tutorial gating
+        // (OnLineEvent → HandleTutorialGateEvent → CanOpenBuildPanel/CanEnterLevel,
+        // completed via CompleteGate in WalkCells/EnterBuildMode/CommitPlacement/
+        // EnterLevel) — scene-scoped, so no explicit unsubscribe needed.
         if (DialogueRunner.Instance != null)
         {
             DialogueRunner.Instance.OnLineEvent += HandleTutorialGateEvent;
@@ -408,17 +394,14 @@ public partial class LevelMapController : MonoBehaviour
     }
 
     // ── Build-tutorial suggestion box ───────────────────────────────────────
-    // A translucent, non-binding hint — one cube per cell of the actual first
-    // reward block's shape (LevelDefinition.mapBlockRewards[0].cells), placed at
-    // rewardSuggestOrigin — shown while the reward-block placement gate is
-    // active, so the hint reads as "the block you're holding, right here"
-    // instead of a generic bounding cube.
+    // Translucent, non-binding hint — one cube per cell of the reward block's
+    // shape, shown while the reward-block placement gate is active.
     [Header("Build-tutorial suggestion box")]
-    [Tooltip("Tint of the translucent hint shown while placing the reward block. White, distinct from gameplay's blue suggestion boxes, since this is on the overworld map, not the combat grid.")]
+    [Tooltip("Tint of the translucent placement hint.")]
     public Color rewardSuggestColor = new Color(1f, 1f, 1f, 0.6f);
-    [Tooltip("Suggestion cubes are scaled to this fraction of a cell larger than the cell itself, so the hint visibly stands proud of the ground/terrain instead of blending flush into it.")]
+    [Tooltip("Suggestion cubes are this much larger than a cell, so they stand proud of the ground.")]
     public float rewardSuggestOverscale = 1.08f;
-    [Tooltip("OrbitCamera zoom (distance/orthoSize) when the suggestion box first appears — smaller = closer. LevelSelect's default orbit distance is 10.")]
+    [Tooltip("OrbitCamera zoom when the box first appears. LevelSelect's default distance is 10.")]
     public float rewardSuggestZoom = 5f;
 
     GameObject _rewardSuggestBox;
@@ -435,10 +418,6 @@ public partial class LevelMapController : MonoBehaviour
             if (_rewardSuggestBox == null)
             {
                 BuildRewardSuggestBox();
-                // Camera focuses AND zooms in the instant the hint appears — the
-                // player just opened build mode and shouldn't have to hunt the map
-                // for it, and a zoomed-out overworld view makes the hint too small
-                // to read as "place it here" rather than map decoration.
                 if (_orbit != null && gridSystem != null)
                 {
                     _orbit.FocusOnPoint(gridSystem.GridToWorld(_activeRewardLevel.rewardSuggestOrigin), snap: false);
@@ -454,23 +433,19 @@ public partial class LevelMapController : MonoBehaviour
         }
     }
 
-    // Absolute cells the placement hint occupies right now, or null when there's no
-    // hint. Single source of truth for BOTH the translucent box and the tutorial's
-    // "must land exactly here" test below, so the visual and the rule can't drift.
+    // Absolute cells the placement hint occupies, or null. Single source of truth
+    // for both the translucent box and RewardPlacementBlocked below.
     Vector3Int[] RewardSuggestCells()
     {
         var lv = _activeRewardLevel;
         if (lv == null || lv.rewardSuggestCubeSide <= 0) return null;
 
-        // Same shape as the block the player actually earned/is holding — falls
-        // back to a single cell if no reward block or shape data is authored.
         var rewards = lv.mapBlockRewards;
         var shapeCells = (rewards != null && rewards.Length > 0 && rewards[0] != null && rewards[0].cells != null && rewards[0].cells.Length > 0)
                         ? rewards[0].cells
                         : new[] { Vector3Int.zero };
 
-        // Same rotation convention as TutorialStep.TargetCells() in gameplay.
-        var r   = lv.rewardSuggestRotation90;
+        var r   = lv.rewardSuggestRotation90;   // same rotation convention as TutorialStep.TargetCells()
         var rot = Quaternion.Euler(90f * r.x, 90f * r.y, 90f * r.z);
 
         var outCells = new Vector3Int[shapeCells.Length];
@@ -479,14 +454,9 @@ public partial class LevelMapController : MonoBehaviour
         return outCells;
     }
 
-    // True when a held block may NOT be committed where it currently sits, because
-    // the reward tutorial's placement step is waiting and this isn't the spot.
-    //
-    // Enforced by REFUSING the placement (folded into _placementValid, so the ghost
-    // reads red and the click simply doesn't land) rather than by placing it and
-    // then withholding the gate: F is itself gated to the OpenBuild step, so a
-    // landed-but-wrong block would leave the player empty-handed with no way back
-    // into build mode — a softlock. Refusing can't strand anyone.
+    // True when the reward tutorial's placement step is waiting and `cells` isn't
+    // the spot — folded into _placementValid so the ghost just reads red instead of
+    // landing wrong and softlocking (F is itself gated to OpenBuild).
     bool RewardPlacementBlocked(Vector3Int[] cells)
     {
         if (_tutorialGate != TutorialGateIds.Place) return false;
@@ -1142,19 +1112,10 @@ public partial class LevelMapController : MonoBehaviour
             HandleClick();
     }
 
-    // Without this, a click that lands on the open LevelInfoPanel ALSO raycasts
-    // into the 3D map underneath, selecting/walking to whatever block happens to
-    // sit behind the panel instead of just interacting with the panel.
-    //
-    // Deliberately scoped to infoPanel's OWN rect (RectangleContainsScreenPoint)
-    // rather than a blanket EventSystem.IsPointerOverGameObject() check: this
-    // scene also runs DialogueRunner's full-screen CanvasGroup, which the hands-on
-    // tutorial gates (ls.walk/ls.enter/...) deliberately flip to non-blocking so
-    // the player CAN click through to the map — a global "is the pointer over any
-    // UI" query doesn't compose with that per-line toggle and ended up reporting
-    // "over UI" for clicks that were never near the panel at all, breaking the
-    // tutorial's own click-to-walk step. Testing the panel's actual rect sidesteps
-    // that entirely.
+    // Without this, a click on the open LevelInfoPanel also raycasts into the map
+    // underneath. Scoped to the panel's own rect rather than a blanket
+    // EventSystem.IsPointerOverGameObject() check, which false-positived against
+    // DialogueRunner's full-screen CanvasGroup and broke the tutorial's click-to-walk.
     bool PointerOverInfoPanel()
     {
         if (infoPanel == null || !infoPanel.IsShown) return false;
@@ -1165,19 +1126,9 @@ public partial class LevelMapController : MonoBehaviour
         return RectTransformUtility.RectangleContainsScreenPoint(rt, VirtualCursor.Position, cam);
     }
 
-    // Perspective FOV zoom — LevelSelect's camera has no PlacementController driving
-    // scroll-to-AddDistance the way gameplay does, so outside build mode the wheel
-    // was previously unbound entirely. Changes fieldOfView (not OrbitCamera.distance)
-    // since narrowing the FOV is what reads as "zooming the lens" rather than
-    // dollying the whole rig closer.
-    //
-    // Scroll only nudges a TARGET; UpdateFovZoom eases the camera's actual
-    // fieldOfView toward it every frame. Setting fieldOfView directly off the raw
-    // per-frame scroll delta (the first version of this) stepped in visible jumps —
-    // Input.GetAxis's own smoothing still lands as one lump per notch, so the lens
-    // snapped instead of gliding. -1 = not adopted yet; UpdateFovZoom seeds it from
-    // whatever FOV the scene camera actually shipped with on its first tick, same
-    // reasoning as GalleryScreen's _baseFov.
+    // Scroll nudges a target FOV; UpdateFovZoom eases toward it each frame (setting
+    // fieldOfView directly off the raw scroll delta stepped visibly instead of
+    // gliding). -1 = not seeded yet — picks up whatever FOV the camera shipped with.
     float _fovTarget = -1f;
 
     void UpdateFovZoom()
@@ -1232,15 +1183,12 @@ public partial class LevelMapController : MonoBehaviour
         Vector3Int cell = TopOfColumn(gridSystem.WorldToGrid(hit.collider.transform.position));
         if (!_surface.Contains(cell) || cell == _currentCell) return;
 
-        // Mid-walk, _currentCell is the last cell the pawn fully entered (WalkCells
-        // advances it as it goes), so this re-plans from where the pawn actually IS
-        // rather than from where the interrupted walk originally started.
+        // _currentCell tracks the pawn live during a walk (see WalkCells), so this
+        // re-plans from wherever it actually is.
         var cellPath = SurfaceBfs(_currentCell, new HashSet<Vector3Int> { cell }, _surface);
         if (cellPath != null)
         {
-            // Only cancel the walk in progress once the NEW destination is known to
-            // be reachable — clicking somewhere unreachable shouldn't strand the
-            // pawn halfway through a perfectly good walk.
+            // Cancel the old walk only once the new destination is confirmed reachable.
             if (_walkRoutine != null) { StopCoroutine(_walkRoutine); _walkRoutine = null; _moving = false; HideTrail(); }
 
             if (cameraFocus) FocusCameraOn(SurfaceTop(cell));   // frame the destination cell
@@ -1413,10 +1361,8 @@ public partial class LevelMapController : MonoBehaviour
     // onto the next top — so the pawn crawls over edges instead of cutting through air.
     // Shared by the trail preview (ShowTrail) and the pawn's own walk (WalkCells) so
     // they always trace the exact same line.
-    // `ptCell` (optional) receives, per emitted point, the index into `cells` of the
-    // cell that point belongs to — the edge-climb points count as still belonging to
-    // the cell being left. WalkCells uses it to keep _currentCell truthful mid-walk,
-    // which is what lets a click re-plan from the pawn's real position.
+    // `ptCell` (optional) maps each emitted point back to its cell's index in
+    // `cells`, so WalkCells can keep _currentCell accurate mid-walk.
     List<Vector3> BuildWorldPath(List<Vector3Int> cells, List<int> ptCell = null)
     {
         var pts = new List<Vector3> { SurfaceTop(cells[0]) };
@@ -1458,11 +1404,7 @@ public partial class LevelMapController : MonoBehaviour
                     if (d <= step)
                     {
                         pawn.position = target; step -= d;
-                        // Reached this point outright, so the cell it belongs to is
-                        // now genuinely "where the pawn is" — kept current so an
-                        // interrupting click can re-plan from here (see HandleClick),
-                        // and so UpdatePawnBob settles on the right cell if it does.
-                        if (ptCell != null && idx < ptCell.Count) _currentCell = cells[ptCell[idx]];
+                        if (ptCell != null && idx < ptCell.Count) _currentCell = cells[ptCell[idx]];   // keep live for HandleClick re-plans
                         idx++;
                     }
                     else { pawn.position = Vector3.MoveTowards(pawn.position, target, step); break; }

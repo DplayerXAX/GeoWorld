@@ -1314,41 +1314,42 @@ MonoBehaviour:
   rewardSuggestColor: {r: 1, g: 1, b: 1, a: 0.6}
   rewardSuggestOverscale: 1.08
   rewardSuggestZoom: 5
-  decorEnabled: 1
-  decorGateLevelId: 1-1
-  decorOrigin: {x: -10, y: 2, z: 0}
-  decorSize: {x: 12, y: 11}
-  decorRotationSteps: 3
-  decorCoverage: 0.82
-  decorTerrace: 1
-  decorSoilColor: {r: 0.34, g: 0.26, b: 0.18, a: 1}
-  decorSoilJitter: 0.12
-  decorPathRowEvery: 3
-  decorPathRowExtraCoverage: 0.18
-  decorBloomChance: 0.8
-  decorMaxFlowers: 170
-  decorStalksPerCell: 4
-  decorStalkHeight: 0.75
-  decorCropColor: {r: 0.62, g: 0.58, b: 0.24, a: 1}
-  decorFenceEnabled: 1
-  decorFenceCoverage: 0.78
-  decorFenceHeight: 0.55
-  decorFenceColor: {r: 0.55, g: 0.4, b: 0.26, a: 1}
-  decorWindmillEnabled: 1
-  decorWindmillHeight: 2.6
-  decorWindmillSpin: 26
-  decorTowerColor: {r: 0.88, g: 0.85, b: 0.78, a: 1}
-  decorAccentColor: {r: 0.98, g: 0.8, b: 0.3, a: 1}
-  decorSignCount: 4
-  decorGrowRiseHeight: 3
-  decorGrowRiseDuration: 1.8
-  decorGrowHoldSeconds: 1.4
-  decorGrowZoom: 0
-  decorGrowYawOffset: -90
-  decorTransitionFadeDuration: 0.6
-  decorGrowAsideText: As Abundance returned, a small farm blossomed where countless
-    wishes had been sown.
-  decorGrowAsideSeconds: 4.5
+  decor:
+    enabled: 1
+    gateLevelId: 1-1
+    origin: {x: -10, y: 2, z: 0}
+    size: {x: 12, y: 11}
+    rotationSteps: 3
+    coverage: 0.82
+    terrace: 1
+    soilColor: {r: 0.34, g: 0.26, b: 0.18, a: 1}
+    soilJitter: 0.12
+    pathRowEvery: 3
+    pathRowExtraCoverage: 0.18
+    bloomChance: 0.8
+    maxFlowers: 170
+    stalksPerCell: 4
+    stalkHeight: 0.75
+    cropColor: {r: 0.62, g: 0.58, b: 0.24, a: 1}
+    fenceEnabled: 1
+    fenceCoverage: 0.78
+    fenceHeight: 0.55
+    fenceColor: {r: 0.55, g: 0.4, b: 0.26, a: 1}
+    windmillEnabled: 1
+    windmillHeight: 2.6
+    windmillSpin: 26
+    towerColor: {r: 0.88, g: 0.85, b: 0.78, a: 1}
+    accentColor: {r: 0.98, g: 0.8, b: 0.3, a: 1}
+    signCount: 4
+    growRiseHeight: 3
+    growRiseDuration: 1.8
+    growHoldSeconds: 1.4
+    growZoom: 0
+    growYawOffset: -90
+    transitionFadeDuration: 0.6
+    growAsideText: As Abundance returned, a small farm blossomed where countless
+      wishes had been sown.
+    growAsideSeconds: 4.5
   monumentMaterial: {fileID: 0}
   monumentScale: 1
   monumentLight: 1.6

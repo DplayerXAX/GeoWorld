@@ -66,11 +66,11 @@ public class LevelDefinition : ScriptableObject
     [Tooltip("Played once, back on LevelSelect, right after this level's FIRST clear (same one-time gate as the tech/unlock/map-block rewards above). Author it like any other DialogueConversation asset. Leave null for no conversation.")]
     public DialogueConversation rewardConversation;
 
-    [Tooltip("Shows a translucent suggestion box on the LevelSelect map — a non-binding hint for where to place the earned reward block — while the build-tutorial gate (LevelMapController's ls.openbuild/ls.place) is active for THIS level's reward. Same idea as TutorialStep.suggestCubeSide in gameplay. 0 = no suggestion shown.")]
+    [Tooltip("Non-binding placement hint shown on the LevelSelect map while placing this level's reward block. Same idea as TutorialStep.suggestCubeSide. 0 = no hint.")]
     public int rewardSuggestCubeSide = 0;
-    [Tooltip("Grid cell at the suggestion box's minimum corner, on the LevelSelect map (not the gameplay grid).")]
+    [Tooltip("Grid cell at the hint's minimum corner, on the LevelSelect map.")]
     public Vector3Int rewardSuggestOrigin;
-    [Tooltip("Required rotation in 90° turns around X / Y / Z, applied to the reward block's shape before offsetting by rewardSuggestOrigin. Same convention as TutorialStep.rotation90.")]
+    [Tooltip("Rotation in 90° turns, same convention as TutorialStep.rotation90.")]
     public Vector3Int rewardSuggestRotation90;
 
     [Header("Tutorial")]

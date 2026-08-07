@@ -20,14 +20,9 @@ public static class SaveSystem
         private set { PlayerPrefs.SetInt(ActiveSlotKey, Mathf.Clamp(value, 0, SlotCount - 1)); PlayerPrefs.Save(); }
     }
 
-    // Editor-only dev convenience: when true, every read/write below redirects to
-    // ONE throwaway file instead of any of the real numbered slots — so a testing
-    // session (LevelMapController.resetSaveOnStart) can wipe/rewrite freely without
-    // ever touching real progress. Set once per Play session (see LevelMapController.
-    // Start()); the file is deleted the instant Play mode exits (below), so it never
-    // lingers into the next session. Plain bool rather than `#if UNITY_EDITOR` so
-    // SlotPath doesn't need per-platform special-casing — nothing outside the
-    // Editor ever sets this true.
+    // Editor-only: redirects every read/write to ONE throwaway file instead of a
+    // real slot, so LevelMapController.resetSaveOnStart can wipe freely. Deleted
+    // when Play mode exits (below).
     public static bool DevTempActive;
     static string DevTempPath => Path.Combine(Application.persistentDataPath, "profile_devtemp.json");
 
@@ -35,10 +30,8 @@ public static class SaveSystem
         DevTempActive ? DevTempPath
                        : Path.Combine(Application.persistentDataPath, $"profile_{Mathf.Clamp(slot, 0, SlotCount - 1)}.json");
 
-    // The REAL numbered path, bypassing DevTempActive — used only by PeekSlot/
-    // SlotHasData (the Title save-select UI), which must always reflect the actual
-    // slot files regardless of whether a gameplay test session redirected
-    // Profile/Load/Save/ResetProfile elsewhere.
+    // Bypasses DevTempActive — PeekSlot/SlotHasData (Title's save-select UI) must
+    // always reflect the real slot files.
     static string RealSlotPath(int slot) =>
         Path.Combine(Application.persistentDataPath, $"profile_{Mathf.Clamp(slot, 0, SlotCount - 1)}.json");
 
@@ -92,13 +85,8 @@ public static class SaveSystem
         catch (System.Exception e) { Debug.LogWarning($"[SaveSystem] save slot {slot} failed: {e.Message}"); }
     }
 
-    // Wipes the ACTIVE slot's save file on disk (or the dev-temp file, if
-    // DevTempActive) and resets the in-memory cache to a blank ProfileData — for
-    // testing systems that want to start from a truly fresh profile (e.g.
-    // LevelMapController.resetSaveOnStart) without hunting down profile_<n>.json
-    // under Application.persistentDataPath by hand. Anything that runs afterward
-    // and calls Save() will happily persist into the now-blank slot/temp file —
-    // that's expected.
+    // Wipes the active slot's save file (or dev-temp file) and resets the in-memory
+    // cache to blank — for testing systems like LevelMapController.resetSaveOnStart.
     public static void ResetProfile()
     {
         int slot = ActiveSlot;
@@ -133,10 +121,7 @@ public static class SaveSystem
         File.Exists(RealSlotPath(slot)) || (slot == 0 && File.Exists(LegacyPath));
 
 #if UNITY_EDITOR
-    // Deletes the dev-temp file the instant Play mode exits, so "reset on start"
-    // testing never leaves a throwaway save lying around between sessions.
-    // [InitializeOnLoadMethod] runs at editor load/recompile time (not Play), which
-    // is exactly when we need to (re)register the callback.
+    // Deletes the dev-temp file the instant Play mode exits.
     [UnityEditor.InitializeOnLoadMethod]
     static void RegisterDevTempCleanup()
     {

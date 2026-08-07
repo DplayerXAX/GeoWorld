@@ -861,16 +861,8 @@ public class TutorialDirector : MonoBehaviour
         _hintText.raycastTarget = false;
         _hintText.richText = true;
 
-        // Continue light — the same round pulsing ball DialogueRunner uses, planted
-        // right after the last visible character rather than pinned to the panel's
-        // bottom edge, so the two dialogue surfaces read identically and the
-        // indicator shows up where the player's eye already is. Parented to the TEXT
-        // (not the panel) so UpdateContinueBall can drive its localPosition straight
-        // off the character's own local coords with no space conversion.
-        //
-        // UIRoundedRect.Get(radius) bakes its texture at radius*2+4, so the sprite is
-        // already a near-perfect circle; Type.Simple scales it whole instead of
-        // 9-slicing borders that would squash unevenly as the ball pulses.
+        // Same round pulsing ball as DialogueRunner, planted after the last visible
+        // character (see PositionContinueBall). Parented to the text itself.
         var barRT = NewRect("ContinueBall", _hintText.rectTransform);
         barRT.anchorMin = barRT.anchorMax = Vector2.zero;
         barRT.pivot     = new Vector2(0f, 0.5f);
@@ -891,7 +883,7 @@ public class TutorialDirector : MonoBehaviour
         string msg  = step != null ? step.hint : null;
         bool   show = !string.IsNullOrEmpty(msg) && step != null && !step.UsesDialogue
                       && !SettingsScreen.Open && !PauseMenu.Paused && !IntroDirector.Playing
-                      && !PeekWorld.Held;   // hold Shift to peek at the world behind it — see PeekWorld
+                      && !PeekWorld.Held;
 
         _hintCanvas.enabled = show;
         if (!show)
@@ -941,18 +933,13 @@ public class TutorialDirector : MonoBehaviour
             float pulse = 0.35f + 0.65f * Mathf.PingPong(Time.unscaledTime * 2f, 1f);
             Color sig   = GeoPalette.Signal;
             _continueBar.color = new Color(sig.r, sig.g, sig.b, pulse);
-            // Width and height pulse off the same diameter, so it stays a perfect
-            // circle at every point in the breathe — same as DialogueRunner's.
-            float d = Mathf.Lerp(20f, 32f, pulse);
+            float d = Mathf.Lerp(20f, 32f, pulse);   // pulses as a circle, same as DialogueRunner's
             _continueBar.rectTransform.sizeDelta = new Vector2(d, d);
             PositionContinueBall(shown);
         }
     }
 
-    // Plants the ball just past the last visible glyph of the hint text. Mirrors
-    // DialogueRunner.PositionContinueBar — including walking back over trailing
-    // whitespace / line breaks, which TMP marks not-visible and gives degenerate
-    // geometry, so the ball never lands at a stray (0,0).
+    // Mirrors DialogueRunner.PositionContinueBar.
     void PositionContinueBall(int shown)
     {
         var ti = _hintText.textInfo;

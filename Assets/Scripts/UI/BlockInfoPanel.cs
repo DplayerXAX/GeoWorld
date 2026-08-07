@@ -210,11 +210,7 @@ public class BlockInfoPanel : MonoBehaviour
         _sellButton   = NewButton(row, "Sell",    sellColor,   buttonTextColor, out _sellLabel);
         _sellButton.onClick.AddListener(() => _onSell?.Invoke());
 
-        // Small print — the Shift-peek this panel responds to (see
-        // PlacementController.UpdateInfoPanel) isn't otherwise discoverable. Last
-        // row of the vertical layout and right-aligned, so it sits in the panel's
-        // bottom-right corner: present enough to be found, tucked far enough out of
-        // the reading path that it doesn't compete with the title/body/buttons.
+        // Bottom-right footnote advertising the Shift-peek (PeekWorld).
         _shiftHint = NewText("ShiftHint", _panel, bodySize * 0.7f,
             new Color(bodyColor.r, bodyColor.g, bodyColor.b, 0.55f),
             FontStyles.Italic, TextAlignmentOptions.BottomRight);

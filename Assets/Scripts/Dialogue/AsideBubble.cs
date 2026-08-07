@@ -56,10 +56,8 @@ public class AsideBubble : MonoBehaviour
     public float slideInDuration = 0.3f;
     public float slideOutDuration = 0.3f;
 
-    // Slide time on top of Show()'s `duration` (which is the HOLD only), so a caller
-    // sequencing around a bubble — e.g. LevelMapController's farm-reveal cutscene
-    // holding its camera until the line has finished — can budget for the whole
-    // animation instead of just the readable part.
+    // Slide time on top of Show()'s `duration` (the hold only) — lets a caller
+    // budget for the whole animation, not just the readable part.
     public const float SlideSeconds = 0.6f;
     [Tooltip("How long the (now off-screen) popup lingers before its GameObject is destroyed.")]
     public float destroyDelayAfterHidden = 1f;
