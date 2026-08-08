@@ -28,6 +28,13 @@ public class ProfileData
     // it can never replay even if the player quits mid-conversation.
     public bool seenLevelSelectIntro;
 
+    // MapInteractable.id values already interacted with once — lets an NPC have a
+    // one-time introduction and a different line on every visit after.
+    public List<string> seenInteractables = new();
+
+    // Best score per minigame, keyed by MapInteractable.id.
+    public List<MinigameScore> minigameScores = new();
+
     // ── Overworld map-building (LevelMapController build mode) ──────────────
     // Blocks earned from level clears (LevelDefinition.mapBlockRewards) but not
     // yet placed on the LevelSelect map.
@@ -42,6 +49,33 @@ public class ProfileData
 
     public bool OwnsTech(string id) =>
         !string.IsNullOrEmpty(id) && ownedTech.Contains(id);
+
+    public bool HasSeenInteractable(string id) =>
+        !string.IsNullOrEmpty(id) && seenInteractables.Contains(id);
+
+    public void MarkInteractableSeen(string id)
+    {
+        if (!string.IsNullOrEmpty(id) && !seenInteractables.Contains(id))
+            seenInteractables.Add(id);
+    }
+
+    public int GetMinigameBest(string id)
+    {
+        if (string.IsNullOrEmpty(id)) return 0;
+        var e = minigameScores.Find(x => x.id == id);
+        return e != null ? e.best : 0;
+    }
+
+    // Returns true when this run actually set a new record, so the caller can say so.
+    public bool RecordMinigameScore(string id, int score)
+    {
+        if (string.IsNullOrEmpty(id)) return false;
+        var e = minigameScores.Find(x => x.id == id);
+        if (e == null) { minigameScores.Add(new MinigameScore { id = id, best = score }); return score > 0; }
+        if (score <= e.best) return false;
+        e.best = score;
+        return true;
+    }
 
     public LevelRecord GetRecord(string levelId)
     {
@@ -107,6 +141,13 @@ public class LevelRecord
     // last cleared — None if nothing was active. Drives the celebratory ring on
     // this level's LevelSelect badge (see LevelMapController.MapLevelMarker).
     public BlockColor clearSynergyColor = BlockColor.None;
+}
+
+[Serializable]
+public class MinigameScore
+{
+    public string id;   // MapInteractable.id
+    public int    best;
 }
 
 [Serializable]

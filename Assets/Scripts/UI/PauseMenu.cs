@@ -81,7 +81,11 @@ public class PauseMenu : MonoBehaviour
     {
         if (IntroDirector.Playing) { SetCanvasVisible(false); return; }
 
-        if ((Input.GetKeyDown(toggleKey) || GamepadInput.TogglePauseDown) && !SettingsScreen.Open)
+        // A minigame overlay owns Esc for its own "leave" — without this it and the
+        // pause menu both consume the same keypress in the same frame, so leaving
+        // the minigame dumped you straight into a paused map.
+        if ((Input.GetKeyDown(toggleKey) || GamepadInput.TogglePauseDown)
+            && !SettingsScreen.Open && !BlockTetris3D.Active)
         {
             if (_menuOpen) SetMenuOpen(false);   // Esc backs out of the menu first
             else           SetPaused(!_paused);  // otherwise toggles the planning pause

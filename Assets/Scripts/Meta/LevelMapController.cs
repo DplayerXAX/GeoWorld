@@ -245,16 +245,22 @@ public partial class LevelMapController : MonoBehaviour
         // true exactly once — the very first visit after this field's gate level was
         // cleared — in which case the grow-in cutscene below plays before any dialogue.
         bool decorGrowthPending = TryBuildDecor();
+        CollectInteractableSpots();   // after the surface — the spots snap onto it
 
-        // Resume at the node the pawn last entered a level from, if we have one —
-        // otherwise the usual home-block default.
+        // Resume on the cell the pawn last left from, if it still exists — a block
+        // the player picked up since then leaves nothing to stand on, so fall back
+        // to the home block rather than stranding the pawn mid-air.
         LevelNode resumeNode = null;
-        if (!string.IsNullOrEmpty(RunConfig.LastLevelSelectNodeId))
-            resumeNode = _nodes.Find(n => n != null && n.level != null && n.level.levelId == RunConfig.LastLevelSelectNodeId);
+        Vector3Int resumeCell = default;
+        bool hasResume = RunConfig.HasLastLevelSelectCell
+                      && _surface.Contains(RunConfig.LastLevelSelectCell)
+                      && _cellToNode.TryGetValue(RunConfig.LastLevelSelectCell, out resumeNode);
+        if (hasResume) resumeCell = RunConfig.LastLevelSelectCell;
+
         _current = resumeNode ?? _nodes.Find(n => n.isStart) ?? (_nodes.Count > 0 ? _nodes[0] : null);
         if (_current != null)
         {
-            _currentCell = TopCellOf(_current);
+            _currentCell = hasResume ? resumeCell : TopCellOf(_current);
             if (pawn != null) pawn.position = SurfaceTop(_currentCell);
         }
         if (pawn != null) pawn.localScale *= pawnScale;
@@ -1099,7 +1105,9 @@ public partial class LevelMapController : MonoBehaviour
         PulseRewardSuggestBox();    // runs whether or not build mode is actually open yet (the box can
                                      // show before F is pressed, while the ls.openbuild gate is waiting)
         HandleFocusViewportDrag();   // middle-mouse drag — no conflict with build mode, so it runs unconditionally
-        if (SettingsScreen.Open || _decorCutscenePlaying) return;   // no clicking/walking/building while the camera's locked on the grow-in reveal
+        // No clicking/walking/building while the grow-in reveal owns the camera, or
+        // while a minigame is running on top of this scene.
+        if (SettingsScreen.Open || _decorCutscenePlaying || BlockTetris3D.Active) return;
 
         if (_buildMode) { UpdateBuildMode(); return; }   // scroll is reserved for HandleGhostScroll in there
 
@@ -1175,12 +1183,16 @@ public partial class LevelMapController : MonoBehaviour
         if (!Physics.Raycast(_cam.ScreenPointToRay(VirtualCursor.Position), out var hit)) return;
 
         var node = hit.collider.GetComponentInParent<LevelNode>();
-        if (node != null) OpenPanel(node);   // show level info right away
 
         // Which cell did we click? Map the cube back to grid, climb to the top of
         // its column, then walk the whole surface to it.
-        if (gridSystem == null || _surface.Count == 0) return;
+        if (gridSystem == null || _surface.Count == 0) { if (node != null) OpenPanel(node); return; }
         Vector3Int cell = TopOfColumn(gridSystem.WorldToGrid(hit.collider.transform.position));
+
+        // Show info right away — an interactable standing here takes the panel over
+        // from the level block it's standing ON (see TryOpenInteractablePanel).
+        if (!TryOpenInteractablePanel(cell) && node != null) OpenPanel(node);
+
         if (!_surface.Contains(cell) || cell == _currentCell) return;
 
         // _currentCell tracks the pawn live during a walk (see WalkCells), so this
@@ -1424,12 +1436,10 @@ public partial class LevelMapController : MonoBehaviour
         // suspected to be running.
         DialogueRunner.Instance?.CompleteGate(TutorialGateIds.Walk);
 
-        // Arrived: if this cell belongs to a level block, surface its panel.
-        if (_cellToNode.TryGetValue(_currentCell, out var n))
-        {
-            _current = n;
-            OpenPanel(n);
-        }
+        // Arrived — re-open the panel so an interactable's action button, disabled
+        // while walking, becomes live now that the pawn is actually standing here.
+        if (_cellToNode.TryGetValue(_currentCell, out var n)) _current = n;
+        if (!TryOpenInteractablePanel(_currentCell) && n != null) OpenPanel(n);
     }
 
     // ── Path trail (LineRenderer) ────────────────────────────────────────────────
@@ -2174,9 +2184,16 @@ public partial class LevelMapController : MonoBehaviour
             _selected.NodeState == LevelNode.State.Locked) return;
         if (!CanEnterLevel()) { ShowToast("Finish the current tutorial step first."); return; }
         DialogueRunner.Instance?.CompleteGate(TutorialGateIds.EnterLevel);
-        RunConfig.LastLevelSelectNodeId = lv != null ? lv.levelId : null;
+        RememberPawnCell();
         RunConfig.SetLevel(lv);
         LoadScene(gameplayScene);
+    }
+
+    // Snapshot where the pawn is standing, so returning to this scene resumes here.
+    void RememberPawnCell()
+    {
+        RunConfig.LastLevelSelectCell    = _currentCell;
+        RunConfig.HasLastLevelSelectCell = true;
     }
 
     void LoadScene(string s)

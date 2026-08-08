@@ -1,0 +1,25 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: bb3d8a0e57283c644a6a5af3773d64af, type: 3}
+  m_Name: NPC_FieldKeeper
+  m_EditorClassIdentifier: Assembly-CSharp::MapInteractable
+  id: npc.fieldkeeper
+  kind: 0
+  displayName: Field Keeper
+  description: An old hand who has tended this ground since long before it bloomed.
+    Happy to talk, in no particular hurry.
+  status: Tending the field
+  actionLabel: Talk
+  approachLabel: Walk over
+  conversation: {fileID: 11400000, guid: 3a71c05e9d4b8f1428c6e0a7b52d9f31, type: 2}
+  repeatConversation: {fileID: 11400000, guid: 5c92e4173b8da60449f7182ce6b04d8a, type: 2}
+  minigame: 0
