@@ -1,3 +1,5 @@
+using UnityEngine;
+
 // How the next gameplay run is configured. Title / LevelSelect set this, then
 // load the "gamePlay" scene; GameFlowManager.Start reads it to decide how to open.
 //
@@ -22,9 +24,12 @@ public static class RunConfig
     // LevelMapController.Start() plays the decoration's grow-in cutscene first.
     public static string PendingMapGrowthLevelId;
 
-    // levelId of the node the pawn stood on when it last entered a level. Sticky
-    // (not cleared) so returning to LevelSelect resumes there instead of the home block.
-    public static string LastLevelSelectNodeId;
+    // Map cell the pawn stood on when it last left LevelSelect (for a level or a
+    // minigame). Sticky — returning resumes there instead of the home block.
+    // A raw cell rather than a levelId so it covers non-level departures too;
+    // LevelMapController falls back to the start node if the cell is gone.
+    public static bool       HasLastLevelSelectCell;
+    public static Vector3Int LastLevelSelectCell;
 
     public static void SetLevel(LevelDefinition level)
     {

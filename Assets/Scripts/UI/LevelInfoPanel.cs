@@ -132,6 +132,25 @@ public class LevelInfoPanel : MonoBehaviour
         _target  = 1f;
     }
 
+    // Same panel, non-level content (NPCs, minigames — see MapInteractable). The
+    // roster and keepsake thumb are level-only, so they hide themselves on null.
+    public void ShowInteractable(string title, string desc, string status, string best,
+                                 string actionLabel, bool canAct, Action onAct)
+    {
+        _title.text  = title;
+        _status.text = status ?? "";
+        SetOptional(_desc, desc);
+        SetOptional(_best, best);
+        _enterLabel.text    = actionLabel;
+        _enter.interactable = canAct;
+
+        BuildRoster(null);
+        ShowBuildThumb(null);
+
+        _onEnter = onAct;
+        _target  = 1f;
+    }
+
     // The keepsake board from the last time this level was cleared
     // (LevelRecord.buildSnapshot — see GameFlowManager.DoLevelClear).
     void ShowBuildThumb(LevelDefinition lv)

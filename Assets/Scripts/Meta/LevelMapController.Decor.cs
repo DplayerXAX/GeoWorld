@@ -84,6 +84,13 @@ public class AbundanceFarmConfig
         "As Abundance returned, a small farm blossomed where countless wishes had been sown.";
     [Tooltip("How long the aside stays up — the camera hold stretches to cover it.")]
     public float growAsideSeconds = 4.5f;
+
+    [Header("Residents")]
+    [Tooltip("Planted on the field once it exists. Null = don't place one.")]
+    public MapInteractable npc;
+    public MapInteractable minigame;
+    [Tooltip("Cells the minigame's own pedestal is raised above the surrounding ground (the NPC's is fixed at 1).")]
+    [Range(1, 4)] public int minigamePedestalLift = 2;
 }
 
 public partial class LevelMapController : MonoBehaviour
@@ -92,6 +99,7 @@ public partial class LevelMapController : MonoBehaviour
     public AbundanceFarmConfig decor = new();
 
     GameObject _decorRoot;
+    readonly List<GameObject> _residents = new();   // NPC / minigame objects planted on the field
     Vector3    _decorCenter;
     Vector3    _decorRestPos;   // where _decorRoot sits when NOT mid grow-in — see BuildDecor
     bool       _decorCutscenePlaying;
@@ -225,6 +233,7 @@ public partial class LevelMapController : MonoBehaviour
             yield return null;
         }
         if (_decorRoot != null) _decorRoot.transform.position = _decorRestPos;
+        foreach (var r in _residents) if (r != null) r.SetActive(true);   // the field has arrived — its people with it
 
         // Camera waits for the line to finish (its clock started at the rise, so
         // only what's left of it needs covering).
@@ -264,10 +273,26 @@ public partial class LevelMapController : MonoBehaviour
         // back to the local row index once the plot can be rotated.
         var colKind = new Dictionary<Vector2Int, RowKind>();
 
+        // The residents stand on PEDESTALS — forced-covered columns raised at least
+        // one cell. Decided up front (they're derived from origin/extent alone) so
+        // the ground pass can build them: picking a raised column afterwards would
+        // only work when coverage and the terrace roll happened to cooperate.
+        var ext = RotatedExtent(w, d);
+        var npcCol  = new Vector2Int(decor.origin.x + ext.x / 3,     decor.origin.z + ext.y * 2 / 3);
+        var gameCol = new Vector2Int(decor.origin.x + ext.x * 2 / 3, decor.origin.z + ext.y / 3);
+        bool wantNpc  = decor.npc != null;
+        bool wantGame = decor.minigame != null;
+
         // ── Ground ───────────────────────────────────────────────────────────
         for (int ix = 0; ix < w; ix++)
         for (int iz = 0; iz < d; iz++)
         {
+            var rot = RotateLocal(ix, iz, w, d);
+            var worldCol = new Vector2Int(decor.origin.x + rot.x, decor.origin.z + rot.y);
+            bool npcPedestal  = wantNpc  && worldCol == npcCol;
+            bool gamePedestal = wantGame && worldCol == gameCol;
+            bool pedestal = npcPedestal || gamePedestal;
+
             var kind = RowKindAt(iz);
             // Lanes are deliberately MORE likely to be covered — they're the
             // farm's walkways, and a frayed walkway just looks like a mistake.
@@ -276,16 +301,18 @@ public partial class LevelMapController : MonoBehaviour
                 : decor.coverage;
 
             int hash = DecorHash(ix, iz);
-            if (Hash01(hash) > coverageHere) continue;
+            if (!pedestal && Hash01(hash) > coverageHere) continue;
 
             // Every column is filled from decor.origin.y up to its own top, so a
             // terraced neighbour never leaves a floating tile.
             int lift = decor.terrace > 0
                 ? Mathf.FloorToInt(Hash01(hash ^ unchecked((int)0x9e3779b9)) * (decor.terrace + 1))
                 : 0;
+            // The minigame's own pedestal stands taller than the NPC's — the well
+            // reads better perched a bit above the rest of the field.
+            if (npcPedestal)  lift = Mathf.Max(lift, 1);
+            if (gamePedestal) lift = Mathf.Max(lift, decor.minigamePedestalLift);
 
-            var rot = RotateLocal(ix, iz, w, d);
-            var worldCol = new Vector2Int(decor.origin.x + rot.x, decor.origin.z + rot.y);
             coveredCols.Add(worldCol);
             colKind[worldCol] = kind;
             for (int y = 0; y <= lift; y++)
@@ -301,7 +328,6 @@ public partial class LevelMapController : MonoBehaviour
         // Centre of the plot's footprint (not its cell centroid, which skews toward
         // wherever coverage happened to roll) — what the grow-in cutscene's camera
         // frames, so it's stable regardless of decor.coverage/terrace jitter.
-        var ext = RotatedExtent(w, d);
         _decorCenter = gridSystem.GridToWorld(new Vector3Int(
             decor.origin.x + ext.x / 2, decor.origin.y, decor.origin.z + ext.y / 2));
 
@@ -353,6 +379,7 @@ public partial class LevelMapController : MonoBehaviour
         if (decor.windmillEnabled) BuildWindmill(coveredCols, colTop, cs);
         if (decor.fenceEnabled)    BuildFence(coveredCols, colTop, cs);
         PlantBeds(occupied, colKind, cs);
+        PlantResidents(colTop, ext, cs);
 
         // Sink the WHOLE field below ground — soil, fence, windmill, crops, blooms
         // are all children of _decorRoot, so one offset on the root moves them all
@@ -361,7 +388,107 @@ public partial class LevelMapController : MonoBehaviour
         // The controller's own GameObject isn't at the world origin in LevelSelect,
         // so animating back to Vector3.zero (instead of this) left the farm displaced.
         _decorRestPos = _decorRoot.transform.position;
-        if (grow) _decorRoot.transform.position = _decorRestPos + Vector3.down * decor.growRiseHeight;
+        if (grow)
+        {
+            _decorRoot.transform.position = _decorRestPos + Vector3.down * decor.growRiseHeight;
+            foreach (var r in _residents) if (r != null) r.SetActive(false);
+        }
+    }
+
+    // ── Residents ────────────────────────────────────────────────────────────
+    // The NPC and the minigame entrance, on the pedestal columns the ground pass
+    // raised for them (see BuildDecor) — opposite thirds of the plot, so the two
+    // never crowd each other.
+    void PlantResidents(Dictionary<Vector2Int, Vector3Int> colTop, Vector2Int ext, float cs)
+    {
+        var npcCol  = new Vector2Int(decor.origin.x + ext.x / 3,     decor.origin.z + ext.y * 2 / 3);
+        var gameCol = new Vector2Int(decor.origin.x + ext.x * 2 / 3, decor.origin.z + ext.y / 3);
+
+        if (decor.npc != null && colTop.TryGetValue(npcCol, out var npcTop))
+            SpawnResident(decor.npc, npcTop, cs, BuildNpcFigure);
+        if (decor.minigame != null && colTop.TryGetValue(gameCol, out var gameTop))
+            SpawnResident(decor.minigame, gameTop, cs, BuildStackingWell);
+    }
+
+    void SpawnResident(MapInteractable data, Vector3Int topCell, float cs,
+                       System.Action<Transform, float> buildVisual)
+    {
+        // NOT parented to _decorRoot: that root gets sunk underground and animated
+        // back up by the grow-in cutscene, which would drag residents with it and
+        // leave MapInteractableSpot's own bob fighting the rise. They're hidden
+        // outright for the duration instead (see _residents / PlayDecorGrowthCutscene)
+        // so they don't hover over an empty field while it's still underground.
+        var go = new GameObject($"Resident_{data.name}");
+        go.transform.SetParent(transform, false);
+        _residents.Add(go);
+
+        var spot = go.AddComponent<MapInteractableSpot>();
+        spot.data = data;
+        spot.cell = topCell;
+        spot.PlaceOn(BlockTop(topCell));
+
+        buildVisual(go.transform, cs);
+
+        // Clicking the FIGURE has to work, not just the ground under it — the
+        // figure is what the player is aiming at. Its own parts are collider-free
+        // mesh props, so this is the hit target.
+        //
+        // Deliberately parented to the controller and centred on the CELL, not on
+        // the (bobbing) resident root: HandleClick derives the grid cell from
+        // hit.collider.transform.position, so a collider sitting anywhere other
+        // than the cell's centre resolves to the wrong cell — or to empty air
+        // above it.
+        var click = new GameObject($"ResidentClick_{data.name}");
+        click.transform.SetParent(transform, false);
+        click.transform.position = gridSystem.GridToWorld(topCell);
+        var box = click.AddComponent<BoxCollider>();
+        box.size = new Vector3(cs * 0.9f, cs * 2.2f, cs * 0.9f);
+        box.center = new Vector3(0f, cs * 0.6f, 0f);   // spans the block and the figure above it
+        _residents.Add(click);
+    }
+
+    // A simple standing figure — cream body, ink head, gold hat brim. Reads as
+    // "someone is here" from the map camera without needing an art asset.
+    void BuildNpcFigure(Transform root, float cs)
+    {
+        MakeMeshProp(root, "Body", TowerMesh(), root.position + Vector3.up * (cs * 0.02f),
+                     Quaternion.identity, new Vector3(0.34f * cs, 0.62f * cs, 0.34f * cs),
+                     decor.towerColor);
+        MakeMeshProp(root, "Head", RailMesh(), root.position + Vector3.up * (cs * 0.74f),
+                     Quaternion.identity, new Vector3(0.26f * cs, 0.24f * cs, 0.26f * cs),
+                     GeoPalette.Ink);
+        MakeMeshProp(root, "Brim", RailMesh(), root.position + Vector3.up * (cs * 0.86f),
+                     Quaternion.identity, new Vector3(0.46f * cs, 0.05f * cs, 0.46f * cs),
+                     decor.accentColor);
+    }
+
+    // The minigame entrance: a short shaft with a few coloured blocks resting in
+    // it, so it reads as the stacking well it opens.
+    void BuildStackingWell(Transform root, float cs)
+    {
+        MakeMeshProp(root, "Rim", RailMesh(), root.position + Vector3.up * (cs * 0.06f),
+                     Quaternion.identity, new Vector3(0.78f * cs, 0.12f * cs, 0.78f * cs),
+                     GeoPalette.Ink);
+
+        // Four corner posts suggest a shaft you drop into.
+        for (int i = 0; i < 4; i++)
+        {
+            float sx = (i & 1) == 0 ? -1f : 1f;
+            float sz = (i & 2) == 0 ? -1f : 1f;
+            MakeMeshProp(root, $"Post{i}", RailMesh(),
+                         root.position + new Vector3(sx * 0.34f * cs, cs * 0.34f, sz * 0.34f * cs),
+                         Quaternion.identity, new Vector3(0.09f * cs, 0.58f * cs, 0.09f * cs),
+                         GeoPalette.Ink);
+        }
+
+        Color[] stack = { GeoPalette.Signal, decor.accentColor, GeoPalette.Blue };
+        for (int i = 0; i < stack.Length; i++)
+            MakeMeshProp(root, $"Block{i}", RailMesh(),
+                         root.position + new Vector3(((i % 2) - 0.5f) * 0.24f * cs,
+                                                     cs * (0.20f + i * 0.19f),
+                                                     ((i / 2) - 0.5f) * 0.24f * cs),
+                         Quaternion.Euler(0f, i * 22f, 0f),
+                         Vector3.one * (0.30f * cs), stack[i]);
     }
 
     // Flowers, crops and signposts, driven by each cell's row role. One pass so a

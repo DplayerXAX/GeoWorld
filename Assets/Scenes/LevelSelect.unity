@@ -1281,7 +1281,7 @@ MonoBehaviour:
   ghostInvalidColor: {r: 1, g: 0.3, b: 0.3, a: 0.55}
   playerBuiltColor: {r: 0.55, g: 0.85, b: 0.95, a: 1}
   pawnScale: 1.1
-  resetSaveOnStart: 1
+  resetSaveOnStart: 0
   autoFill: 0
   autoReward: 0
   editorAutoFillBlocks:
@@ -1350,6 +1350,8 @@ MonoBehaviour:
     growAsideText: As Abundance returned, a small farm blossomed where countless
       wishes had been sown.
     growAsideSeconds: 4.5
+    npc: {fileID: 11400000, guid: 7e14b8039fa25c34ab6d7051e93c26fb, type: 2}
+    minigame: {fileID: 11400000, guid: 9b6f2ad4715e08c4c8a3f19d64e70b25, type: 2}
   monumentMaterial: {fileID: 0}
   monumentScale: 1
   monumentLight: 1.6
