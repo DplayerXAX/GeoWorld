@@ -35,6 +35,9 @@ Shader "Custom/ManifoldSkybox"
         // Kill reaction: briefly YANKS combat mode back toward calm on each enemy kill
         // (opposite direction of the damage tint) — driven by BackgroundReactor
         _KillReact     ("Kill Reaction",  Range(0,1)) = 0
+        // World collapse: tracks lost health. Tears the sky into slipped bands and
+        // drops cells to the engine's missing-material checker — driven by BackgroundReactor
+        _Collapse      ("World Collapse", Range(0,1)) = 0
 
         // Intro reveal: 0 = flat _IntroColor, 1 = full sky. Driven by IntroDirector.
         _IntroBlend    ("Intro Blend",    Range(0,1)) = 1
@@ -61,6 +64,7 @@ Shader "Custom/ManifoldSkybox"
             float _CombatMode;
             float _ClearReact;
             float _KillReact;
+            float _Collapse;
             float _DamageTint;
             half4 _FlashColor;
             float _FlashAmount;
@@ -294,6 +298,27 @@ Shader "Custom/ManifoldSkybox"
             half4 frag(Varyings IN) : SV_Target
             {
                 float3 dir = normalize(IN.dir);
+
+                // ── World collapse: signal tear ────────────────────────────────
+                // Applied to `dir` BEFORE anything samples it, so the gradient,
+                // fog, grids and geometry all tear as one picture — a post-pass
+                // over the finished colour would only smear the result and would
+                // read as a filter laid on top rather than the world itself failing.
+                float cl = saturate(_Collapse);
+                if (cl > 0.001)
+                {
+                    // Bands re-roll on a coarse clock rather than every frame: a
+                    // per-frame reroll is just noise, holding each tear for a few
+                    // frames is what makes it read as a broken signal.
+                    float tick = floor(_Time.y * (5.0 + cl * 13.0));
+                    float band = floor(dir.y * (12.0 + cl * 24.0));
+                    // Only some bands slip, and the threshold drops as it worsens.
+                    float live = step(1.0 - cl * 0.8, Hash3(float3(band, tick, 7.7)));
+                    float slip = (Hash3(float3(band, tick, 0.0)) - 0.5) * live * cl * 0.5;
+                    dir.xz += slip;
+                    dir = normalize(dir);
+                }
+
                 // 0 = calm build, 1 = intense combat. _KillReact yanks this back toward 0
                 // for an instant on every kill — the mirror of _DamageTint's push toward
                 // red/chaos on damage taken — so the fold/gradient/beat boosts below all
@@ -554,6 +579,42 @@ half3 combatHorizon =
                 // 将原画面压至红黑色调，同时保留发光的线条和几何体质感
                 half3 damagePalette = half3(result.r * 1.3 + finalLuma * 0.3, result.g * 0.1, result.b * 0.12);
                 result = lerp(result, damagePalette, _DamageTint);
+
+                // ── World collapse: material dropout ───────────────────────────
+                // Whole cube cells stop resolving and fall back to the engine's
+                // magenta/black "no material" checker, with a few going to flat
+                // void instead. Deliberately the ugly, unmistakable asset-failure
+                // look — it says the world is losing its data, which distortion
+                // alone never does.
+                if (cl > 0.001)
+                {
+                    float3 mp    = dir * 9.0 + floor(_Time.y * 2.5) * 0.37;
+                    float3 mcell = floor(mp);
+                    // Threshold walks down from "never" as health drains, so the
+                    // first cells only give out well after the tearing starts.
+                    float  gone  = step(1.0 - cl * 0.42, Hash3(mcell + 31.4));
+                    if (gone > 0.5)
+                    {
+                        float3 cf   = frac(mp) * 4.0;
+                        float  chk  = fmod(floor(cf.x) + floor(cf.y) + floor(cf.z), 2.0);
+                        // A minority of dead cells drop out entirely instead of
+                        // checkering — an unbroken checker field over the whole sky
+                        // turns into a texture of its own and stops reading as damage.
+                        float  void_ = step(0.72, Hash3(mcell + 5.9));
+                        half3  miss  = lerp(half3(1.0, 0.0, 1.0) * chk, half3(0.02, 0.0, 0.03), void_);
+                        result = lerp(result, miss, cl * 0.85);
+                    }
+
+                    // Colour desync in the torn bands — the channels stop agreeing
+                    // about what the sky is, on top of where it is.
+                    float dtick = floor(_Time.y * 9.0);
+                    float dband = floor(dir.y * 30.0);
+                    float desync = step(0.86 - cl * 0.3, Hash3(float3(dband, dtick, 2.3))) * cl;
+                    result = lerp(result, result.gbr, desync * 0.6);
+
+                    // The picture as a whole loses grip: contrast crushes toward black.
+                    result *= 1.0 - cl * 0.18;
+                }
 
                 // ── Theme flash (synergy activation) ──────────────────────────
                 // Wash the whole sky toward a theme colour; brightness follows the

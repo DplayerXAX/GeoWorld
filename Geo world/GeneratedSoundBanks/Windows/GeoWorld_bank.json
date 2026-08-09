@@ -10,7 +10,7 @@
     "Type": "User",
     "GUID": "{FBAC0406-FA36-4CC0-8121-80F7B6376C7E}",
     "Language": "SFX",
-    "Hash": "{3ED913C7-5508-8B86-24CD-18028DA765BD}",
+    "Hash": "{7B1B5E11-CCEA-C954-E851-C7606C0C37AA}",
     "ObjectPath": "\\SoundBanks\\Default Work Unit\\GeoWorld_bank",
     "ShortName": "GeoWorld_bank",
     "Path": "GeoWorld_bank.bnk",
@@ -80,6 +80,14 @@
       "CachePath": "5A/{5A86A6C0-68E1-5E45-F13B-F453451E2AC5}.wem"
      },
      {
+      "Id": "236207169",
+      "Language": "SFX",
+      "Streaming": "false",
+      "Location": "Memory",
+      "ShortName": "damage.wav",
+      "CachePath": "F6/{F6BE20B4-EF88-6DA8-8EB0-F0B475980DC9}.wem"
+     },
+     {
       "Id": "265774773",
       "Language": "SFX",
       "Streaming": "false",
@@ -134,6 +142,14 @@
       "Location": "Memory",
       "ShortName": "solo_a.wav",
       "CachePath": "DB/{DB539939-026D-38FE-A732-796F86477D78}.wem"
+     },
+     {
+      "Id": "405419700",
+      "Language": "SFX",
+      "Streaming": "false",
+      "Location": "Memory",
+      "ShortName": "The Moment Before the End.wav",
+      "CachePath": "E2/{E2DE449C-0EEB-898D-16AF-0B755598F832}.wem"
      },
      {
       "Id": "442785962",
@@ -198,6 +214,14 @@
       "Location": "Memory",
       "ShortName": "Firmament's Farewell.wav",
       "CachePath": "78/{789133AD-F88C-D585-E24A-AA2F0F54BD84}.wem"
+     },
+     {
+      "Id": "586490051",
+      "Language": "SFX",
+      "Streaming": "false",
+      "Location": "Memory",
+      "ShortName": "geo tetris.wav",
+      "CachePath": "0C/{0CAC642D-69E8-B3B7-223E-E9FAFC2F32CA}.wem"
      },
      {
       "Id": "633751974",
@@ -373,6 +397,20 @@
       ]
      },
      {
+      "Id": "1786804762",
+      "Name": "damage",
+      "ObjectPath": "\\Events\\Default Work Unit\\damage",
+      "GUID": "{FB60B0F1-A95D-4F54-92DA-C3E856DA8A9C}",
+      "DurationType": "OneShot",
+      "DurationMin": "0.5",
+      "DurationMax": "0.5",
+      "MediaRefs": [
+       {
+        "Id": "236207169"
+       }
+      ]
+     },
+     {
       "Id": "1836525772",
       "Name": "Dm",
       "ObjectPath": "\\Events\\Default Work Unit\\Dm",
@@ -481,6 +519,18 @@
       "MediaRefs": [
        {
         "Id": "969998505"
+       }
+      ]
+     },
+     {
+      "Id": "3140303807",
+      "Name": "lose_Loop",
+      "ObjectPath": "\\Events\\Default Work Unit\\lose_Loop",
+      "GUID": "{C218A859-F296-483C-9F65-B62545114636}",
+      "DurationType": "Infinite",
+      "MediaRefs": [
+       {
+        "Id": "405419700"
        }
       ]
      },
@@ -671,6 +721,18 @@
       ]
      },
      {
+      "Id": "1299445167",
+      "Name": "tetris_Loop",
+      "ObjectPath": "\\Events\\Default Work Unit\\tetris_Loop",
+      "GUID": "{7619AE84-FA56-4146-9A83-F9717EAF54A3}",
+      "DurationType": "Infinite",
+      "MediaRefs": [
+       {
+        "Id": "586490051"
+       }
+      ]
+     },
+     {
       "Id": "1387752797",
       "Name": "TextBlip",
       "ObjectPath": "\\Events\\Default Work Unit\\TextBlip",
@@ -826,6 +888,6 @@
     ]
    }
   ],
-  "FileHash": "{BFF8ED92-679C-BAA4-C9B2-035448703D0E}"
+  "FileHash": "{45FF2E27-D31E-6887-CF55-28FAA46B453A}"
  }
 }

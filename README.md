@@ -1,131 +1,108 @@
 # GeoWorld
 
-A music-driven tower defense game built in Unity. Players construct paths on a 3D block grid — the path geometry directly shapes the procedural music that plays as units traverse it. Longer, more varied paths produce richer soundscapes and stronger defenses.
+A tower-defense game played on the **surface of a 3D block sculpture**.
 
-## Tech Stack
+You don't build a path — you build a *solid*, and the path is whatever route emerges across its exposed faces. Enemies walk that surface from the spawn portals to your endpoints; turrets placed on the same solid shoot them. Where the blocks sit determines the route, the firing angles, the economy, and the music all at once.
 
-| Layer | Technology |
-|-------|-----------|
-| Engine | Unity (URP) |
-| Audio | Wwise |
-| Language | C# / HLSL |
-| Render | Universal Render Pipeline, custom additive shaders |
+On top of that sits a **synergy layer**: blocks carry colours, and certain arrangements (a closed loop, a solid cube, a long straight run, one connected mass) activate faction bonuses. Deciding whether to place a block for *pathing* or for *synergy* is the game's central tension.
 
 ---
 
-## Core Loop
+## Requirements
 
+| | |
+|---|---|
+| **Unity** | `6000.3.6f1` (Unity 6, URP) |
+| **Audio** | Wwise — the Unity integration is committed, but SoundBanks must be generated |
+| **Git LFS** | **Required.** `.bnk` SoundBanks are stored in LFS |
+
+### First-time setup
+
+```bash
+git lfs install
 ```
-Place blocks on the 3D grid
-        ↓
-Path auto-detects between start and end endpoints
-        ↓
-Press Space — unit traverses the path, generating live music
-        ↓
-Completed path becomes a persistent ambient loop layer
-        ↓
-New endpoint added every N runs → expanding network
-```
+
+Run this **before** cloning, or run it after and then `git lfs pull`. Without it you'll get ~130-byte text pointer files where the SoundBanks should be, and Unity will fail to load any audio.
+
+Then, in Wwise, open `Geo world/` and **Generate SoundBanks** before entering Play mode.
 
 ---
 
-## Script Architecture
+## Scenes
+
+Build order matters — `LoadingScreen.Go()` looks scenes up by name against Build Settings.
+
+| # | Scene | Role |
+|---|-------|------|
+| 0 | `Title` | Save-slot select, main menu, settings, gallery entry |
+| 1 | `LevelSelect` | The world map — a walkable block surface with level nodes, NPCs and minigame entrances on it |
+| 2 | `gamePlay` | The actual tower-defense level |
+| 3 | `Gallery` | Unlocked-art viewer |
+
+`mapMaker` and `material_Test` are editor-only tools and are deliberately **not** in Build Settings.
+
+Scenes hand off through **`RunConfig`** — a plain static class, no `DontDestroyOnLoad`, no serialization. `LevelSelect` writes the chosen level into it, loads `gamePlay`, and `GameFlowManager.Start()` reads it back to decide how to open.
+
+---
+
+## Core loop
 
 ```
-Assets/Scripts/
-├── Audio/
-│   ├── ArpeggiatorManager.cs
-│   ├── AudioManager.cs
-│   ├── BackgroundReactor.cs
-│   ├── LoopManager.cs
-│   └── PathFlowManager.cs
-│
-├── Construct/
-│   ├── BlockData.cs
-│   ├── BlockRenderer.cs
-│   ├── GameFlowManager.cs
-│   ├── GridOverlay.cs
-│   ├── GridSystem.cs
-│   ├── OrbitCamera.cs
-│   ├── PlacementController.cs
-│   ├── SelectedBlock.cs
-│   └── pathFinding/
-│       ├── EndpointVisual.cs
-│       ├── FaceBuilder.cs
-│       ├── LevelEndpointGenerator.cs
-│       ├── SurfaceGraphBuilder.cs
-│       ├── SurfacePathfinding.cs
-│       ├── SurfaceUnit.cs
-│       ├── SurfaceUnitVisual.cs
-│       └── SelectableBlock.cs
-│
-├── Resource/
-│   └── ResourceManager.cs
-│
-└── Audio/ (Shaders at Assets/Shader/)
-    ├── BlackHoleCore.shader
-    └── UnitGlow.shader
+LevelSelect: walk the pawn to a level node → Enter
+        ↓
+Build phase — spend currency, place blocks and turrets on the grid
+        ↓          (synergies evaluate live on every placement)
+Space — the wave runs; enemies path across the surface, turrets fire
+        ↓
+Wave cleared → pick 1 of N upgrade cards → next wave
+        ↓
+All waves cleared → level clear screen → back to the map
+   or lives hit 0 → the sky collapses, GAME OVER
 ```
 
 ---
 
-## Script Reference
+## Architecture
 
-### Audio
+Roughly 200 scripts under `Assets/Scripts/`, grouped by responsibility rather than by Unity type.
 
-#### `ArpeggiatorManager.cs`
-The musical brain of the game. Generates melody notes in **C Dorian** (C D Eb F G A Bb) as a unit walks each path step. Note selection is driven by path geometry — horizontal direction, vertical contour, and zigzag frequency all bias the melodic line. Supports recording a traversal and replaying it as a low-register ambient loop.
+| Folder | Owns |
+|--------|------|
+| `Construct/` | The grid, block placement, camera, and `GameFlowManager` (the phase state machine: `Init → Build → ReadyToRun → Running → GameOver`) |
+| `Construct/pathFinding/` | Surface graph + A*. `SurfaceGraphBuilder` turns placed blocks into a graph of exposed-face nodes; `SurfacePathfinding` searches it |
+| `Construct/Synergy/` | Rule detection, effect application, and the per-faction visualisers |
+| `Construct/Waves/` | Wave definitions and the budget-driven `WaveGenerator` |
+| `Construct/Upgrades/` | The end-of-wave "pick 1 of N" card system |
+| `Enemy/` | Enemy units, spawning, and the per-level mechanics (chaos blocks, shrines, random destruction) |
+| `Turret/` | Turret firing, bullets, and status effects (slow, burn, gravity well, suppression) |
+| `Audio/` | Wwise hub, the procedural arpeggiator, ambient loop layers, and the skybox reactor |
+| `Meta/` | Everything outside a run: save system, level database, the LevelSelect map, tutorials, settings, loading screen |
+| `Dialogue/` | A self-contained visual-novel runner — builds its own UGUI, zero scene setup |
+| `Minigame/` | Standalone diversions reachable from the map (currently *Stack Well*, a 3D Tetris) |
+| `UI/` | HUD, shop, panels, pause and game-over screens |
+| `VFX/` | Camera shake, death explosions, outlines, combo and currency effects, URP renderer features |
+| `Balance/` | `BalanceTable` — one read-only ScriptableObject holding every tunable number |
+| `Input/` | Gamepad support and the virtual cursor |
 
-Key methods:
-- `PlayMelodyNote()` — called per path step; reads geometry to shape note choice
-- `PlayBassRoot()` — triggers a bass note on block-type transitions
-- `PlayAmbientNote()` — lightweight playback used by loop layers and path scans
-- `StartRecording()` / `StopRecording()` — captures a traversal for loop replay
+### Key subsystems
 
-#### `AudioManager.cs`
-Wwise integration hub. All Wwise `PostEvent` and `SetRTPCValue` calls go through here. Manages the BGM Switch Container (chord pad layer that changes with block type) and exposes `PlayArpNote(degree, octave, velocity, emitter)` — the `emitter` parameter positions the sound in 3D space for distance attenuation.
+**Surface pathfinding.** `FaceBuilder` enumerates each block's six faces and keeps the exposed ones. `SurfaceGraphBuilder` links adjacent coplanar faces *and* faces meeting across an edge, so units can walk over corners. Everything downstream — enemy routing, the live path preview, turret line-of-sight — reads that one graph, so it's rebuilt on every placement via `GameFlowManager.EvaluateGrid()`.
 
-#### `BackgroundReactor.cs`
-Listens to music events and drives background visual/environmental responses (intensity, chord colour shifts).
+**Synergies.** Six factions, each a `SynergyRule` over the current `BoardSnapshot`:
 
-#### `LoopManager.cs`
-Manages all active ambient loop layers. Each completed path traversal is registered here as a `LoopEntry` (note sequence + visual block list + grid cells). Loops play back at a lower octave register so they sit beneath the live melody. Exposes `RemoveLoopsOverlapping(cells)` — called when a block is lifted to stop loops whose path has been broken.
+| Faction | Shape required |
+|---------|----------------|
+| **Abundance** | A closed loop of same-colour pieces |
+| **Enlightenment** | A filled axis-aligned cube — 2³, 3³, 4³ for tiers 1–3 |
+| **Exploration** | A straight run of same-colour cells along any axis |
+| **Harmony** | Every piece of that colour in one face-connected component |
+| **Order** | N same-colour pieces connected face-to-face |
+| **Heresy** | Placeholder — never fires |
 
-#### `PathFlowManager.cs`
-Draws `LineRenderer`-based laser lines for paths.
-- **Live line** — warm-white preview shown automatically whenever a valid path exists; updated on every block placement
-- **Loop lines** — coloured lines added when a run commits; tracked by grid cell so they disappear when their blocks are removed
-- Corner waypoints are calculated geometrically (face-plane intersection) so lines route around block edges rather than cutting through them
+`SynergyEvaluator` re-runs after every placement and removal. The important rule is **first-locked**: once a synergy claims a set of pieces, no other rule — and no second instance of the same rule — can see them. Active claims survive re-evaluation and can *grow* into newly placed pieces rather than being torn down and rebuilt. Read the header comment in `SynergyEvaluator.cs` before touching any of this; the ordering is load-bearing.
 
----
+**Blocks.** `BlockData` is a ScriptableObject: a `BlockType` (`Home` / `Lift` / `Pull` / `Shadow` / `Turret` / `SlowTurret` / `AoeTurret`), a multi-cell shape, and a Wwise step event. The four terrain types each map to a chord, so the board's composition drives the music:
 
-### Construct
-
-#### `GameFlowManager.cs`
-Top-level game state machine. Manages phases (`Build → ReadyToRun → Running`) and the roguelite endpoint accumulation loop.
-
-Key responsibilities:
-- `EvaluateGrid()` — rebuilds the surface graph, refreshes the live path preview, and immediately destroys the running unit if its path is broken. Called after every block placement or removal.
-- `Run()` — spawns the `SurfaceUnit` and converts the live preview line into a tracked loop line
-- `EndRunningPhase()` — promotes finished unit to ambient loop, retires the oldest loop if the layer limit is exceeded, adds a new endpoint every `runsPerEndpoint` completions
-
-Inspector tunables: `blocksPerTurn`, `runsPerEndpoint`, `maxLoopLayers`, `scanBeats`
-
-#### `PlacementController.cs`
-Handles all player interaction with blocks.
-- **Select mode** — click to select, double-click to pick up and re-edit, WASD to pan camera
-- **Edit mode** — WASD/QE to move block, 1/2/3 to rotate on each axis, left-click to place
-- **Tray system** — blocks offered each round are displayed as selectable tokens; clicking a token enters Edit mode
-- Placing a **new** block from the tray deducts resources via `ResourceManager`; repositioning an already-placed block is free
-- Calls `GameFlowManager.EvaluateGrid()` after every placement or block lift
-
-#### `GridSystem.cs`
-The 3D voxel grid. Stores `PlacedBlockInstance` records keyed by `Vector3Int` cell. Provides `GridToWorld()` (cell centre), `WorldToGrid()`, `GetInstanceAt()`, `RegisterInstance()`, `RemoveInstance()`.
-
-#### `BlockData.cs`
-`ScriptableObject` defining a block type. Fields: `blockType` (enum: Home / Lift / Pull / Shadow / Turret), `cells` (multi-cell shape offsets), `onStepEvent` (Wwise event fired when a unit steps on it).
-
-Each type carries musical meaning:
 | Type | Chord | Character |
 |------|-------|-----------|
 | Home | Cm | Stable root |
@@ -133,98 +110,54 @@ Each type carries musical meaning:
 | Pull | Gm | Tension, forward motion |
 | Shadow | Bb | Dark, unstable |
 
-#### `GridOverlay.cs`
-Renders the dashed-line 3D grid using `GL.LINES` in `OnRenderObject`. Toggle with **G** key. Outer edges are brighter than interior lines. Also draws a cursor highlight box on the hovered cell.
+**Turrets.** Three modes, colour-coded to stay legible on a busy board: Basic (steel white), Slow (ice blue), AOE (hot orange). Stats live in `BalanceTable`, not on the prefabs.
 
-#### `OrbitCamera.cs`
-Orbit/pan/zoom camera. `SetFocus()` smoothly pivots to a target transform (used when double-clicking a block).
+**Reactive sky.** `BackgroundReactor` clones the skybox material at runtime and drives `ManifoldSkybox.shader` from live game state — beat pulses, chord colour, combat intensity, kill reactions, damage flashes, the level-clear crystallisation, and a **health-driven collapse** that tears the sky into slipped bands and drops cells to the engine's missing-material checker as you lose lives.
 
----
-
-### Construct / pathFinding
-
-#### `SurfaceGraphBuilder.cs`
-Scans all placed blocks and builds a graph of `FaceNode` objects — one node per exposed block face. Connects adjacent coplanar faces and faces that share an edge across different normals (e.g., top face → side face for corner transitions).
-
-#### `SurfacePathfinding.cs`
-A* search over the `FaceNode` graph. Accepts lists of start and end nodes (supporting multiple endpoints) and returns the shortest surface path.
-
-#### `FaceBuilder.cs`
-Low-level helper that enumerates the six faces of a block, checks which are exposed (no adjacent block), and creates the corresponding `FaceNode` with world position and surface normal.
-
-#### `SurfaceUnit.cs`
-The entity that traverses a path. Moves beat-by-beat (tempo driven by `bpm`), interpolating between face centres using a quadratic Bezier arc at surface-normal transitions. Calls `ArpeggiatorManager.PlayMelodyNote()` at each step. On completion, hands off the recorded note sequence to `LoopManager` and signals `GameFlowManager.EndRunningPhase()`.
-
-#### `SurfaceUnitVisual.cs`
-Abstract geometric art visual attached to `SurfaceUnit`. Procedurally builds:
-- A glowing core sphere (pulsing)
-- Three gyroscope rings at different tilts, each spinning at a different speed and colour (cyan / violet / amber)
-- Four orbiting cube nodes, each on a different tilted orbital plane
-
-All primitives use the `Custom/UnitGlow` shader.
-
-#### `EndpointVisual.cs`
-Applied to start and end blocks. Modifies the block's material to a transparent aerogel haze, then adds a `BlackHoleCore` sphere at the block centre. Start = warm palette (orange/amber/magenta); End = cool palette (cyan/mint/violet). Start also spawns a thin antenna spire; End spawns a spinning ring.
-
-#### `LevelEndpointGenerator.cs`
-Places start and end endpoint blocks on the grid surface within a configurable distance range. Generates additional endpoints each `runsPerEndpoint` cycles, alternating between adding starts and ends. Distance window widens over rounds.
-
----
-
-### Resource
-
-#### `ResourceManager.cs`
-Four-resource economy tied directly to block types (Home / Lift / Pull / Shadow). Placing a new block from the tray costs resources of its type; repositioning a block already on the grid is free.
-
-Income API for the battle system:
-```csharp
-ResourceManager.Instance.OnEnemyPassedBlock(BlockType.Home); // +1 per block walked
-ResourceManager.Instance.OnWaveComplete(pathBlockTypes);      // wave-end bonus
-```
-
-Subscribe to `OnResourceChanged(BlockType, int)` for UI updates. A temporary `OnGUI` overlay displays current amounts until proper UI is connected.
-
----
-
-### Shaders
-
-#### `UnitGlow.shader` (`Custom/UnitGlow`)
-Simple additive-blend emissive shader. Works on any mesh. A Fresnel rim term brightens silhouette edges, giving flat primitives apparent depth without lighting. Animated with a sine-wave pulse. Properties: `_Color`, `_Intensity`, `_RimBoost`, `_RimPower`, `_PulseSpeed`, `_PulseDepth`.
-
-#### `BlackHoleCore.shader` (`Custom/BlackHoleCore`)
-Single additive pass plasma-sphere shader with four composited layers:
-- **Inner core glow** — coloured centre falloff (`_DiskColor`)
-- **Accretion disk ring** — sharp band at configurable radius
-- **Flowing streams** — three overlapping directional sine waves on the world-space normal, producing seamless animated plasma without UV seams
-- **Outer nebula haze** — soft rim colour (`_HazeColor`)
+**Saves.** Three independent slots, each a `profile_<n>.json`. Mutators persist immediately, so a crash never costs a clear or a purchase. `SaveSystem.PeekSlot` reads a slot without selecting it, for the title screen.
 
 ---
 
 ## Controls
 
-| Key | Action |
-|-----|--------|
-| Left-click | Select block / place block |
-| Double-click | Pick up placed block for re-editing |
-| Tab | Enter / exit Edit mode |
-| WASD | Pan camera (Select) / move block (Edit) |
-| Q / E | Camera down/up (Select) / block down/up (Edit) |
-| 1 / 2 / 3 | Rotate block on X / Y / Z axis (Edit) |
-| Space | Run — spawn unit on current path |
-| P | Force re-evaluate path preview |
-| G | Toggle grid overlay |
-| B | Cancel run, return to Build phase |
+| Input | Build phase | Editing a held block |
+|-------|-------------|----------------------|
+| Left-click | Select block / place | Place |
+| Double-click | Pick up a placed block for re-editing | — |
+| WASD / QE | Move camera | Move the block |
+| Right-drag | Rotate view | Rotate view |
+| Scroll | Zoom | Set placement distance |
+| 1 / 2 / 3 | — | Rotate on X / Y / Z |
+| Tab | Enter / exit edit mode | |
+| Space | Start the wave | |
+| Shift (hold) | Peek past any open panel at the world behind it | |
+| Delete | Remove the selected block | |
+| G | Toggle grid overlay | |
+| Esc | Pause menu | |
+
+Gamepad is supported through `GamepadInputDriver` and a virtual cursor.
 
 ---
 
-## Project Setup
+## Conventions
 
-1. Open in **Unity 2022.3+** with URP package installed
-2. Open the Wwise project and generate SoundBanks before entering Play mode
-3. Assign the `AkAudioListener` component to the main camera
-4. In the scene, ensure these Manager GameObjects are present:
-   - `AudioManager` — assign BGM, Note, and chord Wwise events
-   - `PathFlowManager` — assign `PathLaser` material
-   - `LoopManager`, `ArpeggiatorManager`, `ResourceManager`
-   - `GameFlowManager` — assign `GridSystem`, `PlacementController`, `LevelEndpointGenerator`, `SurfaceUnit` prefab
-5. Set `GridSystem.size` to at least **10 × 3 × 10** for a comfortable play area
+Things that aren't obvious from reading a single file, and that will bite you if you guess:
+
+- **No namespaces.** Nothing in this codebase is namespaced. Don't introduce one.
+- **UI is built in code, not in scenes.** Panels, HUDs, overlays and whole screens construct their own `Canvas` + `CanvasScaler` + `GraphicRaycaster` at runtime, usually auto-spawned via `[RuntimeInitializeOnLoadMethod]`. There is almost nothing to wire in the Inspector, and that's deliberate — it survives scene merges.
+- **Wwise events cannot be created from code.** An `AK.Wwise.Event` field only works when it was assigned through a real Inspector reference; there is no `Find`-by-name equivalent. A pure-code system that needs audio must load a Resources ScriptableObject carrying the Inspector-assigned field (see `MinigameAudio`).
+- **`new Material(shader)` loses your tuning.** It only picks up the shader's Properties-block *defaults*, not what you set on the `.mat` asset. Any runtime system that should respect a tuned material must `Resources.Load<Material>()` the real asset.
+- **Shaders used only from code get stripped at build time.** They need an entry in Always Included Shaders *and* a keepalive material under `Assets/Resources/GeoWorldShaderKeepalive/`.
+- **`BalanceTable` is read-only at runtime.** Query it; never write back into it.
+- **`OrbitCamera` owns the camera transform.** It rewrites position and rotation every `LateUpdate`. Any effect that moves the camera has to live inside it (as camera shake does) or it will simply be overwritten.
+
+---
+
+## Repo notes
+
+`.bnk` SoundBanks are tracked with Git LFS. Two consequences worth knowing:
+
+- The three platform banks (Mac / WebGL / Windows) are byte-identical, so LFS deduplicates them into one object.
+- LFS stores whole files, not deltas — every regeneration of the bank costs its full size again against the account's LFS quota. Regenerate deliberately, not habitually.
+
+`Geo world/` is the Wwise project. `Assets/StreamingAssets/Audio/` holds the banks Unity actually loads.

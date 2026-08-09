@@ -435,6 +435,15 @@ public class EnemyBaseManager : MonoBehaviour
             CurrencyFlyFx.Fly(enemy.transform.position, isTurret: false, enemy.rewardOnKill);
         }
 
+        // Sampled BEFORE RemoveEnemy destroys the GameObject, so the burst is
+        // tinted from this specific enemy's own shard colors, not a generic one.
+        if (enemy != null)
+        {
+            var visual  = enemy.GetComponentInChildren<EnemyChaoticVisual>();
+            var palette = visual != null ? visual.shardPalette : null;
+            EnemyDeathFx.Explode(enemy.transform.position, palette);
+        }
+
         ComboManager.RegisterKill();
         RemoveEnemy(enemy, destroy: true);
     }

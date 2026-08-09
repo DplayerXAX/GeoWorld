@@ -41,6 +41,8 @@ public class AudioManager : MonoBehaviour
     public AK.Wwise.Event Victory;
     [Tooltip("Posted when the player runs out of lives (GameFlowManager.HandleGameOver).")]
     public AK.Wwise.Event Defeat;
+    [Tooltip("Posted every time a life is lost (PlayerHealth.TakeDamage) — including the killing hit, which plays alongside Defeat.")]
+    public AK.Wwise.Event Damage;
     [Header("Volume RTPCs (Wwise global, 0..100)")]
     [Tooltip("Global Wwise RTPC names bound to your bus volumes. SettingsScreen drives these 0..1 → 0..100. Set them up on the Master / Music / SFX buses in Wwise.")]
     public string masterVolumeRtpc = "MasterVolume";
@@ -55,6 +57,10 @@ public class AudioManager : MonoBehaviour
     // Tracked so we can stop the right playing instance when swapping BGMs
     // (event-swap path). 0 = nothing playing.
     uint _currentBgmPlayingId;
+
+    // Tracked so Restart can cut the Defeat stinger short — like BGM, a posted
+    // Wwise event keeps ringing past this GameObject's destruction on scene reload.
+    uint _defeatPlayingId;
 
     // TextBlip is authored as ONE continuous segment (not a per-character one-shot),
     // so it's started once when a typewriter begins and stopped once it finishes/skips
@@ -79,6 +85,7 @@ public class AudioManager : MonoBehaviour
             _currentBgmPlayingId = 0;
         }
         StopTextBlip();
+        StopDefeat();
         if (Instance == this) Instance = null;
     }
 
@@ -106,7 +113,22 @@ public class AudioManager : MonoBehaviour
 
     public void PlayDefeat()
     {
-        if (Defeat != null && Defeat.IsValid()) Defeat.Post(this.gameObject);
+        if (Defeat != null && Defeat.IsValid()) _defeatPlayingId = Defeat.Post(this.gameObject);
+    }
+
+    // Cuts the Defeat stinger short — used on Restart, where the old scene's
+    // AudioManager is destroyed but the already-posted event would otherwise
+    // keep ringing over the freshly reloaded scene.
+    public void StopDefeat(int fadeMs = 0)
+    {
+        if (_defeatPlayingId == 0) return;
+        AkUnitySoundEngine.StopPlayingID(_defeatPlayingId, fadeMs, AkCurveInterpolation.AkCurveInterpolation_Linear);
+        _defeatPlayingId = 0;
+    }
+
+    public void PlayDamage()
+    {
+        if (Damage != null && Damage.IsValid()) Damage.Post(this.gameObject);
     }
 
     // Call once when a typewriter starts revealing a new line/hint.
@@ -202,6 +224,16 @@ public class AudioManager : MonoBehaviour
             return;
         }
         SwapBgmEvent(BGM);
+    }
+
+    // Stops the event-swap BGM outright — unlike ExitBattleBGM, which hands off
+    // to the calm loop, this leaves nothing playing. Used for Defeat, where the
+    // stinger has to play alone, not layered under music that kept going.
+    public void StopBGM(int fadeMs = 0)
+    {
+        if (_currentBgmPlayingId == 0) return;
+        AkUnitySoundEngine.StopPlayingID(_currentBgmPlayingId, fadeMs, AkCurveInterpolation.AkCurveInterpolation_Linear);
+        _currentBgmPlayingId = 0;
     }
 
     void SwapBgmEvent(AK.Wwise.Event next)

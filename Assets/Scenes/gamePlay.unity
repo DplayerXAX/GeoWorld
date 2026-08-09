@@ -3260,7 +3260,11 @@ MonoBehaviour:
   Defeat:
     idInternal: 0
     valueGuidInternal: 
-    WwiseObjectReference: {fileID: 0}
+    WwiseObjectReference: {fileID: 11400000, guid: 8ad8997a668a664478226078885baf4c, type: 2}
+  Damage:
+    idInternal: 0
+    valueGuidInternal: 
+    WwiseObjectReference: {fileID: 11400000, guid: 6a1a8662fcc34c14e9f58af4a58459d9, type: 2}
   masterVolumeRtpc: MasterVolume
   musicVolumeRtpc: MusicVolume
   sfxVolumeRtpc: SFXVolume

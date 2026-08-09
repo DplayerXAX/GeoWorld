@@ -23,6 +23,8 @@ Shader "GeoWorld/MinigameSkybox"
         _SkyLow    ("Lower", Color)   = (0.97, 0.62, 0.24, 1)
         _SkyGlow   ("At Horizon", Color) = (1.00, 0.85, 0.42, 1)
         _Bands     ("Ramp Bands", Range(3, 40)) = 11
+        _GlowExtent("At Horizon Size", Range(0.02, 0.6)) = 0.12
+        _RampPress ("Press Bands Down", Range(0.2, 1.5)) = 0.42
 
         [Header(Sun)]
         _SunColor   ("Sun", Color) = (1.00, 0.95, 0.72, 1)
@@ -80,7 +82,7 @@ Shader "GeoWorld/MinigameSkybox"
             float4 _SkyZenith, _SkyHigh, _SkyMid, _SkyLow, _SkyGlow;
             float4 _SunColor, _CloudColor, _CloudLit;
             float4 _WheatNear, _WheatFar, _SoilColor, _HedgeColor, _MillColor;
-            float  _Bands, _SunAzimuth, _SunHeight, _SunRadius, _SunCorona;
+            float  _Bands, _GlowExtent, _RampPress, _SunAzimuth, _SunHeight, _SunRadius, _SunCorona;
             float  _CloudAmount, _CloudDrift;
             float  _WheatLine, _WheatRagged, _StalkCount, _StalkDepth, _Sway, _FurrowCount;
             float  _MillAzimuth, _MillSize, _MillSpin, _MillOn;
@@ -100,13 +102,25 @@ Shader "GeoWorld/MinigameSkybox"
             half3 DuskRamp(float e)
             {
                 float k = saturate(e / 1.5707963);            // 0 at horizon, 1 at zenith
-                k = pow(saturate(k), 0.62);                   // compress the warm end upward
+                // Smaller _RampPress = the WHOLE ramp (all four stops, not just
+                // the horizon glow) happens closer to the horizon, leaving more of
+                // the upper sky sitting flat at _SkyZenith — "each band presses
+                // down a bit" is this one knob, since every stop below rides on it.
+                k = pow(saturate(k), _RampPress);
                 k = floor(k * _Bands) / max(1.0, _Bands - 1.0);
 
-                half3 c = lerp(_SkyGlow.rgb, _SkyLow.rgb,  saturate(k * 4.0));
-                c = lerp(c, _SkyMid.rgb,    saturate(k * 4.0 - 1.0));
-                c = lerp(c, _SkyHigh.rgb,   saturate(k * 4.0 - 2.0));
-                c = lerp(c, _SkyZenith.rgb, saturate(k * 4.0 - 3.0));
+                // Stops are NOT evenly spaced: _GlowExtent alone controls how much
+                // of the ramp the horizon glow gets before handing off to Low —
+                // shrinking it tightens the "At Horizon" band specifically without
+                // touching how Low/Mid/High/Zenith divide up what's left.
+                float s1 = saturate(_GlowExtent);
+                float s2 = s1 + (1.0 - s1) / 3.0;
+                float s3 = s1 + (1.0 - s1) * 2.0 / 3.0;
+
+                half3 c = lerp(_SkyGlow.rgb, _SkyLow.rgb,  saturate(k / max(1e-4, s1)));
+                c = lerp(c, _SkyMid.rgb,    saturate((k - s1) / max(1e-4, s2 - s1)));
+                c = lerp(c, _SkyHigh.rgb,   saturate((k - s2) / max(1e-4, s3 - s2)));
+                c = lerp(c, _SkyZenith.rgb, saturate((k - s3) / max(1e-4, 1.0 - s3)));
                 return c;
             }
 

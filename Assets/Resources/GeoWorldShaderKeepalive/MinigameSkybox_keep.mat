@@ -41,16 +41,18 @@ Material:
     - _CloudScroll: 0.03
     - _CloudStrength: 0.3
     - _FurrowCount: 7
+    - _GlowExtent: 0.02
     - _GridDensity: 28
     - _GridStrength: 0.55
     - _GridThickness: 0.025
     - _GroundTint: 0.82
     - _HorizonSharp: 3
-    - _MillAzimuth: 0.3
+    - _MillAzimuth: 0.53
     - _MillOn: 1
     - _MillSize: 0.12
     - _MillSpin: 0.45
     - _PosterizeSteps: 8
+    - _RampPress: 0.42
     - _RingWidth: 0.025
     - _Saturate: 1.25
     - _Speed: 1
@@ -63,15 +65,15 @@ Material:
     - _StripeDensity: 18
     - _StripeStrength: 0.16
     - _StripeWidth: 0.055
-    - _SunAzimuth: 0.62
-    - _SunCorona: 3
-    - _SunHeight: 0.3
-    - _SunRadius: 0.12
+    - _SunAzimuth: 0.68
+    - _SunCorona: 5
+    - _SunHeight: 0.01
+    - _SunRadius: 0.081
     - _SunRing: 0.045
     - _Sway: 0.55
     - _WedgeCount: 3
     - _WedgeWidth: 0.085
-    - _WheatLine: -0.2
+    - _WheatLine: -0.3
     - _WheatRagged: 0.018
     - _Wrap: 5
     - _ZenithTint: 0.16

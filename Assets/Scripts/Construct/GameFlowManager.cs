@@ -121,6 +121,9 @@ public class GameFlowManager : MonoBehaviour
         // gate) into this one.
         TowerUpgradeGate.ResetAll();
         UnlockTowerUpgradeEffect.ResetAllHeld();
+        // Static too, so a game-over that locked the camera would otherwise keep it
+        // locked through the restart that's supposed to clear it.
+        OrbitCamera.InputLocked = false;
 
         RunStats.BeginRun();   // reset kill/blocks/time counters for score-keeping
         ApplyRunConfig();   // Level vs Endless setup (seed, pacing, authored waves)
@@ -232,7 +235,13 @@ public class GameFlowManager : MonoBehaviour
     // True while the level-clear settlement is on screen — systems read this to
     // lock input (shop, pickup, sell, …) and hide gameplay HUD.
     public bool LevelCleared => _levelDone;
-    public static bool SettlementUp => Instance != null && Instance._levelDone;
+
+    // Also true on game over: the run is finished either way, and every caller
+    // already means "the run is over, take the controls away and hide the HUD".
+    // Reusing this rather than threading a second flag through a dozen call sites
+    // is what makes defeat lock down exactly as thoroughly as victory already did.
+    public static bool SettlementUp =>
+        Instance != null && (Instance._levelDone || Instance.phase == GamePhase.GameOver);
 
     bool TryObjectiveClear()
     {
@@ -351,12 +360,20 @@ public class GameFlowManager : MonoBehaviour
     {
         if (phase == GamePhase.GameOver) return;
         Debug.Log("[GameFlow] Game Over — last life lost.");
-        AbortRun();
+        AbortRun(quiet: true);   // no fight_end stinger — this is a loss, not a survived wave
         enemyBaseManager?.CancelWave();
         BackgroundReactor.Instance?.SetCombatMode(false);
-        AudioManager.Instance?.ExitBattleBGM();   // safety: dropping into Game Over also leaves battle music
+        // StopBGM, not ExitBattleBGM — ExitBattleBGM hands off to the calm loop,
+        // which would keep playing underneath Defeat instead of leaving it alone.
+        AudioManager.Instance?.StopBGM(200);
         AudioManager.Instance?.PlayDefeat();
+
+        // Phase FIRST: SettlementUp keys off it, and the systems it gates (shop,
+        // placement, HUD) should already be locked out by the time the defeat
+        // sequence starts drawing over them.
         phase = GamePhase.GameOver;
+        OrbitCamera.InputLocked = true;   // SettlementUp doesn't reach the camera rig; this does
+        GameOverScreen.Show();
     }
 
     // Hard reset → reload current scene from scratch. Bound to PlayerHealth's
@@ -971,7 +988,11 @@ public class GameFlowManager : MonoBehaviour
 
     // Force-aborts an in-progress run without promoting it to a loop.
     // Used by dev tools / cancel-run shortcut.
-    public void AbortRun()
+    //
+    // `quiet` suppresses the combat-ended music/stinger, for callers that are
+    // about to play their own — a defeat shouldn't announce itself with the
+    // "you survived the wave" fight_end cue first (see HandleGameOver).
+    public void AbortRun(bool quiet = false)
     {
         if (phase != GamePhase.Running) return;
 
@@ -979,7 +1000,7 @@ public class GameFlowManager : MonoBehaviour
         if (currentUnit != null) { Destroy(currentUnit.gameObject); currentUnit = null; }
         ResourceManager.Instance?.SetCombatActive(false);
         BackgroundReactor.Instance?.SetCombatMode(false);
-        AudioManager.Instance?.ExitBattleBGM();
+        if (!quiet) AudioManager.Instance?.ExitBattleBGM();
         Time.timeScale = 1f;                               // restore normal speed when bailing out of combat
         phase = GamePhase.Build;
     }

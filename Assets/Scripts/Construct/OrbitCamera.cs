@@ -323,8 +323,11 @@ public class OrbitCamera : MonoBehaviour
         Vector3 offset = rot * new Vector3(0, 0, -distance);
         Vector3 desiredPos = currentFocusPoint + offset + shift;
 
+        // Last frame's shake is subtracted BEFORE the lerp so the easing always
+        // operates on the clean, unshaken position — otherwise the jitter feeds
+        // back into the smoothing and the rig drifts while it's shaking.
         transform.position = Vector3.Lerp(
-            transform.position,
+            transform.position - _shakeOffset,
             desiredPos,
             1f - Mathf.Exp(-transitionSpeed * Time.unscaledDeltaTime)
         );
@@ -332,6 +335,44 @@ public class OrbitCamera : MonoBehaviour
         // Smooth aim (eased rotation, not a per-frame snap). Looking at the SHIFTED
         // target keeps the focus point biased to `focusViewport` while staying smooth.
         transform.LookAt(currentFocusPoint + shift);
+
+        ApplyShake();
+    }
+
+    // ── Screen shake ─────────────────────────────────────────────────────────
+    // Lives here rather than in a separate component because THIS is what owns
+    // the camera transform — anything else writing position in its own LateUpdate
+    // would just race with the lerp above and get overwritten half the time.
+    float   _shakeAmp, _shakeDur, _shakeT;
+    Vector3 _shakeOffset;
+
+    // Additive: a new shake during an old one takes the stronger of the two
+    // rather than cutting it short, so rapid repeat hits build instead of reset.
+    public void Shake(float amplitude, float duration)
+    {
+        _shakeAmp = Mathf.Max(_shakeAmp, amplitude);
+        _shakeDur = Mathf.Max(_shakeDur, duration);
+        _shakeT   = Mathf.Max(_shakeT, duration);
+    }
+
+    void ApplyShake()
+    {
+        if (_shakeT <= 0f) { _shakeOffset = Vector3.zero; return; }
+
+        _shakeT -= Time.unscaledDeltaTime;
+        if (_shakeT <= 0f) { _shakeT = 0f; _shakeAmp = 0f; _shakeOffset = Vector3.zero; return; }
+
+        // Squared falloff — hits hard immediately, then settles fast.
+        float k = _shakeDur > 0f ? _shakeT / _shakeDur : 0f;
+        float mag = _shakeAmp * k * k;
+
+        _shakeOffset = (transform.right * Random.Range(-1f, 1f)
+                      + transform.up    * Random.Range(-1f, 1f)) * mag;
+        transform.position += _shakeOffset;
+        // A little roll on top — pure translation reads as the rig sliding, the
+        // twist is what makes it read as an impact.
+        transform.rotation = Quaternion.AngleAxis(Random.Range(-1f, 1f) * mag * 6f, transform.forward)
+                           * transform.rotation;
     }
 
     // World shift so the focus point lands at `focusViewport` instead of dead centre.

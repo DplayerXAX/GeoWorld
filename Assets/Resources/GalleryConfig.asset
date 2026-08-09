@@ -52,5 +52,18 @@ MonoBehaviour:
       idInternal: 0
       valueGuidInternal: 
       WwiseObjectReference: {fileID: 11400000, guid: 85e3c987bf05d7640b116fb01bd2dd11, type: 2}
+  - title: A Melody Misremembered
+    description: I definitely hear this somewhere before.....
+    track:
+      idInternal: 0
+      valueGuidInternal: 
+      WwiseObjectReference: {fileID: 11400000, guid: c2c3c72bcae93f144b0773aec4b191ad, type: 2}
+  - title: The moment before end
+    description: "Suddenly, you lose everything\u2026 and there is no way back. You
+      can only wait for the final relief\u2014the end."
+    track:
+      idInternal: 0
+      valueGuidInternal: 
+      WwiseObjectReference: {fileID: 11400000, guid: 8ad8997a668a664478226078885baf4c, type: 2}
   shaders: []
   monsters: []
