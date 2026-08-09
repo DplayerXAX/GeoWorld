@@ -94,6 +94,8 @@ public class BlockTetris3D : MonoBehaviour
         BuildUI();
         SuppressHostUI();
         SpawnPiece();
+        PauseHostMusic();
+        PlayMusic();
     }
 
     void Quit()
@@ -106,8 +108,72 @@ public class BlockTetris3D : MonoBehaviour
         RenderSettings.fogColor        = _hostFogColor;
         RenderSettings.fogStartDistance = _hostFogStart;
         RenderSettings.fogEndDistance   = _hostFogEnd;
+        StopMusic();
+        ResumeHostMusic();
         if (_cam != null) Destroy(_cam.gameObject);
         Destroy(gameObject);
+    }
+
+    uint _musicPlayingId;
+
+    // Posted from a MinigameAudio Resources asset rather than through
+    // AudioManager — this overlay launches from LevelSelect, which carries no
+    // AudioManager, so AudioManager.Instance would be null there and this would
+    // silently never play.
+    void PlayMusic()
+    {
+        var cfg = MinigameAudio.Get();
+        if (cfg == null || cfg.stackWellMusic == null || !cfg.stackWellMusic.IsValid())
+        {
+            Debug.LogWarning("[BlockTetris3D] stackWellMusic not assigned on MinigameAudio.asset — nothing to play.");
+            return;
+        }
+        _musicPlayingId = cfg.stackWellMusic.Post(gameObject);
+    }
+
+    void StopMusic()
+    {
+        if (_musicPlayingId == 0) return;
+        var cfg = MinigameAudio.Get();
+        int fadeMs = cfg != null ? cfg.stackWellMusicFadeOutMs : 500;
+        AkUnitySoundEngine.StopPlayingID(_musicPlayingId, fadeMs, AkCurveInterpolation.AkCurveInterpolation_Linear);
+        _musicPlayingId = 0;
+    }
+
+    // Every BGM-carrying event id we successfully paused, so Quit() resumes
+    // exactly what Begin() paused — never more, never less.
+    readonly List<uint> _pausedMusicIds = new();
+
+    // Pauses whatever music was already playing rather than stopping it, so
+    // resuming picks the track back up mid-phrase instead of restarting it.
+    // Targeted BY EVENT (with AK_INVALID_GAME_OBJECT, i.e. "wherever it's
+    // playing") rather than by ducking a bus RTPC: this overlay can be reached
+    // from more than one scene (LevelSelect's ambient timeLoop today, possibly
+    // gameplay's AudioManager BGM/BGM_fight from a future entry point), and a
+    // bus-wide duck would have no way to tell "the host's music" apart from
+    // "Stack Well's own music" if they ever end up on the same bus.
+    void PauseHostMusic()
+    {
+        _pausedMusicIds.Clear();
+        TryPause(AudioManager.Instance != null ? AudioManager.Instance.BGM : null);
+        TryPause(AudioManager.Instance != null ? AudioManager.Instance.BGM_fight : null);
+        TryPause(LevelMapController.Instance != null ? LevelMapController.Instance.timeLoop : null);
+    }
+
+    void TryPause(AK.Wwise.Event evt)
+    {
+        if (evt == null || !evt.IsValid()) return;
+        AkUnitySoundEngine.ExecuteActionOnEvent(evt.Id, AkActionOnEventType.AkActionOnEventType_Pause,
+            AkUnitySoundEngine.AK_INVALID_GAME_OBJECT, 200, AkCurveInterpolation.AkCurveInterpolation_Linear);
+        _pausedMusicIds.Add(evt.Id);
+    }
+
+    void ResumeHostMusic()
+    {
+        foreach (var id in _pausedMusicIds)
+            AkUnitySoundEngine.ExecuteActionOnEvent(id, AkActionOnEventType.AkActionOnEventType_Resume,
+                AkUnitySoundEngine.AK_INVALID_GAME_OBJECT, 400, AkCurveInterpolation.AkCurveInterpolation_Linear);
+        _pausedMusicIds.Clear();
     }
 
     void SuppressHostUI()

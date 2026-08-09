@@ -67,6 +67,15 @@ public class BackgroundReactor : MonoBehaviour
     [Tooltip("How fast the skybox reorganises into ordered geometry on level clear.")]
     public float clearTransitionSpeed = 2.5f;
 
+    [Header("Collapse (low health)")]
+    [Tooltip("Health fraction at which the sky starts breaking up. 0.75 = the glitching begins once a quarter of the lives are gone.")]
+    [Range(0.05f, 1f)] public float collapseOnset = 0.75f;
+    [Tooltip("How fast the glitch level follows the health bar — kept low so a hit reads as the world sagging, not a switch flipping.")]
+    [Range(0.1f, 5f)]  public float collapseFollowSpeed = 0.8f;
+    [Tooltip("Fraction of the glitch that survives outside combat. Below 1 the world visibly steadies between waves without healing itself.")]
+    [Range(0f, 1f)]    public float collapseOutOfCombat = 0.45f;
+    float _collapse;
+
     [Header("Kill reaction")]
     [Tooltip("How fast the kill-reaction pulse decays back to 0 after each kill — kept high so it reads as a brief twitch, not a lingering shift.")]
     [Range(0.5f, 30f)] public float killReactDecay = 18f;
@@ -80,6 +89,7 @@ public class BackgroundReactor : MonoBehaviour
     static readonly int CombatModeId = Shader.PropertyToID("_CombatMode");
     static readonly int ClearReactId = Shader.PropertyToID("_ClearReact");
     static readonly int KillReactId  = Shader.PropertyToID("_KillReact");
+    static readonly int CollapseId   = Shader.PropertyToID("_Collapse");
 
     void Awake()
     {
@@ -122,8 +132,22 @@ public class BackgroundReactor : MonoBehaviour
                                         combatTransitionSpeed * dt);
 
         // Level-clear: ramp the ordered-geometry reaction while the settlement is up.
-        float targetClear = GameFlowManager.SettlementUp ? 1f : 0f;
+        // Keyed to LevelCleared, NOT SettlementUp — SettlementUp also covers game
+        // over, and defeat has no business turning the sky into the victory gold.
+        float targetClear = GameFlowManager.Instance != null && GameFlowManager.Instance.LevelCleared ? 1f : 0f;
         _clearReact = Mathf.MoveTowards(_clearReact, targetClear, clearTransitionSpeed * dt);
+
+        // World collapse: the sky glitches and drops its materials in step with the
+        // health bar, so a run going badly is visible in the background before the
+        // player thinks to look at the HP readout.
+        float targetCollapse = 0f;
+        var hp = PlayerHealth.Instance;
+        if (hp != null && hp.maxLives > 0)
+        {
+            float frac = (float)hp.CurrentLives / hp.maxLives;
+            targetCollapse = 1f - Mathf.InverseLerp(0f, collapseOnset, frac);
+        }
+        _collapse = Mathf.MoveTowards(_collapse, targetCollapse, collapseFollowSpeed * dt);
 
         // In combat, music intensity rides higher for extra visual energy
         float targetInt = _targetCombatMode > 0.5f
@@ -158,6 +182,7 @@ public class BackgroundReactor : MonoBehaviour
         skyboxMaterial.SetFloat(CombatModeId, _combatMode);
         skyboxMaterial.SetFloat(ClearReactId, _clearReact);
         skyboxMaterial.SetFloat(KillReactId,  _killReact);
+        skyboxMaterial.SetFloat(CollapseId,   _collapse * Mathf.Lerp(collapseOutOfCombat, 1f, _combatMode));
     }
 
     /// <summary>

@@ -267,6 +267,39 @@
 						</Action>
 					</ChildrenList>
 				</Event>
+				<Event Name="tetris_Loop" ID="{7619AE84-FA56-4146-9A83-F9717EAF54A3}">
+					<ChildrenList>
+						<Action Name="" ID="{04C7EA5B-0C0A-4E5B-91F5-5C40251E3229}" ShortID="425419702">
+							<ReferenceList>
+								<Reference Name="Target">
+									<ObjectRef Name="tetris loop" ID="{1076FEE8-6E42-469E-9A85-8B869C8B303F}" WorkUnitID="{48502AC3-EE10-4952-8017-84D50D1C5C35}"/>
+								</Reference>
+							</ReferenceList>
+						</Action>
+					</ChildrenList>
+				</Event>
+				<Event Name="lose_Loop" ID="{C218A859-F296-483C-9F65-B62545114636}">
+					<ChildrenList>
+						<Action Name="" ID="{85F2F758-2042-46EC-B51A-4D68AC86AE03}" ShortID="1047161945">
+							<ReferenceList>
+								<Reference Name="Target">
+									<ObjectRef Name="lose_Loop" ID="{F41B351E-260A-4980-9778-347959B73DEB}" WorkUnitID="{48502AC3-EE10-4952-8017-84D50D1C5C35}"/>
+								</Reference>
+							</ReferenceList>
+						</Action>
+					</ChildrenList>
+				</Event>
+				<Event Name="damage" ID="{FB60B0F1-A95D-4F54-92DA-C3E856DA8A9C}">
+					<ChildrenList>
+						<Action Name="" ID="{26FD1C21-9552-4477-9F29-CA04C08CCBD3}" ShortID="338917325">
+							<ReferenceList>
+								<Reference Name="Target">
+									<ObjectRef Name="damage" ID="{4E28CF71-D86E-49FF-9FF0-211B4F30A45B}" WorkUnitID="{48502AC3-EE10-4952-8017-84D50D1C5C35}"/>
+								</Reference>
+							</ReferenceList>
+						</Action>
+					</ChildrenList>
+				</Event>
 			</ChildrenList>
 		</WorkUnit>
 	</Events>
