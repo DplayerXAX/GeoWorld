@@ -65,5 +65,13 @@ MonoBehaviour:
       idInternal: 0
       valueGuidInternal: 
       WwiseObjectReference: {fileID: 11400000, guid: 8ad8997a668a664478226078885baf4c, type: 2}
+  - title: Mock The Obedience
+    description: "A relentless breakbeat \u201Cnoise\u201D emerges as threatening
+      chaos descends. Creatures revel in their frenzy, defying the order we uphold
+      and leaving nothing but disorder in their wake.\r\n"
+    track:
+      idInternal: 0
+      valueGuidInternal: 
+      WwiseObjectReference: {fileID: 11400000, guid: 6d4a22ddef624264fa4a6c9c5e1f4082, type: 2}
   shaders: []
   monsters: []

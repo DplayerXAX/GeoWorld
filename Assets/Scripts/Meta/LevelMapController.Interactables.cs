@@ -16,11 +16,19 @@ public partial class LevelMapController : MonoBehaviour
     readonly Dictionary<Vector2Int, MapInteractableSpot> _spots = new();
 
     // Called from Start() after BuildSurface — the spots bind to the surface, so
-    // there has to be one. Scene-placed, so no spawning here, just indexing.
+    // there has to be one.
+    //
+    // INACTIVE ones are included deliberately. On the one visit right after a decor
+    // plot's gate level is cleared, BuildDecor hides that plot's residents so they
+    // don't hover over an empty field while it's still underground, and the grow-in
+    // cutscene switches them back on afterwards. But this indexing pass runs in
+    // Start, before the cutscene — so with the default (active-only) search the
+    // residents that were mid-reveal never made it into _spots, and stayed
+    // unclickable for the entire session even once they were visible.
     void CollectInteractableSpots()
     {
         _spots.Clear();
-        foreach (var s in FindObjectsByType<MapInteractableSpot>(FindObjectsSortMode.None))
+        foreach (var s in FindObjectsByType<MapInteractableSpot>(FindObjectsInactive.Include, FindObjectsSortMode.None))
         {
             if (s == null || s.data == null) continue;
             _spots[s.Column] = s;

@@ -107,9 +107,13 @@ public class BalanceTable : ScriptableObject
     [Header("Pricing — Type multipliers")]
     public float liftTypeMult   = 1.4f;
     public float shadowTypeMult = 0.85f;
-    [Tooltip("Basic turret price multiplier. A 1-cell turret is cells(1) × cellBasePrice(10) × this, so 0.8 ≈ 8 before the per-shop fluctuation roll — i.e. 2 cheaper than the flat 10 it used to be.")]
-    public float turretTypeMult = 0.8f;
-    // Other block types (Slow / AOE turrets included) use 1.0 implicitly.
+    [Tooltip("Basic turret price multiplier. A 1-cell turret is cells(1) × cellBasePrice(10) × this, so 0.7 ≈ 7 before the per-shop fluctuation roll.")]
+    public float turretTypeMult = 0.7f;
+    [Tooltip("Slow turret price multiplier. 0.9 ≈ 9 for a 1-cell turret, before fluctuation.")]
+    public float slowTurretTypeMult = 0.9f;
+    [Tooltip("AOE turret price multiplier. 1.2 ≈ 12 for a 1-cell turret — the priciest of the three, matching its splash.")]
+    public float aoeTurretTypeMult = 1.2f;
+    // Every non-turret block type uses 1.0 implicitly.
 
     // ═══════════════════════════════════════════════════════════════════════
     // 2. PLAYER
@@ -192,7 +196,9 @@ public class BalanceTable : ScriptableObject
     [Header("Turret — Basic (single-target, cheap)")]
     public TurretRecord basicTurret = new()
     {
-        cost = 3, damage = 1.0f, range = 4.0f, fireRate = 1.5f,
+        // damage stays 1: it rounds to an int, so a "slight" bump isn't expressible.
+        // The intended small buff is carried by fireRate instead (1.5 → 1.85).
+        cost = 3, damage = 1.0f, range = 4.0f, fireRate = 1.85f,
     };
 
     [Header("Turret — Slow (low DMG, applies slow debuff)")]
@@ -247,10 +253,10 @@ public class BalanceTable : ScriptableObject
     [Serializable]
     public class TurretRecord
     {
-        [Tooltip("UNUSED — shop price does NOT come from here. Every block (turrets included) is priced by ComputePrice: cells × cellBasePrice × rarity × type × round × fluctuation. To change what a turret costs, edit the Type multipliers above (turretTypeMult / slowTurretTypeMult / aoeTurretTypeMult), not this field.")]
+        [Tooltip("UNUSED — shop price does NOT come from here. Every block (turrets included) is priced by ComputePrice: cells × cellBasePrice × rarity × type × round × fluctuation. To change what a turret costs, edit the Type multipliers above (turretTypeMult / slowTurretTypeMult); AOE has no multiplier and sits at 1.0.")]
         [Min(1)] public int cost = 3;
 
-        [Tooltip("Damage per shot.")]
+        [Tooltip("Damage per shot. QUANTISED: TurretController.bulletDamage is an int, so this is rounded — 1.2 and 1.0 are the same turret. The smallest real step up from 1 is 2, i.e. double. Use fireRate for anything finer.")]
         public float damage = 1.0f;
         [Tooltip("World-space targeting range in cells.")]
         public float range = 4.0f;
@@ -337,19 +343,48 @@ public class BalanceTable : ScriptableObject
         _                    => 1f,
     };
 
+    /// <summary>
+    /// The table in use, for code that can't carry an Inspector reference.
+    /// TurretController is AddComponent'd onto a placed block at runtime and has no
+    /// prefab, so its own `balance` field is always null — which silently disabled
+    /// this entire turret section. Anything in that position resolves through here.
+    /// </summary>
+    public static BalanceTable Active
+    {
+        get
+        {
+            // Not cached: a ScriptableObject asset survives scene loads, so a stale
+            // cache would outlive a scene that wires a different table.
+            var rm = ResourceManager.Instance;
+            if (rm != null && rm.balance != null) return rm.balance;
+            var eb = EnemyBaseManager.Instance;
+            if (eb != null && eb.balance != null) return eb.balance;
+            return null;
+        }
+    }
+
     /// <summary>Type price multiplier from the pricing rules. Mirrors ResourceManager's switch.</summary>
     public float GetTypeMult(BlockType t) => t switch
     {
-        BlockType.Lift   => liftTypeMult,
-        BlockType.Shadow => shadowTypeMult,
-        BlockType.Turret => turretTypeMult,
-        _                => 1f,
+        BlockType.Lift       => liftTypeMult,
+        BlockType.Shadow     => shadowTypeMult,
+        BlockType.Turret     => turretTypeMult,
+        BlockType.SlowTurret => slowTurretTypeMult,
+        BlockType.AoeTurret  => aoeTurretTypeMult,
+        _                    => 1f,
     };
 
     /// <summary>Compute final shop price for a block (matches ResourceManager.ComputePrice formula). Useful for previewing balance from editor scripts without going through ResourceManager.</summary>
     public int ComputePrice(BlockData data, int round, float fluctuation)
     {
         if (data == null) return 0;
+
+        // Turrets are priced flat. Their cost is a defence budget the player plans
+        // against — "can I afford a second AOE this round" should have one answer,
+        // not a different one per shop roll. Fluctuation stays on regular blocks,
+        // where a cheap-today/expensive-tomorrow roll is the interesting part.
+        if (TurretTypes.Is(data.blockType)) fluctuation = 1f;
+
         int   cells     = (data.cells != null && data.cells.Length > 0) ? data.cells.Length : 1;
         float roundMult = 1f + Mathf.Max(0, round) * roundPriceScale;
         float raw       = cells * cellBasePrice

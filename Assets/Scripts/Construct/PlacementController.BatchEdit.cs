@@ -419,7 +419,7 @@ public partial class PlacementController
                 targetCells.Add(cell);
             }
 
-        if (allValid && !grid.HasOccupiedNeighbor26(targetCells))
+        if (allValid && !grid.HasOccupiedNeighbor18(targetCells))
             allValid = false;   // the whole formation must touch something existing
 
         RenderBatchPreview(anchor, allValid);

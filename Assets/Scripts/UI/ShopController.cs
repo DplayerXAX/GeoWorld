@@ -96,8 +96,8 @@ public class ShopController : MonoBehaviour
     public Sprite shopButtonIcon;
     [Tooltip("Refresh button diameter (px).")]
     public float refreshButtonSize = 54f;
-    [Tooltip("Refresh button offset from the rift's top-right corner (x = left, y = up).")]
-    public Vector2 refreshButtonOffset = new Vector2(0f, 6f);
+    [Tooltip("Refresh / shop button offset from the rift's bottom-right corner (x = left, y = up). The Y clears the wave progress bar, which shares this corner — at 6 the button sat straight on top of the bar and its WAVE label.")]
+    public Vector2 refreshButtonOffset = new Vector2(0f, 100f);
 
     [Header("Block style")]
     [Tooltip("Render shop blocks flat / unlit (2D look — no scene light or shadow).")]

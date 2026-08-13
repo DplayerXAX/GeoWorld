@@ -1,0 +1,43 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 18af14bdaf844c441a68207fdd09610b, type: 3}
+  m_Name: T_tutorialCleared
+  m_EditorClassIdentifier: Assembly-CSharp::DialogueConversation
+  topic: The First Victory
+  lines:
+  - character: {fileID: 11400000, guid: 80993e3c86b4337429c2d6273c8eedc2, type: 2}
+    portrait: Default
+    slot: 1
+    text: "Victory, My Lord — and the first of many, if the omens hold. The
+      Rift is sealed, and this corner of the world breathes again."
+    speakerOverride:
+    eventId:
+    actionGateId:
+  - character: {fileID: 11400000, guid: 80993e3c86b4337429c2d6273c8eedc2, type: 2}
+    portrait: Default
+    slot: 1
+    text: "Listen — even the world sounds different now. It always does, once
+      a land remembers it can be defended."
+    speakerOverride:
+    eventId:
+    actionGateId:
+  - character: {fileID: 11400000, guid: 80993e3c86b4337429c2d6273c8eedc2, type: 2}
+    portrait: Default
+    slot: 1
+    text: The further you press, the more of this world will show itself to you.
+      Keep driving back the chaos, and we shall see all of it together.
+    speakerOverride:
+    eventId:
+    actionGateId:
+  choices: []
+  autoNext: {fileID: 0}
+  skippable: 1

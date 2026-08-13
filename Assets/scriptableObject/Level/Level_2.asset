@@ -54,11 +54,137 @@ MonoBehaviour:
   mapBlockRewards:
   - {fileID: 11400000, guid: 6eeb6b311184fcb40be187ae07e15da1, type: 2}
   rewardConversation: {fileID: 0}
-  isTutorial: 0
+  isTutorial: 1
   fixedEndpoints: 0
   startCell: {x: 0, y: 0, z: 0}
   endCell: {x: 0, y: 0, z: 0}
-  tutorialSteps: []
+  tutorialSteps:
+  - kind: 5
+    block: {fileID: 0}
+    origin: {x: 0, y: 0, z: 0}
+    rotation90: {x: 0, y: 0, z: 0}
+    cellsOverride: []
+    waitSeconds: 0
+    count: 1
+    inputKey: 323
+    pathLength: 0
+    freeOperations: 1
+    hideInCombat: 0
+    requiredWave: 0
+    unlocksOps: 
+    cameraFocus: 0
+    focusZoom: 0
+    openPanel: 0
+    hint: This ground answers to ORDER, My Lord. Where blocks of one colour stand joined face to face, they fall into rank — and whatever marches past them is dragged to a crawl.
+    conversation: {fileID: 0}
+    speaker: {fileID: 11400000, guid: 80993e3c86b4337429c2d6273c8eedc2, type: 2}
+    speakerSlot: 1
+    speakerPortrait: 
+  - kind: 5
+    block: {fileID: 0}
+    origin: {x: 0, y: 0, z: 0}
+    rotation90: {x: 0, y: 0, z: 0}
+    cellsOverride: []
+    waitSeconds: 0
+    count: 1
+    inputKey: 323
+    pathLength: 0
+    freeOperations: 1
+    hideInCombat: 0
+    requiredWave: 0
+    unlocksOps: 
+    cameraFocus: 0
+    focusZoom: 0
+    openPanel: 0
+    hint: Three of a kind, touching, is enough to wake it. And every block that later joins that group is taken into it as well — so build the mass. Do not scatter it.
+    conversation: {fileID: 0}
+    speaker: {fileID: 11400000, guid: 80993e3c86b4337429c2d6273c8eedc2, type: 2}
+    speakerSlot: 1
+    speakerPortrait: 
+  - kind: 4
+    block: {fileID: 0}
+    origin: {x: 0, y: 0, z: 0}
+    rotation90: {x: 0, y: 0, z: 0}
+    cellsOverride: []
+    waitSeconds: 0
+    count: 3
+    inputKey: 323
+    pathLength: 0
+    freeOperations: 1
+    hideInCombat: 0
+    requiredWave: 0
+    unlocksOps: 
+    cameraFocus: 0
+    focusZoom: 0
+    openPanel: 0
+    hint: Set down three blocks of one colour, each touching the last. Let us see them fall in line.
+    conversation: {fileID: 0}
+    speaker: {fileID: 11400000, guid: 80993e3c86b4337429c2d6273c8eedc2, type: 2}
+    speakerSlot: 1
+    speakerPortrait: 
+  - kind: 5
+    block: {fileID: 0}
+    origin: {x: 0, y: 0, z: 0}
+    rotation90: {x: 0, y: 0, z: 0}
+    cellsOverride: []
+    waitSeconds: 0
+    count: 1
+    inputKey: 323
+    pathLength: 0
+    freeOperations: 1
+    hideInCombat: 0
+    requiredWave: 0
+    unlocksOps: 
+    cameraFocus: 0
+    focusZoom: 0
+    openPanel: 1
+    hint: There. Look to the synergy panel at your left — ORDER now stands among your blessings, and will hold while those blocks remain joined.
+    conversation: {fileID: 0}
+    speaker: {fileID: 11400000, guid: 80993e3c86b4337429c2d6273c8eedc2, type: 2}
+    speakerSlot: 1
+    speakerPortrait: 
+  - kind: 5
+    block: {fileID: 0}
+    origin: {x: 0, y: 0, z: 0}
+    rotation90: {x: 0, y: 0, z: 0}
+    cellsOverride: []
+    waitSeconds: 0
+    count: 1
+    inputKey: 323
+    pathLength: 0
+    freeOperations: 1
+    hideInCombat: 0
+    requiredWave: 0
+    unlocksOps: 
+    cameraFocus: 0
+    focusZoom: 0
+    openPanel: 0
+    hint: One more counsel. ORDER stays the enemy's advance, but it does not feed you. Close a loop of ABUNDANCE now and then, or you will run out of blocks long before you run out of foes.
+    conversation: {fileID: 0}
+    speaker: {fileID: 11400000, guid: 80993e3c86b4337429c2d6273c8eedc2, type: 2}
+    speakerSlot: 1
+    speakerPortrait: 
+  - kind: 2
+    block: {fileID: 0}
+    origin: {x: 0, y: 0, z: 0}
+    rotation90: {x: 0, y: 0, z: 0}
+    cellsOverride: []
+    waitSeconds: 0
+    count: 1
+    inputKey: 32
+    pathLength: 0
+    freeOperations: 1
+    hideInCombat: 0
+    requiredWave: 0
+    unlocksOps: 
+    cameraFocus: 0
+    focusZoom: 0
+    openPanel: 0
+    hint: When your line is set, press Space. Let them come.
+    conversation: {fileID: 0}
+    speaker: {fileID: 11400000, guid: 80993e3c86b4337429c2d6273c8eedc2, type: 2}
+    speakerSlot: 1
+    speakerPortrait: 
   startingLayout: {fileID: 11400000, guid: 38871691a215fd945ae711b604b680e6, type: 2}
   overrideEndpointDistance: 0
   endpointMinDistance: 5

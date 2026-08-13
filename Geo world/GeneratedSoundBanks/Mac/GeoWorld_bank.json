@@ -10,7 +10,7 @@
     "Type": "User",
     "GUID": "{FBAC0406-FA36-4CC0-8121-80F7B6376C7E}",
     "Language": "SFX",
-    "Hash": "{7B1B5E11-CCEA-C954-E851-C7606C0C37AA}",
+    "Hash": "{3C6BE654-2CDD-D98F-EFE5-926AD5731E10}",
     "ObjectPath": "\\SoundBanks\\Default Work Unit\\GeoWorld_bank",
     "ShortName": "GeoWorld_bank",
     "Path": "GeoWorld_bank.bnk",
@@ -221,7 +221,7 @@
       "Streaming": "false",
       "Location": "Memory",
       "ShortName": "geo tetris.wav",
-      "CachePath": "0C/{0CAC642D-69E8-B3B7-223E-E9FAFC2F32CA}.wem"
+      "CachePath": "7A/{7A55ACED-79D7-E2AC-813A-38C24F3C439E}.wem"
      },
      {
       "Id": "633751974",
@@ -270,6 +270,14 @@
       "Location": "Memory",
       "ShortName": "Piecing together.wav",
       "CachePath": "07/{07380261-5851-21B4-FB73-0AA3725DE03D}.wem"
+     },
+     {
+      "Id": "1057243432",
+      "Language": "SFX",
+      "Streaming": "false",
+      "Location": "Memory",
+      "ShortName": "Mock The Obedience.wav",
+      "CachePath": "D9/{D9CB22BD-D355-3E7C-48F9-59B84978D8FD}.wem"
      },
      {
       "Id": "1062488858",
@@ -373,6 +381,18 @@
           "Id": "910080498"
          }
         ]
+       }
+      ]
+     },
+     {
+      "Id": "3688152761",
+      "Name": "boss_fight",
+      "ObjectPath": "\\Events\\Default Work Unit\\boss_fight",
+      "GUID": "{4ABA170F-9CAF-42DC-839C-B82A0DC6C250}",
+      "DurationType": "Infinite",
+      "MediaRefs": [
+       {
+        "Id": "1057243432"
        }
       ]
      },
@@ -888,6 +908,6 @@
     ]
    }
   ],
-  "FileHash": "{0CB286E8-2F61-4E1C-91C6-750E0D866253}"
+  "FileHash": "{AD85CFD3-7A9C-1035-B8C7-DDF243446E03}"
  }
 }

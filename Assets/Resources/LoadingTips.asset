@@ -26,3 +26,5 @@ MonoBehaviour:
   - You may place new turrets and blocks during combat, but you can't edit the existed
     ones.
   - You may also place block and turret when pausing.
+  - When some UI is blocking the view, try holding Left Shift!
+  - During the battle, hold Left Shift to display enemies' HP temporarily.

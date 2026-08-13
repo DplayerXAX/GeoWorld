@@ -24,6 +24,7 @@ Event	ID	Name			Wwise Object Path	Notes
 	2833906173	Ending_Loop			\Default Work Unit\Ending_Loop	
 	3140303807	lose_Loop			\Default Work Unit\lose_Loop	
 	3258153068	TimeDrain			\Default Work Unit\TimeDrain	
+	3688152761	boss_fight			\Default Work Unit\boss_fight	
 	4131907033	Piece_Normal			\Default Work Unit\Piece_Normal	
 
 Switch Group	ID	Name			Wwise Object Path	Notes
@@ -76,13 +77,14 @@ In Memory Audio	ID	Name	Audio source file		Wwise Object Path	Notes	Data Size
 	566543099	ambient bgm	.cache\28\{28D4672F-2484-1CD6-8135-CDAD372308AD}.wem		\Containers\Default Work Unit\Music_BGM\Calm_BGM\change bgm\ambient bgm		5644896
 	574625576	select	.cache\9D\{9D399CF8-EE15-22F5-5126-1EAACF32A447}.wem		\Containers\Default Work Unit\select\select		216672
 	577639329	Firmament's Farewell	.cache\78\{789133AD-F88C-D585-E24A-AA2F0F54BD84}.wem		\Containers\Default Work Unit\Ending song\Firmament's Farewell\Firmament's Farewell		28772136
-	586490051	geo tetris	.cache\0C\{0CAC642D-69E8-B3B7-223E-E9FAFC2F32CA}.wem		\Containers\Default Work Unit\tetris loop\tetris\geo tetris		4838496
+	586490051	geo tetris	.cache\7A\{7A55ACED-79D7-E2AC-813A-38C24F3C439E}.wem		\Containers\Default Work Unit\tetris loop\tetris\geo tetris		4838496
 	633751974	New Music Track_06	.cache\7D\{7D33FDDD-17CE-8BDA-C0FB-75D5FB7BA202}.wem		\Containers\Default Work Unit\Bdim\New Music Track_06		352896
 	759153527	ambient bgm	.cache\EA\{EAE24123-C675-595C-B50B-C5C8DBB2DC3C}.wem		\Containers\Default Work Unit\Music_BGM\Calm_BGM\ambient bgm\ambient bgm		5644896
 	799708269	New Music Track_06	.cache\19\{1911F0A7-4D8E-A328-97B7-A96A592875B7}.wem		\Containers\Default Work Unit\G\New Music Track_06		352896
 	888948449	ambient bgm	.cache\80\{802F01CA-1B7C-C650-FF9E-451F3BE2007C}.wem		\Containers\Default Work Unit\Music_BGM\Calm_BGM\up bgm\ambient bgm		5644896
 	910080498	geo fight	.cache\93\{9315BEBF-32E3-5C09-B5B1-CF8354B77B71}.wem		\Containers\Default Work Unit\Music_BGM\Battle_BGM\geo fight\geo fight		19756896
 	969998505	Piecing together	.cache\07\{07380261-5851-21B4-FB73-0AA3725DE03D}.wem		\Containers\Default Work Unit\Music_BGM\Piece_BGM\Piecing together\Piecing together		7091376
+	1057243432	Firmament's Farewell	.cache\D9\{D9CB22BD-D355-3E7C-48F9-59B84978D8FD}.wem		\Containers\Default Work Unit\boss_fight\Mock The Obedience\Firmament's Farewell		9732512
 	1062488858	7	.cache\6A\{6AA23FAE-6D57-D56F-8BE8-4188A088EA5D}.wem		\Containers\Default Work Unit\SC_Note\7		352896
 	1072811695	New Music Track_04	.cache\3E\{3E50F188-05FB-4E0D-B3A8-1EB2FC689910}.wem		\Containers\Default Work Unit\Dm\New Music Track_04		352896
 

@@ -86,6 +86,10 @@ public class TurretBullet : MonoBehaviour
 
         switch (_turret.mode)
         {
+            // Slow no longer fires projectiles (TurretController.Fire draws a beam
+            // and applies the hold directly), but the case stays: a turret whose
+            // mode is switched mid-flight would otherwise fall through to plain
+            // damage and silently drop the debuff.
             case TurretController.Mode.Slow:
                 enemy.TakeDamage(_damage);
                 EnemySlowEffect.Apply(enemy, _turret.slowDuration, _turret.slowMultiplier);
@@ -94,6 +98,11 @@ public class TurretBullet : MonoBehaviour
             case TurretController.Mode.Aoe:
             {
                 Vector3 blastCenter = transform.position;
+
+                // Drawn at the real aoeRadius, so what splashes and what the player
+                // sees splash are the same circle.
+                TurretShotFx.Blast(blastCenter, _turret.aoeRadius);
+
                 var mgr = EnemyBaseManager.Instance;
                 if (mgr != null)
                 {

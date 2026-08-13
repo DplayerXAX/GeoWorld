@@ -70,7 +70,7 @@ public class BlockTetris3D : MonoBehaviour
     Camera        _cam;
     Transform     _root, _deck;
     Canvas        _canvas;
-    TMP_Text      _scoreText, _overText;
+    TMP_Text      _scoreText, _overLeft, _overRight;
 
     readonly bool[,,]      _filled = new bool[W, H, D];
     readonly Transform[,,] _cubes  = new Transform[W, H, D];
@@ -157,7 +157,9 @@ public class BlockTetris3D : MonoBehaviour
         _pausedMusicIds.Clear();
         TryPause(AudioManager.Instance != null ? AudioManager.Instance.BGM : null);
         TryPause(AudioManager.Instance != null ? AudioManager.Instance.BGM_fight : null);
-        TryPause(LevelMapController.Instance != null ? LevelMapController.Instance.timeLoop : null);
+        // ActiveLoop, not timeLoop — the map swaps its ambient track once the
+        // tutorial is cleared, and pausing the wrong event pauses nothing.
+        TryPause(LevelMapController.Instance != null ? LevelMapController.Instance.ActiveLoop : null);
     }
 
     void TryPause(AK.Wwise.Event evt)
@@ -228,7 +230,9 @@ public class BlockTetris3D : MonoBehaviour
         if (Input.GetKey(KeyCode.E)) _fallTimer += Time.unscaledDeltaTime * 12f;   // soft drop
         if (Input.GetKeyDown(KeyCode.Space))                                        // hard drop
         {
-            while (TryMove(Vector3Int.down)) _score += 1;
+            int fell = 0;
+            while (TryMove(Vector3Int.down)) { _score += 1; fell++; }
+            _diveCells = fell;
             Lock();
         }
     }
@@ -345,14 +349,25 @@ public class BlockTetris3D : MonoBehaviour
             var p = _piecePos + c;
             if (p.y < 0 || p.y >= H) continue;
             _filled[p.x, p.y, p.z] = true;
-            _cubes[p.x, p.y, p.z]  = MakeCube(p, _pieceColor);
+            var cube = _cubes[p.x, p.y, p.z] = MakeCube(p, _pieceColor);
+            if (_diveCells > 0)
+                cube.gameObject.AddComponent<PiecePlummet>().Init(cube.localPosition, _diveCells * Cell);
         }
+        _diveCells = 0;
+        // The piece is part of the well now, not a thing in flight. Everything
+        // below this line — layer clears, the garbage raise — has to reason about
+        // it as grid content; leaving _piece pointing at it invites exactly the
+        // kind of double-counting RaiseGarbage used to do.
+        _piece = null;
         ClearPieceCubes();
         ClearGhostCubes();
 
         int cleared = ClearFullLayers();
         if (cleared > 0)
         {
+            Shockwave(_lastClearY, cleared);
+            StartleCrows(16 + cleared * 8);
+
             // Quadratic, like Tetris' line bonus — clearing several at once is the
             // whole reason to stack rather than dump every piece flat.
             _score  += 100 * cleared * cleared * _level;
@@ -396,7 +411,7 @@ public class BlockTetris3D : MonoBehaviour
                     var t = _cubes[x, y, z] = _cubes[x, y - 1, z];
                     _cubes[x, y - 1, z]  = null;
                     _filled[x, y - 1, z] = false;
-                    if (t != null) t.localPosition = CellPos(new Vector3Int(x, y, z));
+                    MoveCube(t, new Vector3Int(x, y, z));   // same stale-home hazard as CollapseLayer
                 }
 
         int holes = Random.Range(1, 4);
@@ -413,13 +428,23 @@ public class BlockTetris3D : MonoBehaviour
                 _cubes[x, 0, z]  = MakeCube(new Vector3Int(x, 0, z), junk);
             }
 
-        // The piece in play may now be intersecting what just rose into it.
-        if (_piece != null && !Fits(_piece, _piecePos)) GameOver();
+        // No "does the piece in play still fit" check here. Garbage only ever rises
+        // from Lock(), i.e. after the piece has been written into _filled — so that
+        // test was comparing the piece against its own just-locked cells and failing
+        // every single time, ending the run on the first raise no matter how empty
+        // the well was. Whether the NEXT piece has room is SpawnPiece's job, and it
+        // already checks.
     }
+
+    // Height of the LOWEST layer cleared by the last ClearFullLayers call. The
+    // shockwave rides this rather than the piece's landing height — the wave should
+    // come off the line that vanished, which isn't always where the piece stopped.
+    int _lastClearY;
 
     int ClearFullLayers()
     {
         int cleared = 0;
+        _lastClearY = 0;
         for (int y = 0; y < H; y++)
         {
             bool full = true;
@@ -428,6 +453,7 @@ public class BlockTetris3D : MonoBehaviour
                     if (!_filled[x, y, z]) { full = false; break; }
             if (!full) continue;
 
+            if (cleared == 0) _lastClearY = y;
             CollapseLayer(y);
             cleared++;
             y--;   // everything shifted down — re-test this height
@@ -454,8 +480,40 @@ public class BlockTetris3D : MonoBehaviour
                     _cubes[x, up - 1, z] = t;
                     _cubes[x, up, z]     = null;
                     _filled[x, up, z]    = false;
-                    if (t != null) t.localPosition = CellPos(new Vector3Int(x, up - 1, z));
+                    MoveCube(t, new Vector3Int(x, up - 1, z));
                 }
+    }
+
+    // The ONLY way a settled cube may be repositioned.
+    //
+    // A cube that just hard-dropped still carries a PiecePlummet, which drives its
+    // localPosition toward a home captured when it locked. Writing localPosition
+    // directly here worked for one frame and was then stomped back to that stale
+    // home — so a two-layer piece whose bottom layer cleared left its top layer
+    // hanging exactly one cell up, permanently.
+    void MoveCube(Transform t, Vector3Int cell)
+    {
+        if (t == null) return;
+        var pos = CellPos(cell);
+        t.localPosition = pos;
+        var plummet = t.GetComponent<PiecePlummet>();
+        if (plummet != null) plummet.Rebase(pos);
+    }
+
+    // Both halves of the settlement banner. Null on either side hides it, so the
+    // reset path doesn't need its own teardown.
+    void SetOverColumns(string left, string right)
+    {
+        if (_overLeft != null)
+        {
+            _overLeft.gameObject.SetActive(left != null);
+            if (left != null) _overLeft.text = left;
+        }
+        if (_overRight != null)
+        {
+            _overRight.gameObject.SetActive(right != null);
+            if (right != null) _overRight.text = right;
+        }
     }
 
     void GameOver()
@@ -468,13 +526,10 @@ public class BlockTetris3D : MonoBehaviour
         if (_newRecord) SaveSystem.Save();
         int best = SaveSystem.Profile.GetMinigameBest(_scoreId);
 
-        if (_overText != null)
-        {
-            _overText.gameObject.SetActive(true);
-            string line = _newRecord ? "NEW RECORD" : $"best {best}";
-            _overText.text = $"WELL FULL\n<size=60%>score {_score}   ·   {line}"
-                           + "\n<size=80%>R to retry   ·   Esc to leave</size></size>";
-        }
+        string line = _newRecord ? "NEW RECORD" : $"best {best}";
+        SetOverColumns(
+            left:  $"WELL\n<size=60%>score {_score}\n<size=80%>R to retry</size></size>",
+            right: $"FULL\n<size=60%>{line}\n<size=80%>Esc to leave</size></size>");
     }
 
     void Restart()
@@ -489,7 +544,7 @@ public class BlockTetris3D : MonoBehaviour
                 }
         _score = 0; _layers = 0; _level = 1; _piecesPlaced = 0;
         _fallInterval = 0.8f; _gameOver = false; _newRecord = false;
-        if (_overText != null) _overText.gameObject.SetActive(false);
+        SetOverColumns(null, null);   // null = hide both
         RefreshScore();
         SpawnPiece();
     }
@@ -618,12 +673,9 @@ public class BlockTetris3D : MonoBehaviour
         // taller plinth has to grow DOWNWARD — centre at -BaseHeight/2, never
         // +BaseHeight/2, or the slab rises into the playfield and swallows the
         // bottom rows of blocks.
-        var floor = GameObject.CreatePrimitive(PrimitiveType.Cube);
-        floor.name = "Floor";
-        floor.transform.SetParent(_deck, false);
+        var floor = MakeBox("Floor", _deck);
         floor.transform.localPosition = new Vector3(0f, -BaseHeight * 0.5f, 0f);
         floor.transform.localScale    = new Vector3(W * Cell, BaseHeight, D * Cell);
-        Destroy(floor.GetComponent<Collider>());
         MpbColor.Set(floor.GetComponent<Renderer>(), GeoPalette.Ink);
 
         // Corner posts the full height of the well — the only cue for how much
@@ -632,12 +684,9 @@ public class BlockTetris3D : MonoBehaviour
         {
             float sx = (i & 1) == 0 ? -1f : 1f;
             float sz = (i & 2) == 0 ? -1f : 1f;
-            var post = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            post.name = $"Post{i}";
-            post.transform.SetParent(_deck, false);
+            var post = MakeBox($"Post{i}", _deck);
             post.transform.localPosition = new Vector3(sx * W * Cell * 0.5f, H * Cell * 0.5f, sz * D * Cell * 0.5f);
             post.transform.localScale    = new Vector3(0.09f, H * Cell, 0.09f);
-            Destroy(post.GetComponent<Collider>());
             // Fence timber, like the farm's own posts — and mid-toned, so it reads
             // against the dark upper sky AND the lit wheat the lower half crosses.
             MpbColor.Set(post.GetComponent<Renderer>(), new Color(0.55f, 0.40f, 0.26f));
@@ -659,23 +708,63 @@ public class BlockTetris3D : MonoBehaviour
         // DeckLift puts it — the pillar grows as the board rises.
         float pillarTop = DeckLift - BaseHeight;
         float pillarLen = FieldDrop + pillarTop;
-        var pillar = GameObject.CreatePrimitive(PrimitiveType.Cube);
-        pillar.name = "Pillar";
-        pillar.transform.SetParent(_root, false);
+        var pillar = MakeBox("Pillar", _root);
         pillar.transform.localPosition = new Vector3(0f, pillarTop - pillarLen * 0.5f, 0f);
         // Slender rather than tapered — a real taper would need its own mesh, and
         // fog hides the lower two-thirds anyway.
         pillar.transform.localScale = new Vector3(Cell * 0.55f, pillarLen, Cell * 0.55f);
-        Destroy(pillar.GetComponent<Collider>());
         MpbColor.Set(pillar.GetComponent<Renderer>(), new Color(0.55f, 0.40f, 0.26f));
 
-        var field = GameObject.CreatePrimitive(PrimitiveType.Cube);
-        field.name = "FieldFarBelow";
-        field.transform.SetParent(_root, false);
+        var field = MakeBox("FieldFarBelow", _root);
         field.transform.localPosition = new Vector3(0f, -FieldDrop - 1f, 0f);
         field.transform.localScale    = new Vector3(FieldDrop * 1.6f, 2f, FieldDrop * 1.6f);
-        Destroy(field.GetComponent<Collider>());
         MpbColor.Set(field.GetComponent<Renderer>(), new Color(0.62f, 0.58f, 0.24f));   // decor.cropColor
+    }
+
+    // Every non-block piece of scenery goes through here, because the material a
+    // primitive ships with can't be trusted in a player.
+    //
+    // GameObject.CreatePrimitive assigns Unity's built-in Default-Material, which
+    // belongs to the BUILT-IN pipeline. It resolves fine in the editor, but a URP
+    // build has no reason to include it, so the deck, posts and pillar came back
+    // untextured while the blocks stayed correct — the blocks come from a real
+    // prefab, whose material IS a shipped asset. Borrowing that same material is
+    // what makes these survive the build, and it keeps MpbColor tinting working
+    // since it's the exact shader the per-cube colouring already targets.
+    GameObject MakeBox(string name, Transform parent)
+    {
+        var go = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        go.name = name;
+        go.transform.SetParent(parent, false);
+        Destroy(go.GetComponent<Collider>());
+
+        var mat = DeckMaterial();
+        if (mat != null) go.GetComponent<Renderer>().sharedMaterial = mat;
+        return go;
+    }
+
+    Material _deckMat;
+
+    Material DeckMaterial()
+    {
+        if (_deckMat != null) return _deckMat;
+
+        if (_cubePrefab != null)
+        {
+            var r = _cubePrefab.GetComponentInChildren<Renderer>();
+            if (r != null) _deckMat = r.sharedMaterial;
+        }
+
+        // Only reached on Launch's no-prefab fallback path. URP/Lit is in any URP
+        // build by construction, unlike the primitive default.
+        if (_deckMat == null)
+        {
+            var sh = Shader.Find("Universal Render Pipeline/Lit");
+            if (sh != null) _deckMat = new Material(sh) { name = "TetrisDeck" };
+            else Debug.LogWarning("[StackWell] No cube prefab and no URP/Lit — scenery will use the primitive default.");
+        }
+
+        return _deckMat;
     }
 
     void BuildCamera()
@@ -753,6 +842,311 @@ public class BlockTetris3D : MonoBehaviour
         _cam.transform.LookAt(focus - Vector3.up * (FrameLift * Cell));
     }
 
+    // ═════════════════════════════════════════════════════════════════════════
+    // Juice
+    // ═════════════════════════════════════════════════════════════════════════
+
+    // ── Hard-drop plummet ────────────────────────────────────────────────────
+    // The PIECE dives, not the camera. A hard drop is logically instant — the
+    // cells are already written into the grid by the time anything renders — so
+    // the blocks would otherwise just teleport, and a drop from the top of the
+    // well looks exactly like a drop from one cell up.
+    //
+    // This replays that fall cosmetically: the cubes start where the piece was,
+    // accelerate down to where they actually are, stretch along the way and squash
+    // on arrival. Purely visual — the board state never waits for it.
+
+    // Cells the piece fell on the current hard drop, read by Lock() when it builds
+    // the locked cubes. 0 = it wasn't a hard drop, so no plummet.
+    int _diveCells;
+
+    // ── Layer-clear shockwave ────────────────────────────────────────────────
+    // A flat ring thrown out from the layer that vanished, at that layer's height.
+    // Flat and horizontal on purpose: it has to read as coming off the LINE, and a
+    // sphere would just look like an explosion anywhere in the well.
+
+    void Shockwave(int layerY, int layers)
+    {
+        if (_deck == null) return;
+
+        var go = new GameObject("Shockwave");
+        go.transform.SetParent(_deck, false);
+        go.transform.localPosition = new Vector3(0f, (layerY + 0.5f) * Cell, 0f);
+        go.transform.localRotation = Quaternion.identity;
+
+        go.AddComponent<MeshFilter>().sharedMesh = ShockMesh();
+        var mr = go.AddComponent<MeshRenderer>();
+        mr.sharedMaterial    = GhostMaterial();
+        mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        mr.receiveShadows    = false;
+
+        // Bigger multi-clears throw a wider, longer-lived wave — the payoff has to
+        // scale with the play or clearing four reads the same as clearing one.
+        go.AddComponent<ShockRing>().Init(mr,
+            Mathf.Max(W, D) * Cell * (1.6f + layers * 0.55f),
+            0.42f + layers * 0.08f);
+    }
+
+    // ── Startled crows ───────────────────────────────────────────────────────
+    // Silhouettes that scatter out of the wheat when a layer goes. They exist to
+    // make the world react to the play: without them the clear happens inside the
+    // well and the enormous sky around it stays completely indifferent.
+
+    // Distance band the flock lives in. Far enough to sit on the horizon rather
+    // than beside the well, but inside the fog's useful range: fog runs
+    // 38 → 180 units, so at 55-100 they're 12-45% faded into the sky — reading as
+    // distant without dissolving into it.
+    const float CrowNear = 55f;
+    const float CrowFar  = 100f;
+
+    void StartleCrows(int count)
+    {
+        if (_root == null) return;
+
+        for (int i = 0; i < count; i++)
+        {
+            float a = Random.Range(0f, Mathf.PI * 2f);
+            float r = Random.Range(CrowNear, CrowFar);
+            // Well below eye level, so they come UP past the horizon rather than
+            // appearing on it — a bird already at cruising height isn't startled.
+            var start = new Vector3(Mathf.Cos(a) * r, Random.Range(-18f, -4f), Mathf.Sin(a) * r);
+
+            var go = new GameObject("Crow");
+            go.transform.SetParent(_root, false);
+            go.transform.localPosition = start;
+            // Big in world units purely because of the distance — at 70 units out,
+            // the small silhouettes this started with were a couple of pixels.
+            go.transform.localScale = Vector3.one * Random.Range(2.6f, 4.6f);
+
+            go.AddComponent<MeshFilter>().sharedMesh = CrowMesh();
+            var mr = go.AddComponent<MeshRenderer>();
+            mr.sharedMaterial    = GhostMaterial();
+            mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            mr.receiveShadows    = false;
+
+            // CLIMBING, first and foremost — they've been startled off the ground,
+            // and a flock that mostly slides sideways reads as migrating past. The
+            // lateral component is only there to fan them out so they don't rise as
+            // one rigid sheet.
+            var out_  = new Vector3(Mathf.Cos(a), 0f, Mathf.Sin(a));
+            var side  = new Vector3(-out_.z, 0f, out_.x) * (Random.value < 0.5f ? -1f : 1f);
+            var vel   = Vector3.up * Random.Range(14f, 23f)
+                      + side * Random.Range(3f, 8f)
+                      + out_ * Random.Range(1f, 5f);
+            go.AddComponent<CrowFlight>().Init(mr, vel, Random.Range(0f, Mathf.PI * 2f));
+        }
+    }
+
+    // ── Juice meshes ─────────────────────────────────────────────────────────
+
+    static Mesh _shockMesh, _crowMesh;
+
+    // Flat annulus in the XZ plane, unit outer radius 0.5, drawn double-sided so
+    // it still reads when the camera drops below its plane mid-dive.
+    static Mesh ShockMesh()
+    {
+        if (_shockMesh != null) return _shockMesh;
+        var v = new List<Vector3>();
+        var t = new List<int>();
+
+        const int seg = 28;
+        const float rOut = 0.5f, rIn = 0.36f;
+        for (int i = 0; i < seg; i++)
+        {
+            float a0 = i / (float)seg * Mathf.PI * 2f;
+            float a1 = (i + 1) / (float)seg * Mathf.PI * 2f;
+            Vector3 o0 = new(Mathf.Cos(a0) * rOut, 0f, Mathf.Sin(a0) * rOut);
+            Vector3 o1 = new(Mathf.Cos(a1) * rOut, 0f, Mathf.Sin(a1) * rOut);
+            Vector3 i0 = new(Mathf.Cos(a0) * rIn,  0f, Mathf.Sin(a0) * rIn);
+            Vector3 i1 = new(Mathf.Cos(a1) * rIn,  0f, Mathf.Sin(a1) * rIn);
+
+            int s = v.Count;
+            v.Add(i0); v.Add(i1); v.Add(o1); v.Add(o0);
+            t.Add(s); t.Add(s + 1); t.Add(s + 2);
+            t.Add(s); t.Add(s + 2); t.Add(s + 3);
+            t.Add(s); t.Add(s + 2); t.Add(s + 1);   // back faces
+            t.Add(s); t.Add(s + 3); t.Add(s + 2);
+        }
+
+        _shockMesh = new Mesh { name = "TetrisShock", hideFlags = HideFlags.DontSave };
+        _shockMesh.SetVertices(v);
+        _shockMesh.SetTriangles(t, 0);
+        _shockMesh.RecalculateBounds();
+        return _shockMesh;
+    }
+
+    // Crow: two swept wing quads meeting at a small body, lying in the XZ plane so
+    // the flap can be a Y-scale on each wing root. A silhouette from any angle,
+    // which is all it needs to be against a bright sky.
+    static Mesh CrowMesh()
+    {
+        if (_crowMesh != null) return _crowMesh;
+        var v = new List<Vector3>();
+        var t = new List<int>();
+
+        void Wing(float s)
+        {
+            int i = v.Count;
+            v.Add(new Vector3(0f, 0f, -0.10f));            // body rear
+            v.Add(new Vector3(0f, 0f, 0.22f));             // body front
+            v.Add(new Vector3(s * 0.55f, 0.14f, 0.02f));   // wing tip, raised
+            v.Add(new Vector3(s * 0.30f, 0.03f, -0.18f));  // trailing edge
+            t.Add(i); t.Add(i + 1); t.Add(i + 2);
+            t.Add(i); t.Add(i + 2); t.Add(i + 3);
+            t.Add(i); t.Add(i + 2); t.Add(i + 1);          // back faces
+            t.Add(i); t.Add(i + 3); t.Add(i + 2);
+        }
+        Wing(1f);
+        Wing(-1f);
+
+        _crowMesh = new Mesh { name = "TetrisCrow", hideFlags = HideFlags.DontSave };
+        _crowMesh.SetVertices(v);
+        _crowMesh.SetTriangles(t, 0);
+        _crowMesh.RecalculateBounds();
+        return _crowMesh;
+    }
+
+    // ── Juice behaviours ─────────────────────────────────────────────────────
+
+    // Replays a hard drop on one cube: rush down from where the piece was, stretched
+    // along the fall, then squash flat on arrival and spring back.
+    class PiecePlummet : MonoBehaviour
+    {
+        Vector3 _home, _scale;
+        float   _height, _t;
+
+        // Longer falls take a little longer, but nowhere near proportionally — a
+        // true constant speed makes a full-height drop feel sluggish, and the whole
+        // point of a hard drop is that it's decisive. Even the longest fall is under
+        // four frames at 60fps; past that it stops reading as a slam.
+        float Fall  => Mathf.Clamp(0.026f + _height * 0.005f, 0.028f, 0.075f);
+        const float Land = 0.13f;   // squash + recover
+
+        // Called when the board moves this cube out from under a running animation
+        // (a layer clearing below it, garbage rising under it). Without this the
+        // animation would keep driving it back to where it locked.
+        public void Rebase(Vector3 home)
+        {
+            _home = home;
+            if (_t >= Fall) transform.localPosition = _home;   // past the fall, the squash holds it in place
+        }
+
+        public void Init(Vector3 home, float height)
+        {
+            _home   = home;
+            _height = Mathf.Max(0f, height);
+            _scale  = transform.localScale;
+            transform.localPosition = _home + Vector3.up * _height;
+            enabled = _height > 0.001f;
+            if (!enabled) Destroy(this);
+        }
+
+        void Update()
+        {
+            _t += Time.unscaledDeltaTime;
+
+            if (_t < Fall)
+            {
+                float k = _t / Fall;
+                float e = k * k;                      // accelerating — gravity, not a lerp
+                transform.localPosition = _home + Vector3.up * (_height * (1f - e));
+                // Stretch along the fall, thinned across it so the cube keeps its
+                // volume. This is what turns a fast move into a visible streak.
+                float s = 1f + 0.9f * k;
+                transform.localScale = new Vector3(_scale.x / Mathf.Sqrt(s), _scale.y * s, _scale.z / Mathf.Sqrt(s));
+                return;
+            }
+
+            transform.localPosition = _home;
+
+            float lk = Mathf.Clamp01((_t - Fall) / Land);
+            if (lk >= 1f)
+            {
+                transform.localScale = _scale;
+                Destroy(this);
+                return;
+            }
+
+            // Squash hard on contact, then overshoot slightly on the way back —
+            // stopping dead at the rest scale reads as the animation being cut off.
+            float squash = Mathf.Sin(lk * Mathf.PI) * (1f - lk) * 0.55f;
+            transform.localScale = new Vector3(_scale.x * (1f + squash * 0.6f),
+                                               _scale.y * (1f - squash),
+                                               _scale.z * (1f + squash * 0.6f));
+        }
+    }
+
+    class ShockRing : MonoBehaviour
+    {
+        MeshRenderer _mr;
+        float _maxRadius, _life, _t;
+
+        public void Init(MeshRenderer mr, float maxRadius, float life)
+        {
+            _mr = mr; _maxRadius = maxRadius; _life = Mathf.Max(0.05f, life);
+        }
+
+        void Update()
+        {
+            _t += Time.unscaledDeltaTime;
+            float k = Mathf.Clamp01(_t / _life);
+            if (k >= 1f) { Destroy(gameObject); return; }
+
+            // Fast out of the gate, easing as it goes — a linear expansion reads
+            // as a growing circle, not as something that was thrown.
+            float e = 1f - (1f - k) * (1f - k);
+            float r = Mathf.Lerp(0.4f, _maxRadius, e);
+            transform.localScale = new Vector3(r, 1f, r);
+
+            var c = GeoPalette.Paper;
+            MpbColor.Set(_mr, new Color(c.r, c.g, c.b, (1f - k) * 0.75f));
+        }
+    }
+
+    class CrowFlight : MonoBehaviour
+    {
+        MeshRenderer _mr;
+        Vector3 _vel;
+        float   _phase, _t;
+        // Long, because at horizon range they need real screen time to cross
+        // anything. A 3-second life out there is a flicker at the edge of frame.
+        const float Life = 6f;
+
+        public void Init(MeshRenderer mr, Vector3 velocity, float phase)
+        {
+            _mr = mr; _vel = velocity; _phase = phase;
+            MpbColor.Set(mr, new Color(0f, 0f, 0f, 0f));   // fades IN — they enter, they don't pop
+        }
+
+        void Update()
+        {
+            float dt = Time.unscaledDeltaTime;
+            _t += dt;
+            if (_t >= Life) { Destroy(gameObject); return; }
+
+            // Gentle uniform drag, no gravity. They should still be climbing when
+            // they fade — a ballistic arc would level them off and drop them back
+            // into frame, which is the opposite of "startled".
+            _vel *= Mathf.Exp(-0.25f * dt);
+            transform.localPosition += _vel * dt;
+
+            // Flap by squashing on Y — cheaper than skinning two wings and, at this
+            // size, indistinguishable from it.
+            float flap = Mathf.Sin(_t * 17f + _phase);
+            var s = transform.localScale;
+            transform.localScale = new Vector3(s.x, Mathf.Abs(s.x) * (0.55f + flap * 0.45f), s.z);
+            if (_vel.sqrMagnitude > 0.001f)
+                transform.localRotation = Quaternion.LookRotation(_vel.normalized, Vector3.up);
+
+            // Pure black at full opacity — a silhouette, not a dark shape. Any alpha
+            // under 1 lets the bright sky through and greys them out, which is what
+            // the old 0.85 was doing.
+            float k = Mathf.Clamp01(_t / Life);
+            float a = Mathf.Min(Mathf.Clamp01(_t / 0.15f), 1f - Mathf.Clamp01((k - 0.65f) / 0.35f));
+            MpbColor.Set(_mr, new Color(0f, 0f, 0f, a));
+        }
+    }
+
     void BuildUI()
     {
         var canvasGo = new GameObject("TetrisCanvas", typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster));
@@ -765,10 +1159,11 @@ public class BlockTetris3D : MonoBehaviour
         sc.referenceResolution = new Vector2(1920f, 1080f);
         sc.matchWidthOrHeight = 0.5f;
 
-        // Top of the screen is dusk sky (dark), bottom is lit wheat (bright), so
-        // the two halves need opposite text colours to stay legible.
+        // Both halves of the screen ended up BRIGHT once the skybox settled — pale
+        // sky up top, lit wheat below — so everything here is ink, not paper. The
+        // white these started as was left over from the dark-sky draft.
         _scoreText = NewText("Score", 40f, TextAlignmentOptions.TopLeft);
-        _scoreText.color = GeoPalette.Paper;
+        _scoreText.color = GeoPalette.Ink;
         var srt = _scoreText.rectTransform;
         srt.anchorMin = srt.anchorMax = srt.pivot = new Vector2(0f, 1f);
         srt.anchoredPosition = new Vector2(48f, -40f);
@@ -776,9 +1171,12 @@ public class BlockTetris3D : MonoBehaviour
         RefreshScore();
 
         var help = NewText("Help", 24f, TextAlignmentOptions.BottomLeft);
-        help.color = GeoPalette.WithAlpha(GeoPalette.Ink, 0.6f);
-        help.text = "WASD move   ·   1/2/3 rotate   ·   E soft drop   ·   Space hard drop\n"
-                  + "Right-drag orbit   ·   Esc leave";
+        // Paper, not ink: the bottom of the frame is the shadowed near edge of the
+        // field, and the dark grey this used to be disappeared into it entirely.
+        help.color = GeoPalette.WithAlpha(GeoPalette.Paper, 0.8f);
+        // No "Esc leave" — the Leave button in the opposite corner already says it.
+        help.text = "WASD move   ·   1/2/3 rotate   ·   E soft drop\n"
+                  + "Space hard drop   ·   Right-drag orbit";
         var hrt = help.rectTransform;
         hrt.anchorMin = hrt.anchorMax = hrt.pivot = new Vector2(0f, 0f);
         hrt.anchoredPosition = new Vector2(48f, 36f);
@@ -788,13 +1186,34 @@ public class BlockTetris3D : MonoBehaviour
         // the only one on a pad.
         BuildLeaveButton();
 
-        _overText = NewText("GameOver", 64f, TextAlignmentOptions.Center);
-        _overText.color = GeoPalette.Paper;   // dead-centre of screen, over whichever half is on screen — ink would vanish against the dark upper sky
-        var ort = _overText.rectTransform;
-        ort.anchorMin = ort.anchorMax = ort.pivot = new Vector2(0.5f, 0.5f);
-        ort.anchoredPosition = Vector2.zero;
-        ort.sizeDelta = new Vector2(1200f, 300f);
-        _overText.gameObject.SetActive(false);
+        // Game-over text in TWO columns with the middle left empty. Centred, it
+        // landed straight on the stack — the one thing the player wants to look at
+        // when the run ends is how their tower finished, and the text was covering
+        // exactly that. Both columns carry the same tag sequence so their rows line
+        // up across the gap.
+        _overLeft  = BuildOverColumn("GameOverLeft",  right: false);
+        _overRight = BuildOverColumn("GameOverRight", right: true);
+    }
+
+    // Half the screen's centre gap, in reference pixels — the clear channel the
+    // well sits in.
+    const float OverGap = 360f;
+
+    TMP_Text BuildOverColumn(string name, bool right)
+    {
+        var t = NewText(name, 84f, right ? TextAlignmentOptions.Left : TextAlignmentOptions.Right);
+        t.color = GeoPalette.Paper;
+
+        var rt = t.rectTransform;
+        rt.anchorMin = rt.anchorMax = new Vector2(0.5f, 0.5f);
+        rt.pivot     = new Vector2(right ? 0f : 1f, 0.5f);
+        rt.anchoredPosition = new Vector2(right ? OverGap : -OverGap, 0f);
+        // Wide enough for the longest row ("Esc to leave") at the bigger size, so
+        // it can't wrap and break the row alignment across the gap.
+        rt.sizeDelta = new Vector2(700f, 360f);
+
+        t.gameObject.SetActive(false);
+        return t;
     }
 
     void BuildLeaveButton()
@@ -818,6 +1237,7 @@ public class BlockTetris3D : MonoBehaviour
 
         var label = NewText("Label", 26f, TextAlignmentOptions.Center);
         label.transform.SetParent(rt, false);
+        label.color = GeoPalette.Paper;   // same reason as the help line — dark ground behind it
         label.text = "Leave  (Esc)";
         var lrt = label.rectTransform;
         lrt.anchorMin = Vector2.zero; lrt.anchorMax = Vector2.one;

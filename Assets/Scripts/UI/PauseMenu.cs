@@ -91,6 +91,13 @@ public class PauseMenu : MonoBehaviour
             else           SetPaused(!_paused);  // otherwise toggles the planning pause
         }
 
+        // Fast-forward hotkey — literally the chip's own handler, so the two can
+        // never drift apart. Blocked while the settings screen is up (it may be
+        // listening for this very key to rebind it) and under a minigame overlay.
+        if (Input.GetKeyDown(GameSettings.FastForwardKey)
+            && !SettingsScreen.Open && !BlockTetris3D.Active)
+            CycleSpeed();
+
         _controlsGo.SetActive(showControls);
         if (showControls) UpdateTopRightControls();
 

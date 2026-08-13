@@ -182,11 +182,17 @@ public class TurretController : MonoBehaviour
 
         mode = TurretTypes.Mode(type);
 
-        // Pull authoritative per-mode stats from BalanceTable when wired.
-        // Inspector defaults stay as fallback for un-wired turrets.
-        if (balance != null)
+        // Pull authoritative per-mode stats from BalanceTable.
+        //
+        // BalanceTable.Active, not just the `balance` field: this component is
+        // AddComponent'd onto the placed block by PlacementController.AttachTurret,
+        // so there's no prefab and no Inspector pass to ever fill that field in. It
+        // was always null, which meant the whole turret section of the balance table
+        // was dead and every turret silently ran on the field defaults below.
+        var table = balance != null ? balance : BalanceTable.Active;
+        if (table != null)
         {
-            var s = balance.GetTurretStats(mode);
+            var s = table.GetTurretStats(mode);
             attackRange  = s.range;
             fireInterval = s.fireRate > 0f ? Mathf.Max(MinFireInterval, 1f / s.fireRate) : fireInterval;
             bulletDamage = Mathf.Max(1, Mathf.RoundToInt(s.damage));
@@ -555,8 +561,29 @@ public class TurretController : MonoBehaviour
         return best;
     }
 
+    // Per-mode projectile size, multiplied on top of bulletScale. The shared prefab
+    // is sized for the basic turret, and at that size the AOE shot read as the same
+    // pellet — nothing about it said "this one splashes".
+    float ModeBulletScale => mode switch
+    {
+        Mode.Aoe => 2.3f,    // an energy ball, not a bullet
+        _        => 1.6f,
+    };
+
     void Fire(EnemySurfaceUnit target)
     {
+        // Slow fires a BEAM, not a projectile: the effect is a hold, and a hold
+        // has to land the instant the turret decides to apply it. Damage and the
+        // debuff are applied here rather than on a bullet's impact — there is no
+        // impact to wait for. Line of sight was already cleared by CanShoot.
+        if (mode == Mode.Slow)
+        {
+            TurretShotFx.Beam(MuzzlePosition, target.transform.position);
+            target.TakeDamage(EffectiveBulletDamage);
+            EnemySlowEffect.Apply(target, slowDuration, slowMultiplier);
+            return;
+        }
+
         if (ResolveBulletPrefab() == null)
         {
             Debug.LogError("[TurretController] No bullet prefab found. Put Bullet.prefab in a Resources folder, or assign bulletPrefab.", this);
@@ -583,8 +610,7 @@ public class TurretController : MonoBehaviour
     {
         var bullet = Instantiate(bulletPrefab, spawn, rot);
         bullet.SetActive(true);
-        if (!Mathf.Approximately(bulletScale, 1f))
-            bullet.transform.localScale *= bulletScale;
+        bullet.transform.localScale *= bulletScale * ModeBulletScale;
 
         if (!bullet.TryGetComponent(out TurretBullet projectile))
             projectile = bullet.AddComponent<TurretBullet>();

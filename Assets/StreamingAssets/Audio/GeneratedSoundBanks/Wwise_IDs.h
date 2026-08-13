@@ -17,6 +17,7 @@ namespace AK
         static const AkUniqueID BATTLE_LOOP = 316156164U;
         static const AkUniqueID BDIM = 1660099773U;
         static const AkUniqueID BGM_EVENT = 1799075776U;
+        static const AkUniqueID BOSS_FIGHT = 3688152761U;
         static const AkUniqueID C = 84696444U;
         static const AkUniqueID CHILL_EVENT = 3153557168U;
         static const AkUniqueID DAMAGE = 1786804762U;

@@ -66,6 +66,8 @@ public class BackgroundReactor : MonoBehaviour
     [Header("Clear reaction")]
     [Tooltip("How fast the skybox reorganises into ordered geometry on level clear.")]
     public float clearTransitionSpeed = 2.5f;
+    [Tooltip("How far the clear reaction ramps. Deliberately not 1 — 0.65 is the palette the game wants; the last third over-saturates the gold and folds the sky into a flat symmetry pattern.")]
+    [Range(0f, 1f)] public float clearReactPeak = 0.65f;
 
     [Header("Collapse (low health)")]
     [Tooltip("Health fraction at which the sky starts breaking up. 0.75 = the glitching begins once a quarter of the lives are gone.")]
@@ -134,7 +136,7 @@ public class BackgroundReactor : MonoBehaviour
         // Level-clear: ramp the ordered-geometry reaction while the settlement is up.
         // Keyed to LevelCleared, NOT SettlementUp — SettlementUp also covers game
         // over, and defeat has no business turning the sky into the victory gold.
-        float targetClear = GameFlowManager.Instance != null && GameFlowManager.Instance.LevelCleared ? 1f : 0f;
+        float targetClear = GameFlowManager.Instance != null && GameFlowManager.Instance.LevelCleared ? clearReactPeak : 0f;
         _clearReact = Mathf.MoveTowards(_clearReact, targetClear, clearTransitionSpeed * dt);
 
         // World collapse: the sky glitches and drops its materials in step with the

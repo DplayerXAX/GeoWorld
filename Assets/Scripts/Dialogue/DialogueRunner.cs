@@ -48,6 +48,13 @@ public class DialogueRunner : MonoBehaviour
 
     public bool IsPlaying { get; private set; }
 
+    /// <summary>
+    /// True while the current line's typewriter is still revealing characters.
+    /// Read by TutorialDirector so the click that COMPLETES a line isn't also
+    /// counted as the click that advances the step the line belongs to.
+    /// </summary>
+    public bool IsTyping => IsPlaying && _typing;
+
     // ── Singleton (auto-creates if none in scene) ────────────────────────────────
     static DialogueRunner _instance;
     public static DialogueRunner Instance
@@ -257,17 +264,24 @@ public class DialogueRunner : MonoBehaviour
         // advance/dismiss the line it just brought up.
         // `!peeking`: while the box is hidden to look at the world, a click is aimed
         // at the world, not at dismissing a line the player can't currently read.
-        if (!Gated && !_choiceMode && !peeking && Time.frameCount != _lineFrame
+        bool pressed = !_choiceMode && !peeking && Time.frameCount != _lineFrame
             && (Input.GetMouseButtonDown(0) || (advanceKey != KeyCode.None && Input.GetKeyDown(advanceKey))
-                || GamepadInput.ConfirmDown))
+                || GamepadInput.ConfirmDown);
+
+        if (pressed)
         {
             if (_typing)
             {
+                // Completing the line is allowed even while GATED. The gate governs
+                // whether the conversation may MOVE ON, not whether the player is
+                // allowed to finish reading — and on a gated line the click is aimed
+                // at the world anyway, so leaving the typewriter crawling through the
+                // rest of the sentence while they act on it is pure friction.
                 _typing = false;
                 _bodyText.maxVisibleCharacters = _bodyText.textInfo.characterCount;
                 AudioManager.Instance?.StopTextBlip();
             }
-            else Advance();
+            else if (!Gated) Advance();
         }
     }
 
