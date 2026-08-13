@@ -18,11 +18,14 @@ MonoBehaviour:
   runSeed: 25
   blocksPerTurn: 5
   turretsPerTurn: 3
+  infiniteResources: 0
+  startPointWaves: 9a020000
+  endPointWaves: 
   synergyEnabled: 0
   allowedColors: 01000000
   startingShop: []
   waves: []
-  wavesToClear: 3
+  wavesToClear: 2
   objectives:
   - type: 1
     target: 3
@@ -42,7 +45,10 @@ MonoBehaviour:
   unlocks: []
   techReward: 1
   mapBlockRewards: []
-  rewardConversation: {fileID: 0}
+  rewardConversation: {fileID: 11400000, guid: 5394c1c8fb6246778f2c76728c362224, type: 2}
+  rewardSuggestCubeSide: 0
+  rewardSuggestOrigin: {x: 0, y: 0, z: 0}
+  rewardSuggestRotation90: {x: 0, y: 0, z: 0}
   isTutorial: 1
   fixedEndpoints: 1
   startCell: {x: 1, y: 0, z: 0}
@@ -63,8 +69,19 @@ MonoBehaviour:
     unlocksOps: 
     cameraFocus: 0
     focusZoom: 0
+    openPanel: 0
     hint: O Lord, born of our unwavering faith, you have come to save us from the
       infinite chaos.
+    suggestCubeSide: 0
+    suggestOrigin: {x: 0, y: 0, z: 0}
+    suggestSpanEndpoints: 0
+    suggestSpanMargin: 2
+    suggestTransient: 0
+    suggestCubeSide2: 0
+    suggestOrigin2: {x: 0, y: 0, z: 0}
+    asideText: 
+    asideSpeaker: {fileID: 0}
+    asideSpeakerPortrait: 
     conversation: {fileID: 0}
     speaker: {fileID: 11400000, guid: 80993e3c86b4337429c2d6273c8eedc2, type: 2}
     speakerSlot: 1
@@ -84,8 +101,19 @@ MonoBehaviour:
     unlocksOps: 
     cameraFocus: 1
     focusZoom: 3
+    openPanel: 0
     hint: An endless horde of chaotic enemies pours forth from this Rift, determined
       to destroy our order.
+    suggestCubeSide: 0
+    suggestOrigin: {x: 0, y: 0, z: 0}
+    suggestSpanEndpoints: 0
+    suggestSpanMargin: 2
+    suggestTransient: 0
+    suggestCubeSide2: 0
+    suggestOrigin2: {x: 0, y: 0, z: 0}
+    asideText: 
+    asideSpeaker: {fileID: 0}
+    asideSpeakerPortrait: 
     conversation: {fileID: 0}
     speaker: {fileID: 11400000, guid: 80993e3c86b4337429c2d6273c8eedc2, type: 2}
     speakerSlot: 1
@@ -105,8 +133,19 @@ MonoBehaviour:
     unlocksOps: 
     cameraFocus: 2
     focusZoom: 3
+    openPanel: 0
     hint: This is the heart of our realm. Please do not let the forces of chaos reach
       it.
+    suggestCubeSide: 0
+    suggestOrigin: {x: 0, y: 0, z: 0}
+    suggestSpanEndpoints: 0
+    suggestSpanMargin: 2
+    suggestTransient: 0
+    suggestCubeSide2: 0
+    suggestOrigin2: {x: 0, y: 0, z: 0}
+    asideText: 
+    asideSpeaker: {fileID: 0}
+    asideSpeakerPortrait: 
     conversation: {fileID: 0}
     speaker: {fileID: 11400000, guid: 80993e3c86b4337429c2d6273c8eedc2, type: 2}
     speakerSlot: 1
@@ -126,7 +165,18 @@ MonoBehaviour:
     unlocksOps: 
     cameraFocus: 1
     focusZoom: 10
+    openPanel: 0
     hint: We shape the path before enemies, leading them away from our Core.
+    suggestCubeSide: 0
+    suggestOrigin: {x: 0, y: 0, z: 0}
+    suggestSpanEndpoints: 0
+    suggestSpanMargin: 2
+    suggestTransient: 0
+    suggestCubeSide2: 0
+    suggestOrigin2: {x: 0, y: 0, z: 0}
+    asideText: 
+    asideSpeaker: {fileID: 0}
+    asideSpeakerPortrait: 
     conversation: {fileID: 0}
     speaker: {fileID: 11400000, guid: 80993e3c86b4337429c2d6273c8eedc2, type: 2}
     speakerSlot: 1
@@ -146,7 +196,18 @@ MonoBehaviour:
     unlocksOps: 
     cameraFocus: 0
     focusZoom: 0
+    openPanel: 0
     hint: With blocks, we shape their path. With turrets, we strike them down.
+    suggestCubeSide: 0
+    suggestOrigin: {x: 0, y: 0, z: 0}
+    suggestSpanEndpoints: 0
+    suggestSpanMargin: 2
+    suggestTransient: 0
+    suggestCubeSide2: 0
+    suggestOrigin2: {x: 0, y: 0, z: 0}
+    asideText: 
+    asideSpeaker: {fileID: 0}
+    asideSpeakerPortrait: 
     conversation: {fileID: 0}
     speaker: {fileID: 11400000, guid: 80993e3c86b4337429c2d6273c8eedc2, type: 2}
     speakerSlot: 1
@@ -166,7 +227,18 @@ MonoBehaviour:
     unlocksOps: 
     cameraFocus: 0
     focusZoom: 0
+    openPanel: 0
     hint: (Press F to open the shop)
+    suggestCubeSide: 0
+    suggestOrigin: {x: 0, y: 0, z: 0}
+    suggestSpanEndpoints: 0
+    suggestSpanMargin: 2
+    suggestTransient: 0
+    suggestCubeSide2: 0
+    suggestOrigin2: {x: 0, y: 0, z: 0}
+    asideText: 
+    asideSpeaker: {fileID: 0}
+    asideSpeakerPortrait: 
     conversation: {fileID: 0}
     speaker: {fileID: 0}
     speakerSlot: 1
@@ -186,7 +258,18 @@ MonoBehaviour:
     unlocksOps: 
     cameraFocus: 0
     focusZoom: 0
+    openPanel: 0
     hint: (Click and purchase the L-shape block!)
+    suggestCubeSide: 0
+    suggestOrigin: {x: 0, y: 0, z: 0}
+    suggestSpanEndpoints: 0
+    suggestSpanMargin: 2
+    suggestTransient: 0
+    suggestCubeSide2: 0
+    suggestOrigin2: {x: 0, y: 0, z: 0}
+    asideText: 
+    asideSpeaker: {fileID: 0}
+    asideSpeakerPortrait: 
     conversation: {fileID: 0}
     speaker: {fileID: 0}
     speakerSlot: 1
@@ -206,7 +289,18 @@ MonoBehaviour:
     unlocksOps: 
     cameraFocus: 0
     focusZoom: 0
+    openPanel: 0
     hint: Please place the block on the white area, Connecting the rift and our core.
+    suggestCubeSide: 0
+    suggestOrigin: {x: 0, y: 0, z: 0}
+    suggestSpanEndpoints: 0
+    suggestSpanMargin: 2
+    suggestTransient: 0
+    suggestCubeSide2: 0
+    suggestOrigin2: {x: 0, y: 0, z: 0}
+    asideText: 
+    asideSpeaker: {fileID: 0}
+    asideSpeakerPortrait: 
     conversation: {fileID: 0}
     speaker: {fileID: 11400000, guid: 80993e3c86b4337429c2d6273c8eedc2, type: 2}
     speakerSlot: 1
@@ -226,8 +320,19 @@ MonoBehaviour:
     unlocksOps: 
     cameraFocus: 0
     focusZoom: 0
+    openPanel: 0
     hint: Once the path is complete, the forces of chaos will march toward the Core
       along the SHORTEST route.
+    suggestCubeSide: 0
+    suggestOrigin: {x: 0, y: 0, z: 0}
+    suggestSpanEndpoints: 0
+    suggestSpanMargin: 2
+    suggestTransient: 0
+    suggestCubeSide2: 0
+    suggestOrigin2: {x: 0, y: 0, z: 0}
+    asideText: 
+    asideSpeaker: {fileID: 0}
+    asideSpeakerPortrait: 
     conversation: {fileID: 0}
     speaker: {fileID: 11400000, guid: 80993e3c86b4337429c2d6273c8eedc2, type: 2}
     speakerSlot: 1
@@ -244,10 +349,21 @@ MonoBehaviour:
     freeOperations: 0
     hideInCombat: 0
     requiredWave: 0
-    unlocksOps:
+    unlocksOps: 
     cameraFocus: 0
     focusZoom: 0
+    openPanel: 0
     hint: Allow us to witness your power. Buy a turret from the shop.
+    suggestCubeSide: 0
+    suggestOrigin: {x: 0, y: 0, z: 0}
+    suggestSpanEndpoints: 0
+    suggestSpanMargin: 2
+    suggestTransient: 0
+    suggestCubeSide2: 0
+    suggestOrigin2: {x: 0, y: 0, z: 0}
+    asideText: 
+    asideSpeaker: {fileID: 0}
+    asideSpeakerPortrait: 
     conversation: {fileID: 0}
     speaker: {fileID: 11400000, guid: 80993e3c86b4337429c2d6273c8eedc2, type: 2}
     speakerSlot: 1
@@ -267,8 +383,19 @@ MonoBehaviour:
     unlocksOps: 
     cameraFocus: 0
     focusZoom: 0
+    openPanel: 0
     hint: Set it down on the marked spot, guarding where the enemy first steps onto
       the path.
+    suggestCubeSide: 0
+    suggestOrigin: {x: 0, y: 0, z: 0}
+    suggestSpanEndpoints: 0
+    suggestSpanMargin: 2
+    suggestTransient: 0
+    suggestCubeSide2: 0
+    suggestOrigin2: {x: 0, y: 0, z: 0}
+    asideText: 
+    asideSpeaker: {fileID: 0}
+    asideSpeakerPortrait: 
     conversation: {fileID: 0}
     speaker: {fileID: 11400000, guid: 80993e3c86b4337429c2d6273c8eedc2, type: 2}
     speakerSlot: 1
@@ -285,10 +412,21 @@ MonoBehaviour:
     freeOperations: 0
     hideInCombat: 0
     requiredWave: 0
-    unlocksOps:
+    unlocksOps: 
     cameraFocus: 0
     focusZoom: 0
+    openPanel: 0
     hint: One tower alone cannot hold this line. Buy a second turret.
+    suggestCubeSide: 0
+    suggestOrigin: {x: 0, y: 0, z: 0}
+    suggestSpanEndpoints: 0
+    suggestSpanMargin: 2
+    suggestTransient: 0
+    suggestCubeSide2: 0
+    suggestOrigin2: {x: 0, y: 0, z: 0}
+    asideText: 
+    asideSpeaker: {fileID: 0}
+    asideSpeakerPortrait: 
     conversation: {fileID: 0}
     speaker: {fileID: 11400000, guid: 80993e3c86b4337429c2d6273c8eedc2, type: 2}
     speakerSlot: 1
@@ -308,8 +446,19 @@ MonoBehaviour:
     unlocksOps: 
     cameraFocus: 0
     focusZoom: 0
+    openPanel: 0
     hint: Place this one at the far end, so the two of them cover the whole road
       to the Core.
+    suggestCubeSide: 0
+    suggestOrigin: {x: 0, y: 0, z: 0}
+    suggestSpanEndpoints: 0
+    suggestSpanMargin: 2
+    suggestTransient: 0
+    suggestCubeSide2: 0
+    suggestOrigin2: {x: 0, y: 0, z: 0}
+    asideText: 
+    asideSpeaker: {fileID: 0}
+    asideSpeakerPortrait: 
     conversation: {fileID: 0}
     speaker: {fileID: 11400000, guid: 80993e3c86b4337429c2d6273c8eedc2, type: 2}
     speakerSlot: 1
@@ -329,11 +478,55 @@ MonoBehaviour:
     unlocksOps: 
     cameraFocus: 0
     focusZoom: 0
+    openPanel: 0
     hint: (You may click any placed items for detail)
+    suggestCubeSide: 0
+    suggestOrigin: {x: 0, y: 0, z: 0}
+    suggestSpanEndpoints: 0
+    suggestSpanMargin: 2
+    suggestTransient: 0
+    suggestCubeSide2: 0
+    suggestOrigin2: {x: 0, y: 0, z: 0}
+    asideText: 
+    asideSpeaker: {fileID: 0}
+    asideSpeakerPortrait: 
     conversation: {fileID: 0}
     speaker: {fileID: 0}
     speakerSlot: 1
     speakerPortrait: Default
+  - kind: 5
+    block: {fileID: 0}
+    origin: {x: 0, y: 0, z: 0}
+    rotation90: {x: 0, y: 0, z: 0}
+    cellsOverride: []
+    waitSeconds: 0
+    count: 1
+    inputKey: 323
+    pathLength: 0
+    freeOperations: 0
+    hideInCombat: 0
+    requiredWave: 0
+    unlocksOps: 
+    cameraFocus: 0
+    focusZoom: 0
+    openPanel: 2
+    hint: "Before you take the field, My Lord \u2014 I have set a control panel at
+      your right hand, bearing every command you might need. Open it whenever memory
+      fails you."
+    suggestCubeSide: 0
+    suggestOrigin: {x: 0, y: 0, z: 0}
+    suggestSpanEndpoints: 0
+    suggestSpanMargin: 2
+    suggestTransient: 0
+    suggestCubeSide2: 0
+    suggestOrigin2: {x: 0, y: 0, z: 0}
+    asideText: 
+    asideSpeaker: {fileID: 0}
+    asideSpeakerPortrait: 
+    conversation: {fileID: 0}
+    speaker: {fileID: 11400000, guid: 80993e3c86b4337429c2d6273c8eedc2, type: 2}
+    speakerSlot: 1
+    speakerPortrait: 
   - kind: 2
     block: {fileID: 11400000, guid: 3bcfeb02226d44d49a6df82d6c36a1a7, type: 2}
     origin: {x: 1, y: 1, z: 1}
@@ -349,8 +542,19 @@ MonoBehaviour:
     unlocksOps: 02000000
     cameraFocus: 0
     focusZoom: 0
+    openPanel: 0
     hint: My Lord, when your preparations are complete, press Space to begin the
       wave. Drive back the forces of chaos.
+    suggestCubeSide: 0
+    suggestOrigin: {x: 0, y: 0, z: 0}
+    suggestSpanEndpoints: 0
+    suggestSpanMargin: 2
+    suggestTransient: 0
+    suggestCubeSide2: 0
+    suggestOrigin2: {x: 0, y: 0, z: 0}
+    asideText: 
+    asideSpeaker: {fileID: 0}
+    asideSpeakerPortrait: 
     conversation: {fileID: 0}
     speaker: {fileID: 11400000, guid: 80993e3c86b4337429c2d6273c8eedc2, type: 2}
     speakerSlot: 1
@@ -370,7 +574,18 @@ MonoBehaviour:
     unlocksOps: 
     cameraFocus: 0
     focusZoom: 0
+    openPanel: 0
     hint: Your wisdom guides us, My Lord.
+    suggestCubeSide: 0
+    suggestOrigin: {x: 0, y: 0, z: 0}
+    suggestSpanEndpoints: 0
+    suggestSpanMargin: 2
+    suggestTransient: 0
+    suggestCubeSide2: 0
+    suggestOrigin2: {x: 0, y: 0, z: 0}
+    asideText: 
+    asideSpeaker: {fileID: 0}
+    asideSpeakerPortrait: 
     conversation: {fileID: 0}
     speaker: {fileID: 11400000, guid: 80993e3c86b4337429c2d6273c8eedc2, type: 2}
     speakerSlot: 1
@@ -390,8 +605,19 @@ MonoBehaviour:
     unlocksOps: 
     cameraFocus: 0
     focusZoom: 0
+    openPanel: 0
     hint: Each enemy that reaches the Core drains 1 Health. Please do not let our
       strength be extinguished.
+    suggestCubeSide: 0
+    suggestOrigin: {x: 0, y: 0, z: 0}
+    suggestSpanEndpoints: 0
+    suggestSpanMargin: 2
+    suggestTransient: 0
+    suggestCubeSide2: 0
+    suggestOrigin2: {x: 0, y: 0, z: 0}
+    asideText: 
+    asideSpeaker: {fileID: 0}
+    asideSpeakerPortrait: 
     conversation: {fileID: 0}
     speaker: {fileID: 11400000, guid: 80993e3c86b4337429c2d6273c8eedc2, type: 2}
     speakerSlot: 1
@@ -411,8 +637,19 @@ MonoBehaviour:
     unlocksOps: 
     cameraFocus: 0
     focusZoom: 0
+    openPanel: 0
     hint: A short path gives the enemy an advantage. Let's reshape it to slow them
       down.
+    suggestCubeSide: 0
+    suggestOrigin: {x: 0, y: 0, z: 0}
+    suggestSpanEndpoints: 0
+    suggestSpanMargin: 2
+    suggestTransient: 0
+    suggestCubeSide2: 0
+    suggestOrigin2: {x: 0, y: 0, z: 0}
+    asideText: 
+    asideSpeaker: {fileID: 0}
+    asideSpeakerPortrait: 
     conversation: {fileID: 0}
     speaker: {fileID: 11400000, guid: 80993e3c86b4337429c2d6273c8eedc2, type: 2}
     speakerSlot: 1
@@ -432,8 +669,20 @@ MonoBehaviour:
     unlocksOps: 
     cameraFocus: 0
     focusZoom: 0
+    openPanel: 0
     hint: (Try moving or adding  blocks to force enemies to take a path longer than
       10 before reaching the Core!)
+    suggestCubeSide: 0
+    suggestOrigin: {x: 0, y: 0, z: 0}
+    suggestSpanEndpoints: 1
+    suggestSpanMargin: 2
+    suggestTransient: 1
+    suggestCubeSide2: 0
+    suggestOrigin2: {x: 0, y: 0, z: 0}
+    asideText: I've marked out the ground you have room to work with. Wind the road
+      through it however you like.
+    asideSpeaker: {fileID: 11400000, guid: 80993e3c86b4337429c2d6273c8eedc2, type: 2}
+    asideSpeakerPortrait: 
     conversation: {fileID: 0}
     speaker: {fileID: 0}
     speakerSlot: 1
@@ -442,4 +691,10 @@ MonoBehaviour:
   overrideEndpointDistance: 0
   endpointMinDistance: 5
   endpointMaxDistance: 10
+  overrideInitialCamera: 0
+  initialCameraFocus: {x: 0, y: 0, z: 0}
+  initialCameraYaw: 45
+  initialCameraPitch: 35
+  initialCameraDistance: 15
+  initialCameraFov: 60
   mechanics: []

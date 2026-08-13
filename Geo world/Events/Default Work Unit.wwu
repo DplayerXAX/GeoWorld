@@ -300,6 +300,17 @@
 						</Action>
 					</ChildrenList>
 				</Event>
+				<Event Name="boss_fight" ID="{4ABA170F-9CAF-42DC-839C-B82A0DC6C250}">
+					<ChildrenList>
+						<Action Name="" ID="{1581D105-4E3C-4A3D-AB05-06B72AA27A8D}" ShortID="807932319">
+							<ReferenceList>
+								<Reference Name="Target">
+									<ObjectRef Name="boss_fight" ID="{C426CA7C-7926-412C-84D1-97392649C79A}" WorkUnitID="{48502AC3-EE10-4952-8017-84D50D1C5C35}"/>
+								</Reference>
+							</ReferenceList>
+						</Action>
+					</ChildrenList>
+				</Event>
 			</ChildrenList>
 		</WorkUnit>
 	</Events>

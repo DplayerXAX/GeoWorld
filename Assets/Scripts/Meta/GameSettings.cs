@@ -22,12 +22,41 @@ public static class GameSettings
     // On: held-block ghosts glide between cells (both PlacementController in gameplay
     // and LevelMapController in LevelSelect). Off: both snap instantly, cell to cell.
     public static bool SmoothBlockEditing = true;
-    // Off (default): the mouse still moves the held block freely in Edit mode, but
-    // the cell it lands on is pulled to the nearest one actually touching the
-    // existing build (see PlacementController.SnapToNearestSupported) — WASDQE/
-    // scroll nudge it further from there. On: the raw mouse-projected cell is used
-    // directly with no snap search, the original free-floating behavior.
-    public static bool FreeMove = false;
+    // On (default): the raw mouse-projected cell is used directly, no snap search —
+    // the block goes exactly where the cursor says. Off: the cell is pulled to the
+    // nearest one actually touching the existing build (see
+    // PlacementController.SnapToNearestSupported), with WASDQE/scroll nudging it
+    // further from there.
+    public static bool FreeMove = true;
+
+    // Cycles the game speed — the same action as clicking the fast-forward chip.
+    public static KeyCode FastForwardKey = KeyCode.C;
+
+    // Keys the game already owns. A rebind that lands on one of these is refused:
+    // the conflict wouldn't announce itself, it would just make two things happen
+    // on one press and look like a bug.
+    //
+    // Listed explicitly rather than scraped from the code — the bindings live in a
+    // dozen Update() methods as literals, and a scrape would silently go stale the
+    // first time one moved. If you add a permanent binding, add it here too.
+    public static readonly KeyCode[] ReservedKeys =
+    {
+        KeyCode.W, KeyCode.A, KeyCode.S, KeyCode.D, KeyCode.Q, KeyCode.E,   // move / raise / lower
+        KeyCode.Alpha1, KeyCode.Alpha2, KeyCode.Alpha3,                     // rotate
+        KeyCode.F,                                                          // shop
+        KeyCode.R,                                                          // refresh / hold-restart
+        KeyCode.Z,                                                          // undo (with Ctrl)
+        KeyCode.G,                                                          // grid overlay
+        KeyCode.P,                                                          // re-evaluate path
+        KeyCode.Space, KeyCode.Tab, KeyCode.Escape, KeyCode.Delete,
+        KeyCode.LeftShift, KeyCode.RightShift,                              // peek
+        KeyCode.LeftControl, KeyCode.RightControl,
+        KeyCode.Return, KeyCode.KeypadEnter,
+    };
+
+    /// <summary>True when `key` is free to bind (not None, not already spoken for).</summary>
+    public static bool IsKeyAvailable(KeyCode key) =>
+        key != KeyCode.None && System.Array.IndexOf(ReservedKeys, key) < 0;
 
     public static readonly int[] FrameCaps = { 0, 30, 60, 120, 144 };
 
@@ -67,6 +96,11 @@ public static class GameSettings
         LookSensitivity = PlayerPrefs.GetFloat("set.looksens", LookSensitivity);
         SmoothBlockEditing = PlayerPrefs.GetInt("set.smoothedit", SmoothBlockEditing ? 1 : 0) == 1;
         FreeMove           = PlayerPrefs.GetInt("set.freemove",   FreeMove ? 1 : 0) == 1;
+
+        // Guarded on load too, not just at rebind time: the reserved list can grow
+        // after a player has already saved a binding that later became a conflict.
+        var ff = (KeyCode)PlayerPrefs.GetInt("set.ffkey", (int)FastForwardKey);
+        if (IsKeyAvailable(ff)) FastForwardKey = ff;
     }
 
     public static void Save()
@@ -82,6 +116,7 @@ public static class GameSettings
         PlayerPrefs.SetFloat("set.looksens", LookSensitivity);
         PlayerPrefs.SetInt("set.smoothedit", SmoothBlockEditing ? 1 : 0);
         PlayerPrefs.SetInt("set.freemove",   FreeMove ? 1 : 0);
+        PlayerPrefs.SetInt("set.ffkey",      (int)FastForwardKey);
         PlayerPrefs.Save();
     }
 
@@ -132,7 +167,8 @@ public static class GameSettings
         QualityLevel = QualitySettings.GetQualityLevel(); FrameCap = 0;
         CameraPanSpeed = 8f; LookSensitivity = 120f;
         SmoothBlockEditing = true;
-        FreeMove = false;
+        FreeMove = true;
+        FastForwardKey = KeyCode.C;
         Save(); ApplyAll();
     }
 }

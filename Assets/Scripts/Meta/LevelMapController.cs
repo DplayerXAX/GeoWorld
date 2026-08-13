@@ -25,7 +25,12 @@ public partial class LevelMapController : MonoBehaviour
 
     [Header("Refs")]
     public Transform pawn;
+    [Tooltip("Ambient loop for the map before the world has been defended at all.")]
     public AK.Wwise.Event timeLoop;
+    [Tooltip("Replaces timeLoop once musicSwapAfterLevelId has been cleared — the map should not still sound like nothing has happened after the player has won something. Leave unassigned to keep timeLoop forever.")]
+    public AK.Wwise.Event timeLoopCleared;
+    [Tooltip("Level whose clear swaps the map's ambient loop. Tutorial, not 1-1: it's the earliest win, and clearing 1-1 implies it anyway.")]
+    public string musicSwapAfterLevelId = "Tutorial";
     [Tooltip("UGUI level-info panel (right side). Wire it and the old IMGUI box is skipped.")]
     public LevelInfoPanel infoPanel;
     [Tooltip("Played once, the very first time the player ever lands on this scene (SaveSystem.Profile.seenLevelSelectIntro). Author it like any other DialogueConversation asset. Leave null for no intro.")]
@@ -48,8 +53,12 @@ public partial class LevelMapController : MonoBehaviour
     public Color trailColor = new Color(1f, 0.95f, 0.75f, 0.9f);
     [Range(0.02f, 0.3f)] public float trailWidth = 0.07f;
 
-    [Header("Camera focus")]
-    [Tooltip("On click, smoothly slide the camera to frame the target cell (keeps its current offset/angle).")]
+    [Header("Camera")]
+    [Tooltip("WASDQE pan speed, matching gameplay's PlacementController.panSpeed.")]
+    public float mapPanSpeed = 8f;
+    [Tooltip("World units the opening shot backs off by, so an entry dialogue doesn't sit on top of whatever the camera framed. Matches LevelSelectTutorialGuide.walkFocusPullBack.")]
+    public float entryPullBack = 3.2f;
+    [Tooltip("Used by the fallback framer only (scenes with no OrbitCamera). Clicking a cell no longer moves the camera either way — the player pans it themselves.")]
     public bool  cameraFocus = true;
     public float cameraLerp  = 4f;
     [Tooltip("Where the focused cell sits horizontally on screen. 0.5 = centre, ~0.3 = left-centre (leaves room for the right info panel).")]
@@ -223,7 +232,8 @@ public partial class LevelMapController : MonoBehaviour
             SaveSystem.ResetProfile();
         }
 
-        timeLoop.Post(this.gameObject);
+        _activeLoop = PickAmbientLoop();
+        _activeLoop?.Post(this.gameObject);
         _cam = Camera.main;
 
         if (buildFromFile) BuildMap();
@@ -244,7 +254,7 @@ public partial class LevelMapController : MonoBehaviour
         // Scenery only, so it deliberately runs AFTER connectivity is settled. Returns
         // true exactly once — the very first visit after this field's gate level was
         // cleared — in which case the grow-in cutscene below plays before any dialogue.
-        bool decorGrowthPending = TryBuildDecor();
+        var decorGrowthPending = TryBuildDecors();
         CollectInteractableSpots();   // after the surface — the spots snap onto it
 
         // Resume on the cell the pawn last left from, if it still exists — a block
@@ -276,7 +286,13 @@ public partial class LevelMapController : MonoBehaviour
         if (_orbit != null)
         {
             _orbit.focusViewport = new Vector2(focusViewportX, focusViewportY);
-            _orbit.FocusOnPoint(_camFocus);
+
+            // The opening shot gets the same back-off the tutorial's later beats do.
+            // Nothing fires a gate on the first dialogue line ("Welcome…", which has
+            // no actionGateId), so without this the very first thing the player sees
+            // is the one frame in the whole tutorial that ISN'T pulled back — and
+            // it's the one with a dialogue box over it.
+            _orbit.FocusOnPoint(PulledBack(_camFocus, entryPullBack));
         }
         else if (_cam != null)
         {
@@ -304,8 +320,8 @@ public partial class LevelMapController : MonoBehaviour
         // the new decoration while it rises into place), THEN fires whichever of the
         // two dialogue beats below applies — never the other way around, or the
         // player would be mid-conversation while the camera yanks away to the field.
-        if (decorGrowthPending) StartCoroutine(PlayDecorGrowthCutscene());
-        else                    PlayEntryDialogueIfAny();
+        if (decorGrowthPending != null) StartCoroutine(PlayDecorGrowthCutscene(decorGrowthPending));
+        else                            PlayEntryDialogueIfAny();
     }
 
     void PlayEntryDialogueIfAny()
@@ -407,8 +423,10 @@ public partial class LevelMapController : MonoBehaviour
     public Color rewardSuggestColor = new Color(1f, 1f, 1f, 0.6f);
     [Tooltip("Suggestion cubes are this much larger than a cell, so they stand proud of the ground.")]
     public float rewardSuggestOverscale = 1.08f;
-    [Tooltip("OrbitCamera zoom when the box first appears. LevelSelect's default distance is 10.")]
-    public float rewardSuggestZoom = 5f;
+    [Tooltip("OrbitCamera zoom when the box first appears. LevelSelect's default distance is 10 — 7 keeps both the block being placed AND the gap it has to bridge in frame, which 5 cropped.")]
+    public float rewardSuggestZoom = 7f;
+    [Tooltip("World units the camera backs off after framing the box, so the target isn't sitting under the dialogue panel.")]
+    public float rewardSuggestPullBack = 2.5f;
 
     GameObject _rewardSuggestBox;
     readonly List<Renderer> _rewardSuggestRends = new();
@@ -424,9 +442,15 @@ public partial class LevelMapController : MonoBehaviour
             if (_rewardSuggestBox == null)
             {
                 BuildRewardSuggestBox();
+                // Framed ONCE, when the box is first built. The gate advances from
+                // ls.openbuild to ls.place while the box stays up, and re-framing on
+                // the second line would shove the camera around mid-instruction.
                 if (_orbit != null && gridSystem != null)
                 {
-                    _orbit.FocusOnPoint(gridSystem.GridToWorld(_activeRewardLevel.rewardSuggestOrigin), snap: false);
+                    _orbit.FocusOnPoint(
+                        PulledBack(gridSystem.GridToWorld(_activeRewardLevel.rewardSuggestOrigin),
+                                   rewardSuggestPullBack),
+                        snap: false);
                     if (rewardSuggestZoom > 0f) _orbit.SetZoom(rewardSuggestZoom);
                 }
             }
@@ -530,9 +554,24 @@ public partial class LevelMapController : MonoBehaviour
     bool CanOpenBuildPanel() => string.IsNullOrEmpty(_tutorialGate) || _tutorialGate == TutorialGateIds.OpenBuild;
     bool CanEnterLevel()     => string.IsNullOrEmpty(_tutorialGate) || _tutorialGate == TutorialGateIds.EnterLevel;
 
+    // Whichever ambient loop is actually playing. Read by BlockTetris3D so the
+    // minigame pauses the right one, and by OnDestroy so it stops the right one —
+    // stopping `timeLoop` unconditionally would leave the post-clear track running.
+    public AK.Wwise.Event ActiveLoop => _activeLoop;
+    AK.Wwise.Event _activeLoop;
+
+    AK.Wwise.Event PickAmbientLoop()
+    {
+        if (timeLoopCleared == null || !timeLoopCleared.IsValid()) return timeLoop;
+        if (string.IsNullOrEmpty(musicSwapAfterLevelId))           return timeLoop;
+
+        var rec = SaveSystem.Profile.GetRecord(musicSwapAfterLevelId);
+        return rec != null && rec.cleared ? timeLoopCleared : timeLoop;
+    }
+
     // The loop was Post()'d against this GameObject — Wwise doesn't stop it on its own
     // just because the scene unloads, so stop it explicitly or it bleeds into gameplay.
-    void OnDestroy() => timeLoop.Stop(this.gameObject);
+    void OnDestroy() => _activeLoop?.Stop(this.gameObject);
 
     void LateUpdate()
     {
@@ -544,15 +583,45 @@ public partial class LevelMapController : MonoBehaviour
             1f - Mathf.Exp(-cameraLerp * Time.deltaTime));
     }
 
-    // Route a focus request to the OrbitCamera if present, else our own framer.
-    void FocusCameraOn(Vector3 worldPoint)
+    // WASDQE pans the map camera, exactly as it does in gameplay's Select mode
+    // (PlacementController.HandleSelectModePan) — same keys, same camera-relative
+    // axes, same OrbitCamera.Pan call. The map used to have no manual camera at
+    // all: it framed whatever you clicked and you took what you were given, which
+    // is why anything the info panel or a dialogue box covered was unreachable.
+    //
+    // Only outside build mode — in there the same keys nudge the held ghost block.
+    void HandleMapPan()
     {
-        _camFocus = worldPoint;
-        if (_orbit != null)
-        {
-            _orbit.focusViewport = new Vector2(focusViewportX, focusViewportY);
-            _orbit.FocusOnPoint(worldPoint, snap: false);   // glide to the clicked cell
-        }
+        if (_orbit == null || _cam == null) return;
+
+        Vector3 right = _cam.transform.right;   right.y = 0f; right.Normalize();
+        Vector3 fwd   = _cam.transform.forward; fwd.y   = 0f; fwd.Normalize();
+
+        Vector3 delta = Vector3.zero;
+        if (Input.GetKey(KeyCode.D)) delta += right;
+        if (Input.GetKey(KeyCode.A)) delta -= right;
+        if (Input.GetKey(KeyCode.W)) delta += fwd;
+        if (Input.GetKey(KeyCode.S)) delta -= fwd;
+        if (Input.GetKey(KeyCode.Q)) delta += Vector3.up;
+        if (Input.GetKey(KeyCode.E)) delta -= Vector3.up;
+
+        if (delta.sqrMagnitude > 0.0001f)
+            _orbit.Pan(delta.normalized * mapPanSpeed * Time.unscaledDeltaTime);
+    }
+
+    // `worldPoint` moved back along the camera's own horizontal facing. Feed this to
+    // FocusOnPoint instead of panning afterwards: since the camera sits at
+    // focus - forward × distance, moving the FOCUS back moves the camera back by the
+    // same amount — but as one eased target rather than an instant Pan (which is
+    // rigid by design, for continuous input) followed by an ease dragging it back.
+    Vector3 PulledBack(Vector3 worldPoint, float units)
+    {
+        if (_cam == null || units <= 0f) return worldPoint;
+
+        Vector3 fwd = _cam.transform.forward;
+        fwd.y = 0f;
+        if (fwd.sqrMagnitude < 0.0001f) return worldPoint;
+        return worldPoint - fwd.normalized * units;
     }
 
     // Exact: place _camFocus at viewport (focusViewportX, focusViewportY) keeping the
@@ -1111,6 +1180,7 @@ public partial class LevelMapController : MonoBehaviour
 
         if (_buildMode) { UpdateBuildMode(); return; }   // scroll is reserved for HandleGhostScroll in there
 
+        HandleMapPan();
         HandleCameraZoomScroll();
 
         if (!_moving && Input.GetKeyDown(buildModeKey)) EnterBuildMode();
@@ -1203,7 +1273,12 @@ public partial class LevelMapController : MonoBehaviour
             // Cancel the old walk only once the new destination is confirmed reachable.
             if (_walkRoutine != null) { StopCoroutine(_walkRoutine); _walkRoutine = null; _moving = false; HideTrail(); }
 
-            if (cameraFocus) FocusCameraOn(SurfaceTop(cell));   // frame the destination cell
+            // No camera move here any more. Clicking a cell used to yank the camera
+            // to it, which meant the view was only ever wherever the last click put
+            // it — so anything the info panel or a dialogue box covered could not be
+            // looked at. The camera is the player's now (see HandleMapPan); the
+            // pawn walks without dragging the shot along with it.
+            _camFocus = SurfaceTop(cell);   // still tracked: the decor cutscene restores to it
             var ptCell = new List<int>();
             var pts = BuildWorldPath(cellPath, ptCell);
             ShowTrail(pts);

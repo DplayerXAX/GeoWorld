@@ -19,6 +19,33 @@ public class LevelDefinition : ScriptableObject
     [Min(1)] public int blocksPerTurn  = 8;
     [Min(0)] public int turretsPerTurn = 3;
 
+    [Tooltip("Sandbox: every purchase succeeds and nothing is deducted from either pool. For test / layout-authoring levels. Deliberately a LEVEL flag rather than a global toggle — it can't be left switched on and leak into a real run.")]
+    public bool infiniteResources = false;
+
+    [Header("Endpoint schedule")]
+    [Tooltip("Waves after which a new SPAWN point opens (1-based; 3 = once wave 3 is cleared). Leave BOTH lists empty to fall back to GameFlowManager's automatic every-N-waves cadence.")]
+    public int[] startPointWaves;
+    [Tooltip("Waves after which a new CORE / goal appears (1-based). Leave BOTH lists empty for the automatic cadence.")]
+    public int[] endPointWaves;
+
+    /// <summary>True when this level authors its own endpoint schedule.</summary>
+    public bool HasEndpointSchedule =>
+        (startPointWaves != null && startPointWaves.Length > 0) ||
+        (endPointWaves   != null && endPointWaves.Length   > 0);
+
+    /// <summary>
+    /// What (if anything) opens after `wave` is cleared. Returns null for nothing.
+    /// A wave listed in BOTH lists opens a spawn point — the route change is the
+    /// bigger event, and adding two endpoints on one wave has nowhere to put the
+    /// "which one is this round's challenge" marker.
+    /// </summary>
+    public bool? EndpointKindAfterWave(int wave)
+    {
+        if (startPointWaves != null && System.Array.IndexOf(startPointWaves, wave) >= 0) return true;
+        if (endPointWaves   != null && System.Array.IndexOf(endPointWaves,   wave) >= 0) return false;
+        return null;
+    }
+
     [Tooltip("Whether synergies exist at all on this level. Off = placing/picking up a block never touches SynergyEvaluator: no board tracking, no rule checks, no activation FX. For an early tutorial level that hasn't introduced synergies yet, or a mechanic-focused level that deliberately doesn't use them. On by default so existing levels are unaffected.")]
     public bool synergyEnabled = true;
 
@@ -270,6 +297,9 @@ public class TutorialStep
     [Tooltip("Zoom level applied with cameraFocus (ortho size / orbit distance). SMALLER = more zoomed in. 0 = keep current zoom.")]
     public float focusZoom = 0f;
 
+    [Tooltip("Slide a HUD side panel open when this step begins. Use on the step whose hint TALKS about that panel — being told a panel exists while it's shut is how a player never opens it.")]
+    public HudSidePanels.Side openPanel = HudSidePanels.Side.None;
+
     [TextArea] public string hint;
 
     [Header("Suggestion highlight + aside (optional)")]
@@ -277,12 +307,30 @@ public class TutorialStep
     public int suggestCubeSide = 0;
     [Tooltip("Grid cell at the suggestion box's minimum corner.")]
     public Vector3Int suggestOrigin;
+    [Tooltip("Build the suggestion box to SPAN the level's current start and end points instead of using suggestOrigin/suggestCubeSide. For 'reshape the path' steps: the region then tracks the real endpoints rather than hardcoded cells that drift the moment a layout changes.")]
+    public bool suggestSpanEndpoints = false;
+    [Tooltip("Cells of slack added around the start/end bounding box, so the region is wide enough to actually detour through rather than just the straight line between them.")]
+    [Range(0, 6)] public int suggestSpanMargin = 2;
+    [Tooltip("Clear this step's suggestion box when the step completes, and hide it once combat starts. Off = a standing hint that persists across later steps (the original behaviour).")]
+    public bool suggestTransient = false;
+
     [Tooltip("Optional second suggestion box, layered with the first (e.g. a 3³ tier nested inside a 4³ tier — same idea, different size). 0 = no second box.")]
     public int suggestCubeSide2 = 0;
     [Tooltip("Grid cell at the second suggestion box's minimum corner.")]
     public Vector3Int suggestOrigin2;
-    [Tooltip("If set, pops a small AsideBubble (using `speaker`) when this step begins — separate from the main hint box.")]
+    [Tooltip("If set, pops a small AsideBubble when this step begins — separate from the main hint box.")]
     [TextArea] public string asideText;
+    [Tooltip("Who speaks the aside. Leave null to reuse `speaker` below — set it when the aside is a DIFFERENT voice from the one delivering the hint (an assistant chiming in over the narrator, say).")]
+    public DialogueCharacter asideSpeaker;
+    [Tooltip("Portrait key for the aside speaker. Blank = default.")]
+    public string asideSpeakerPortrait = "";
+
+    /// <summary>Aside voice, falling back to the hint's speaker when unset.</summary>
+    public DialogueCharacter AsideSpeaker => asideSpeaker != null ? asideSpeaker : speaker;
+
+    /// <summary>Aside portrait — only meaningful alongside AsideSpeaker's own character.</summary>
+    public string AsidePortrait =>
+        asideSpeaker != null ? asideSpeakerPortrait : speakerPortrait;
 
     [Header("Dialogue (optional — delivers the hint as a conversation instead of the hint box)")]
     [Tooltip("Full conversation played when the step begins. Overrides `speaker` + `hint`.")]

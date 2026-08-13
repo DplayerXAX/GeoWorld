@@ -113,10 +113,12 @@ class ComboHudRunner : MonoBehaviour
         var textGo = new GameObject("ComboText", typeof(RectTransform));
         textGo.transform.SetParent(canvasGO.transform, false);
         _rt = (RectTransform)textGo.transform;
-        // Top-right corner — the one part of the HUD nothing else occupies
-        // (TopLeftHUD + LevelObjectivesTracker both live top-left).
+        // Top-right, but BELOW the pause / fast-forward / settings row that lives in
+        // that corner — at -40 the combo text drew straight through those buttons.
+        // (TopLeftHUD + LevelObjectivesTracker both live top-left, so the right edge
+        // is still the free side.)
         _rt.anchorMin = _rt.anchorMax = _rt.pivot = new Vector2(1f, 1f);
-        _rt.anchoredPosition = new Vector2(-32f, -40f);
+        _rt.anchoredPosition = new Vector2(-32f, -128f);
         _rt.sizeDelta = new Vector2(420f, 80f);
 
         _text = textGo.AddComponent<TextMeshProUGUI>();

@@ -656,11 +656,27 @@ public partial class PlacementController : MonoBehaviour
     // qualifies, holds at the last cell that DID qualify instead of snapping back
     // to the raw (unsupported) mouse position — the mouse can keep moving, but the
     // ghost simply won't follow it off into empty space.
+    // Last raw (unsnapped) mouse cell, so a solve can tell a real mouse move from
+    // a re-solve triggered by something else in the same frame.
+    Vector3Int _lastRawCell;
+    bool       _hasLastRawCell;
+
     Vector3Int SnapToNearestSupported(Vector3Int raw)
     {
         var cells = GetRotatedCells();
         if (cells.Length == 0) return raw;
+
+        bool mouseMoved = !_hasLastRawCell || raw != _lastRawCell;
+        _lastRawCell    = raw;
+        _hasLastRawCell = true;
+
         if (CanPlace(raw + manualOffset, cells)) return _lastSnappedBaseGridPos = raw;
+
+        // Mouse hasn't moved, so this solve came from a nudge or a rotation, and the
+        // anchor we already hold still works. Searching anyway would pick a base
+        // that compensates for the changed offset and cancel the player's input out.
+        if (!mouseMoved && CanPlace(_lastSnappedBaseGridPos + manualOffset, cells))
+            return _lastSnappedBaseGridPos;
 
         int cellRadius = Mathf.Max(1, Mathf.CeilToInt(snapGridRadius / Mathf.Max(0.01f, grid.cellSize)));
         Vector3Int best = _lastSnappedBaseGridPos;
@@ -690,18 +706,39 @@ public partial class PlacementController : MonoBehaviour
         Vector3Int right   = SnapToHorizontalAxis(cam.transform.right);
         Vector3Int forward = SnapToHorizontalAxis(cam.transform.forward);
 
-        if (Input.GetKeyDown(KeyCode.A)) manualOffset -= right;
-        if (Input.GetKeyDown(KeyCode.D)) manualOffset += right;
-        if (Input.GetKeyDown(KeyCode.W)) manualOffset += forward;
-        if (Input.GetKeyDown(KeyCode.S)) manualOffset -= forward;
-        if (Input.GetKeyDown(KeyCode.Q)) manualOffset += Vector3Int.up;
-        if (Input.GetKeyDown(KeyCode.E)) manualOffset += Vector3Int.down;
+        if (Input.GetKeyDown(KeyCode.A)) Nudge(-right);
+        if (Input.GetKeyDown(KeyCode.D)) Nudge(right);
+        if (Input.GetKeyDown(KeyCode.W)) Nudge(forward);
+        if (Input.GetKeyDown(KeyCode.S)) Nudge(-forward);
+        if (Input.GetKeyDown(KeyCode.Q)) Nudge(Vector3Int.up);
+        if (Input.GetKeyDown(KeyCode.E)) Nudge(Vector3Int.down);
 
         // Gamepad d-pad mirrors A/D/W/S (Q/E depth stays mouse/keyboard-only, low value on a pad).
-        if (GamepadInput.CycleBlockPrevDown) manualOffset -= right;
-        if (GamepadInput.CycleBlockNextDown) manualOffset += right;
-        if (GamepadInput.DPadUpDown)         manualOffset += Vector3Int.up;
-        if (GamepadInput.DPadDownDown)       manualOffset += Vector3Int.down;
+        if (GamepadInput.CycleBlockPrevDown) Nudge(-right);
+        if (GamepadInput.CycleBlockNextDown) Nudge(right);
+        if (GamepadInput.DPadUpDown)         Nudge(Vector3Int.up);
+        if (GamepadInput.DPadDownDown)       Nudge(Vector3Int.down);
+    }
+
+    // One step of keyboard/d-pad nudge.
+    //
+    // In snapping mode the nudge can't just add to manualOffset and hope. The snap
+    // solver runs again next frame, re-derives baseGridPos from the (unmoved) mouse
+    // ray, and tests `raw + manualOffset` — so when the nudged cell isn't placeable
+    // it goes hunting for a base that makes some OTHER nearby cell valid, and the
+    // one it finds is usually the cell we just left. The block visibly refuses to
+    // move, and pressing again does nothing. Rejecting the step here is honest
+    // about what happened instead of letting the solver quietly undo it.
+    void Nudge(Vector3Int delta)
+    {
+        if (delta == Vector3Int.zero) return;
+
+        // Free move has no support constraint at all — the offset IS the position.
+        if (GameSettings.FreeMove) { manualOffset += delta; return; }
+
+        var cells = GetRotatedCells();
+        if (cells.Length > 0 && !CanPlace(currentGridPos + delta, cells)) return;
+        manualOffset += delta;
     }
 
     // Select mode: WASD pans the camera continuously along its horizontal facing,
@@ -1698,9 +1735,10 @@ public partial class PlacementController : MonoBehaviour
 
         // Underground (y < 0) is allowed — you can build down into the earth — but
         // a block must still touch an existing block or endpoint. The Chaos Block
-        // doesn't count as support (HasSupportingNeighbor26 skips it), so you can't
-        // stack a turret straight onto it to attack it.
-        if (!grid.HasSupportingNeighbor26(worldCells))
+        // doesn't count as support (HasSupportingNeighbor18 skips it), so you can't
+        // stack a turret straight onto it to attack it. Corner-only contact doesn't
+        // count either — see GridSystem.IsCornerOffset.
+        if (!grid.HasSupportingNeighbor18(worldCells))
             return PlaceFailureReason.NotAdjacent;
 
         return PlaceFailureReason.None;
@@ -1739,6 +1777,7 @@ public partial class PlacementController : MonoBehaviour
             for (int dz = -1; dz <= 1; dz++)
             {
                 if (dx == 0 && dy == 0 && dz == 0) continue;
+                if (GridSystem.IsCornerOffset(dx, dy, dz)) continue;   // same 18-neighbourhood placement uses
                 var n = new Vector3Int(cell.x + dx, cell.y + dy, cell.z + dz);
                 if (!grid.IsOccupied(n)) continue;
                 if (excludeCells.Contains(n)) continue;

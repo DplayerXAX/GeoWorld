@@ -11,6 +11,7 @@
 						<ObjectRef Name="Idle_Loop" ID="{0B040373-40A3-4150-A014-B9601F6A69C9}" WorkUnitID="{FD1D3805-1493-4712-94C6-0E6DB7322D3D}" Origin="Manual" Filter="7"/>
 						<ObjectRef Name="Battle_Loop" ID="{6E21EF0F-E595-4270-976A-19DECCBC9F2C}" WorkUnitID="{FD1D3805-1493-4712-94C6-0E6DB7322D3D}" Origin="Manual" Filter="7"/>
 						<ObjectRef Name="rotate" ID="{9F0FC09E-EFE1-4273-BE8D-938E9B2D5ABB}" WorkUnitID="{FD1D3805-1493-4712-94C6-0E6DB7322D3D}" Origin="Manual" Filter="7"/>
+						<ObjectRef Name="boss_fight" ID="{4ABA170F-9CAF-42DC-839C-B82A0DC6C250}" WorkUnitID="{FD1D3805-1493-4712-94C6-0E6DB7322D3D}" Origin="Manual" Filter="7"/>
 						<ObjectRef Name="scroll" ID="{C4CD9B9D-4062-4426-94CD-EE02F46401EE}" WorkUnitID="{FD1D3805-1493-4712-94C6-0E6DB7322D3D}" Origin="Manual" Filter="7"/>
 						<ObjectRef Name="Piece_Normal" ID="{FFFC71CD-910F-4439-A444-F74F4054F8BC}" WorkUnitID="{FD1D3805-1493-4712-94C6-0E6DB7322D3D}" Origin="Manual" Filter="7"/>
 						<ObjectRef Name="Play_Arp_Note" ID="{35F24250-09C5-4512-93E3-DA3812BA0D80}" WorkUnitID="{FD1D3805-1493-4712-94C6-0E6DB7322D3D}" Origin="Manual" Filter="7"/>

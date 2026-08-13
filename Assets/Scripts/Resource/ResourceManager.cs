@@ -173,10 +173,12 @@ public class ResourceManager : MonoBehaviour
     // BalanceTable.GetTypeMult or the two paths silently price differently.
     static float TypeMult(BlockType t) => t switch
     {
-        BlockType.Lift   => 1.4f,
-        BlockType.Shadow => 0.85f,
-        BlockType.Turret => 0.8f,
-        _                => 1.0f
+        BlockType.Lift       => 1.4f,
+        BlockType.Shadow     => 0.85f,
+        BlockType.Turret     => 0.7f,
+        BlockType.SlowTurret => 0.9f,
+        BlockType.AoeTurret  => 1.2f,
+        _                    => 1.0f
     };
 
     /// <summary>
@@ -193,6 +195,8 @@ public class ResourceManager : MonoBehaviour
         // Route through the balance asset's identical formula when wired.
         if (balance != null) return balance.ComputePrice(data, round, fluctuation);
 
+        if (TurretTypes.Is(data.blockType)) fluctuation = 1f;   // flat, same as BalanceTable
+
         int   cells     = (data.cells != null && data.cells.Length > 0) ? data.cells.Length : 1;
         float roundMult = 1f + round * roundPriceScale;
         float raw       = cells * cellBasePrice
@@ -203,12 +207,21 @@ public class ResourceManager : MonoBehaviour
         return Mathf.Max(1, Mathf.RoundToInt(raw));
     }
 
+    /// <summary>
+    /// Sandbox mode: every price is affordable and nothing is ever deducted.
+    /// Driven by LevelDefinition.infiniteResources, so it's a property OF THE LEVEL
+    /// rather than a global cheat toggle — a test level can't leak it into a real
+    /// run, and there's no state to remember to switch back off.
+    /// </summary>
+    public static bool InfiniteResources =>
+        RunConfig.Mode == GameMode.Level && RunConfig.Level != null && RunConfig.Level.infiniteResources;
+
     /// <summary>Returns true if the player can afford <paramref name="price"/>.</summary>
-    public bool CanAfford(int price) => _blockCurrency >= price;
+    public bool CanAfford(int price) => InfiniteResources || _blockCurrency >= price;
 
     /// <summary>Type-aware affordability: turrets check turret pool, others check block pool.</summary>
     public bool CanAfford(int price, BlockType type) =>
-        TurretTypes.Is(type) ? _turretCurrency >= price : _blockCurrency >= price;
+        InfiniteResources || (TurretTypes.Is(type) ? _turretCurrency >= price : _blockCurrency >= price);
 
     /// <summary>Adds <paramref name="amount"/> back to block currency (used by undo).</summary>
     public void RefundBlock(int amount)
@@ -230,6 +243,8 @@ public class ResourceManager : MonoBehaviour
     /// </summary>
     public bool TryBuy(int price, BlockType type)
     {
+        if (InfiniteResources) return true;   // sandbox — buy anything, deduct nothing
+
         bool isTurret = TurretTypes.Is(type);
         int  pool     = isTurret ? _turretCurrency : _blockCurrency;
         if (pool < price)
@@ -277,6 +292,7 @@ public class ResourceManager : MonoBehaviour
     /// <summary>Attempt to spend turret currency. Returns false if insufficient.</summary>
     public bool TrySpendTurret(int amount)
     {
+        if (InfiniteResources) return true;
         if (_turretCurrency < amount) return false;
         _turretCurrency -= amount;
         OnTurretCurrencyChanged?.Invoke(_turretCurrency);

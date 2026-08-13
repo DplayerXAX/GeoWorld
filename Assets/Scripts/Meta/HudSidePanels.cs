@@ -52,6 +52,36 @@ public class HudSidePanels : MonoBehaviour
 
     bool _synOpen, _ctrlOpen;
 
+    // Which panel a caller wants shown. Mirrors TutorialStep.openPanel.
+    public enum Side { None, Synergy, Controls }
+
+    // Opens a panel from outside — the tutorial pointing at the thing it's about to
+    // talk about. Static and null-safe on the instance so a step can ask for this
+    // without caring whether the HUD has spawned yet.
+    public static void Open(Side side)
+    {
+        if (side == Side.None) return;
+
+        // Instance is set in Awake, but two instances can briefly race (a
+        // scene-placed one destroying the auto-spawned default), so fall back to a
+        // search rather than silently doing nothing.
+        var inst = Instance != null ? Instance : FindFirstObjectByType<HudSidePanels>();
+        if (inst == null) return;
+
+        if (side == Side.Synergy) inst._synOpen  = true;
+        else                      inst._ctrlOpen = true;
+
+        // The tutorial step that opens a panel is itself advanced BY a click, and
+        // Update's close-on-click-anywhere would see that same still-pressed click
+        // and shut the panel in the frame it opened. Record the frame so that one
+        // click can't both open and close it.
+        inst._openedFrame = Time.frameCount;
+    }
+
+    public static HudSidePanels Instance { get; private set; }
+
+    int _openedFrame = -1;
+
     Canvas        _canvas;
     RectTransform _leftPanel, _rightPanel, _leftHandle, _rightHandle, _leftContent, _rightContent;
 
@@ -77,6 +107,8 @@ public class HudSidePanels : MonoBehaviour
         var all = FindObjectsByType<HudSidePanels>(FindObjectsSortMode.None);
         foreach (var o in all)
             if (o != this && o._autoSpawned) Destroy(o.gameObject);
+
+        Instance = this;
 
         // If this very object is a leftover duplicate auto-spawn, bail.
         if (_autoSpawned && all.Length > 1 && System.Array.Exists(all, o => o != this && !o._autoSpawned))
@@ -124,7 +156,7 @@ public class HudSidePanels : MonoBehaviour
         // Click anywhere while a panel is open → collapse it (and swallow that click
         // so it doesn't also place / select in the world).
         bool closedThisClick = false;
-        if (Input.GetMouseButtonDown(0) && (_synOpen || _ctrlOpen))
+        if (Input.GetMouseButtonDown(0) && (_synOpen || _ctrlOpen) && Time.frameCount != _openedFrame)
         {
             _synOpen = _ctrlOpen = false;
             closedThisClick = true;

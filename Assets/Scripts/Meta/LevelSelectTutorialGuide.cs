@@ -36,8 +36,10 @@ public class LevelSelectTutorialGuide : MonoBehaviour
     public float arrowSize = 0.5f;
 
     [Header("Walk gate camera zoom-in")]
-    [Tooltip("OrbitCamera zoom when the ls.walk gate fires. Default orbit distance is 10.")]
-    public float walkFocusZoom = 5f;
+    [Tooltip("Orbit distance the guide pushes to. LevelSelect is PERSPECTIVE, so this is the physical camera-to-target distance; the rig's own default is 10.")]
+    public float walkFocusZoom = 7f;
+    [Tooltip("World units the guide backs the camera off after focusing — the same nudge a tap on S gives. The focus lands centred, which puts it under the dialogue box; this slides the whole shot back so the target clears it.")]
+    public float walkFocusPullBack = 3.2f;
 
     [Header("Tutorial-level arrow (EnterLevel)")]
     [Tooltip("levelId the EnterLevel gate points the world arrow at.")]
@@ -81,24 +83,54 @@ public class LevelSelectTutorialGuide : MonoBehaviour
             if (enterRect != null) ShowUiPointer(enterRect);
 
             var targetPos = lmc.FindLevelNodePosition(enterLevelTargetId);
-            if (targetPos.HasValue) ShowWorldArrow(targetPos.Value, height: tutorialNodeArrowHeight);
+            if (targetPos.HasValue)
+            {
+                ShowWorldArrow(targetPos.Value, height: tutorialNodeArrowHeight);
+                // This gate is the "let's go to the closest one" line, so the camera
+                // goes and looks at it. The line names a destination the player has
+                // no reason to have found yet — an arrow on a node that's off-screen
+                // points at nothing.
+                FocusCameraOnce(targetPos.Value, zoomIn: true);
+            }
             return;
         }
 
-        // Walk / OpenBuild / Place all happen right where the pawn is standing.
-        if (lmc.pawn != null)
-        {
-            ShowWorldArrow(lmc.pawn.position, followPawn: true, height: arrowHeight);
-            FocusCameraOnce(lmc.pawn.position, zoomIn: gateId == LevelMapController.TutorialGateIds.Walk);
-        }
+        if (lmc.pawn == null) return;
+
+        // Arrow on the pawn for every remaining gate — that's where the player acts.
+        ShowWorldArrow(lmc.pawn.position, followPawn: true, height: arrowHeight);
+
+        // Camera only on Walk. The two reward-block gates are already framed by
+        // LevelMapController.UpdateBuildSuggestionBox, which points at where the
+        // block has to GO; re-aiming at the pawn here would drag the shot off that
+        // target the moment the second line came up.
+        if (gateId == LevelMapController.TutorialGateIds.Walk)
+            FocusCameraOnce(lmc.pawn.position, zoomIn: true);
     }
 
     void FocusCameraOnce(Vector3 worldPos, bool zoomIn = false)
     {
         if (_cam == null) _cam = Camera.main;
         if (_orbit == null && _cam != null) _orbit = _cam.GetComponent<OrbitCamera>();
-        _orbit?.FocusOnPoint(worldPos, snap: false);   // eased pan, not a jump-cut
-        if (zoomIn && walkFocusZoom > 0f) _orbit?.SetZoom(walkFocusZoom);
+        if (_orbit == null) return;
+
+        // The back-off is folded into the FOCUS POINT rather than applied as a pan.
+        // OrbitCamera.Pan moves the rig immediately (so that continuous WASDQE input
+        // stays rigid and doesn't swing) — which is exactly wrong for a one-shot:
+        // a single 3-unit Pan teleported the camera and the ease then hauled it
+        // back, which is the snap this used to have. Moving the focus back along the
+        // camera's own forward moves the camera back by the same amount, and there's
+        // only one eased target instead of two fighting.
+        Vector3 focus = worldPos;
+        if (walkFocusPullBack > 0f && _cam != null)
+        {
+            Vector3 fwd = _cam.transform.forward;
+            fwd.y = 0f;
+            if (fwd.sqrMagnitude > 0.0001f) focus -= fwd.normalized * walkFocusPullBack;
+        }
+
+        _orbit.FocusOnPoint(focus, snap: false);   // eased glide, not a jump-cut
+        if (zoomIn && walkFocusZoom > 0f) _orbit.SetZoom(walkFocusZoom);
     }
 
     void ShowWorldArrow(Vector3 worldPos, bool followPawn = false, float height = -1f)

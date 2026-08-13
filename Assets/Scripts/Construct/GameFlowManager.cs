@@ -268,7 +268,6 @@ public class GameFlowManager : MonoBehaviour
     {
         if (_levelDone) return;
         _levelDone = true;
-        AudioManager.Instance?.PlayVictory();
 
         if (phase == GamePhase.Running)
         {
@@ -277,8 +276,16 @@ public class GameFlowManager : MonoBehaviour
             ResourceManager.Instance?.SetCombatActive(false);
             enemyBaseManager?.CancelWave();
             BackgroundReactor.Instance?.SetCombatMode(false);
-            AudioManager.Instance?.ExitBattleBGM();
+            AudioManager.Instance?.PlayFightEnd();   // a fight really did end — but see below
         }
+
+        // Silence the BGM BEFORE the stinger, and unconditionally — an
+        // objective-driven clear fires from the Build phase, where the calm loop is
+        // what's playing. Deliberately NOT ExitBattleBGM (which posts fight_end but
+        // also SWAPS to the calm loop): Victory has to play alone, so the stinger is
+        // posted on its own above and the music is stopped outright here.
+        AudioManager.Instance?.StopBGM(200);
+        AudioManager.Instance?.PlayVictory();
         Time.timeScale = 1f;
         phase = GamePhase.Build;
 
@@ -451,12 +458,14 @@ public class GameFlowManager : MonoBehaviour
 
     // Alternates: even roundIndex → +start, odd → +end.
     // Distance window widens so later endpoints can span larger gaps.
-    public void AddNextEndpoint()
+    // Automatic cadence: alternate start / end. Used when the level doesn't author
+    // its own schedule (LevelDefinition.startPointWaves / endPointWaves).
+    public void AddNextEndpoint() => AddEndpoint(roundIndex % 2 == 0);
+
+    public void AddEndpoint(bool addStart)
     {
         float extraRange = roundIndex * 1.5f;
         ConfigureEndpointBounds(extraRange);
-
-        bool addStart = (roundIndex % 2 == 0);
 
         if (addStart)
         {
@@ -659,6 +668,17 @@ public class GameFlowManager : MonoBehaviour
         // Per-turn synergy payouts (Abundance harvest, etc.) run after the
         // standing income + token spawn so they see the live synergy state.
         OnTurnStarted?.Invoke();
+
+        // Redraw the live preview for the endpoint set as it stands NOW.
+        //
+        // Run() clears the live lines when a wave commits, and EndRunningPhase can
+        // add a whole new spawn point before handing back to Build — but nothing
+        // between those two points rebuilds the preview, so a freshly added spawn
+        // point had no line until the player happened to place or remove a block.
+        // (The Run itself was always fine: it recomputes FindAllSpawnPaths from
+        // scratch, which is why enemies still came out of a spawn point that
+        // looked unconnected.)
+        EvaluateGrid();
     }
 
     // Called after every block place/remove — rebuilds graph, refreshes live
@@ -1032,11 +1052,28 @@ public class GameFlowManager : MonoBehaviour
         if (HandleWaveProgress()) return;
 
         // Add a new endpoint only every N completed runs.
-        _runsSinceLastEndpoint++;
-        if (_runsSinceLastEndpoint >= runsPerEndpoint)
+        // An authored schedule wins outright — a level that lists its endpoint waves
+        // is stating exactly when the route changes, and the automatic cadence
+        // running alongside it would insert extra ones the author never asked for.
+        var sched = RunConfig.Mode == GameMode.Level ? RunConfig.Level : null;
+        if (sched != null && sched.HasEndpointSchedule)
         {
-            _runsSinceLastEndpoint = 0;
-            AddNextEndpoint();
+            _runsSinceLastEndpoint++;
+            var kind = sched.EndpointKindAfterWave(_wavesCompleted);
+            if (kind.HasValue)
+            {
+                _runsSinceLastEndpoint = 0;
+                AddEndpoint(kind.Value);
+            }
+        }
+        else
+        {
+            _runsSinceLastEndpoint++;
+            if (_runsSinceLastEndpoint >= runsPerEndpoint)
+            {
+                _runsSinceLastEndpoint = 0;
+                AddNextEndpoint();
+            }
         }
 
         // Roguelite choice. Non-blocking — Build phase starts immediately,

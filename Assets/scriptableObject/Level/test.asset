@@ -19,7 +19,9 @@ MonoBehaviour:
   runSeed: 0
   blocksPerTurn: 3
   turretsPerTurn: 3
-  allowedColors: 
+  infiniteResources: 1
+  synergyEnabled: 1
+  allowedColors: 04000000
   startingShop: []
   waves: []
   wavesToClear: 5
@@ -38,17 +40,23 @@ MonoBehaviour:
   unlocks: []
   techReward: 1
   mapBlockRewards: []
+  rewardConversation: {fileID: 0}
+  rewardSuggestCubeSide: 0
+  rewardSuggestOrigin: {x: 0, y: 0, z: 0}
+  rewardSuggestRotation90: {x: 0, y: 0, z: 0}
   isTutorial: 0
   fixedEndpoints: 0
   startCell: {x: 0, y: 0, z: 0}
   endCell: {x: 0, y: 0, z: 0}
   tutorialSteps: []
   startingLayout: {fileID: 0}
-  chaosBlockEnabled: 0
-  chaosBlockStartWave: 1
-  chaosBlockHealth: 20
-  chaosBlockCurrencyDrain: 5
-  chaosBlockMinDistance: 4
-  chaosBlockMaxDistance: 7
-  chaosBlockSearchMargin: 6
-  chaosBlockMaxSimultaneous: 6
+  overrideEndpointDistance: 0
+  endpointMinDistance: 5
+  endpointMaxDistance: 10
+  overrideInitialCamera: 0
+  initialCameraFocus: {x: 0, y: 0, z: 0}
+  initialCameraYaw: 45
+  initialCameraPitch: 35
+  initialCameraDistance: 15
+  initialCameraFov: 60
+  mechanics: []

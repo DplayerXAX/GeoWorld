@@ -68,6 +68,7 @@ public class AxisGizmo : MonoBehaviour
         public Image         handleImg;
         public TMP_Text      label;
         public Color         color;
+        public Vector2       fallback;   // where this end parks when the axis points at the camera
     }
     Axis[] _axes;
 
@@ -98,6 +99,16 @@ public class AxisGizmo : MonoBehaviour
         Vector3 local = _cam.transform.InverseTransformDirection(a.dir);
         Vector2 screen = new Vector2(local.x, local.y) * radius;
 
+        // An axis aimed at (or directly away from) the camera projects to nothing,
+        // so BOTH its ends collapse onto the origin and land exactly on top of each
+        // other — whichever draws on top eats the click and the other one simply
+        // can't be pressed. Ease each end out along its own fixed direction as the
+        // projection shrinks, so a pair always keeps a gap between them.
+        float minR = radius * 0.42f;
+        float mag  = screen.magnitude;
+        if (mag < minR)
+            screen = Vector2.Lerp(a.fallback * minR, screen, mag / minR);
+
         a.handle.anchoredPosition = screen;
 
         float len = screen.magnitude;
@@ -116,16 +127,24 @@ public class AxisGizmo : MonoBehaviour
         a.handle.SetSiblingIndex(local.z > 0f ? 0 : _root.childCount - 1);   // near draws over far
     }
 
-    // Click +X → camera ends up looking from +X back at the origin, so forward = -axis.
-    void SnapTo(int axisIndex)
+    // Clicking a handle means "stand me on that side, looking back at the board",
+    // so the camera's forward is the OPPOSITE of the axis the handle sits on.
+    void SnapTo(Vector3 dir)
     {
         if (_orbit == null) return;
-        switch (axisIndex)
+
+        // Poles: looking straight down (or up) leaves yaw undefined, so keep the
+        // heading the player already had rather than snapping it somewhere arbitrary.
+        if (Mathf.Abs(dir.y) > 0.5f)
         {
-            case 0: _orbit.SetWorldYawPitch(-90f, sideViewPitch); break;                    // X — side
-            case 1: _orbit.SetWorldYawPitch(_orbit.WorldYaw, topViewPitch); break;          // Y — top (heading unchanged)
-            default: _orbit.SetWorldYawPitch(180f, sideViewPitch); break;                   // Z — front
+            _orbit.SetWorldYawPitch(_orbit.WorldYaw, dir.y > 0f ? topViewPitch : -topViewPitch);
+            return;
         }
+
+        // Reproduces the old hardcoded mapping (+X → -90°, +Z → 180°) and extends
+        // it to the negative ends for free.
+        float yaw = Mathf.Atan2(-dir.x, -dir.z) * Mathf.Rad2Deg;
+        _orbit.SetWorldYawPitch(yaw, sideViewPitch);
     }
 
     // ── Build ────────────────────────────────────────────────────────────────
@@ -159,19 +178,33 @@ public class AxisGizmo : MonoBehaviour
         tracker.onEnter = () => PointerOver = true;
         tracker.onExit  = () => PointerOver = false;
 
+        // Six handles, not three. With only the positive ends, half the views were
+        // reachable solely by clicking a handle that had swung BEHIND the origin —
+        // faded, overlapped by the near ones, and effectively unclickable. A handle
+        // per direction means whichever view you want, its handle is facing you.
         _axes = new[]
         {
-            MakeAxis("X", Vector3.right,   xColor, 0),
-            MakeAxis("Y", Vector3.up,      yColor, 1),
-            MakeAxis("Z", Vector3.forward, zColor, 2),
+            MakeAxis("X", Vector3.right,   xColor),
+            MakeAxis("Y", Vector3.up,      yColor),
+            MakeAxis("Z", Vector3.forward, zColor),
+            MakeAxis("X", Vector3.left,    xColor),
+            MakeAxis("Y", Vector3.down,    yColor),
+            MakeAxis("Z", Vector3.back,    zColor),
         };
     }
 
-    Axis MakeAxis(string letter, Vector3 dir, Color color, int index)
+    Axis MakeAxis(string letter, Vector3 dir, Color color)
     {
-        var a = new Axis { dir = dir, color = color };
+        // Opposite ends of one axis get opposite park directions, so the separation
+        // above pushes them apart rather than to the same spot.
+        Vector2 fallback = Mathf.Abs(dir.x) > 0.5f ? new Vector2(1f, 0f) * Mathf.Sign(dir.x)
+                         : Mathf.Abs(dir.y) > 0.5f ? new Vector2(0f, 1f) * Mathf.Sign(dir.y)
+                         : new Vector2(0.707f, -0.707f) * Mathf.Sign(dir.z);
 
-        a.arm = NewRect($"Arm_{letter}", _root);   // pivoted at left edge so it grows outward from centre
+        var a = new Axis { dir = dir, color = color, fallback = fallback };
+        string id = (dir.x + dir.y + dir.z > 0f ? "+" : "-") + letter;
+
+        a.arm = NewRect($"Arm_{id}", _root);   // pivoted at left edge so it grows outward from centre
         a.arm.anchorMin = a.arm.anchorMax = new Vector2(0.5f, 0.5f);
         a.arm.pivot = new Vector2(0f, 0.5f);
         a.arm.anchoredPosition = Vector2.zero;
@@ -179,7 +212,7 @@ public class AxisGizmo : MonoBehaviour
         a.armImg.color = color;
         a.armImg.raycastTarget = false;
 
-        a.handle = NewRect($"Handle_{letter}", _root);   // clickable letter disc at the arm's tip
+        a.handle = NewRect($"Handle_{id}", _root);   // clickable disc at the arm's tip
         a.handle.anchorMin = a.handle.anchorMax = a.handle.pivot = new Vector2(0.5f, 0.5f);
         a.handle.sizeDelta = Vector2.one * handleSize;
         a.handleImg = a.handle.gameObject.AddComponent<Image>();
@@ -193,11 +226,11 @@ public class AxisGizmo : MonoBehaviour
         colors.highlightedColor = GeoPalette.Gold;
         colors.pressedColor = GeoPalette.Paper;
         btn.colors = colors;
-        int captured = index;
+        Vector3 captured = dir;
         btn.onClick.AddListener(() => SnapTo(captured));
 
-        a.label = NewText($"Label_{letter}", a.handle, handleSize * 0.62f);
-        a.label.text = letter;
+        a.label = NewText($"Label_{id}", a.handle, handleSize * 0.62f);
+        a.label.text = letter;   // no +/- prefix: this board has no privileged direction
         var lrt = a.label.rectTransform;
         lrt.anchorMin = Vector2.zero; lrt.anchorMax = Vector2.one;
         lrt.offsetMin = lrt.offsetMax = Vector2.zero;
