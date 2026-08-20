@@ -85,7 +85,7 @@ public class PauseMenu : MonoBehaviour
         // pause menu both consume the same keypress in the same frame, so leaving
         // the minigame dumped you straight into a paused map.
         if ((Input.GetKeyDown(toggleKey) || GamepadInput.TogglePauseDown)
-            && !SettingsScreen.Open && !BlockTetris3D.Active)
+            && !SettingsScreen.Open && !MinigameStage.AnyActive)
         {
             if (_menuOpen) SetMenuOpen(false);   // Esc backs out of the menu first
             else           SetPaused(!_paused);  // otherwise toggles the planning pause
@@ -95,7 +95,7 @@ public class PauseMenu : MonoBehaviour
         // never drift apart. Blocked while the settings screen is up (it may be
         // listening for this very key to rebind it) and under a minigame overlay.
         if (Input.GetKeyDown(GameSettings.FastForwardKey)
-            && !SettingsScreen.Open && !BlockTetris3D.Active)
+            && !SettingsScreen.Open && !MinigameStage.AnyActive)
             CycleSpeed();
 
         _controlsGo.SetActive(showControls);

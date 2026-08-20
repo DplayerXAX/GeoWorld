@@ -7,6 +7,11 @@ public class PlacedBlockInstance
     public List<Vector3Int> occupiedCells = new();
     public GameObject visualObject;
 
+    // Which player put this here. 0 in single-player, which is also that session's
+    // only player — so ownership questions have the same answer shape in both modes
+    // and nothing needs an "if networked" branch. See MultiplayerSession.
+    public int ownerId;
+
     // Synergy theme color this piece was assigned at spawn time. Copied from
     // SelectableBlock.color (or BlockColor.None for direct/legacy placements).
     public BlockColor color = BlockColor.None;

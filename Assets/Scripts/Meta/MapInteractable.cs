@@ -9,6 +9,8 @@ public enum MapInteractableKind
 public enum MinigameId
 {
     BlockTetris3D,
+    BalanceTower,
+    Clepsydra,
 }
 
 // A non-level point of interest on the LevelSelect map — an NPC to talk to, a

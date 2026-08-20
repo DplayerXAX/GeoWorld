@@ -98,6 +98,22 @@ public class BlockTetris3D : MonoBehaviour
         PlayMusic();
     }
 
+
+    // This overlay can also go away WITHOUT Quit running — a scene load, or the
+    // object being destroyed by something else. Host music left paused across that
+    // is an instance nobody owns any more, and the next thing to stop it stops a
+    // PAUSED segment, which is what the music engine asserts on. Safe after Quit
+    // too: ResumeHostMusic clears its own list, so the second call does nothing.
+    //
+    // (This game predates MinigameStage and still owns its own pause/resume — see
+    // PauseHostMusic below.)
+    void OnDestroy()
+    {
+        Active = false;
+        StopMusic();
+        ResumeHostMusic();
+    }
+
     void Quit()
     {
         Active = false;

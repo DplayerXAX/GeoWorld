@@ -20,8 +20,10 @@ MonoBehaviour:
   blocksPerTurn: 3
   turretsPerTurn: 3
   infiniteResources: 1
+  startPointWaves: 
+  endPointWaves: 
   synergyEnabled: 1
-  allowedColors: 04000000
+  allowedColors: 04000000020000000500000006000000070000000100000003000000
   startingShop: []
   waves: []
   wavesToClear: 5

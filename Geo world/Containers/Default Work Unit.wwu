@@ -2984,6 +2984,11 @@
 							<PropertyList>
 								<Property Name="EndPosition" Type="Real64" Value="43875.0113378685"/>
 								<Property Name="OverrideOutput" Type="bool" Value="True"/>
+								<Property Name="PlaybackSpeed" Type="Real64">
+									<ValueList>
+										<Value>0.85</Value>
+									</ValueList>
+								</Property>
 							</PropertyList>
 							<ReferenceList>
 								<Reference Name="Conversion">

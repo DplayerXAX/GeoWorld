@@ -110,6 +110,8 @@ public partial class LevelMapController : MonoBehaviour
                 switch (d.minigame)
                 {
                     case MinigameId.BlockTetris3D: BlockTetris3D.Launch(cubePrefab, d.id); break;
+                    case MinigameId.BalanceTower:  BalanceTower.Launch(cubePrefab, d.id);  break;
+                    case MinigameId.Clepsydra:     Clepsydra.Launch(cubePrefab, d.id);     break;
                 }
                 break;
         }
