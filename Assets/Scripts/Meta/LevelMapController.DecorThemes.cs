@@ -92,6 +92,13 @@ public class ObservatoryConfig : MapDecorConfig
     [Range(0, 60)] public int stars = 26;
     public Color starColor  = new Color(0.95f, 0.94f, 0.78f);
 
+    [Tooltip("Star motes joined into constellations. This is Enlightenment's whole visual language in the game — points, some of which are joined — so the plot that represents it should be saying it too.")]
+    [Range(0, 24)] public int constellationLinks = 10;
+    public Color linkColor = new Color(0.55f, 0.70f, 1f);
+
+    [Tooltip("A meridian arc standing over the plaza — the instrument an observatory is FOR. 0 = none.")]
+    [Range(0, 24)] public int meridianSegments = 14;
+
     public override string RootName => "Observatory";
 
     public ObservatoryConfig()
@@ -364,7 +371,110 @@ public partial class LevelMapController : MonoBehaviour
                                         Quaternion.Euler(45f, Hash01(DecorHash(i, 907)) * 90f, 45f),
                                         Vector3.one * sz, cfg.starColor);
                 twinkle.Add(star, Hash01(DecorHash(i, 1223)) * Mathf.PI * 2f);
+                _starPositions.Add(pos);
             }
+
+            BuildConstellations(field, cfg, cs);
+            _starPositions.Clear();
+        }
+
+        BuildMeridianArc(root, cfg, basePos, rad, cs);
+    }
+
+    // Joins some of the motes into constellations.
+    //
+    // A field of loose points is a starry sky; a field with a few of them JOINED is
+    // Enlightenment — the synergy is literally "same-colour pieces forming a shape",
+    // and its own visualiser draws stars linked by lines. The plot that stands for it
+    // should speak the same sentence.
+    //
+    // Nearest-unused-neighbour rather than random pairs: random pairs make a cat's
+    // cradle across the whole sky, and a constellation is a SHORT chain of near
+    // things. Chains break and restart, so the sky ends up with several figures
+    // instead of one polygon.
+    readonly List<Vector3> _starPositions = new();
+
+    void BuildConstellations(Transform field, ObservatoryConfig cfg, float cs)
+    {
+        if (cfg.constellationLinks <= 0 || _starPositions.Count < 2) return;
+
+        var used = new HashSet<int>();
+        int cur  = 0, drawn = 0, runLength = 0;
+        used.Add(0);
+
+        while (drawn < cfg.constellationLinks)
+        {
+            int best = -1;
+            float bestD = float.MaxValue;
+            for (int i = 0; i < _starPositions.Count; i++)
+            {
+                if (used.Contains(i)) continue;
+                float d = (_starPositions[i] - _starPositions[cur]).sqrMagnitude;
+                if (d < bestD) { bestD = d; best = i; }
+            }
+            if (best < 0) break;
+
+            Vector3 a = _starPositions[cur], b = _starPositions[best];
+            Vector3 mid = (a + b) * 0.5f;
+            Vector3 dir = b - a;
+
+            MakeMeshProp(field, $"Link{drawn}", RailMesh(), mid,
+                         Quaternion.LookRotation(dir.normalized, Vector3.up),
+                         new Vector3(cs * 0.012f, cs * 0.012f, dir.magnitude), cfg.linkColor);
+
+            used.Add(best);
+            cur = best;
+            drawn++;
+
+            // Break the chain every few links so the sky gets several figures rather
+            // than one long polyline wandering through every star.
+            if (++runLength >= 3 + (drawn % 2))
+            {
+                runLength = 0;
+                for (int i = 0; i < _starPositions.Count; i++)
+                    if (!used.Contains(i)) { cur = i; used.Add(i); break; }
+            }
+        }
+    }
+
+    // The meridian arc: a brass half-hoop standing north-south over the plaza.
+    //
+    // Built from straight segments rather than a ring mesh, because it is a HALF
+    // hoop — and because segmenting it lets the ends sink into the ground instead of
+    // floating, which is the difference between an instrument and a prop.
+    void BuildMeridianArc(Transform root, ObservatoryConfig cfg, Vector3 basePos, float rad, float cs)
+    {
+        if (cfg.meridianSegments <= 0) return;
+
+        var arc = new GameObject("MeridianArc").transform;
+        arc.SetParent(root, false);
+
+        float R = rad * 2.4f;
+        int   n = cfg.meridianSegments;
+
+        for (int i = 0; i < n; i++)
+        {
+            float a0 = Mathf.PI * i / n;
+            float a1 = Mathf.PI * (i + 1) / n;
+            Vector3 p0 = basePos + new Vector3(Mathf.Cos(a0) * R, Mathf.Sin(a0) * R, 0f);
+            Vector3 p1 = basePos + new Vector3(Mathf.Cos(a1) * R, Mathf.Sin(a1) * R, 0f);
+            Vector3 d  = p1 - p0;
+
+            MakeMeshProp(arc, $"Arc{i}", RailMesh(), (p0 + p1) * 0.5f,
+                         Quaternion.LookRotation(d.normalized, Vector3.up),
+                         new Vector3(cs * 0.05f, cs * 0.05f, d.magnitude * 1.04f), cfg.brassColor);
+        }
+
+        // Graduation ticks along the outside — the marks that make it a measuring
+        // instrument and not a decorative hoop.
+        for (int i = 0; i <= n; i++)
+        {
+            float a = Mathf.PI * i / n;
+            Vector3 outward = new Vector3(Mathf.Cos(a), Mathf.Sin(a), 0f);
+            MakeMeshProp(arc, $"Tick{i}", RailMesh(), basePos + outward * (R + cs * 0.07f),
+                         Quaternion.LookRotation(outward, Vector3.up),
+                         new Vector3(cs * 0.02f, cs * (i % 3 == 0 ? 0.16f : 0.09f), cs * 0.02f),
+                         cfg.drumColor);
         }
     }
 

@@ -25,12 +25,17 @@ public class TitleFlow : MonoBehaviour
     public string levelSelectScene = "LevelSelect";
     public string gameplayScene    = "gamePlay";
     public string galleryScene     = "Gallery";
+    public string lobbyScene       = "Lobby";
 
     [Header("Save select")]
     [Tooltip("Level registry — used to compute each slot's completion % in the hover tooltip. Drag the same LevelDatabase the map uses.")]
     public LevelDatabase database;
 
-    void Awake() => Instance = this;
+    void Awake()
+    {
+        Instance = this;
+        LevelRegistry.Register(database);   // so the multiplayer lobby can resolve level ids
+    }
     void Start()
     {
         // Volume is pushed to Wwise by AudioSettingsReapplier (GameSettings.cs),
@@ -87,6 +92,13 @@ public class TitleFlow : MonoBehaviour
     public void OpenSettings()   { SettingsScreen.Open = true; }
     public void LoadLevelSelect(){ LoadingScreen.Go(levelSelectScene); }   // save slots → world select
     public void GoToGallery()    { LoadingScreen.Go(galleryScene); }       // its own scene, not a Face
+    // Gated while multiplayer is unfinished — see DevGate on what that gate is and
+    // is not worth. Bind a title button straight to THIS; the prompt is part of the
+    // action rather than something the caller has to remember to put in front of it.
+    public void OpenMultiplayer()
+    {
+        DevGate.Ask("MULTIPLAYER IS IN DEVELOPMENT", () => LoadingScreen.Go(lobbyScene));
+    }
     public void Quit()
     {
 #if UNITY_EDITOR

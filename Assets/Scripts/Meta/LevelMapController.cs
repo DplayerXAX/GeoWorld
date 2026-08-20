@@ -199,7 +199,11 @@ public partial class LevelMapController : MonoBehaviour
     [Header("Aside test")]
     public DialogueCharacter defaultCharacter;
 
-    void Awake() => Instance = this;
+    void Awake()
+    {
+        Instance = this;
+        LevelRegistry.Register(database);   // so the multiplayer lobby can resolve level ids
+    }
 
     void Start()
     {
@@ -1176,7 +1180,7 @@ public partial class LevelMapController : MonoBehaviour
         HandleFocusViewportDrag();   // middle-mouse drag — no conflict with build mode, so it runs unconditionally
         // No clicking/walking/building while the grow-in reveal owns the camera, or
         // while a minigame is running on top of this scene.
-        if (SettingsScreen.Open || _decorCutscenePlaying || BlockTetris3D.Active) return;
+        if (SettingsScreen.Open || _decorCutscenePlaying || MinigameStage.AnyActive) return;
 
         if (_buildMode) { UpdateBuildMode(); return; }   // scroll is reserved for HandleGhostScroll in there
 

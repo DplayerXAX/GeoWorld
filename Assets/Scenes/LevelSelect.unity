@@ -1248,6 +1248,11 @@ MonoBehaviour:
     idInternal: 0
     valueGuidInternal: 
     WwiseObjectReference: {fileID: 11400000, guid: 52054f8a490aa594fbe07f471ed6fe84, type: 2}
+  timeLoopCleared:
+    idInternal: 0
+    valueGuidInternal: 
+    WwiseObjectReference: {fileID: 0}
+  musicSwapAfterLevelId: Tutorial
   infoPanel: {fileID: 303145625}
   firstVisitConversation: {fileID: 11400000, guid: cc58ee9980f0af044af5f14956b7833c, type: 2}
   harmonyVinePrefab: {fileID: 5386003392207672047, guid: 835a92ac1a661154b973e5d4184d2def, type: 3}
@@ -1283,7 +1288,7 @@ MonoBehaviour:
   ghostInvalidColor: {r: 1, g: 0.3, b: 0.3, a: 0.55}
   playerBuiltColor: {r: 0.55, g: 0.85, b: 0.95, a: 1}
   pawnScale: 1.1
-  resetSaveOnStart: 1
+  resetSaveOnStart: 0
   autoFill: 0
   autoReward: 0
   editorAutoFillBlocks:
@@ -1374,7 +1379,7 @@ MonoBehaviour:
       and a workshop rose to keep it."
     growAsideSeconds: 4.5
     npc: {fileID: 0}
-    minigame: {fileID: 0}
+    minigame: {fileID: 11400000, guid: f83e834aaa1e46f5a73968afcbb457f3, type: 2}
     minigamePedestalLift: 2
     houseSize: {x: 4, y: 3}
     wallHeight: 1.6
@@ -1408,7 +1413,7 @@ MonoBehaviour:
       for nothing else.
     growAsideSeconds: 4.5
     npc: {fileID: 0}
-    minigame: {fileID: 0}
+    minigame: {fileID: 11400000, guid: c47b9e0a3d16482fb1e5a8d20c93f671, type: 2}
     minigamePedestalLift: 2
     drumHeight: 1.7
     domeRadius: 1.25
@@ -1426,6 +1431,9 @@ MonoBehaviour:
     sightStones: 9
     stars: 26
     starColor: {r: 0.95, g: 0.94, b: 0.78, a: 1}
+    constellationLinks: 10
+    linkColor: {r: 0.55, g: 0.7, b: 1, a: 1}
+    meridianSegments: 14
   monumentMaterial: {fileID: 0}
   monumentScale: 1
   monumentLight: 1.6

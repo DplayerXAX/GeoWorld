@@ -12,7 +12,12 @@ public class MinigameAudio : ScriptableObject
 {
     [Tooltip("Posted once when the Stack Well minigame opens, stopped (with fade) when it closes. Assign the Wwise event via the picker.")]
     public AK.Wwise.Event stackWellMusic;
-    [Tooltip("Fade-out on the music above when the minigame closes, in ms.")]
+    [Tooltip("Posted once when the Balance Tower minigame opens, stopped (with fade) when it closes.")]
+    public AK.Wwise.Event balanceTowerMusic;
+
+    [Tooltip("Clepsydra (1-3 pipe puzzle) music. Leave empty for silence — the game still plays.")]
+    public AK.Wwise.Event clepsydraMusic;
+    [Tooltip("Fade-out on the music above when a minigame closes, in ms. Shared by both.")]
     [Min(0)] public int stackWellMusicFadeOutMs = 500;
 
     static MinigameAudio _cached;

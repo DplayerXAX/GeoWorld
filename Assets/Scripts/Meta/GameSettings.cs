@@ -32,6 +32,11 @@ public static class GameSettings
     // Cycles the game speed — the same action as clicking the fast-forward chip.
     public static KeyCode FastForwardKey = KeyCode.C;
 
+    // Buys a random affordable shop item and goes straight into placing it. Fixed
+    // rather than rebindable for now; if it becomes rebindable, drop it out of
+    // ReservedKeys below and give it a row in SettingsScreen next to FastForwardKey.
+    public static KeyCode QuickBuyKey = KeyCode.O;
+
     // Keys the game already owns. A rebind that lands on one of these is refused:
     // the conflict wouldn't announce itself, it would just make two things happen
     // on one press and look like a bug.
@@ -48,6 +53,7 @@ public static class GameSettings
         KeyCode.Z,                                                          // undo (with Ctrl)
         KeyCode.G,                                                          // grid overlay
         KeyCode.P,                                                          // re-evaluate path
+        KeyCode.O,                                                          // quick buy
         KeyCode.Space, KeyCode.Tab, KeyCode.Escape, KeyCode.Delete,
         KeyCode.LeftShift, KeyCode.RightShift,                              // peek
         KeyCode.LeftControl, KeyCode.RightControl,

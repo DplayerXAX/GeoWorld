@@ -71,12 +71,36 @@ public class ResourceManager : MonoBehaviour
     public event Action<BlockType> OnInsufficientFunds;
 
     // ── Properties ────────────────────────────────────────────────────────────
-    public int BlockCurrency  => _blockCurrency;
-    public int TurretCurrency => _turretCurrency;
+    //
+    // Unqualified BlockCurrency/TurretCurrency mean THIS machine's player. Every
+    // existing caller — the shop, the HUD, upgrades, undo, the debug panel — is asking
+    // about the person sitting in front of it, so keeping these pointing at the local
+    // wallet is what let per-player money land without touching any of them.
+    public int BlockCurrency  => BlockCurrencyOf(MultiplayerSession.LocalId);
+    public int TurretCurrency => TurretCurrencyOf(MultiplayerSession.LocalId);
+
+    public int BlockCurrencyOf(int playerId)  => Valid(playerId) ? _block[playerId]  : 0;
+    public int TurretCurrencyOf(int playerId) => Valid(playerId) ? _turret[playerId] : 0;
+
+    static bool Valid(int id) => id >= 0 && id < MultiplayerSession.MaxPlayers;
 
     // ── State ─────────────────────────────────────────────────────────────────
-    int   _blockCurrency;
-    int   _turretCurrency;
+    //
+    // A wallet per slot, not a shared pool. Money is the one thing that should NOT be
+    // shared on a co-op board: with one pot the fastest clicker spends everyone's
+    // round, and nobody can plan a purchase because the balance moves under them.
+    readonly int[] _block  = new int[MultiplayerSession.MaxPlayers];
+    readonly int[] _turret = new int[MultiplayerSession.MaxPlayers];
+
+    // How many ways income is split. LATCHED at run start rather than read live: a
+    // player dropping mid-match would otherwise raise everyone else's income the
+    // moment each machine noticed, and they notice at different times — which is a
+    // desync in the one number the whole economy is built on.
+    int _walletCount = 1;
+
+    /// <summary>Players the income is currently being divided between.</summary>
+    public int WalletCount => _walletCount;
+
     float _turretRegenAccum;
     bool  _combatActive;
 
@@ -102,16 +126,63 @@ public class ResourceManager : MonoBehaviour
             // effect immediately when the asset is edited.
         }
 
-        _blockCurrency  = startingBlockCurrency;
-        _turretCurrency = startingTurretCurrency;
-        if (testing)
-        {
-            _blockCurrency = 9999;
-            _turretCurrency = 9999;
+        InitWallets();
 
-        }
         foreach (BlockType t in Enum.GetValues(typeof(BlockType)))
             _placedCounts[t] = 0;
+    }
+
+    /// <summary>
+    /// Hand out starting money, split by however many are playing.
+    /// Called again from GameFlowManager.Start once the session roster is settled —
+    /// Awake runs before that, so the count it sees there is not yet trustworthy.
+    /// </summary>
+    public void InitWallets()
+    {
+        _walletCount = Mathf.Max(1, MultiplayerSession.ConnectedCount);
+
+        int startBlock  = Split(startingBlockCurrency);
+        int startTurret = Split(startingTurretCurrency);
+
+        for (int i = 0; i < MultiplayerSession.MaxPlayers; i++)
+        {
+            _block[i]  = testing ? 9999 : startBlock;
+            _turret[i] = testing ? 9999 : startTurret;
+        }
+        _turretRegenAccum = 0f;
+        RaiseLocal();
+    }
+
+    /// <summary>
+    /// One player's share of a table-wide amount. Four players each get a quarter, so
+    /// the money entering the game is the same as in single-player — otherwise every
+    /// extra player would be a straight difficulty reduction.
+    ///
+    /// Floored at 1 for any positive input: a income of 2 split four ways is 0.5, and
+    /// an income that rounds to nothing is a player who can never buy anything. The
+    /// table then earns slightly more than solo at high counts, which is the right way
+    /// to be wrong.
+    /// </summary>
+    int Split(int total)
+    {
+        if (total <= 0) return 0;
+        return Mathf.Max(1, Mathf.RoundToInt(total / (float)_walletCount));
+    }
+
+    // Events are the LOCAL player's, because every subscriber is local UI. Firing on
+    // someone else's transaction would flash a currency popup for money that never
+    // moved on this screen.
+    void RaiseLocal()
+    {
+        OnBlockCurrencyChanged?.Invoke(BlockCurrency);
+        OnTurretCurrencyChanged?.Invoke(TurretCurrency);
+    }
+
+    void RaiseIfLocal(int playerId, bool turret)
+    {
+        if (playerId != MultiplayerSession.LocalId) return;
+        if (turret) OnTurretCurrencyChanged?.Invoke(TurretCurrency);
+        else        OnBlockCurrencyChanged?.Invoke(BlockCurrency);
     }
 
     void Update()
@@ -123,6 +194,8 @@ public class ResourceManager : MonoBehaviour
         {
             int gain = Mathf.FloorToInt(_turretRegenAccum);
             _turretRegenAccum -= gain;
+            // Regen is table-wide: everyone earns from the same battle, and giving each
+            // player the full rate would multiply combat income by the player count.
             AddTurretCurrency(gain);
         }
     }
@@ -150,10 +223,15 @@ public class ResourceManager : MonoBehaviour
             ? balance.GetTurretIncomeForRound(round)
             : turretCurrencyPerRound;
 
-        _blockCurrency  += blockInc;
-        _turretCurrency += turretInc;
-        OnBlockCurrencyChanged?.Invoke(_blockCurrency);
-        OnTurretCurrencyChanged?.Invoke(_turretCurrency);
+        int blockShare  = Split(blockInc);
+        int turretShare = Split(turretInc);
+
+        for (int i = 0; i < MultiplayerSession.MaxPlayers; i++)
+        {
+            _block[i]  += blockShare;
+            _turret[i] += turretShare;
+        }
+        RaiseLocal();
     }
 
     // ── Block shop ────────────────────────────────────────────────────────────
@@ -217,18 +295,26 @@ public class ResourceManager : MonoBehaviour
         RunConfig.Mode == GameMode.Level && RunConfig.Level != null && RunConfig.Level.infiniteResources;
 
     /// <summary>Returns true if the player can afford <paramref name="price"/>.</summary>
-    public bool CanAfford(int price) => InfiniteResources || _blockCurrency >= price;
+    public bool CanAfford(int price) => CanAfford(MultiplayerSession.LocalId, price, BlockType.Home);
 
     /// <summary>Type-aware affordability: turrets check turret pool, others check block pool.</summary>
-    public bool CanAfford(int price, BlockType type) =>
-        InfiniteResources || (TurretTypes.Is(type) ? _turretCurrency >= price : _blockCurrency >= price);
+    public bool CanAfford(int price, BlockType type) => CanAfford(MultiplayerSession.LocalId, price, type);
+
+    public bool CanAfford(int playerId, int price, BlockType type)
+    {
+        if (InfiniteResources) return true;
+        if (!Valid(playerId)) return false;
+        return TurretTypes.Is(type) ? _turret[playerId] >= price : _block[playerId] >= price;
+    }
 
     /// <summary>Adds <paramref name="amount"/> back to block currency (used by undo).</summary>
-    public void RefundBlock(int amount)
+    public void RefundBlock(int amount) => RefundBlock(MultiplayerSession.LocalId, amount);
+
+    public void RefundBlock(int playerId, int amount)
     {
-        if (amount <= 0) return;
-        _blockCurrency += amount;
-        OnBlockCurrencyChanged?.Invoke(_blockCurrency);
+        if (amount <= 0 || !Valid(playerId)) return;
+        _block[playerId] += amount;
+        RaiseIfLocal(playerId, turret: false);
     }
 
     /// <summary>Number of blocks of this type currently on the grid (used by DebugUI / shop).</summary>
@@ -241,29 +327,32 @@ public class ResourceManager : MonoBehaviour
     /// Returns false (and fires OnInsufficientFunds) if insufficient.
     /// Only call for NEW purchases repositioning is always free.
     /// </summary>
-    public bool TryBuy(int price, BlockType type)
+    public bool TryBuy(int price, BlockType type) => TryBuy(MultiplayerSession.LocalId, price, type);
+
+    /// <summary>
+    /// Charges a SPECIFIC player. The networked placement path uses this with the
+    /// command's issuer, because the machine applying a purchase is usually not the
+    /// one that made it — charging locally there would bill all four players for one
+    /// person's block.
+    /// </summary>
+    public bool TryBuy(int playerId, int price, BlockType type)
     {
         if (InfiniteResources) return true;   // sandbox — buy anything, deduct nothing
+        if (!Valid(playerId)) return false;
 
         bool isTurret = TurretTypes.Is(type);
-        int  pool     = isTurret ? _turretCurrency : _blockCurrency;
-        if (pool < price)
+        var  wallet   = isTurret ? _turret : _block;
+        if (wallet[playerId] < price)
         {
-            OnInsufficientFunds?.Invoke(type);
-            Debug.Log($"[Resource] Can't afford {type} (need {price}, have {pool})");
+            // Only surfaced to the person who could not pay.
+            if (playerId == MultiplayerSession.LocalId) OnInsufficientFunds?.Invoke(type);
+            Debug.Log($"[Resource] p{playerId} can't afford {type} (need {price}, have {wallet[playerId]})");
             return false;
         }
-        if (isTurret)
-        {
-            _turretCurrency -= price;
-            OnTurretCurrencyChanged?.Invoke(_turretCurrency);
-        }
-        else
-        {
-            _blockCurrency -= price;
-            OnBlockCurrencyChanged?.Invoke(_blockCurrency);
-        }
-        Debug.Log($"[Resource] Bought {type} for {price} ¤ {(isTurret ? _turretCurrency : _blockCurrency)} remaining");
+
+        wallet[playerId] -= price;
+        RaiseIfLocal(playerId, isTurret);
+        Debug.Log($"[Resource] p{playerId} bought {type} for {price} ¤ {wallet[playerId]} remaining");
         return true;
     }
 
@@ -293,36 +382,66 @@ public class ResourceManager : MonoBehaviour
     public bool TrySpendTurret(int amount)
     {
         if (InfiniteResources) return true;
-        if (_turretCurrency < amount) return false;
-        _turretCurrency -= amount;
-        OnTurretCurrencyChanged?.Invoke(_turretCurrency);
+        int me = MultiplayerSession.LocalId;
+        if (!Valid(me) || _turret[me] < amount) return false;
+        _turret[me] -= amount;
+        RaiseIfLocal(me, turret: true);
         return true;
     }
 
+    /// <summary>
+    /// Table-wide turret income — kills, passed blocks, wave bonuses, regen. Split,
+    /// like round income: these all come from the ONE board everybody is defending, so
+    /// paying each player in full would scale the game's income with its player count.
+    /// </summary>
     public void AddTurretCurrency(int amount)
     {
-        _turretCurrency += amount;
-        OnTurretCurrencyChanged?.Invoke(_turretCurrency);
+        int share = Split(amount);
+        if (share == 0) return;
+        for (int i = 0; i < MultiplayerSession.MaxPlayers; i++) _turret[i] += share;
+        RaiseLocal();
+    }
+
+    /// <summary>Pays exactly one player — for anything genuinely theirs alone.</summary>
+    public void AddTurretCurrencyTo(int playerId, int amount)
+    {
+        if (amount == 0 || !Valid(playerId)) return;
+        _turret[playerId] += amount;
+        RaiseIfLocal(playerId, turret: true);
     }
 
     /// <summary>Adds <paramref name="amount"/> to block currency. Used by passive
     /// income effects (Abundance synergy, upgrade cards, etc.).</summary>
     public void AddBlockCurrency(int amount)
     {
-        if (amount == 0) return;
-        _blockCurrency += amount;
-        OnBlockCurrencyChanged?.Invoke(_blockCurrency);
+        int share = Split(amount);
+        if (share == 0) return;
+        for (int i = 0; i < MultiplayerSession.MaxPlayers; i++) _block[i] += share;
+        RaiseLocal();
+    }
+
+    /// <summary>Pays exactly one player — for anything genuinely theirs alone.</summary>
+    public void AddBlockCurrencyTo(int playerId, int amount)
+    {
+        if (amount == 0 || !Valid(playerId)) return;
+        _block[playerId] += amount;
+        RaiseIfLocal(playerId, turret: false);
     }
 
     /// <summary>Subtracts <paramref name="amount"/> from block currency, clamped at 0.
     /// Unlike TryBuy this is a PENALTY, not a purchase — it always succeeds (no
     /// insufficient-funds gate, no OnInsufficientFunds). Used by level hazards
     /// (e.g. Chaos Block) that tax the player rather than sell them something.</summary>
+    // A hazard taxes the TABLE, and each player pays a share. Taking the full amount
+    // from everyone would make every level hazard scale with the player count, which
+    // is the opposite of what adding a friend should do.
     public void DrainBlockCurrency(int amount)
     {
-        if (amount <= 0) return;
-        _blockCurrency = Mathf.Max(0, _blockCurrency - amount);
-        OnBlockCurrencyChanged?.Invoke(_blockCurrency);
+        int share = Split(amount);
+        if (share <= 0) return;
+        for (int i = 0; i < MultiplayerSession.MaxPlayers; i++)
+            _block[i] = Mathf.Max(0, _block[i] - share);
+        RaiseLocal();
     }
 
     // ── Battle-system API (other team calls these) ────────────────────────────

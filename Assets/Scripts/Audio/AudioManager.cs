@@ -254,8 +254,21 @@ public class AudioManager : MonoBehaviour
         // Stop the paused tracks too. They're real, still-alive instances holding a
         // playhead — leaving them behind means the next swap would RESUME music the
         // caller just asked to silence.
+        //
+        // RESUMED FIRST, and that ordering is the whole point. Wwise's music engine
+        // schedules interactive music on a segment sequencer, and stopping a segment
+        // that is sitting paused tears it down while the sequencer still has it
+        // flagged as playing — which is the AKASSERT !m_pSegment->IsMusicPlaying()
+        // in AkMatrixSequencer. Resuming puts it back into a state the stop can
+        // unwind cleanly. Resume on an already-playing instance is a no-op, so this
+        // is safe even when nothing was paused.
         foreach (var id in _pausedBgm.Values)
+        {
+            AkUnitySoundEngine.ExecuteActionOnPlayingID(
+                AkActionOnEventType.AkActionOnEventType_Resume, id, 0,
+                AkCurveInterpolation.AkCurveInterpolation_Linear);
             AkUnitySoundEngine.StopPlayingID(id, fadeMs, AkCurveInterpolation.AkCurveInterpolation_Linear);
+        }
         _pausedBgm.Clear();
         _currentBgm = null;
 

@@ -121,6 +121,30 @@ public class GameFlowManager : MonoBehaviour
         // gate) into this one.
         TowerUpgradeGate.ResetAll();
         UnlockTowerUpgradeEffect.ResetAllHeld();
+        // Also static, also survives a scene load: without this a restarted run
+        // inherits the last one's reserved cells and phantom portal pairs.
+        DeviceRegistry.Clear();
+        CommandBus.Reset();
+        CellClaims.Clear();
+        PlayerSpend.Clear();
+        // Assigned, not subscribed: re-entering the scene must REPLACE the rules, and
+        // a += here would leave the previous run's manager applying commands into a
+        // destroyed board.
+        CommandBus.Validator = ValidateCommand;
+        CommandBus.Applier   = ApplyCommand;
+        // A scene entered without a lobby still needs a valid session — single-player
+        // is modelled as a one-player host session rather than as "no session", so
+        // ownership and authority checks answer the same way in both modes.
+        // Offline is ALWAYS a fresh one-player session. Without the Online check a
+        // roster left over from a finished multiplayer match would survive into the
+        // next single-player level, and the wave gate would sit there waiting on
+        // three players who are no longer connected to anything.
+        if (!NetBootstrap.Online || MultiplayerSession.ConnectedCount == 0)
+            MultiplayerSession.BeginLocal();
+
+        // Only now is the roster settled, so only now can starting money be split the
+        // right number of ways. ResourceManager.Awake ran before any of this.
+        ResourceManager.Instance?.InitWallets();
         // Static too, so a game-over that locked the camera would otherwise keep it
         // locked through the restart that's supposed to clear it.
         OrbitCamera.InputLocked = false;
@@ -420,6 +444,9 @@ public class GameFlowManager : MonoBehaviour
 
     void CreateFirstStage()
     {
+        // Installed BEFORE the first generation, not just before later endpoints —
+        // the opening start/end pair is the one every player looks at first.
+        endpoints?.SetRng(EnsureRng());
         ConfigureEndpointBounds();
 
         // Tutorials / authored levels can pin the start & end instead of randomising.
@@ -464,6 +491,7 @@ public class GameFlowManager : MonoBehaviour
 
     public void AddEndpoint(bool addStart)
     {
+        endpoints?.SetRng(EnsureRng());   // same stream on every machine, or same seed means nothing
         float extraRange = roundIndex * 1.5f;
         ConfigureEndpointBounds(extraRange);
 
@@ -514,9 +542,10 @@ public class GameFlowManager : MonoBehaviour
 
         if (phase == GamePhase.Build)
         {
-            // Space: commit and run
+            // Space: declare THIS player ready. With one player that is the same
+            // frame as running; with four it is the wave gate below.
             if (Input.GetKeyDown(KeyCode.Space) && TutorialDirector.CanRun())
-                Run();
+                CommandBus.Submit(new GameCommand { kind = GameCommandKind.StartWave });
 
             // P: manual re-evaluate (force-refresh live preview line)
             if (Input.GetKeyDown(KeyCode.P))
@@ -540,10 +569,81 @@ public class GameFlowManager : MonoBehaviour
         {
             // Space confirms from preview state; B cancels back to build
             if (Input.GetKeyDown(KeyCode.Space) && TutorialDirector.CanRun())
-                Run();
+                CommandBus.Submit(new GameCommand { kind = GameCommandKind.StartWave });
 
             if (Input.GetKeyDown(KeyCode.B))
                 phase = GamePhase.Build;
+        }
+
+        if (phase == GamePhase.Build || phase == GamePhase.ReadyToRun)
+            TryStartReadiedWave();
+    }
+
+    // -- Wave gate -------------------------------------------------------------
+
+    // The wave starts when every CONNECTED player has readied, and the check lives
+    // here rather than in the command handler for one reason: a player who leaves
+    // while three others are waiting has to stop being waited for. AllReady ignores
+    // disconnected slots, so polling it resolves that by itself on the next frame,
+    // where a check that only ran on keypress would hang the round until someone
+    // pressed something.
+    //
+    // Every machine runs this off its own roster. Ready flags arrive everywhere
+    // through the same relayed command stream, so all four reach the same verdict on
+    // their own — no separate "go" message to get lost or arrive out of order.
+    void TryStartReadiedWave()
+    {
+        if (!MultiplayerSession.AllReady) return;
+        MultiplayerSession.ClearReady();
+        Run();
+    }
+
+    // -- Command rules ---------------------------------------------------------
+
+    // Authority-side check. Returns null to accept, or the reason to refuse.
+    string ValidateCommand(GameCommand cmd)
+    {
+        switch (cmd.kind)
+        {
+            case GameCommandKind.StartWave:
+                if (phase != GamePhase.Build && phase != GamePhase.ReadyToRun)
+                    return "not in a build phase";
+                return null;
+            default:
+                // Placement rules already ran on the issuing machine before it
+                // submitted. Re-running them on the authority against a board that
+                // may be a few commands ahead would reject moves that were legal
+                // when made — the wrong trade for a co-op game where nobody is
+                // trying to cheat. Revisit if that stops being true.
+                return null;
+        }
+    }
+
+    void ApplyCommand(GameCommand cmd)
+    {
+        switch (cmd.kind)
+        {
+            case GameCommandKind.StartWave:
+                // Toggle, so Space is also how you take it back while the others are
+                // still building. Only the flag moves here — TryStartReadiedWave
+                // decides whether that was the last one needed.
+                var p = MultiplayerSession.Get(cmd.playerId);
+                bool nowReady = p == null || !p.ready;
+                MultiplayerSession.SetReady(cmd.playerId, nowReady);
+
+                // Readying up opens the roster — the moment you commit is exactly when
+                // "who are we still waiting for" becomes the only question you have,
+                // and it is also where the cancel button lives. Only for the player who
+                // pressed it, and only when there is somebody to wait for.
+                if (nowReady && cmd.playerId == MultiplayerSession.LocalId
+                    && MultiplayerSession.ConnectedCount > 1)
+                    HudSidePanels.Open(HudSidePanels.Side.Controls);
+                break;
+
+            case GameCommandKind.PlaceBlock:
+            case GameCommandKind.RemoveBlock:
+                PlacementController.Instance?.ApplyNetCommand(cmd);
+                break;
         }
     }
 
@@ -652,6 +752,10 @@ public class GameFlowManager : MonoBehaviour
 
     public void StartTurn()
     {
+        // A ready left over from last round would fire the gate before the player had
+        // seen the new board.
+        MultiplayerSession.ClearReady();
+
         ResourceManager.Instance?.GrantRoundIncome();   // fixed income each build phase
         placement.currentBlock = null;
         placement.mode = PlacementMode.Select;
@@ -772,7 +876,15 @@ public class GameFlowManager : MonoBehaviour
         if (_rng != null) return _rng;
 
         if (runSeed == 0UL)
+        {
+            // A clock-derived seed is per-machine by construction, so in a session
+            // with anyone else it would hand every player a different level. The room
+            // agrees on a seed before the match starts; refusing to invent one here is
+            // what makes that agreement mean something.
+            if (MultiplayerSession.ConnectedCount > 1)
+                Debug.LogError("[GameFlowManager] Networked run started with no agreed seed — players will see different levels.");
             runSeed = unchecked((ulong)System.DateTime.UtcNow.Ticks ^ 0xA5A5A5A5A5A5A5A5UL);
+        }
 
         _rng = new Xoshiro256StarStar(runSeed);
         Debug.Log($"[GameFlowManager] Run seed = {runSeed}");

@@ -287,11 +287,20 @@ public class GameOverScreen : MonoBehaviour
         btn.onClick.AddListener(Restart);
 
         var label = NewText("Label", rt, 32f, GeoPalette.Ink, FontStyles.Bold);
-        label.text = "RESTART";
+        // In a session the button LEAVES instead of restarting. Restarting reloads
+        // this machine's scene and nobody else's, so the player would come back to a
+        // board three other people are still playing on, with a fresh one of their
+        // own drawn over it. Going back to the room is the only exit that leaves the
+        // party in a state they all agree on.
+        label.text = InSession ? "LEAVE TO ROOM" : "RESTART";
         var lrt = label.rectTransform;
         lrt.anchorMin = Vector2.zero; lrt.anchorMax = Vector2.one;
         lrt.offsetMin = lrt.offsetMax = Vector2.zero;
     }
+
+    // True when more than this machine is playing. Not "are we networked" — a
+    // one-player host session is still a solo game and should still restart.
+    static bool InSession => MultiplayerSession.ConnectedCount > 1;
 
     void Restart()
     {
@@ -318,7 +327,12 @@ public class GameOverScreen : MonoBehaviour
         }
 
         Release();
-        GameFlowManager.Instance?.RestartGame();
+
+        // The connection is deliberately NOT torn down: NetBootstrap lives across
+        // scene loads, so walking back into the lobby drops the player into the room
+        // they were already in, with everyone still there.
+        if (InSession) LoadingScreen.Go(MultiplayerLobby.SceneName);
+        else           GameFlowManager.Instance?.RestartGame();
     }
 
     void Release()
