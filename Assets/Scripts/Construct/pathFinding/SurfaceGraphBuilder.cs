@@ -24,7 +24,7 @@ public class SurfaceGraphBuilder
 
             // Turrets are obstacles, not walkable. Their cells stay occupied
             // (so paths can't pass through), but we skip generating face nodes
-            // for them â€?the unit can't walk onto a turret's surface.
+            // for them ï¿½?the unit can't walk onto a turret's surface.
             if (IsTurretCell(kv.Key)) continue;
 
             var allCellFaces = FaceBuilder.BuildFaces(kv.Key, gridSystem.cellSize);
@@ -54,9 +54,9 @@ public class SurfaceGraphBuilder
     }
 
     // Locality-based O(V Ã— ~12) instead of O(VÂ²). For each face check:
-    //   Type A â€?parallel face on cell C+T (one cell over in a tangent direction)
-    //   Type B â€?perpendicular face on cell C+N+T (wraps a convex edge across cubes)
-    //   Type C â€?perpendicular sibling on the same cell (wraps a convex edge of this cube)
+    //   Type A ï¿½?parallel face on cell C+T (one cell over in a tangent direction)
+    //   Type B ï¿½?perpendicular face on cell C+N+T (wraps a convex edge across cubes)
+    //   Type C ï¿½?perpendicular sibling on the same cell (wraps a convex edge of this cube)
     // After collecting, sort by normal.y desc so BFS tie-breaks toward top faces.
     void BuildNeighbors()
     {
@@ -97,6 +97,55 @@ public class SurfaceGraphBuilder
 
             face.neighbors.Sort((a, b) => b.normal.y.CompareTo(a.normal.y));
         }
+
+        LinkPortals();
+    }
+
+    // Joins each linked portal pair's TOP faces as graph neighbours, so A* finds
+    // routes through them on its own.
+    //
+    // Done here, after normal adjacency, rather than as a special case inside the
+    // pathfinder: a portal is nothing more than an extra edge, and expressing it as
+    // one means enemy routing, the live path preview, path-length objectives and
+    // turret line-of-sight all understand portals without any of them being taught
+    // what a portal is.
+    void LinkPortals()
+    {
+        foreach (var (a, b, cost) in DeviceRegistry.PortalLinks())
+        {
+            var fa = TopFace(a);
+            var fb = TopFace(b);
+            if (fa == null || fb == null) continue;
+
+            // Cost is paid by inserting `cost` invisible relay nodes between the
+            // mouths. The pathfinder measures in hops, so this is how a portal gets
+            // to be a shortcut without being a free one â€” and it needs no new
+            // concept in SurfacePathfinding at all.
+            FaceNode prev = fa;
+            for (int i = 0; i < cost; i++)
+            {
+                var relay = new FaceNode
+                {
+                    cell     = a,
+                    normal   = Vector3.up,
+                    worldPos = Vector3.Lerp(fa.worldPos, fb.worldPos, (i + 1f) / (cost + 1f)),
+                };
+                prev.neighbors.Add(relay);
+                relay.neighbors.Add(prev);
+                allFaces.Add(relay);
+                prev = relay;
+            }
+            prev.neighbors.Add(fb);
+            fb.neighbors.Add(prev);
+        }
+    }
+
+    // The walkable face of a portal cell â€” the one an enemy would actually stand on.
+    FaceNode TopFace(Vector3Int cell)
+    {
+        if (!cellFaces.TryGetValue(cell, out var faces)) return null;
+        foreach (var f in faces) if (f.normal.y > 0.5f) return f;
+        return faces.Count > 0 ? faces[0] : null;
     }
 
     static readonly Vector3Int[] _tangentsForX = {

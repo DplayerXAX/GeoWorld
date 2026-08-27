@@ -1,4 +1,5 @@
 using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
 
 public class AudioManager : MonoBehaviour
@@ -37,6 +38,12 @@ public class AudioManager : MonoBehaviour
     public AK.Wwise.Event ShopExpand;
     [Tooltip("Posted when the shop rift closes.")]
     public AK.Wwise.Event ShopCollapse;
+    [Tooltip("Posted when a level is cleared (GameFlowManager.DoLevelClear) — the moment a run is actually won.")]
+    public AK.Wwise.Event Victory;
+    [Tooltip("Posted when the player runs out of lives (GameFlowManager.HandleGameOver).")]
+    public AK.Wwise.Event Defeat;
+    [Tooltip("Posted every time a life is lost (PlayerHealth.TakeDamage) — including the killing hit, which plays alongside Defeat.")]
+    public AK.Wwise.Event Damage;
     [Header("Volume RTPCs (Wwise global, 0..100)")]
     [Tooltip("Global Wwise RTPC names bound to your bus volumes. SettingsScreen drives these 0..1 → 0..100. Set them up on the Master / Music / SFX buses in Wwise.")]
     public string masterVolumeRtpc = "MasterVolume";
@@ -51,6 +58,11 @@ public class AudioManager : MonoBehaviour
     // Tracked so we can stop the right playing instance when swapping BGMs
     // (event-swap path). 0 = nothing playing.
     uint _currentBgmPlayingId;
+
+    // Tracked so Restart / returning to the map can cut these short — like BGM, a
+    // posted Wwise event keeps ringing past this GameObject's destruction on a
+    // scene change.
+    uint _defeatPlayingId, _victoryPlayingId;
 
     // TextBlip is authored as ONE continuous segment (not a per-character one-shot),
     // so it's started once when a typewriter begins and stopped once it finishes/skips
@@ -67,14 +79,12 @@ public class AudioManager : MonoBehaviour
     {
         // Stop our BGM when this AudioManager goes away (e.g. scene reload on Restart),
         // so the reloaded scene's AudioManager doesn't stack a second BGM on top.
-        if (_currentBgmPlayingId != 0)
-        {
-            AkUnitySoundEngine.StopPlayingID(
-                _currentBgmPlayingId, bgmFadeOutMs,
-                AkCurveInterpolation.AkCurveInterpolation_Linear);
-            _currentBgmPlayingId = 0;
-        }
+        // StopBGM covers the paused instances too — a paused event survives the
+        // scene load exactly as a playing one does.
+        StopBGM(bgmFadeOutMs);
         StopTextBlip();
+        StopDefeat();
+        StopVictory();
         if (Instance == this) Instance = null;
     }
 
@@ -93,6 +103,49 @@ public class AudioManager : MonoBehaviour
     {
         var e = expanded ? ShopExpand : ShopCollapse;
         if (e != null && e.IsValid()) e.Post(this.gameObject);
+    }
+
+    public void PlayVictory()
+    {
+        if (Victory != null && Victory.IsValid()) _victoryPlayingId = Victory.Post(this.gameObject);
+    }
+
+    // Cuts the Victory stinger short. Same reason as StopDefeat: a posted Wwise
+    // event outlives the GameObject that posted it, so returning to the map or
+    // restarting left the victory loop ringing over the next scene.
+    public void StopVictory(int fadeMs = 0)
+    {
+        if (_victoryPlayingId == 0) return;
+        AkUnitySoundEngine.StopPlayingID(_victoryPlayingId, fadeMs, AkCurveInterpolation.AkCurveInterpolation_Linear);
+        _victoryPlayingId = 0;
+    }
+
+    // Wave-over stinger on its own. ExitBattleBGM also posts this, but it SWAPS to
+    // the calm loop at the same time — which is wrong at level clear, where the
+    // Victory track has to play alone.
+    public void PlayFightEnd()
+    {
+        if (fight_end != null && fight_end.IsValid()) fight_end.Post(this.gameObject);
+    }
+
+    public void PlayDefeat()
+    {
+        if (Defeat != null && Defeat.IsValid()) _defeatPlayingId = Defeat.Post(this.gameObject);
+    }
+
+    // Cuts the Defeat stinger short — used on Restart, where the old scene's
+    // AudioManager is destroyed but the already-posted event would otherwise
+    // keep ringing over the freshly reloaded scene.
+    public void StopDefeat(int fadeMs = 0)
+    {
+        if (_defeatPlayingId == 0) return;
+        AkUnitySoundEngine.StopPlayingID(_defeatPlayingId, fadeMs, AkCurveInterpolation.AkCurveInterpolation_Linear);
+        _defeatPlayingId = 0;
+    }
+
+    public void PlayDamage()
+    {
+        if (Damage != null && Damage.IsValid()) Damage.Post(this.gameObject);
     }
 
     // Call once when a typewriter starts revealing a new line/hint.
@@ -118,7 +171,11 @@ public class AudioManager : MonoBehaviour
 
         StartCoroutine(PostBgmAfterIntro());
 
-        GameSettings.ApplyAudio();   // push saved volumes once the engine is up
+        // Best-effort early push so there's no audible full-volume frame. It may
+        // race this object's own AkBank load (which resets RTPCs to their authored
+        // defaults) — AudioSettingsReapplier re-pushes a few frames later and is
+        // the actual guarantee. See GameSettings.HookAudioReapply.
+        GameSettings.ApplyAudio();
     }
 
     // In the gameplay scene, IntroDirector plays a short reveal before the player can
@@ -136,7 +193,10 @@ public class AudioManager : MonoBehaviour
             BGM_StateCalm.SetValue();
 
         if (BGM != null && BGM.IsValid())
+        {
             _currentBgmPlayingId = BGM.Post(this.gameObject);
+            _currentBgm = BGM;   // so the first battle swap knows what to pause
+        }
     }
 
     void SetChordOnObject(BlockType type, GameObject target)
@@ -186,22 +246,80 @@ public class AudioManager : MonoBehaviour
         SwapBgmEvent(BGM);
     }
 
+    // Stops the event-swap BGM outright — unlike ExitBattleBGM, which hands off
+    // to the calm loop, this leaves nothing playing. Used for Defeat, where the
+    // stinger has to play alone, not layered under music that kept going.
+    public void StopBGM(int fadeMs = 0)
+    {
+        // Stop the paused tracks too. They're real, still-alive instances holding a
+        // playhead — leaving them behind means the next swap would RESUME music the
+        // caller just asked to silence.
+        //
+        // RESUMED FIRST, and that ordering is the whole point. Wwise's music engine
+        // schedules interactive music on a segment sequencer, and stopping a segment
+        // that is sitting paused tears it down while the sequencer still has it
+        // flagged as playing — which is the AKASSERT !m_pSegment->IsMusicPlaying()
+        // in AkMatrixSequencer. Resuming puts it back into a state the stop can
+        // unwind cleanly. Resume on an already-playing instance is a no-op, so this
+        // is safe even when nothing was paused.
+        foreach (var id in _pausedBgm.Values)
+        {
+            AkUnitySoundEngine.ExecuteActionOnPlayingID(
+                AkActionOnEventType.AkActionOnEventType_Resume, id, 0,
+                AkCurveInterpolation.AkCurveInterpolation_Linear);
+            AkUnitySoundEngine.StopPlayingID(id, fadeMs, AkCurveInterpolation.AkCurveInterpolation_Linear);
+        }
+        _pausedBgm.Clear();
+        _currentBgm = null;
+
+        if (_currentBgmPlayingId == 0) return;
+        AkUnitySoundEngine.StopPlayingID(_currentBgmPlayingId, fadeMs, AkCurveInterpolation.AkCurveInterpolation_Linear);
+        _currentBgmPlayingId = 0;
+    }
+
+    // The BGM event currently audible, and every event we've PAUSED (rather than
+    // stopped) mapped to the playing instance that's waiting to be resumed.
+    //
+    // Swapping used to stop the outgoing track outright, so coming back to it posted
+    // a brand-new instance — which is why the battle music started from bar one on
+    // every single wave. Pausing keeps the instance alive at its playhead.
+    AK.Wwise.Event _currentBgm;
+    readonly Dictionary<uint, uint> _pausedBgm = new();   // event Id → paused playing id
+
     void SwapBgmEvent(AK.Wwise.Event next)
     {
         if (next == null || !next.IsValid()) return;
         var host = audioEmitter != null ? audioEmitter : gameObject;
 
-        // Fade out previous BGM, if any.
-        if (_currentBgmPlayingId != 0)
+        if (_currentBgm != null && _currentBgm.IsValid() && _currentBgmPlayingId != 0
+            && _currentBgm.Id != next.Id)
         {
-            AkUnitySoundEngine.StopPlayingID(
-                (uint)_currentBgmPlayingId,
-                bgmFadeOutMs,
-                AkCurveInterpolation.AkCurveInterpolation_Linear);
-            _currentBgmPlayingId = 0;
+            BgmAction(_currentBgm, AkActionOnEventType.AkActionOnEventType_Pause);
+            _pausedBgm[_currentBgm.Id] = _currentBgmPlayingId;
         }
 
-        _currentBgmPlayingId = next.Post(host);
+        if (_pausedBgm.TryGetValue(next.Id, out uint resumeId) && resumeId != 0)
+        {
+            BgmAction(next, AkActionOnEventType.AkActionOnEventType_Resume);
+            _pausedBgm.Remove(next.Id);
+            _currentBgmPlayingId = resumeId;
+        }
+        else if (_currentBgm == null || _currentBgm.Id != next.Id)
+        {
+            _currentBgmPlayingId = next.Post(host);
+        }
+
+        _currentBgm = next;
+    }
+
+    // Targeted by EVENT with AK_INVALID_GAME_OBJECT — "wherever this is playing" —
+    // rather than by playing id, which ExecuteActionOnEvent doesn't take.
+    void BgmAction(AK.Wwise.Event evt, AkActionOnEventType action)
+    {
+        if (evt == null || !evt.IsValid()) return;
+        AkUnitySoundEngine.ExecuteActionOnEvent(
+            evt.Id, action, AkUnitySoundEngine.AK_INVALID_GAME_OBJECT,
+            bgmFadeOutMs, AkCurveInterpolation.AkCurveInterpolation_Linear);
     }
 
     // ===== VOLUME (Wwise global RTPCs) =====
@@ -213,7 +331,6 @@ public class AudioManager : MonoBehaviour
     {
         if (string.IsNullOrEmpty(rtpc)) return;
         AkUnitySoundEngine.SetRTPCValue(rtpc, Mathf.Clamp01(v01) * 100f);
-        Debug.Log("Setting!");
     }
 
     public void PlayRotate()

@@ -1,4 +1,5 @@
-Shader "GeoWorld/Synergy/HarmonyCore_GlassyVolume_Scaleable"
+// HarmonyCore ¡ª Volumetric Shattered Emerald
+Shader "GeoWorld/Synergy/HarmonyCore_GlassyVolume"
 {
     Properties
     {
@@ -21,24 +22,10 @@ Shader "GeoWorld/Synergy/HarmonyCore_GlassyVolume_Scaleable"
         [Header(Raymarching Settings)]
         _MaxSteps              ("Max Ray Steps", Integer) = 96
         _StepSize              ("Ray Step Size", Range(0.01, 0.1)) = 0.02
-        
-        _VolumeScale           ("Volume Scale", Range(0.5, 5.0)) = 1.0
-
-        // Set per-renderer via MaterialPropertyBlock by CellMaterialVisualizer.
-        // Shifts this cube's raymarch sampling into a GROUP-shared space so the
-        // whole synergy reads as one continuous crystal (not one per cube).
-        [HideInInspector] _GroupOffset ("Group Offset (OS)", Vector) = (0, 0, 0, 0)
     }
 
     SubShader
     {
-        // Transparent queue: a glassy raymarched volume that must blend over the
-        // skybox/scene, so it renders AFTER the skybox (blends over sky, not
-        // black) and with ZWrite Off so the GROUP-shared volume stays continuous
-        // (a front cube's empty space reveals the volume in the cubes behind it).
-        // The cube's cartoon block outline (inverse-hull material, slot 1) is
-        // stripped by CellMaterialVisualizer while the synergy is active, so
-        // there is no opaque hull left to bleed dark through the transparency.
         Tags { "RenderType" = "Transparent" "Queue" = "Transparent" "RenderPipeline" = "UniversalPipeline" }
 
         Pass
@@ -46,14 +33,14 @@ Shader "GeoWorld/Synergy/HarmonyCore_GlassyVolume_Scaleable"
             Name "VolumeRaymarching"
             Tags { "LightMode" = "UniversalForward" }
 
-            Blend SrcAlpha OneMinusSrcAlpha
+            Blend SrcAlpha OneMinusSrcAlpha 
             ZWrite Off
             Cull Front
 
             HLSLPROGRAM
             #pragma vertex Vert
             #pragma fragment Frag
-            #pragma target 4.5
+            #pragma target 4.5 
 
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
@@ -64,8 +51,6 @@ Shader "GeoWorld/Synergy/HarmonyCore_GlassyVolume_Scaleable"
                 float  _Glossiness, _Specular, _GrainAmount;
                 int    _MaxSteps;
                 float  _StepSize;
-                float  _VolumeScale;
-                float4 _GroupOffset;
             CBUFFER_END
 
             struct Attributes
@@ -139,21 +124,18 @@ Shader "GeoWorld/Synergy/HarmonyCore_GlassyVolume_Scaleable"
 
             float MapInternalVolume(float3 p)
             {
-                p += _GroupOffset.xyz;
-
-                float3 scaledP = p / _VolumeScale;
-    
                 float t = _Time.y * _TwistSpeed;
-                float theta = scaledP.y * 3.0 - t;
+                float theta = p.y * 3.0 - t;
                 float c = cos(theta); float s = sin(theta);
                 float2x2 rot = float2x2(c, -s, s, c);
-    
-                float3 q = scaledP;
+                
+                float3 q = p;
                 q.xz = mul(rot, q.xz);
 
-                float noiseMask = GlassyFBM(q * 2.5 + float3(0, t * 0.5, 0), _GlassSharpness, _ShardSteps);
-    
-                return noiseMask - 0.55; 
+                float crystal = sdOctahedron(q, 0.40);
+                float noiseMask = GlassyFBM(q * 5.0 + float3(0, t * 0.5, 0), _GlassSharpness, _ShardSteps);
+                
+                return crystal + (noiseMask - 0.5) * 0.3;
             }
 
             float3 CalcInternalNormal(float3 p)
@@ -183,8 +165,8 @@ Shader "GeoWorld/Synergy/HarmonyCore_GlassyVolume_Scaleable"
                 float3 rayOriginOS = TransformWorldToObject(viewPosWS);
                 float3 rayDirOS    = normalize(TransformWorldToObjectDir(viewDirWS));
 
-                float3 boxMin = float3(-0.5, -0.5, -0.5) * _VolumeScale;
-                float3 boxMax = float3( 0.5,  0.5,  0.5) * _VolumeScale;
+                float3 boxMin = float3(-0.5, -0.5, -0.5);
+                float3 boxMax = float3( 0.5,  0.5,  0.5);
 
                 float2 hitAABB = IntersectAABB(rayOriginOS, rayDirOS, boxMin, boxMax);
                 if(hitAABB.x > hitAABB.y || hitAABB.y < 0.0) return half4(0,0,0,0);
@@ -198,8 +180,6 @@ Shader "GeoWorld/Synergy/HarmonyCore_GlassyVolume_Scaleable"
                 float accumulatedThickness = 0.0;
                 float3 crystalNormalOS = float3(0, 1, 0);
                 float hitCrystal = 0.0;
-
-                float adjustedStepSize = _StepSize * _VolumeScale;
 
                 [loop]
                 for(int i = 0; i < _MaxSteps; i++)
@@ -215,17 +195,16 @@ Shader "GeoWorld/Synergy/HarmonyCore_GlassyVolume_Scaleable"
                             crystalNormalOS = CalcInternalNormal(currentPos);
                             hitCrystal = 1.0;
                         }
-                        accumulatedThickness += adjustedStepSize;
+                        accumulatedThickness += _StepSize;
                     }
                     
-                    currentT += adjustedStepSize;
+                    currentT += _StepSize;
                     currentPos = rayOriginOS + rayDirOS * currentT;
                 }
 
                 if (hitCrystal == 0.0) return half4(0, 0, 0, 0);
 
-                float effectiveAbsorption = _Absorption / _VolumeScale;
-                float thickness = saturate(accumulatedThickness * effectiveAbsorption);
+                float thickness = saturate(accumulatedThickness * _Absorption);
                 float sharpThickness = lerp(thickness, floor(thickness * _ShardSteps) / _ShardSteps, _GlassSharpness * 0.5);
 
                 half3 finalColor = lerp(_DarkColor.rgb, _MidColor.rgb, sharpThickness);
@@ -247,7 +226,7 @@ Shader "GeoWorld/Synergy/HarmonyCore_GlassyVolume_Scaleable"
                 float grain = Hash21(IN.positionOS.xy + IN.positionOS.zz * 240.0 + _Time.y * 0.05) - 0.5;
                 finalColor += grain * _GrainAmount;
 
-                float alpha = saturate(accumulatedThickness * 5.0 / _VolumeScale);  
+                float alpha = saturate(accumulatedThickness * 5.0);
 
                 return half4(finalColor, alpha);
             }

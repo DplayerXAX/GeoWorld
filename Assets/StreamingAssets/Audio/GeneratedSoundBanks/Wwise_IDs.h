@@ -17,8 +17,10 @@ namespace AK
         static const AkUniqueID BATTLE_LOOP = 316156164U;
         static const AkUniqueID BDIM = 1660099773U;
         static const AkUniqueID BGM_EVENT = 1799075776U;
+        static const AkUniqueID BOSS_FIGHT = 3688152761U;
         static const AkUniqueID C = 84696444U;
         static const AkUniqueID CHILL_EVENT = 3153557168U;
+        static const AkUniqueID DAMAGE = 1786804762U;
         static const AkUniqueID DM = 1836525772U;
         static const AkUniqueID ENDING_LOOP = 2833906173U;
         static const AkUniqueID F = 84696441U;
@@ -26,6 +28,7 @@ namespace AK
         static const AkUniqueID FIGHT_START = 1037822516U;
         static const AkUniqueID G = 84696440U;
         static const AkUniqueID IDLE_LOOP = 240925188U;
+        static const AkUniqueID LOSE_LOOP = 3140303807U;
         static const AkUniqueID PIECE_NORMAL = 4131907033U;
         static const AkUniqueID PLAY_ARP_NOTE = 2050041828U;
         static const AkUniqueID ROTATE = 1302771492U;
@@ -33,9 +36,11 @@ namespace AK
         static const AkUniqueID SELECT = 1432588725U;
         static const AkUniqueID SHOP_CLOSE = 2506379688U;
         static const AkUniqueID SHOP_OPEN = 839522188U;
+        static const AkUniqueID TETRIS_LOOP = 1299445167U;
         static const AkUniqueID TEXTBLIP = 1387752797U;
         static const AkUniqueID TIMEDRAIN = 3258153068U;
         static const AkUniqueID TITLE_LOOP = 966390882U;
+        static const AkUniqueID VICTORY_LOOP = 301972542U;
     } // namespace EVENTS
 
     namespace STATES
@@ -107,6 +112,7 @@ namespace AK
         static const AkUniqueID SFX_AUDIO_BUS = 4084199202U;
         static const AkUniqueID SFX_AUDIO_BUS_ = 1530229465U;
         static const AkUniqueID SPACIAL = 4054672182U;
+        static const AkUniqueID SPACIAL_AUDIO_BUS = 455295034U;
     } // namespace BUSSES
 
     namespace AUDIO_DEVICES

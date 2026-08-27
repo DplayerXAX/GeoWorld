@@ -121,6 +121,33 @@ public class GameFlowManager : MonoBehaviour
         // gate) into this one.
         TowerUpgradeGate.ResetAll();
         UnlockTowerUpgradeEffect.ResetAllHeld();
+        // Also static, also survives a scene load: without this a restarted run
+        // inherits the last one's reserved cells and phantom portal pairs.
+        DeviceRegistry.Clear();
+        CommandBus.Reset();
+        CellClaims.Clear();
+        PlayerSpend.Clear();
+        // Assigned, not subscribed: re-entering the scene must REPLACE the rules, and
+        // a += here would leave the previous run's manager applying commands into a
+        // destroyed board.
+        CommandBus.Validator = ValidateCommand;
+        CommandBus.Applier   = ApplyCommand;
+        // A scene entered without a lobby still needs a valid session — single-player
+        // is modelled as a one-player host session rather than as "no session", so
+        // ownership and authority checks answer the same way in both modes.
+        // Offline is ALWAYS a fresh one-player session. Without the Online check a
+        // roster left over from a finished multiplayer match would survive into the
+        // next single-player level, and the wave gate would sit there waiting on
+        // three players who are no longer connected to anything.
+        if (!NetBootstrap.Online || MultiplayerSession.ConnectedCount == 0)
+            MultiplayerSession.BeginLocal();
+
+        // Only now is the roster settled, so only now can starting money be split the
+        // right number of ways. ResourceManager.Awake ran before any of this.
+        ResourceManager.Instance?.InitWallets();
+        // Static too, so a game-over that locked the camera would otherwise keep it
+        // locked through the restart that's supposed to clear it.
+        OrbitCamera.InputLocked = false;
 
         RunStats.BeginRun();   // reset kill/blocks/time counters for score-keeping
         ApplyRunConfig();   // Level vs Endless setup (seed, pacing, authored waves)
@@ -232,7 +259,13 @@ public class GameFlowManager : MonoBehaviour
     // True while the level-clear settlement is on screen — systems read this to
     // lock input (shop, pickup, sell, …) and hide gameplay HUD.
     public bool LevelCleared => _levelDone;
-    public static bool SettlementUp => Instance != null && Instance._levelDone;
+
+    // Also true on game over: the run is finished either way, and every caller
+    // already means "the run is over, take the controls away and hide the HUD".
+    // Reusing this rather than threading a second flag through a dozen call sites
+    // is what makes defeat lock down exactly as thoroughly as victory already did.
+    public static bool SettlementUp =>
+        Instance != null && (Instance._levelDone || Instance.phase == GamePhase.GameOver);
 
     bool TryObjectiveClear()
     {
@@ -267,8 +300,16 @@ public class GameFlowManager : MonoBehaviour
             ResourceManager.Instance?.SetCombatActive(false);
             enemyBaseManager?.CancelWave();
             BackgroundReactor.Instance?.SetCombatMode(false);
-            AudioManager.Instance?.ExitBattleBGM();
+            AudioManager.Instance?.PlayFightEnd();   // a fight really did end — but see below
         }
+
+        // Silence the BGM BEFORE the stinger, and unconditionally — an
+        // objective-driven clear fires from the Build phase, where the calm loop is
+        // what's playing. Deliberately NOT ExitBattleBGM (which posts fight_end but
+        // also SWAPS to the calm loop): Victory has to play alone, so the stinger is
+        // posted on its own above and the music is stopped outright here.
+        AudioManager.Instance?.StopBGM(200);
+        AudioManager.Instance?.PlayVictory();
         Time.timeScale = 1f;
         phase = GamePhase.Build;
 
@@ -296,7 +337,15 @@ public class GameFlowManager : MonoBehaviour
 
         bool firstClear = SaveSystem.RecordClear(RunConfig.Level, wavesReached, score);
         if (firstClear && RunConfig.Level != null && RunConfig.Level.rewardConversation != null)
+        {
             RunConfig.PendingRewardConversation = RunConfig.Level.rewardConversation;
+            RunConfig.PendingRewardLevelId       = RunConfig.Level.levelId;
+        }
+        // Any level's first clear COULD gate a map decoration (LevelMapController
+        // checks this against its own decorGateLevelId) — harmless to set even for
+        // levels that don't, LevelMapController just won't find a match and ignores it.
+        if (firstClear && RunConfig.Level != null)
+            RunConfig.PendingMapGrowthLevelId = RunConfig.Level.levelId;
 
         LevelClearScreen.Show(RunConfig.Level, wavesReached, lives, maxLives, stars, score, prevBest, isNewBest, objMet, ReturnToMap);
     }
@@ -342,11 +391,20 @@ public class GameFlowManager : MonoBehaviour
     {
         if (phase == GamePhase.GameOver) return;
         Debug.Log("[GameFlow] Game Over — last life lost.");
-        AbortRun();
+        AbortRun(quiet: true);   // no fight_end stinger — this is a loss, not a survived wave
         enemyBaseManager?.CancelWave();
         BackgroundReactor.Instance?.SetCombatMode(false);
-        AudioManager.Instance?.ExitBattleBGM();   // safety: dropping into Game Over also leaves battle music
+        // StopBGM, not ExitBattleBGM — ExitBattleBGM hands off to the calm loop,
+        // which would keep playing underneath Defeat instead of leaving it alone.
+        AudioManager.Instance?.StopBGM(200);
+        AudioManager.Instance?.PlayDefeat();
+
+        // Phase FIRST: SettlementUp keys off it, and the systems it gates (shop,
+        // placement, HUD) should already be locked out by the time the defeat
+        // sequence starts drawing over them.
         phase = GamePhase.GameOver;
+        OrbitCamera.InputLocked = true;   // SettlementUp doesn't reach the camera rig; this does
+        GameOverScreen.Show();
     }
 
     // Hard reset → reload current scene from scratch. Bound to PlayerHealth's
@@ -386,6 +444,9 @@ public class GameFlowManager : MonoBehaviour
 
     void CreateFirstStage()
     {
+        // Installed BEFORE the first generation, not just before later endpoints —
+        // the opening start/end pair is the one every player looks at first.
+        endpoints?.SetRng(EnsureRng());
         ConfigureEndpointBounds();
 
         // Tutorials / authored levels can pin the start & end instead of randomising.
@@ -399,23 +460,40 @@ public class GameFlowManager : MonoBehaviour
         allEnds.Add(endpoints.endCell);
     }
 
-    // Centre the orbit camera on the midpoint of the first start & end endpoints.
+    // Centre the orbit camera on the midpoint of the first start & end endpoints —
+    // unless the level authored its own opening shot (LevelDefinition.overrideInitialCamera).
     void FocusCameraOnFirstStage()
     {
+        var orbit = FindFirstObjectByType<OrbitCamera>();
+        if (orbit == null) return;
+
+        var lv = RunConfig.Mode == GameMode.Level ? RunConfig.Level : null;
+        if (lv != null && lv.overrideInitialCamera)
+        {
+            // ApplyState is the same hard-reset hook snapshot restore uses — it sets
+            // the orbit rig's focus/distance/yaw/pitch directly rather than fighting
+            // the rig's own per-frame position computation with a raw transform write.
+            orbit.ApplyState(lv.initialCameraFocus, lv.initialCameraDistance, lv.initialCameraYaw, lv.initialCameraPitch);
+            if (orbit.myCam != null) orbit.myCam.fieldOfView = lv.initialCameraFov;
+            return;
+        }
+
         if (gridSystem == null || allStarts.Count == 0 || allEnds.Count == 0) return;
         Vector3 mid = (gridSystem.GridToWorld(allStarts[0]) + gridSystem.GridToWorld(allEnds[0])) * 0.5f;
-        var orbit = FindFirstObjectByType<OrbitCamera>();
-        if (orbit != null) orbit.FocusOnPoint(mid);
+        orbit.FocusOnPoint(mid);
     }
 
     // Alternates: even roundIndex → +start, odd → +end.
     // Distance window widens so later endpoints can span larger gaps.
-    public void AddNextEndpoint()
+    // Automatic cadence: alternate start / end. Used when the level doesn't author
+    // its own schedule (LevelDefinition.startPointWaves / endPointWaves).
+    public void AddNextEndpoint() => AddEndpoint(roundIndex % 2 == 0);
+
+    public void AddEndpoint(bool addStart)
     {
+        endpoints?.SetRng(EnsureRng());   // same stream on every machine, or same seed means nothing
         float extraRange = roundIndex * 1.5f;
         ConfigureEndpointBounds(extraRange);
-
-        bool addStart = (roundIndex % 2 == 0);
 
         if (addStart)
         {
@@ -449,15 +527,25 @@ public class GameFlowManager : MonoBehaviour
     {
         if (phase == GamePhase.GameOver) return;
 
+#if UNITY_EDITOR
+        // Editor-only cheat: instantly clear the level, bypassing wavesToClear and
+        // any objectives entirely — DoLevelClear() already no-ops if the level is
+        // already cleared, so mashing this is harmless. F12, not P: P is already
+        // "manual re-evaluate" a few lines down, and this needed a free key.
+        if (RunConfig.Mode == GameMode.Level && Input.GetKeyDown(KeyCode.F12))
+            DoLevelClear(_wavesCompleted);
+#endif
+
         // Objective-driven levels clear the instant every required goal is met (any
         // phase), independent of wavesToClear.
         if (TryObjectiveClear()) return;
 
         if (phase == GamePhase.Build)
         {
-            // Space: commit and run
+            // Space: declare THIS player ready. With one player that is the same
+            // frame as running; with four it is the wave gate below.
             if (Input.GetKeyDown(KeyCode.Space) && TutorialDirector.CanRun())
-                Run();
+                CommandBus.Submit(new GameCommand { kind = GameCommandKind.StartWave });
 
             // P: manual re-evaluate (force-refresh live preview line)
             if (Input.GetKeyDown(KeyCode.P))
@@ -481,10 +569,81 @@ public class GameFlowManager : MonoBehaviour
         {
             // Space confirms from preview state; B cancels back to build
             if (Input.GetKeyDown(KeyCode.Space) && TutorialDirector.CanRun())
-                Run();
+                CommandBus.Submit(new GameCommand { kind = GameCommandKind.StartWave });
 
             if (Input.GetKeyDown(KeyCode.B))
                 phase = GamePhase.Build;
+        }
+
+        if (phase == GamePhase.Build || phase == GamePhase.ReadyToRun)
+            TryStartReadiedWave();
+    }
+
+    // -- Wave gate -------------------------------------------------------------
+
+    // The wave starts when every CONNECTED player has readied, and the check lives
+    // here rather than in the command handler for one reason: a player who leaves
+    // while three others are waiting has to stop being waited for. AllReady ignores
+    // disconnected slots, so polling it resolves that by itself on the next frame,
+    // where a check that only ran on keypress would hang the round until someone
+    // pressed something.
+    //
+    // Every machine runs this off its own roster. Ready flags arrive everywhere
+    // through the same relayed command stream, so all four reach the same verdict on
+    // their own — no separate "go" message to get lost or arrive out of order.
+    void TryStartReadiedWave()
+    {
+        if (!MultiplayerSession.AllReady) return;
+        MultiplayerSession.ClearReady();
+        Run();
+    }
+
+    // -- Command rules ---------------------------------------------------------
+
+    // Authority-side check. Returns null to accept, or the reason to refuse.
+    string ValidateCommand(GameCommand cmd)
+    {
+        switch (cmd.kind)
+        {
+            case GameCommandKind.StartWave:
+                if (phase != GamePhase.Build && phase != GamePhase.ReadyToRun)
+                    return "not in a build phase";
+                return null;
+            default:
+                // Placement rules already ran on the issuing machine before it
+                // submitted. Re-running them on the authority against a board that
+                // may be a few commands ahead would reject moves that were legal
+                // when made — the wrong trade for a co-op game where nobody is
+                // trying to cheat. Revisit if that stops being true.
+                return null;
+        }
+    }
+
+    void ApplyCommand(GameCommand cmd)
+    {
+        switch (cmd.kind)
+        {
+            case GameCommandKind.StartWave:
+                // Toggle, so Space is also how you take it back while the others are
+                // still building. Only the flag moves here — TryStartReadiedWave
+                // decides whether that was the last one needed.
+                var p = MultiplayerSession.Get(cmd.playerId);
+                bool nowReady = p == null || !p.ready;
+                MultiplayerSession.SetReady(cmd.playerId, nowReady);
+
+                // Readying up opens the roster — the moment you commit is exactly when
+                // "who are we still waiting for" becomes the only question you have,
+                // and it is also where the cancel button lives. Only for the player who
+                // pressed it, and only when there is somebody to wait for.
+                if (nowReady && cmd.playerId == MultiplayerSession.LocalId
+                    && MultiplayerSession.ConnectedCount > 1)
+                    HudSidePanels.Open(HudSidePanels.Side.Controls);
+                break;
+
+            case GameCommandKind.PlaceBlock:
+            case GameCommandKind.RemoveBlock:
+                PlacementController.Instance?.ApplyNetCommand(cmd);
+                break;
         }
     }
 
@@ -593,6 +752,10 @@ public class GameFlowManager : MonoBehaviour
 
     public void StartTurn()
     {
+        // A ready left over from last round would fire the gate before the player had
+        // seen the new board.
+        MultiplayerSession.ClearReady();
+
         ResourceManager.Instance?.GrantRoundIncome();   // fixed income each build phase
         placement.currentBlock = null;
         placement.mode = PlacementMode.Select;
@@ -609,6 +772,17 @@ public class GameFlowManager : MonoBehaviour
         // Per-turn synergy payouts (Abundance harvest, etc.) run after the
         // standing income + token spawn so they see the live synergy state.
         OnTurnStarted?.Invoke();
+
+        // Redraw the live preview for the endpoint set as it stands NOW.
+        //
+        // Run() clears the live lines when a wave commits, and EndRunningPhase can
+        // add a whole new spawn point before handing back to Build — but nothing
+        // between those two points rebuilds the preview, so a freshly added spawn
+        // point had no line until the player happened to place or remove a block.
+        // (The Run itself was always fine: it recomputes FindAllSpawnPaths from
+        // scratch, which is why enemies still came out of a spawn point that
+        // looked unconnected.)
+        EvaluateGrid();
     }
 
     // Called after every block place/remove — rebuilds graph, refreshes live
@@ -702,7 +876,15 @@ public class GameFlowManager : MonoBehaviour
         if (_rng != null) return _rng;
 
         if (runSeed == 0UL)
+        {
+            // A clock-derived seed is per-machine by construction, so in a session
+            // with anyone else it would hand every player a different level. The room
+            // agrees on a seed before the match starts; refusing to invent one here is
+            // what makes that agreement mean something.
+            if (MultiplayerSession.ConnectedCount > 1)
+                Debug.LogError("[GameFlowManager] Networked run started with no agreed seed — players will see different levels.");
             runSeed = unchecked((ulong)System.DateTime.UtcNow.Ticks ^ 0xA5A5A5A5A5A5A5A5UL);
+        }
 
         _rng = new Xoshiro256StarStar(runSeed);
         Debug.Log($"[GameFlowManager] Run seed = {runSeed}");
@@ -938,7 +1120,11 @@ public class GameFlowManager : MonoBehaviour
 
     // Force-aborts an in-progress run without promoting it to a loop.
     // Used by dev tools / cancel-run shortcut.
-    public void AbortRun()
+    //
+    // `quiet` suppresses the combat-ended music/stinger, for callers that are
+    // about to play their own — a defeat shouldn't announce itself with the
+    // "you survived the wave" fight_end cue first (see HandleGameOver).
+    public void AbortRun(bool quiet = false)
     {
         if (phase != GamePhase.Running) return;
 
@@ -946,7 +1132,7 @@ public class GameFlowManager : MonoBehaviour
         if (currentUnit != null) { Destroy(currentUnit.gameObject); currentUnit = null; }
         ResourceManager.Instance?.SetCombatActive(false);
         BackgroundReactor.Instance?.SetCombatMode(false);
-        AudioManager.Instance?.ExitBattleBGM();
+        if (!quiet) AudioManager.Instance?.ExitBattleBGM();
         Time.timeScale = 1f;                               // restore normal speed when bailing out of combat
         phase = GamePhase.Build;
     }
@@ -978,11 +1164,28 @@ public class GameFlowManager : MonoBehaviour
         if (HandleWaveProgress()) return;
 
         // Add a new endpoint only every N completed runs.
-        _runsSinceLastEndpoint++;
-        if (_runsSinceLastEndpoint >= runsPerEndpoint)
+        // An authored schedule wins outright — a level that lists its endpoint waves
+        // is stating exactly when the route changes, and the automatic cadence
+        // running alongside it would insert extra ones the author never asked for.
+        var sched = RunConfig.Mode == GameMode.Level ? RunConfig.Level : null;
+        if (sched != null && sched.HasEndpointSchedule)
         {
-            _runsSinceLastEndpoint = 0;
-            AddNextEndpoint();
+            _runsSinceLastEndpoint++;
+            var kind = sched.EndpointKindAfterWave(_wavesCompleted);
+            if (kind.HasValue)
+            {
+                _runsSinceLastEndpoint = 0;
+                AddEndpoint(kind.Value);
+            }
+        }
+        else
+        {
+            _runsSinceLastEndpoint++;
+            if (_runsSinceLastEndpoint >= runsPerEndpoint)
+            {
+                _runsSinceLastEndpoint = 0;
+                AddNextEndpoint();
+            }
         }
 
         // Roguelite choice. Non-blocking — Build phase starts immediately,

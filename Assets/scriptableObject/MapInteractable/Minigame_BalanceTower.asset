@@ -1,0 +1,27 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: bb3d8a0e57283c644a6a5af3773d64af, type: 3}
+  m_Name: Minigame_BalanceTower
+  m_EditorClassIdentifier: Assembly-CSharp::MapInteractable
+  id: minigame.balancetower
+  kind: 1
+  displayName: The Balancing Yard
+  description: A round plinth the machinists use to settle arguments. Blocks come
+    down one at a time and nothing snaps into place — they land where they land,
+    and lean where they lean. The only rule is that the tower must still be
+    standing when the next one arrives.
+  status: Endless — stack as high as you dare
+  actionLabel: Play
+  approachLabel: Walk over
+  conversation: {fileID: 0}
+  repeatConversation: {fileID: 0}
+  minigame: 1

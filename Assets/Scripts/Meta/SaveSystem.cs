@@ -20,7 +20,19 @@ public static class SaveSystem
         private set { PlayerPrefs.SetInt(ActiveSlotKey, Mathf.Clamp(value, 0, SlotCount - 1)); PlayerPrefs.Save(); }
     }
 
+    // Editor-only: redirects every read/write to ONE throwaway file instead of a
+    // real slot, so LevelMapController.resetSaveOnStart can wipe freely. Deleted
+    // when Play mode exits (below).
+    public static bool DevTempActive;
+    static string DevTempPath => Path.Combine(Application.persistentDataPath, "profile_devtemp.json");
+
     static string SlotPath(int slot) =>
+        DevTempActive ? DevTempPath
+                       : Path.Combine(Application.persistentDataPath, $"profile_{Mathf.Clamp(slot, 0, SlotCount - 1)}.json");
+
+    // Bypasses DevTempActive — PeekSlot/SlotHasData (Title's save-select UI) must
+    // always reflect the real slot files.
+    static string RealSlotPath(int slot) =>
         Path.Combine(Application.persistentDataPath, $"profile_{Mathf.Clamp(slot, 0, SlotCount - 1)}.json");
 
     // Pre-slot single-file save; migrated into slot 0 on first access.
@@ -37,9 +49,10 @@ public static class SaveSystem
     // Point gameplay at a slot. Next Profile access loads that slot's file.
     public static void SelectSlot(int slot)
     {
-        ActiveSlot  = slot;
-        _cached     = null;
-        _cachedSlot = -1;
+        ActiveSlot     = slot;
+        DevTempActive  = false;   // a real slot pick always wins over any leftover dev-temp redirect
+        _cached        = null;
+        _cachedSlot    = -1;
     }
 
     public static ProfileData Load()
@@ -50,7 +63,8 @@ public static class SaveSystem
         {
             var path = SlotPath(slot);
             // One-time migration: an old single-file profile.json becomes slot 0.
-            if (!File.Exists(path) && slot == 0 && File.Exists(LegacyPath))
+            // Never applies in dev-temp mode — that file isn't a real slot 0.
+            if (!DevTempActive && !File.Exists(path) && slot == 0 && File.Exists(LegacyPath))
                 path = LegacyPath;
 
             if (File.Exists(path))
@@ -71,20 +85,14 @@ public static class SaveSystem
         catch (System.Exception e) { Debug.LogWarning($"[SaveSystem] save slot {slot} failed: {e.Message}"); }
     }
 
-    // Wipes the ACTIVE slot's save file on disk and resets the in-memory cache to
-    // a blank ProfileData — for testing systems that want to start from a truly
-    // fresh profile every Play session (e.g. LevelMapController.resetSaveOnStart)
-    // without hunting down profile_<n>.json under Application.persistentDataPath
-    // by hand. Anything that runs afterward and calls Save() will happily persist
-    // into the now-blank slot — that's expected: turning a "reset on start" toggle
-    // on means you're intentionally treating that slot as disposable for this
-    // session, not that the wipe is somehow undone later.
+    // Wipes the active slot's save file (or dev-temp file) and resets the in-memory
+    // cache to blank — for testing systems like LevelMapController.resetSaveOnStart.
     public static void ResetProfile()
     {
         int slot = ActiveSlot;
         try { if (File.Exists(SlotPath(slot))) File.Delete(SlotPath(slot)); }
         catch (System.Exception e) { Debug.LogWarning($"[SaveSystem] reset slot {slot} failed: {e.Message}"); }
-        if (slot == 0)
+        if (!DevTempActive && slot == 0)
         {
             try { if (File.Exists(LegacyPath)) File.Delete(LegacyPath); }
             catch (System.Exception e) { Debug.LogWarning($"[SaveSystem] reset legacy save failed: {e.Message}"); }
@@ -95,11 +103,12 @@ public static class SaveSystem
 
     // Read a slot's data WITHOUT selecting it or touching the active cache — for
     // the save-select UI. Returns null when the slot has no save yet (empty).
+    // Always reads the REAL file (RealSlotPath), never the dev-temp redirect.
     public static ProfileData PeekSlot(int slot)
     {
         try
         {
-            var path = SlotPath(slot);
+            var path = RealSlotPath(slot);
             if (!File.Exists(path) && slot == 0 && File.Exists(LegacyPath)) path = LegacyPath;
             if (File.Exists(path))
                 return JsonUtility.FromJson<ProfileData>(File.ReadAllText(path));
@@ -109,7 +118,25 @@ public static class SaveSystem
     }
 
     public static bool SlotHasData(int slot) =>
-        File.Exists(SlotPath(slot)) || (slot == 0 && File.Exists(LegacyPath));
+        File.Exists(RealSlotPath(slot)) || (slot == 0 && File.Exists(LegacyPath));
+
+#if UNITY_EDITOR
+    // Deletes the dev-temp file the instant Play mode exits.
+    [UnityEditor.InitializeOnLoadMethod]
+    static void RegisterDevTempCleanup()
+    {
+        UnityEditor.EditorApplication.playModeStateChanged -= HandlePlayModeStateChanged;
+        UnityEditor.EditorApplication.playModeStateChanged += HandlePlayModeStateChanged;
+    }
+
+    static void HandlePlayModeStateChanged(UnityEditor.PlayModeStateChange change)
+    {
+        if (change != UnityEditor.PlayModeStateChange.ExitingPlayMode) return;
+        DevTempActive = false;
+        try { if (File.Exists(DevTempPath)) File.Delete(DevTempPath); }
+        catch (System.Exception e) { Debug.LogWarning($"[SaveSystem] dev-temp cleanup failed: {e.Message}"); }
+    }
+#endif
 
     // ── Progression helpers ──────────────────────────────────────────────────
 

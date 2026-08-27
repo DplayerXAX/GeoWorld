@@ -49,6 +49,23 @@ public class OrbitCamera : MonoBehaviour
     public float   Yaw        => yaw;
     public float   Pitch      => pitch;
 
+    // Relative yaw bump — position still eases toward the new angle via LateUpdate.
+    public void AddYaw(float degrees) => yaw += degrees;
+
+    // Ortho's real heading is yaw + the isometric 45° bias (orthoAngle.y) — world-
+    // space callers like AxisGizmo need to go through these, not raw `yaw`.
+    public float YawOffset => useOrthographic ? orthoAngle.y : 0f;
+    public float WorldYaw  => yaw + YawOffset;
+
+    // Points the rig along a world-space heading/elevation, keeping focus/distance/
+    // pan. Pitch clamped to the same range right-drag uses.
+    public void SetWorldYawPitch(float worldYaw, float newPitch)
+    {
+        yaw   = worldYaw - YawOffset;
+        pitch = useOrthographic ? Mathf.Clamp(newPitch, 10f, 80f)
+                                : Mathf.Clamp(newPitch, minPitch, maxPitch);
+    }
+
     // Hard-reset orbit state. Used by snapshot restore.
     public void ApplyState(Vector3 focus, float dist, float newYaw, float newPitch)
     {
@@ -57,6 +74,8 @@ public class OrbitCamera : MonoBehaviour
         yaw               = newYaw;
         pitch             = Mathf.Clamp(newPitch, minPitch, maxPitch);
         _panOffset        = Vector3.zero;
+        _viewportShown    = focusViewport;   // a hard reset composes hard too
+        _viewportSeeded   = true;
     }
 
     // Free pan offset added on top of the focus target's position.
@@ -198,7 +217,10 @@ public class OrbitCamera : MonoBehaviour
         desiredTarget     = _focusAnchor;
         // snap=true → instant centre (initial framing). snap=false → leave
         // currentFocusPoint so LateUpdate glides both position and LookAt target.
-        if (snap) currentFocusPoint = worldPoint;
+        // snap also takes the viewport bias with it — an initial framing (or a
+        // cutscene hand-off behind a fade) must be fully composed on the first
+        // frame, not glide in from centre.
+        if (snap) { currentFocusPoint = worldPoint; _viewportShown = focusViewport; _viewportSeeded = true; }
         _panOffset        = Vector3.zero;
     }
 
@@ -207,6 +229,18 @@ public class OrbitCamera : MonoBehaviour
     {
         if (InputLocked) return;
         _panOffset += worldDelta;
+
+        // Carry the smoothed focus and the rig itself along by the same amount
+        // instead of leaving LateUpdate's lerp to chase them.
+        //
+        // The aim is set from currentFocusPoint every frame (transform.LookAt) but
+        // the POSITION is a lagging lerp, so while the focus is sliding ahead of
+        // the body the camera has to keep re-aiming — a straight pan comes out as a
+        // visible twist that unwinds when you let go. Translating both together
+        // makes a pan rigid: nothing moves relative to anything else, so there's
+        // nothing to re-aim.
+        currentFocusPoint  += worldDelta;
+        transform.position += worldDelta;
     }
 
     void LateUpdate()
@@ -302,12 +336,16 @@ public class OrbitCamera : MonoBehaviour
             rot = Quaternion.Euler(pitch, yaw, 0);
         }
 
+        EaseViewportBias();
         Vector3 shift  = ViewportBiasShift(rot);
         Vector3 offset = rot * new Vector3(0, 0, -distance);
         Vector3 desiredPos = currentFocusPoint + offset + shift;
 
+        // Last frame's shake is subtracted BEFORE the lerp so the easing always
+        // operates on the clean, unshaken position — otherwise the jitter feeds
+        // back into the smoothing and the rig drifts while it's shaking.
         transform.position = Vector3.Lerp(
-            transform.position,
+            transform.position - _shakeOffset,
             desiredPos,
             1f - Mathf.Exp(-transitionSpeed * Time.unscaledDeltaTime)
         );
@@ -315,13 +353,71 @@ public class OrbitCamera : MonoBehaviour
         // Smooth aim (eased rotation, not a per-frame snap). Looking at the SHIFTED
         // target keeps the focus point biased to `focusViewport` while staying smooth.
         transform.LookAt(currentFocusPoint + shift);
+
+        ApplyShake();
+    }
+
+    // ── Screen shake ─────────────────────────────────────────────────────────
+    // Lives here rather than in a separate component because THIS is what owns
+    // the camera transform — anything else writing position in its own LateUpdate
+    // would just race with the lerp above and get overwritten half the time.
+    float   _shakeAmp, _shakeDur, _shakeT;
+    Vector3 _shakeOffset;
+
+    // Additive: a new shake during an old one takes the stronger of the two
+    // rather than cutting it short, so rapid repeat hits build instead of reset.
+    public void Shake(float amplitude, float duration)
+    {
+        _shakeAmp = Mathf.Max(_shakeAmp, amplitude);
+        _shakeDur = Mathf.Max(_shakeDur, duration);
+        _shakeT   = Mathf.Max(_shakeT, duration);
+    }
+
+    void ApplyShake()
+    {
+        if (_shakeT <= 0f) { _shakeOffset = Vector3.zero; return; }
+
+        _shakeT -= Time.unscaledDeltaTime;
+        if (_shakeT <= 0f) { _shakeT = 0f; _shakeAmp = 0f; _shakeOffset = Vector3.zero; return; }
+
+        // Squared falloff — hits hard immediately, then settles fast.
+        float k = _shakeDur > 0f ? _shakeT / _shakeDur : 0f;
+        float mag = _shakeAmp * k * k;
+
+        _shakeOffset = (transform.right * Random.Range(-1f, 1f)
+                      + transform.up    * Random.Range(-1f, 1f)) * mag;
+        transform.position += _shakeOffset;
+        // A little roll on top — pure translation reads as the rig sliding, the
+        // twist is what makes it read as an impact.
+        transform.rotation = Quaternion.AngleAxis(Random.Range(-1f, 1f) * mag * 6f, transform.forward)
+                           * transform.rotation;
     }
 
     // World shift so the focus point lands at `focusViewport` instead of dead centre.
+    // The bias actually in effect. `focusViewport` is written instantly by callers
+    // (a tutorial step re-composing the shot, LevelMapController re-applying its
+    // authored offset); this trails it.
+    //
+    // Without the trail, a step that changed composition produced a JERK: the shift
+    // is used both in desiredPos — which is eased — and in transform.LookAt, which
+    // is not. So the camera's aim snapped to the new framing in one frame while its
+    // body glided there over many, and the mismatch reads as a twitch that then
+    // unwinds. Easing the bias itself fixes both halves at once, and needs no
+    // changes at any call site.
+    Vector2 _viewportShown = new(0.5f, 0.5f);
+    bool    _viewportSeeded;
+
+    void EaseViewportBias()
+    {
+        if (!_viewportSeeded) { _viewportShown = focusViewport; _viewportSeeded = true; return; }
+        _viewportShown = Vector2.Lerp(_viewportShown, focusViewport,
+                                      1f - Mathf.Exp(-transitionSpeed * Time.unscaledDeltaTime));
+    }
+
     Vector3 ViewportBiasShift(Quaternion rot)
     {
         if (myCam == null) return Vector3.zero;
-        if (Mathf.Approximately(focusViewport.x, 0.5f) && Mathf.Approximately(focusViewport.y, 0.5f))
+        if (Mathf.Approximately(_viewportShown.x, 0.5f) && Mathf.Approximately(_viewportShown.y, 0.5f))
             return Vector3.zero;
 
         float halfH = myCam.orthographic
@@ -330,7 +426,7 @@ public class OrbitCamera : MonoBehaviour
         float halfW = halfH * myCam.aspect;
 
         // Moving the camera right pushes the focus left, so use (0.5 - viewport).
-        return rot * Vector3.right * ((0.5f - focusViewport.x) * 2f * halfW)
-             + rot * Vector3.up    * ((0.5f - focusViewport.y) * 2f * halfH);
+        return rot * Vector3.right * ((0.5f - _viewportShown.x) * 2f * halfW)
+             + rot * Vector3.up    * ((0.5f - _viewportShown.y) * 2f * halfH);
     }
 }

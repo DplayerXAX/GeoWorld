@@ -1,3 +1,5 @@
+using UnityEngine;
+
 // How the next gameplay run is configured. Title / LevelSelect set this, then
 // load the "gamePlay" scene; GameFlowManager.Start reads it to decide how to open.
 //
@@ -11,11 +13,23 @@ public static class RunConfig
     public static LevelDefinition Level;      // null in Endless mode
     public static ulong           Seed;       // 0 = randomize at run start
 
-    // Set by GameFlowManager right after a level's FIRST clear (if it has one
-    // authored); consumed once by LevelMapController.Start() back on LevelSelect,
-    // then cleared so it never replays. Static for the same reason as the rest of
-    // this class — needs to survive the gameplay → LevelSelect scene load.
+    // Set by GameFlowManager on a level's first clear; consumed once by
+    // LevelMapController.Start() back on LevelSelect, then cleared.
     public static DialogueConversation PendingRewardConversation;
+    // Which level granted PendingRewardConversation — lets LevelMapController
+    // focus the camera on that level's map marker before the dialogue starts.
+    public static string PendingRewardLevelId;
+
+    // Set alongside PendingRewardConversation. If it matches decorGateLevelId,
+    // LevelMapController.Start() plays the decoration's grow-in cutscene first.
+    public static string PendingMapGrowthLevelId;
+
+    // Map cell the pawn stood on when it last left LevelSelect (for a level or a
+    // minigame). Sticky — returning resumes there instead of the home block.
+    // A raw cell rather than a levelId so it covers non-level departures too;
+    // LevelMapController falls back to the start node if the cell is gone.
+    public static bool       HasLastLevelSelectCell;
+    public static Vector3Int LastLevelSelectCell;
 
     public static void SetLevel(LevelDefinition level)
     {

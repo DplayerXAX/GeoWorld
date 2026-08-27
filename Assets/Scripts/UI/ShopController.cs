@@ -96,8 +96,8 @@ public class ShopController : MonoBehaviour
     public Sprite shopButtonIcon;
     [Tooltip("Refresh button diameter (px).")]
     public float refreshButtonSize = 54f;
-    [Tooltip("Refresh button offset from the rift's top-right corner (x = left, y = up).")]
-    public Vector2 refreshButtonOffset = new Vector2(0f, 6f);
+    [Tooltip("Refresh / shop button offset from the rift's bottom-right corner (x = left, y = up). The Y clears the wave progress bar, which shares this corner — at 6 the button sat straight on top of the bar and its WAVE label.")]
+    public Vector2 refreshButtonOffset = new Vector2(0f, 100f);
 
     [Header("Block style")]
     [Tooltip("Render shop blocks flat / unlit (2D look — no scene light or shadow).")]
@@ -329,10 +329,24 @@ public class ShopController : MonoBehaviour
 
         // sRGB read/write so the snapshot matches the main camera's colours. A default
         // (linear) RT in a Linear-colour-space project makes the shop read darker.
-        _shopRT              = new RenderTexture(Mathf.Max(32, rtWidth), Mathf.Max(32, rtHeight),
+        //
+        // SUPERSAMPLED, not MSAA. This used to set antiAliasing = 2, which under URP's
+        // render graph (Unity 6) produces a multisampled target with no resolve
+        // surface — "Missing resolve surface for attachment 0", once per draw, every
+        // frame — and the camera's output never lands, so the shop renders empty.
+        // Rendering at SS× and letting the RawImage's bilinear filter downscale gives
+        // equivalent edge quality here with a plain single-sample target that the
+        // pipeline has no opinion about.
+        //
+        // Resolution only: the aspect is set explicitly from the strip's own size, and
+        // every hit test goes through viewport coordinates, so nothing downstream can
+        // tell the difference.
+        const int SS = 2;
+        _shopRT              = new RenderTexture(Mathf.Max(32, rtWidth)  * SS,
+                                                 Mathf.Max(32, rtHeight) * SS,
                                                  16, RenderTextureFormat.ARGB32,
                                                  RenderTextureReadWrite.sRGB);
-        _shopRT.antiAliasing = 2;
+        _shopRT.antiAliasing = 1;
         _shopRT.filterMode   = FilterMode.Bilinear;
 
         if (shopCam != null)
@@ -398,9 +412,19 @@ public class ShopController : MonoBehaviour
     {
         if (GameFlowManager.SettlementUp) { _expanded = false; return; }   // locked during clear settlement
         if (!Input.GetKeyDown(shopToggleKey) && !GamepadInput.ToggleShopDown) return;
-        // Toggle off what the player actually SEES, not a possibly-stale _expanded
-        // (grab/Collapse/RestoreItem/combat paths can desync it → a press did nothing).
-        bool visiblyOpen = _riftScale > 0.5f;
+        // Read the VISIBLE state only once the rift has settled.
+        //
+        // The visible test is here because _expanded can go stale — grab, Collapse,
+        // RestoreItem and the combat hooks all write it — so a press could otherwise
+        // do nothing. But applied mid-animation it does the opposite: opening runs
+        // _riftScale up toward 0.6, and a second press before it crosses 0.5 reads
+        // "not open yet" and sets _expanded = true again. Press twice quickly and the
+        // shop refuses to close.
+        //
+        // Settled means the animation has arrived, and only then is what is on screen
+        // a better witness than the flag.
+        bool settled     = Mathf.Abs(_riftScale - _riftTarget) < 0.05f;
+        bool visiblyOpen = settled ? _riftScale > 0.5f : _expanded;
         _expanded = !visiblyOpen;   // openable during combat too (buy / place new pieces)
     }
 
@@ -722,6 +746,40 @@ public class ShopController : MonoBehaviour
             renderers   = root.GetComponentsInChildren<Renderer>(),
         });
     }
+
+    /// <summary>
+    /// A random item the player can currently afford, or null when none is.
+    /// Drawn from the AFFORDABLE subset rather than from everything and then
+    /// rejected: picking blind and failing would make the key do nothing on a press
+    /// that looked identical to a working one, and the player has no way to see why.
+    ///
+    /// Uses UnityEngine.Random deliberately, not the run's seeded stream — this is a
+    /// convenience input, not part of the run, and drawing from the seeded stream
+    /// would shift every later shop roll and wave for anyone who pressed it.
+    /// </summary>
+    public SelectableBlock RandomAffordable()
+    {
+        var rm = ResourceManager.Instance;
+        var pool = new List<SelectableBlock>();
+
+        foreach (var it in _items)
+        {
+            if (it?.sb == null || it.sb.data == null) continue;
+            if (it.root == null || !it.root.activeInHierarchy) continue;
+            if (rm != null && !rm.CanAfford(it.sb.cachedPrice, it.sb.data.blockType)) continue;
+            // The tutorial can restrict which block may be bought; a quick-buy that
+            // ignored that would hand the player a piece the current step refuses.
+            if (!TutorialDirector.CanPurchase(it.sb.data)) continue;
+            pool.Add(it.sb);
+        }
+
+        if (pool.Count == 0) return null;
+        return pool[Random.Range(0, pool.Count)];
+    }
+
+    /// <summary>True when the shop is holding anything at all — for telling
+    /// "can't afford it" apart from "there is nothing there".</summary>
+    public bool HasItems => _items.Count > 0;
 
     public void ClearItems()
     {

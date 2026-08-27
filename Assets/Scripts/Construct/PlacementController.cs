@@ -40,6 +40,9 @@ public partial class PlacementController : MonoBehaviour
     // Fired with the highest branch level reached on that turret after an upgrade.
     public static event System.Action<int> TurretUpgradeLevelReached;
     public Vector3Int SnappedGridPos => baseGridPos;
+    // Where the held block actually sits (snap + the player's WASDQE nudge) — this,
+    // not baseGridPos, is what a remote ghost has to mirror.
+    public Vector3Int HeldGridPos => currentGridPos;
     public Vector3Int CurrentGridPos => currentGridPos;
     [Range(0.5f, 4f)] public float snapGridRadius = 1.5f;
     public float minDepth = 2f, maxDepth = 40f, scrollSpeed = 3f, rotateSpeed = 10f;
@@ -262,6 +265,11 @@ public partial class PlacementController : MonoBehaviour
     {
         Instance        = this;
         editFocusAnchor = new GameObject("EditFocusAnchor").transform;
+
+        // Every block this scene can hand the player gets a wire id. Without this the
+        // catalog was empty unless someone had hand-populated a Resources folder, and
+        // an empty catalog silently disables every networked block preview.
+        BlockCatalog.RegisterAll(blocks);
     }
 
     public void ShowPlacementPopup(string msg, float duration = 1.5f)
@@ -565,6 +573,13 @@ public partial class PlacementController : MonoBehaviour
                 TryDelete();
         }
 
+        // Quick buy: grab a random affordable shop item and go straight into
+        // placing it. Same entry point a click uses, so the tutorial gate, the
+        // price, the colour and the combat rules all behave identically — a second
+        // purchase path with its own copy of those checks is a second place for them
+        // to drift.
+        if (Input.GetKeyDown(GameSettings.QuickBuyKey)) TryQuickBuy();
+
         // Ctrl+Z undo last placement or deletion.
         if ((Input.GetKeyDown(KeyCode.Z)
             && (Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl)))
@@ -656,11 +671,27 @@ public partial class PlacementController : MonoBehaviour
     // qualifies, holds at the last cell that DID qualify instead of snapping back
     // to the raw (unsupported) mouse position — the mouse can keep moving, but the
     // ghost simply won't follow it off into empty space.
+    // Last raw (unsnapped) mouse cell, so a solve can tell a real mouse move from
+    // a re-solve triggered by something else in the same frame.
+    Vector3Int _lastRawCell;
+    bool       _hasLastRawCell;
+
     Vector3Int SnapToNearestSupported(Vector3Int raw)
     {
         var cells = GetRotatedCells();
         if (cells.Length == 0) return raw;
+
+        bool mouseMoved = !_hasLastRawCell || raw != _lastRawCell;
+        _lastRawCell    = raw;
+        _hasLastRawCell = true;
+
         if (CanPlace(raw + manualOffset, cells)) return _lastSnappedBaseGridPos = raw;
+
+        // Mouse hasn't moved, so this solve came from a nudge or a rotation, and the
+        // anchor we already hold still works. Searching anyway would pick a base
+        // that compensates for the changed offset and cancel the player's input out.
+        if (!mouseMoved && CanPlace(_lastSnappedBaseGridPos + manualOffset, cells))
+            return _lastSnappedBaseGridPos;
 
         int cellRadius = Mathf.Max(1, Mathf.CeilToInt(snapGridRadius / Mathf.Max(0.01f, grid.cellSize)));
         Vector3Int best = _lastSnappedBaseGridPos;
@@ -690,18 +721,39 @@ public partial class PlacementController : MonoBehaviour
         Vector3Int right   = SnapToHorizontalAxis(cam.transform.right);
         Vector3Int forward = SnapToHorizontalAxis(cam.transform.forward);
 
-        if (Input.GetKeyDown(KeyCode.A)) manualOffset -= right;
-        if (Input.GetKeyDown(KeyCode.D)) manualOffset += right;
-        if (Input.GetKeyDown(KeyCode.W)) manualOffset += forward;
-        if (Input.GetKeyDown(KeyCode.S)) manualOffset -= forward;
-        if (Input.GetKeyDown(KeyCode.Q)) manualOffset += Vector3Int.up;
-        if (Input.GetKeyDown(KeyCode.E)) manualOffset += Vector3Int.down;
+        if (Input.GetKeyDown(KeyCode.A)) Nudge(-right);
+        if (Input.GetKeyDown(KeyCode.D)) Nudge(right);
+        if (Input.GetKeyDown(KeyCode.W)) Nudge(forward);
+        if (Input.GetKeyDown(KeyCode.S)) Nudge(-forward);
+        if (Input.GetKeyDown(KeyCode.Q)) Nudge(Vector3Int.up);
+        if (Input.GetKeyDown(KeyCode.E)) Nudge(Vector3Int.down);
 
         // Gamepad d-pad mirrors A/D/W/S (Q/E depth stays mouse/keyboard-only, low value on a pad).
-        if (GamepadInput.CycleBlockPrevDown) manualOffset -= right;
-        if (GamepadInput.CycleBlockNextDown) manualOffset += right;
-        if (GamepadInput.DPadUpDown)         manualOffset += Vector3Int.up;
-        if (GamepadInput.DPadDownDown)       manualOffset += Vector3Int.down;
+        if (GamepadInput.CycleBlockPrevDown) Nudge(-right);
+        if (GamepadInput.CycleBlockNextDown) Nudge(right);
+        if (GamepadInput.DPadUpDown)         Nudge(Vector3Int.up);
+        if (GamepadInput.DPadDownDown)       Nudge(Vector3Int.down);
+    }
+
+    // One step of keyboard/d-pad nudge.
+    //
+    // In snapping mode the nudge can't just add to manualOffset and hope. The snap
+    // solver runs again next frame, re-derives baseGridPos from the (unmoved) mouse
+    // ray, and tests `raw + manualOffset` — so when the nudged cell isn't placeable
+    // it goes hunting for a base that makes some OTHER nearby cell valid, and the
+    // one it finds is usually the cell we just left. The block visibly refuses to
+    // move, and pressing again does nothing. Rejecting the step here is honest
+    // about what happened instead of letting the solver quietly undo it.
+    void Nudge(Vector3Int delta)
+    {
+        if (delta == Vector3Int.zero) return;
+
+        // Free move has no support constraint at all — the offset IS the position.
+        if (GameSettings.FreeMove) { manualOffset += delta; return; }
+
+        var cells = GetRotatedCells();
+        if (cells.Length > 0 && !CanPlace(currentGridPos + delta, cells)) return;
+        manualOffset += delta;
     }
 
     // Select mode: WASD pans the camera continuously along its horizontal facing,
@@ -842,12 +894,16 @@ public partial class PlacementController : MonoBehaviour
         // block follow the cursor directly — no offset back to its old cell.
         SnapDepthToWorldPos(lastObjectPos);
 
-        // Update count before removing from grid.
-        ResourceManager.Instance?.OnBlockRemoved(selectedInstance.data.blockType);
-        SynergyEvaluator.Instance?.OnPieceRemoved(selectedInstance.placedPiece);
+        // Lifting a block is a board change like any other, so it goes through the
+        // bus. Without this a reposition removed the block on ONE machine and then
+        // placed it on all four — leaving everyone else with a duplicate that no
+        // amount of later syncing could reconcile.
+        CommandBus.Submit(new GameCommand
+        {
+            kind = GameCommandKind.RemoveBlock,
+            cell = lastObjectCells.Length > 0 ? lastObjectCells[0] : Vector3Int.zero,
+        });
 
-        grid.RemoveInstance(selectedInstance);
-        NotifyBlockLifted(lastObjectCells);
         selectedInstance = null;
         HideRangeIndicator();
         EnterEditMode(null);   // leave the camera where it is — SnapDepthToWorldPos already fixed the height plane
@@ -1380,79 +1436,59 @@ public partial class PlacementController : MonoBehaviour
             }
         }
 
-        if (isNewBlock && ResourceManager.Instance != null)
-        {
-            ResourceManager.Instance.TryBuy(_pendingShopPrice, currentBlock.blockType);
-            _pendingShopPrice = 0;
-        }
+        // ── The board change goes on the wire ─────────────────────────────────
+        //
+        // Not committed here. Submit routes it to the authority and back, and the
+        // board is built in ApplyPlace on EVERY machine including this one — so the
+        // player who placed it runs exactly the same code as the three watching. In
+        // single-player the router is a straight-through call, so this still lands
+        // on the same frame and nothing about the feel changes.
+        //
+        // Everything BELOW this point is about the local player's hand — funds
+        // already checked, undo, the tray token, resetting the cursor — and stays
+        // here, because none of it exists on anybody else's machine.
+        int placedPrice = isNewBlock ? _pendingShopPrice : 0;
+        _pendingShopPrice = 0;
 
         Vector3 center = Vector3.zero;
         foreach (var c in cells)
             center += grid.GridToWorld(currentGridPos + c);
         center /= cells.Length;
 
-        GameObject obj = new GameObject("PlacedBlock");
-        obj.transform.position = center;
-        obj.transform.rotation = _currentRotation;
+        var placedCells = new Vector3Int[cells.Length];
+        for (int i = 0; i < cells.Length; i++) placedCells[i] = currentGridPos + cells[i];
 
-        if (TurretTypes.Is(currentBlock.blockType))
+        var placedData = currentBlock;
+
+        CommandBus.Submit(new GameCommand
         {
-            SpawnTurretVisual(obj, currentBlock);
-        }
-        else
-        {
-            var br = obj.AddComponent<BlockRenderer>();
-            br.cubePrefab = cubePrefab;
-            br.Render(currentGridPos, cells, grid.cellSize, grid);
-
-            foreach (var r in obj.GetComponentsInChildren<Renderer>())
-                MpbColor.Set(r, currentColor);
-        }
-
-        PlacedBlockInstance ins = new()
-        {
-            data         = currentBlock,
-            visualObject = obj,
-            color        = currentSynergyColor,
-            basicPowerUpgradeLevel = isPickingUpObject ? lastBasicPowerUpgradeLevel : 0,
-            basicBurstUpgradeLevel = isPickingUpObject ? lastBasicBurstUpgradeLevel : 0,
-            aoeFireUpgradeLevel = isPickingUpObject ? lastAoeFireUpgradeLevel : 0,
-            aoeGravityUpgradeLevel = isPickingUpObject ? lastAoeGravityUpgradeLevel : 0,
-        };
-
-        foreach (var c in cells)
-            ins.occupiedCells.Add(currentGridPos + c);
-
-        RegisterPlacedBlock(ins);
-
-        // Synergy hook: register the piece so SynergyEvaluator can re-run
-        // its pattern detection. Returns the PlacedPiece reference we stash
-        // for later removal.
-        ins.placedPiece = SynergyEvaluator.Instance?.OnPiecePlaced(
-            ins.data, ins.color, ins.occupiedCells.ToArray());
-
-        // Collapse to zero for the GrowIn pop ONLY AFTER synergy decoration has
-        // run. CellMaterialVisualizer matches cells to child renderers by world
-        // bounds, which all collapse onto the block centre at scale 0 — doing it
-        // here (block still full-size) is what lets the just-placed block, the
-        // one that activates the synergy, light up along with the rest.
-        obj.transform.localScale = Vector3.zero;
-        StartCoroutine(GrowIn(obj));
+            kind         = GameCommandKind.PlaceBlock,
+            cell         = currentGridPos,
+            rotation90   = RotationSteps(_currentRotation),
+            blockAssetId = BlockCatalog.IdOf(currentBlock),
+            price        = placedPrice,
+            colorIndex   = (int)currentSynergyColor,
+            tintRgb      = GameCommand.PackRgb(currentColor),
+            upBasicPower = isPickingUpObject ? lastBasicPowerUpgradeLevel : 0,
+            upBasicBurst = isPickingUpObject ? lastBasicBurstUpgradeLevel : 0,
+            upAoeFire    = isPickingUpObject ? lastAoeFireUpgradeLevel    : 0,
+            upAoeGravity = isPickingUpObject ? lastAoeGravityUpgradeLevel : 0,
+        });
 
         // ── Push undo record ──────────────────────────────────────────────────
         if (isPickingUpObject)   // reposition: remember where it came from
         {
             PushUndo(new UndoRecord {
                 actionType  = UndoType.Reposition,
-                data        = ins.data,
+                data        = placedData,
                 color       = currentColor,
                 rotation    = _currentRotation,
-                cells       = ins.occupiedCells.ToArray(),
-                worldCenter = obj.transform.position,
-                basicPowerUpgradeLevel = ins.basicPowerUpgradeLevel,
-                basicBurstUpgradeLevel = ins.basicBurstUpgradeLevel,
-                aoeFireUpgradeLevel = ins.aoeFireUpgradeLevel,
-                aoeGravityUpgradeLevel = ins.aoeGravityUpgradeLevel,
+                cells       = placedCells,
+                worldCenter = center,
+                basicPowerUpgradeLevel = lastBasicPowerUpgradeLevel,
+                basicBurstUpgradeLevel = lastBasicBurstUpgradeLevel,
+                aoeFireUpgradeLevel = lastAoeFireUpgradeLevel,
+                aoeGravityUpgradeLevel = lastAoeGravityUpgradeLevel,
                 prevCells   = lastObjectCells,
                 prevCenter  = lastObjectPos,
                 prevRotation= lastObjectRot,
@@ -1466,31 +1502,24 @@ public partial class PlacementController : MonoBehaviour
         {
             PushUndo(new UndoRecord {
                 actionType  = UndoType.NewPlace,
-                data        = ins.data,
+                data        = placedData,
                 color       = currentColor,
                 rotation    = _currentRotation,
-                cells       = ins.occupiedCells.ToArray(),
-                worldCenter = obj.transform.position,
-                basicPowerUpgradeLevel = ins.basicPowerUpgradeLevel,
-                basicBurstUpgradeLevel = ins.basicBurstUpgradeLevel,
-                aoeFireUpgradeLevel = ins.aoeFireUpgradeLevel,
-                aoeGravityUpgradeLevel = ins.aoeGravityUpgradeLevel,
+                cells       = placedCells,
+                worldCenter = center,
                 pricePaid   = priceForUndo,
             });
         }
 
-        // Track placed count for shop price scaling (both new and repositioned blocks).
-        ResourceManager.Instance?.OnBlockPlaced(ins.data.blockType);
-
-        // Tutorial / listeners: announce the successful placement.
-        BlockPlaced?.Invoke(ins.data, ins.occupiedCells.ToArray());
-
-        // Auto-check path after every block placement updates live preview line.
-        GameFlowManager.Instance?.EvaluateGrid();
-
+        // Count, listeners and path re-check now happen in ApplyPlace, so they run on
+        // every machine rather than only the placer's.
+        //
+        // The note does NOT: it is feedback for the hand that just placed something,
+        // and hearing three other people's placements chime on your machine turns the
+        // ambient line into noise.
         ArpeggiatorManager.Instance?.PlayAmbientNote(
-    PlacementDegree(ins.data.blockType),
-    PlacementOctave(ins.data.blockType),
+    PlacementDegree(placedData.blockType),
+    PlacementOctave(placedData.blockType),
     0.45f
 );
         // Consume the tray token we picked up. activePhysicsObject is set
@@ -1594,7 +1623,9 @@ public partial class PlacementController : MonoBehaviour
     Vector3Int[] worldCells,
     Quaternion rotation,
     Color color,
-    BlockColor synergyColor = BlockColor.None)
+    BlockColor synergyColor = BlockColor.None,
+    int ownerId = -1,
+    int upBasicPower = 0, int upBasicBurst = 0, int upAoeFire = 0, int upAoeGravity = 0)
     {
         if (data == null || worldCells == null || worldCells.Length == 0)
             return null;
@@ -1633,13 +1664,17 @@ public partial class PlacementController : MonoBehaviour
         {
             data = data,
             visualObject = obj,
-            color = synergyColor
+            color = synergyColor,
+            basicPowerUpgradeLevel = upBasicPower,
+            basicBurstUpgradeLevel = upBasicBurst,
+            aoeFireUpgradeLevel    = upAoeFire,
+            aoeGravityUpgradeLevel = upAoeGravity,
         };
 
         foreach (var c in worldCells)
             ins.occupiedCells.Add(c);
 
-        RegisterPlacedBlock(ins);
+        RegisterPlacedBlock(ins, ownerId);
 
         ins.placedPiece = SynergyEvaluator.Instance?.OnPiecePlaced(
             ins.data,
@@ -1647,6 +1682,86 @@ public partial class PlacementController : MonoBehaviour
             ins.occupiedCells.ToArray());
 
         return ins;
+    }
+
+    // ── Networked board changes ──────────────────────────────────────────────
+    //
+    // Every board mutation lands HERE, on every machine, including the one that
+    // asked for it. The alternative — commit locally and also send — means the
+    // issuer runs different code from everyone else, and the two drift the first
+    // time one of them is edited. One path, four machines.
+    //
+    // Installed by GameFlowManager, which owns CommandBus.Applier.
+    public void ApplyNetCommand(GameCommand cmd)
+    {
+        switch (cmd.kind)
+        {
+            case GameCommandKind.PlaceBlock: ApplyPlace(cmd);  break;
+            case GameCommandKind.RemoveBlock: ApplyRemove(cmd); break;
+        }
+    }
+
+    void ApplyPlace(GameCommand cmd)
+    {
+        var data = BlockCatalog.Resolve(cmd.blockAssetId);
+        if (data == null || data.cells == null)
+        {
+            Debug.LogWarning($"[Placement] Command names block '{cmd.blockAssetId}', which this build cannot resolve — skipped.");
+            return;
+        }
+
+        var rot = Quaternion.Euler(cmd.rotation90.x * 90f, cmd.rotation90.y * 90f, cmd.rotation90.z * 90f);
+
+        // Cells are re-derived from the shape and the rotation rather than sent, so
+        // the two can never disagree — the same reason the held piece in Balance
+        // Tower keeps exactly one description of its shape.
+        var world = new Vector3Int[data.cells.Length];
+        for (int i = 0; i < world.Length; i++)
+            world[i] = cmd.cell + Vector3Int.RoundToInt(rot * (Vector3)data.cells[i]);
+
+        var ins = PlaceBlockDirect(data, world, rot, GameCommand.UnpackRgb(cmd.tintRgb),
+                                   (BlockColor)cmd.colorIndex, cmd.playerId,
+                                   cmd.upBasicPower, cmd.upBasicBurst, cmd.upAoeFire, cmd.upAoeGravity);
+        if (ins == null) return;
+
+        // The pool is shared, so the charge happens on every machine — not just the
+        // buyer's — or four players would each see a different balance.
+        if (cmd.price > 0)
+        {
+            ResourceManager.Instance?.TryBuy(cmd.playerId, cmd.price, data.blockType);
+            PlayerSpend.Add(cmd.playerId, cmd.price);
+        }
+        ResourceManager.Instance?.OnBlockPlaced(data.blockType);
+
+        ins.visualObject.transform.localScale = Vector3.zero;
+        StartCoroutine(GrowIn(ins.visualObject));
+
+        BlockPlaced?.Invoke(ins.data, ins.occupiedCells.ToArray());
+        GameFlowManager.Instance?.EvaluateGrid();
+    }
+
+    void ApplyRemove(GameCommand cmd)
+    {
+        var ins = grid != null ? grid.GetInstanceAt(cmd.cell) : null;
+        if (ins == null) return;
+
+        ResourceManager.Instance?.OnBlockRemoved(ins.data.blockType);
+        SynergyEvaluator.Instance?.OnPieceRemoved(ins.placedPiece);
+        CellClaims.Release(ins.occupiedCells, ins.ownerId);
+
+        var cells = ins.occupiedCells.ToArray();
+        grid.RemoveInstance(ins);   // this already destroys the visual — one owner for that
+        NotifyBlockLifted(cells);
+        GameFlowManager.Instance?.EvaluateGrid();
+    }
+
+    /// <summary>90° rotation steps, as the wire carries them.</summary>
+    static Vector3Int RotationSteps(Quaternion q)
+    {
+        var e = q.eulerAngles;
+        return new Vector3Int(Mathf.RoundToInt(e.x / 90f) & 3,
+                              Mathf.RoundToInt(e.y / 90f) & 3,
+                              Mathf.RoundToInt(e.z / 90f) & 3);
     }
 
     public BlockData FindBlockData(BlockType type)
@@ -1678,6 +1793,8 @@ public partial class PlacementController : MonoBehaviour
         OutOfBounds,
         Occupied,
         NotAdjacent,
+        Reserved,
+        Claimed,
     }
 
     bool CanPlace(Vector3Int bp, Vector3Int[] cs) => Validate(bp, cs) == PlaceFailureReason.None;
@@ -1693,14 +1810,22 @@ public partial class PlacementController : MonoBehaviour
         {
             var p = bp + cs[i];
             if (grid.IsOccupied(p)) return PlaceFailureReason.Occupied;
+            // A device's travel corridor is empty but not FREE — an oscillator
+            // would otherwise shear straight through whatever got built in it.
+            if (DeviceRegistry.IsReserved(p)) return PlaceFailureReason.Reserved;
+            // Another player got here first. Checked alongside occupancy because a
+            // claim IS occupancy as far as this player is concerned — the block just
+            // hasn't finished arriving yet.
+            if (CellClaims.HeldByOther(p, MultiplayerSession.LocalId)) return PlaceFailureReason.Claimed;
             worldCells[i] = p;
         }
 
         // Underground (y < 0) is allowed — you can build down into the earth — but
         // a block must still touch an existing block or endpoint. The Chaos Block
-        // doesn't count as support (HasSupportingNeighbor26 skips it), so you can't
-        // stack a turret straight onto it to attack it.
-        if (!grid.HasSupportingNeighbor26(worldCells))
+        // doesn't count as support (HasSupportingNeighbor18 skips it), so you can't
+        // stack a turret straight onto it to attack it. Corner-only contact doesn't
+        // count either — see GridSystem.IsCornerOffset.
+        if (!grid.HasSupportingNeighbor18(worldCells))
             return PlaceFailureReason.NotAdjacent;
 
         return PlaceFailureReason.None;
@@ -1739,6 +1864,7 @@ public partial class PlacementController : MonoBehaviour
             for (int dz = -1; dz <= 1; dz++)
             {
                 if (dx == 0 && dy == 0 && dz == 0) continue;
+                if (GridSystem.IsCornerOffset(dx, dy, dz)) continue;   // same 18-neighbourhood placement uses
                 var n = new Vector3Int(cell.x + dx, cell.y + dy, cell.z + dz);
                 if (!grid.IsOccupied(n)) continue;
                 if (excludeCells.Contains(n)) continue;
@@ -1756,6 +1882,8 @@ public partial class PlacementController : MonoBehaviour
         PlaceFailureReason.OutOfBounds       => "Can't place below ground",
         PlaceFailureReason.Occupied          => "Cell is already occupied",
         PlaceFailureReason.NotAdjacent       => "Must touch an existing block or endpoint",
+        PlaceFailureReason.Reserved           => "A device needs this space to move",
+        PlaceFailureReason.Claimed            => "Another player claimed this spot",
         _                                    => "",
     };
 
@@ -2002,6 +2130,37 @@ public partial class PlacementController : MonoBehaviour
         ResourceManager.Instance?.OnBlockPlaced(data.blockType);
     }
 
+    // Refused while something is already held: quick-buying mid-hold would drop the
+    // piece in hand, and a key that silently discards what you were placing is worse
+    // than one that does nothing.
+    void TryQuickBuy()
+    {
+        if (GameFlowManager.SettlementUp) return;
+        if (mode == PlacementMode.Edit || currentBlock != null || _batchMoving)
+        {
+            ShowPlacementPopup("Place what you're holding first.");
+            return;
+        }
+
+        var shop = ShopController.Instance;
+        if (shop == null) return;
+
+        if (!shop.HasItems)
+        {
+            ShowPlacementPopup("The shop is empty.");
+            return;
+        }
+
+        var sb = shop.RandomAffordable();
+        if (sb == null)
+        {
+            ShowPlacementPopup("Nothing in the shop you can afford.");
+            return;
+        }
+
+        GrabFromShop(sb);
+    }
+
     // =========================
     // SHOP GRAB
     // =========================
@@ -2184,11 +2343,37 @@ public partial class PlacementController : MonoBehaviour
         visual.AddComponent<BoxCollider>().size = Vector3.one / TurretVisualScale;
     }
 
-    void RegisterPlacedBlock(PlacedBlockInstance ins)
+    void RegisterPlacedBlock(PlacedBlockInstance ins, int ownerId = -1)
     {
+        // -1 means "mine". A block arriving from the wire belongs to whoever issued
+        // the command, not to whoever is applying it — stamping the local id here is
+        // what would make every player think they owned the whole board.
+        ins.ownerId = ownerId >= 0 ? ownerId : MultiplayerSession.LocalId;
+        // First-come-first-served. The claim is taken at commit, not at preview:
+        // claiming on hover would let a player freeze ground just by pointing at it.
+        CellClaims.TryClaim(ins.occupiedCells, ins.ownerId);
         grid.RegisterInstance(ins);
         AttachTurretController(ins);
+        AttachDevice(ins);
         //AttachTurretBeacon(ins);
+    }
+
+    // Mirrors AttachTurretController: the behaviour rides the placed block's own
+    // visual, so destroying the block (sell / undo / a level mechanic) takes the
+    // device down with it and no removal path has to know devices exist.
+    void AttachDevice(PlacedBlockInstance ins)
+    {
+        if (ins?.data == null || ins.data.device == null || ins.visualObject == null) return;
+
+        var anchor = ins.occupiedCells != null && ins.occupiedCells.Count > 0
+            ? ins.occupiedCells[0]
+            : grid.WorldToGrid(ins.visualObject.transform.position);
+
+        PlacedDevice.Attach(ins.visualObject, ins.data.device, anchor);
+
+        // Tint so a device is distinguishable from the plain terrain it's made of.
+        foreach (var r in ins.visualObject.GetComponentsInChildren<Renderer>())
+            MpbColor.Set(r, ins.data.device.accentColor);
     }
 
     void AttachTurretController(PlacedBlockInstance ins)

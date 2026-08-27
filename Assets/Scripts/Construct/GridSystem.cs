@@ -7,6 +7,11 @@ public class PlacedBlockInstance
     public List<Vector3Int> occupiedCells = new();
     public GameObject visualObject;
 
+    // Which player put this here. 0 in single-player, which is also that session's
+    // only player — so ownership questions have the same answer shape in both modes
+    // and nothing needs an "if networked" branch. See MultiplayerSession.
+    public int ownerId;
+
     // Synergy theme color this piece was assigned at spawn time. Copied from
     // SelectableBlock.color (or BlockColor.None for direct/legacy placements).
     public BlockColor color = BlockColor.None;
@@ -171,9 +176,16 @@ public class GridSystem : MonoBehaviour
 
     public Dictionary<Vector3Int, bool> GetGrid() => occupied;
 
-    // 26-neighbor (face / edge / corner) adjacency. Cells within newCells
-    // don't count as neighbors of each other.
-    public bool HasOccupiedNeighbor26(IList<Vector3Int> newCells)
+    // The adjacency neighbourhood placement uses: the 6 face neighbours plus the
+    // 12 edge neighbours, but NOT the 8 corners. A corner contact is a single
+    // point — it looks like a gap on screen and reads as floating, so it isn't
+    // enough to anchor a block. |dx|+|dy|+|dz| == 3 is exactly the corner set.
+    public static bool IsCornerOffset(int dx, int dy, int dz) =>
+        Mathf.Abs(dx) + Mathf.Abs(dy) + Mathf.Abs(dz) == 3;
+
+    // 18-neighbor (face / edge) adjacency. Cells within newCells don't count as
+    // neighbors of each other.
+    public bool HasOccupiedNeighbor18(IList<Vector3Int> newCells)
     {
         if (newCells == null || newCells.Count == 0) return false;
 
@@ -185,6 +197,7 @@ public class GridSystem : MonoBehaviour
             for (int dz = -1; dz <= 1; dz++)
             {
                 if (dx == 0 && dy == 0 && dz == 0) continue;
+                if (IsCornerOffset(dx, dy, dz)) continue;
                 var n = new Vector3Int(c.x + dx, c.y + dy, c.z + dz);
                 if (newSet.Contains(n)) continue;
                 if (IsOccupied(n)) return true;
@@ -193,9 +206,9 @@ public class GridSystem : MonoBehaviour
         return false;
     }
 
-    // Same as HasOccupiedNeighbor26 but ignores non-supporting cells (Chaos Block),
+    // Same as HasOccupiedNeighbor18 but ignores non-supporting cells (Chaos Block),
     // so a new block can't anchor to a Chaos Block alone. Used by placement validation.
-    public bool HasSupportingNeighbor26(IList<Vector3Int> newCells)
+    public bool HasSupportingNeighbor18(IList<Vector3Int> newCells)
     {
         if (newCells == null || newCells.Count == 0) return false;
 
@@ -207,6 +220,7 @@ public class GridSystem : MonoBehaviour
             for (int dz = -1; dz <= 1; dz++)
             {
                 if (dx == 0 && dy == 0 && dz == 0) continue;
+                if (IsCornerOffset(dx, dy, dz)) continue;
                 var n = new Vector3Int(c.x + dx, c.y + dy, c.z + dz);
                 if (newSet.Contains(n)) continue;
                 if (IsOccupied(n) && !noSupport.Contains(n)) return true;

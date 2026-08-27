@@ -46,7 +46,13 @@ public class SettingsScreen : MonoBehaviour
 
     void Update()
     {
-        if (_open && (Input.GetKeyDown(KeyCode.Escape) || GamepadInput.CancelDown)) Open = false;
+        if (!_open) return;
+
+        // Rebinding owns the keyboard while it's listening — including Escape, which
+        // cancels the rebind rather than closing the whole screen.
+        if (_listeningForKey) { UpdateRebind(); return; }
+
+        if (Input.GetKeyDown(KeyCode.Escape) || GamepadInput.CancelDown) Open = false;
     }
 
     void OnOpenChanged()
@@ -104,6 +110,9 @@ public class SettingsScreen : MonoBehaviour
 
         _frameCapIndex = Mathf.Max(0, System.Array.IndexOf(GameSettings.FrameCaps, GameSettings.FrameCap));
         _frameCapLabel.text = FrameLabels[Mathf.Clamp(_frameCapIndex, 0, FrameLabels.Length - 1)];
+
+        _listeningForKey = false;   // never reopen mid-capture
+        RefreshRebindLabel();
     }
 
     // ── UI build ──────────────────────────────────────────────────────────────
@@ -260,8 +269,94 @@ public class SettingsScreen : MonoBehaviour
             "Off: the held block snaps to the nearest cell touching your build. On: it follows the mouse freely.",
             v => { GameSettings.FreeMove = v; GameSettings.Save(); });
 
+        BuildRebindRow(root, "Fast forward", "Cycles game speed — the same as the fast forward button.");
+
         _firstControlControls = _panSlider.gameObject;
         return root.gameObject;
+    }
+
+    // ── Key rebinding ─────────────────────────────────────────────────────────
+
+    TMP_Text _rebindLabel;
+    bool     _listeningForKey;
+
+    void BuildRebindRow(RectTransform parent, string label, string description)
+    {
+        var row = NewRect("Row", parent);
+        row.gameObject.AddComponent<LayoutElement>().minHeight = 62f;
+        var hlg = row.gameObject.AddComponent<HorizontalLayoutGroup>();
+        hlg.spacing = 16f; hlg.childAlignment = TextAnchor.MiddleLeft;
+        hlg.childControlWidth = hlg.childControlHeight = true;
+        hlg.childForceExpandWidth = false; hlg.childForceExpandHeight = false;
+
+        var textBlock = NewRect("Text", row);
+        textBlock.gameObject.AddComponent<LayoutElement>().flexibleWidth = 1f;
+        var vlg = textBlock.gameObject.AddComponent<VerticalLayoutGroup>();
+        vlg.spacing = 2f; vlg.childAlignment = TextAnchor.MiddleLeft;
+        vlg.childControlWidth = vlg.childControlHeight = true;
+        vlg.childForceExpandWidth = true; vlg.childForceExpandHeight = false;
+
+        var labelT = NewText("Label", textBlock, 22f, GeoPalette.Ink, FontStyles.Bold, TextAlignmentOptions.MidlineLeft);
+        labelT.text = label;
+        var descT = NewText("Desc", textBlock, 15f, GeoPalette.WithAlpha(GeoPalette.Ink, 0.6f), FontStyles.Normal, TextAlignmentOptions.MidlineLeft);
+        descT.text = description;
+        descT.textWrappingMode = TextWrappingModes.Normal;
+
+        var btnRt = NewRect("Bind", row);
+        btnRt.gameObject.AddComponent<LayoutElement>().preferredWidth = 130f;
+        var bg = btnRt.gameObject.AddComponent<Image>();
+        bg.sprite = UIRoundedRect.Get(12); bg.type = Image.Type.Sliced;
+        bg.color = new Color(0f, 0f, 0f, 0.18f);
+
+        var btn = btnRt.gameObject.AddComponent<Button>();
+        btn.targetGraphic = bg;
+        var colors = btn.colors; colors.highlightedColor = GeoPalette.Gold; btn.colors = colors;
+        btn.onClick.AddListener(() => { _listeningForKey = true; RefreshRebindLabel(); });
+
+        _rebindLabel = NewText("Key", btnRt, 20f, GeoPalette.Ink, FontStyles.Bold, TextAlignmentOptions.Center);
+        StretchFull(_rebindLabel.rectTransform);
+        RefreshRebindLabel();
+    }
+
+    void RefreshRebindLabel()
+    {
+        if (_rebindLabel == null) return;
+        _rebindLabel.text = _listeningForKey ? "Press a key…" : GameSettings.FastForwardKey.ToString();
+    }
+
+    // Polls every key while listening. Uses Input.GetKeyDown over the whole KeyCode
+    // range rather than a fixed candidate list, so any key the player reaches for is
+    // offered — and then refused by name if it's already spoken for, which is more
+    // useful than silently not responding.
+    void UpdateRebind()
+    {
+        if (!_listeningForKey) return;
+
+        if (Input.GetKeyDown(KeyCode.Escape))   // back out without changing anything
+        {
+            _listeningForKey = false;
+            RefreshRebindLabel();
+            return;
+        }
+
+        foreach (KeyCode k in System.Enum.GetValues(typeof(KeyCode)))
+        {
+            if (k == KeyCode.None || !Input.GetKeyDown(k)) continue;
+            // Mouse buttons would collide with clicking the button itself.
+            if (k >= KeyCode.Mouse0 && k <= KeyCode.Mouse6) continue;
+
+            if (!GameSettings.IsKeyAvailable(k))
+            {
+                _rebindLabel.text = $"{k} taken";
+                return;   // stay in listening mode so they can just try another
+            }
+
+            GameSettings.FastForwardKey = k;
+            GameSettings.Save();
+            _listeningForKey = false;
+            RefreshRebindLabel();
+            return;
+        }
     }
 
     // ── Row builders ──────────────────────────────────────────────────────────
@@ -290,7 +385,6 @@ public class SettingsScreen : MonoBehaviour
         sliderLe.preferredHeight = 20f;   // HorizontalLayoutGroup controls height — give it one, or it collapses to 0
         var slider = BuildSlider(sliderRt, min, max);
         slider.onValueChanged.AddListener(v => onChanged(v));
-        Debug.LogWarning($"Create listener for {label}!");
         return slider;
     }
 

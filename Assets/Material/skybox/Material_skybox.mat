@@ -92,6 +92,7 @@ Material:
     - _ClearCoatMask: 0
     - _ClearCoatSmoothness: 0
     - _ClearReact: 0
+    - _Collapse: 0
     - _ColorShift: 0.9909666
     - _CombatMode: 0
     - _Cull: 2
@@ -113,6 +114,7 @@ Material:
     - _GridThickness: 0.03
     - _HorizonSharp: 1
     - _IntroBlend: 1
+    - _KillReact: 0
     - _Metallic: 0
     - _MusicIntensity: 0.5
     - _OcclusionStrength: 1

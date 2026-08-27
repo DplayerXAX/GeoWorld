@@ -3,6 +3,8 @@ using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.SceneManagement;
 using UnityEngine.EventSystems;
+using UnityEngine.Rendering;
+using UnityEngine.Rendering.Universal;
 using TMPro;
 
 // The Gallery scene. Two views:
@@ -62,6 +64,11 @@ public class GalleryScreen : MonoBehaviour
     [Header("Atelier materials")]
     [Tooltip("A cool graphite blue makes the desk recess while the exhibit accents stay vivid.")]
     public Color deskColor = new Color(0.055f, 0.085f, 0.12f);
+
+    [Header("Lighting")]
+    [Tooltip("URP's global shadow distance (PC_RPAsset default: 25) is tuned for the open gameplay board — spent almost entirely on the near cascade here, since every exhibit sits within a few metres of the camera, which is what read as blurry/blocky shadow edges. Shrinking it to the size of this actual room hands that same cascade resolution to a much smaller volume. Restored on OnDestroy so LevelSelect/gameplay are untouched.")]
+    public float shadowDistance = 10f;
+    float _savedShadowDistance = -1f;
 
     [Header("Camera poses")]
     public Vector3 overviewCamPos  = new Vector3(0.78f, 4.25f, -5.7f);
@@ -218,12 +225,36 @@ public class GalleryScreen : MonoBehaviour
                 _cam.backgroundColor = GeoPalette.Paper;
             }
         }
+        ApplyTightShadowDistance();
         LoadConfig();
         BuildDesk();
         BuildObjects();
         BuildUI();
         GoOverview(instant: true);
         PlayMusic(_musicIndex);   // starts the instant the Gallery loads; keeps running across nav
+    }
+
+    // The global URP shadow distance is tuned for the open gameplay board, where
+    // it's spent on cascades that need to reach the far side of a build. Every
+    // Gallery exhibit sits within a few metres of the camera, so almost all of
+    // that distance was wasted on empty space beyond the desk — the near cascade
+    // (the only one that actually matters here) got a texel density tuned for a
+    // much bigger volume, which is exactly what read as blurry/blocky shadow
+    // edges. Shrinking it to this room's actual size hands the same resolution
+    // to a much smaller area. Scoped to this scene only — restored in OnDestroy.
+    void ApplyTightShadowDistance()
+    {
+        if (GraphicsSettings.currentRenderPipeline is not UniversalRenderPipelineAsset urp) return;
+        _savedShadowDistance = urp.shadowDistance;
+        urp.shadowDistance = shadowDistance;
+    }
+
+    void RestoreShadowDistance()
+    {
+        if (_savedShadowDistance < 0f) return;
+        if (GraphicsSettings.currentRenderPipeline is UniversalRenderPipelineAsset urp)
+            urp.shadowDistance = _savedShadowDistance;
+        _savedShadowDistance = -1f;
     }
 
     void Update()
@@ -858,7 +889,11 @@ public class GalleryScreen : MonoBehaviour
         if (!_configMusic && _battleMood) SetMood(false);
     }
 
-    void OnDestroy() => StopMusic();   // don't leave a track ringing after leaving the Gallery
+    void OnDestroy()
+    {
+        StopMusic();   // don't leave a track ringing after leaving the Gallery
+        RestoreShadowDistance();
+    }
 
     void SetMood(bool battle)
     {
@@ -1032,16 +1067,23 @@ public class GalleryScreen : MonoBehaviour
         vlg.childForceExpandWidth = true; vlg.childForceExpandHeight = false;
         _menuList.gameObject.AddComponent<ContentSizeFitter>().verticalFit = ContentSizeFitter.FitMode.PreferredSize;
 
+        // Everything below shares one horizontal band, shifted left off the raw
+        // 0.34~1.0 span so it sits centred in the area actually left over once the
+        // 380px menu strip is excluded (that span's own centre is ~0.67, well right
+        // of the ~0.60 centre of the leftover area — it read as pushed toward the
+        // right edge instead of centred beside the menu).
+        const float band = 0.075f;
+
         // Title (top centre, over the object) — ink on the pale sky, gold rule under.
         _titleText = NewText("Title", _detailRoot, 56f, GeoPalette.Ink, FontStyles.Bold);
         var trt = _titleText.rectTransform;
-        trt.anchorMin = new Vector2(0.35f, 1f); trt.anchorMax = new Vector2(1f, 1f); trt.pivot = new Vector2(0.5f, 1f);
+        trt.anchorMin = new Vector2(0.35f - band, 1f); trt.anchorMax = new Vector2(1f - band, 1f); trt.pivot = new Vector2(0.5f, 1f);
         trt.anchoredPosition = new Vector2(0f, -52f); trt.sizeDelta = new Vector2(-80f, 90f);
         _titleText.alignment = TextAlignmentOptions.Top;
         _titleText.characterSpacing = 6f;
 
         var titleRule = NewRect("TitleRule", _detailRoot);
-        titleRule.anchorMin = new Vector2(0.35f, 1f); titleRule.anchorMax = new Vector2(1f, 1f); titleRule.pivot = new Vector2(0.5f, 1f);
+        titleRule.anchorMin = new Vector2(0.35f - band, 1f); titleRule.anchorMax = new Vector2(1f - band, 1f); titleRule.pivot = new Vector2(0.5f, 1f);
         titleRule.anchoredPosition = new Vector2(0f, -126f); titleRule.sizeDelta = new Vector2(-460f, 5f);
         var titleRuleImg = titleRule.gameObject.AddComponent<Image>();
         titleRuleImg.color = GeoPalette.Gold;
@@ -1049,14 +1091,14 @@ public class GalleryScreen : MonoBehaviour
 
         _detailIndexText = NewText("Index", _detailRoot, 15f, GeoPalette.WithAlpha(GeoPalette.Ink, 0.68f), FontStyles.Bold);
         var irt = _detailIndexText.rectTransform;
-        irt.anchorMin = irt.anchorMax = new Vector2(0.98f, 1f); irt.pivot = new Vector2(1f, 1f);
+        irt.anchorMin = irt.anchorMax = new Vector2(0.98f - band, 1f); irt.pivot = new Vector2(1f, 1f);
         irt.anchoredPosition = new Vector2(-40f, -38f); irt.sizeDelta = new Vector2(220f, 28f);
         _detailIndexText.alignment = TextAlignmentOptions.Right;
         _detailIndexText.characterSpacing = 2f;
 
         var navigationHint = NewText("NavigationHint", _detailRoot, 15f, GeoPalette.WithAlpha(GeoPalette.Paper, 0.65f), FontStyles.Bold);
         var nrt = navigationHint.rectTransform;
-        nrt.anchorMin = nrt.anchorMax = new Vector2(0.98f, 0f); nrt.pivot = new Vector2(1f, 0f);
+        nrt.anchorMin = nrt.anchorMax = new Vector2(0.98f - band, 0f); nrt.pivot = new Vector2(1f, 0f);
         nrt.anchoredPosition = new Vector2(-40f, 16f); nrt.sizeDelta = new Vector2(370f, 26f);
         navigationHint.alignment = TextAlignmentOptions.Right;
         navigationHint.characterSpacing = 2f;
@@ -1066,7 +1108,7 @@ public class GalleryScreen : MonoBehaviour
         // like a caption card beside a hung work.
         var plaque = NewRect("Plaque", _detailRoot);
         _plaqueRect = plaque;  // and the caption card's height is the lower edge
-        plaque.anchorMin = new Vector2(0.34f, 0f); plaque.anchorMax = new Vector2(0.98f, 0f); plaque.pivot = new Vector2(0.5f, 0f);
+        plaque.anchorMin = new Vector2(0.34f - band, 0f); plaque.anchorMax = new Vector2(0.98f - band, 0f); plaque.pivot = new Vector2(0.5f, 0f);
         plaque.anchoredPosition = new Vector2(0f, 44f); plaque.sizeDelta = new Vector2(0f, 170f);
         var plaqueImg = plaque.gameObject.AddComponent<Image>();
         plaqueImg.sprite = UIRoundedRect.Get(18);
@@ -1082,8 +1124,8 @@ public class GalleryScreen : MonoBehaviour
         _descText.textWrappingMode = TextWrappingModes.Normal;
 
         // Prev / Next arrows.
-        BuildArrow(_detailRoot, "‹", new Vector2(0.42f, 0.5f), () => Step(-1));
-        BuildArrow(_detailRoot, "›", new Vector2(0.96f, 0.5f), () => Step(+1));
+        BuildArrow(_detailRoot, "‹", new Vector2(0.42f - band, 0.5f), () => Step(-1));
+        BuildArrow(_detailRoot, "›", new Vector2(0.96f - band, 0.5f), () => Step(+1));
     }
 
     void RebuildMenu()
@@ -1186,24 +1228,12 @@ public class GalleryScreen : MonoBehaviour
 
     // ── Camera ───────────────────────────────────────────────────────────────
 
-    // One critically damped scalar drives the whole move, and the camera's ROTATION
-    // is never authored or interpolated — it's derived every frame from where the
-    // subject physically is. That pair of decisions is the entire fix:
-    //
-    //   · a spring eases IN as well as out. The old 1-exp(-camGlide*dt) chase left
-    //     at maximum speed on frame one and then crawled, never quite arriving —
-    //     which is also why nothing else on screen had anything to synchronise to;
-    //   · a spring survives interruption as a PROPERTY, because it carries velocity.
-    //     BACK pressed mid-push-in decelerates, turns and leaves;
-    //   · a derived aim keeps the subject framed for every frame of the move.
-    //     Slerping two quaternions walks the geodesic through orientation space,
-    //     which has no relationship to where the exhibit actually is, so the subject
-    //     swims out of frame mid-move and drifts back;
-    //   · and because the target is re-solved every frame instead of baked at click
-    //     time, the pointer parallax under _galleryRig stops fighting the camera:
-    //     the subject stays pinned while its neighbours slide past it. That's the
-    //     answer to "dead once it arrives", and it beats authored idle noise because
-    //     the player causes it.
+    // One critically damped spring drives the whole move; the camera's rotation is
+    // never authored/interpolated, only derived each frame from where the subject
+    // is. That keeps the subject framed throughout the move (unlike slerping two
+    // quaternions, which drifts off-target mid-flight), eases in as well as out
+    // (the old exp-decay chase left at max speed and crawled), and survives
+    // interruption smoothly since the spring carries real velocity.
 
     // Reference travel and turn for the pacing law. Distance scales as a SQRT, so a
     // 6m move is quicker than a 3m one but not twice as quick; ANGLE scales linearly,

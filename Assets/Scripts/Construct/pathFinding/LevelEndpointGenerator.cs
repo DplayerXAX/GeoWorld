@@ -5,6 +5,26 @@ public class LevelEndpointGenerator : MonoBehaviour
 {
     public GridSystem gridSystem;
 
+    // ── Randomness ───────────────────────────────────────────────────────────
+    //
+    // This used to call UnityEngine.Random, which is a single process-wide stream
+    // seeded from the clock. That is fine for one machine and fatal for four: every
+    // player generated their own start and end points and then built on a board that
+    // only looked like everyone else's. The run's seeded stream is shared by
+    // definition, so the same seed produces the same level everywhere.
+    //
+    // GameFlowManager installs it (SetRng). Left unset — the map maker, a scene run
+    // on its own — it falls back to a locally seeded stream rather than to the global
+    // one, so nothing silently shares state with unrelated systems.
+    Xoshiro256StarStar _rng;
+
+    public void SetRng(Xoshiro256StarStar rng) => _rng = rng;
+
+    Xoshiro256StarStar Rng => _rng ??= new Xoshiro256StarStar();
+
+    int   RandInt(int minInclusive, int maxExclusive) => Rng.NextInt(minInclusive, maxExclusive);
+    float RandFloat(float min, float max)             => Rng.NextRange(min, max);
+
     [Header("Logic")]
     public Vector3Int startCell;
     public Vector3Int endCell;
@@ -92,7 +112,7 @@ public class LevelEndpointGenerator : MonoBehaviour
         }
         else
         {
-            var anchor = existingPoints[Random.Range(0, existingPoints.Count)];
+            var anchor = existingPoints[RandInt(0, existingPoints.Count)];
             cell = ShellSample(anchor, minDistance, maxDistance);
             if (cell == anchor) return Vector3Int.zero;
         }
@@ -159,7 +179,7 @@ public class LevelEndpointGenerator : MonoBehaviour
         // not just the anchor's own circle.
         for (int attempt = 0; attempt < shellSampleAttempts; attempt++)
         {
-            var anchor = starts[Random.Range(0, starts.Count)];
+            var anchor = starts[RandInt(0, starts.Count)];
             var cell   = ShellSample(anchor, minDistance, maxDistance);
             if (cell == anchor) continue;
             if (InsideAnyReach(cell, starts, ends)) return cell;
@@ -172,15 +192,15 @@ public class LevelEndpointGenerator : MonoBehaviour
         // radius, so the reach rule wins over the distance window when they clash.
         for (int attempt = 0; attempt < shellSampleAttempts; attempt++)
         {
-            var anchor = starts[Random.Range(0, starts.Count)];
+            var anchor = starts[RandInt(0, starts.Count)];
             float r = ReachRadius(anchor, ends);
             if (r < 1f) continue;   // degenerate circle — a start sitting on an end
 
-            float d   = Random.Range(Mathf.Min(minDistance, r), Mathf.Min(maxDistance, r));
-            float ang = Random.Range(0f, Mathf.PI * 2f);
+            float d   = RandFloat(Mathf.Min(minDistance, r), Mathf.Min(maxDistance, r));
+            float ang = RandFloat(0f, Mathf.PI * 2f);
             var cell = new Vector3Int(
                 anchor.x + Mathf.RoundToInt(Mathf.Cos(ang) * d),
-                Mathf.Clamp(Random.Range(0, yMax + 1), 0, yMax),
+                Mathf.Clamp(RandInt(0, yMax + 1), 0, yMax),
                 anchor.z + Mathf.RoundToInt(Mathf.Sin(ang) * d));
 
             if (cell == anchor) continue;
@@ -196,9 +216,9 @@ public class LevelEndpointGenerator : MonoBehaviour
     {
         int r = Mathf.Max(0, firstStartScatter);
         return new Vector3Int(
-            Random.Range(-r, r + 1),
+            RandInt(-r, r + 1),
             0,
-            Random.Range(-r, r + 1)
+            RandInt(-r, r + 1)
         );
     }
 
@@ -219,12 +239,12 @@ public class LevelEndpointGenerator : MonoBehaviour
     {
         for (int attempt = 0; attempt < shellSampleAttempts; attempt++)
         {
-            float ang = Random.Range(0f, Mathf.PI * 2f);
-            float d   = Random.Range(minD, maxD);
+            float ang = RandFloat(0f, Mathf.PI * 2f);
+            float d   = RandFloat(minD, maxD);
 
             float dx = Mathf.Cos(ang) * d;
             float dz = Mathf.Sin(ang) * d;
-            int   y  = Mathf.Clamp(Random.Range(0, yMax + 1), 0, yMax);
+            int   y  = Mathf.Clamp(RandInt(0, yMax + 1), 0, yMax);
 
             var cell = new Vector3Int(
                 center.x + Mathf.RoundToInt(dx),

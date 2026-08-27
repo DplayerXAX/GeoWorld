@@ -35,6 +35,9 @@ Shader "Custom/ManifoldSkybox"
         // Kill reaction: briefly YANKS combat mode back toward calm on each enemy kill
         // (opposite direction of the damage tint) — driven by BackgroundReactor
         _KillReact     ("Kill Reaction",  Range(0,1)) = 0
+        // World collapse: tracks lost health. Tears the sky into slipped bands and
+        // drops cells to the engine's missing-material checker — driven by BackgroundReactor
+        _Collapse      ("World Collapse", Range(0,1)) = 0
 
         // Intro reveal: 0 = flat _IntroColor, 1 = full sky. Driven by IntroDirector.
         _IntroBlend    ("Intro Blend",    Range(0,1)) = 1
@@ -61,6 +64,7 @@ Shader "Custom/ManifoldSkybox"
             float _CombatMode;
             float _ClearReact;
             float _KillReact;
+            float _Collapse;
             float _DamageTint;
             half4 _FlashColor;
             float _FlashAmount;
@@ -294,6 +298,27 @@ Shader "Custom/ManifoldSkybox"
             half4 frag(Varyings IN) : SV_Target
             {
                 float3 dir = normalize(IN.dir);
+
+                // ── World collapse: signal tear ────────────────────────────────
+                // Applied to `dir` BEFORE anything samples it, so the gradient,
+                // fog, grids and geometry all tear as one picture — a post-pass
+                // over the finished colour would only smear the result and would
+                // read as a filter laid on top rather than the world itself failing.
+                float cl = saturate(_Collapse);
+                if (cl > 0.001)
+                {
+                    // Bands re-roll on a coarse clock rather than every frame: a
+                    // per-frame reroll is just noise, holding each tear for a few
+                    // frames is what makes it read as a broken signal.
+                    float tick = floor(_Time.y * (5.0 + cl * 13.0));
+                    float band = floor(dir.y * (12.0 + cl * 24.0));
+                    // Only some bands slip, and the threshold drops as it worsens.
+                    float live = step(1.0 - cl * 0.8, Hash3(float3(band, tick, 7.7)));
+                    float slip = (Hash3(float3(band, tick, 0.0)) - 0.5) * live * cl * 0.5;
+                    dir.xz += slip;
+                    dir = normalize(dir);
+                }
+
                 // 0 = calm build, 1 = intense combat. _KillReact yanks this back toward 0
                 // for an instant on every kill — the mirror of _DamageTint's push toward
                 // red/chaos on damage taken — so the fold/gradient/beat boosts below all
@@ -376,11 +401,14 @@ half3 combatHorizon =
         damageRed * 0.6,
         _DamageTint
     );
-                // Clear reaction: push the base palette itself toward warm gold — not
-                // just an overlay — so the whole sky visibly turns golden, not only
-                // its facet lines.
-                combatZenith  = lerp(combatZenith,  half3(0.12, 0.08, 0.03), cr * 0.5);
-                combatHorizon = lerp(combatHorizon, half3(0.62, 0.44, 0.16), cr * 0.55);
+                // Clear reaction: push the base palette itself toward gemstone — not
+                // just an overlay — so the whole sky turns topaz, not only its facets.
+                // The dark end stays strongly SATURATED amber rather than going
+                // brown-black: in a gem the shadows are light that came through the
+                // stone, so they carry more colour than the highlights, not less.
+                // Desaturating them is what made the old version read as metal.
+                combatZenith  = lerp(combatZenith,  half3(0.34, 0.21, 0.08), cr * 0.6);
+                combatHorizon = lerp(combatHorizon, half3(0.78, 0.61, 0.28), cr * 0.65);
 
                 half3 zenith = combatZenith * (1.0 + _PitchGlow * 3.5 * up);
                 half3 sky    = lerp(combatHorizon, zenith, t);
@@ -412,9 +440,14 @@ half3 combatHorizon =
                 // panel's hash (panel.x) offsets it a little toward bronze/amber/champagne,
                 // so neighbouring facets still contrast against each other instead of
                 // reading as one flat sheet of yellow.
-                float goldBandHue = 0.085;                         // amber-gold centre (not pure yellow)
-                panel.x = lerp(panel.x, goldBandHue + (panel.x - 0.5) * 0.05, cr);
-                panel.y = saturate((panel.y - 0.5) * (1.0 + cr * 0.9) + 0.5 + cr * 0.10);
+                float goldBandHue = 0.105;                         // citrine/topaz yellow, past amber
+                // Wider per-panel spread than the old ±0.025: a cut stone's facets
+                // visibly disagree with each other, and too tight a band collapses
+                // them into one flat sheet of yellow.
+                panel.x = lerp(panel.x, goldBandHue + (panel.x - 0.5) * 0.10, cr);
+                // Harder brightness spread too — facet-to-facet CONTRAST is most of
+                // what reads as "cut gem" rather than "painted glass".
+                panel.y = saturate((panel.y - 0.5) * (1.0 + cr * 1.5) + 0.5 + cr * 0.04);
                 // Clear: fade _ColorShift's contribution out too — same reasoning as the
                 // final hue rotation below, it's what was pulling fogCol off gold.
                 float panelHue = (_ColorShift + panel.x + cm * 0.30) * (1.0 - cr) + panel.x * cr;
@@ -450,7 +483,9 @@ half3 combatHorizon =
                 half3 combatGridCol = lerp(_GridColor.rgb, half3(0.08, 0.48, 0.58), cm * 0.55);
                 // Clear: pull the grid lines gold too, so they read WITH the sky instead
                 // of leaving a leftover cool teal cast fighting the warm tint.
-                combatGridCol = lerp(combatGridCol, half3(0.95, 0.78, 0.40), cr * 0.6);
+                // Reads as a cut line rather than a painted one, but stays under 1 —
+                // over that it blooms and the grid becomes the loudest thing on screen.
+                combatGridCol = lerp(combatGridCol, half3(0.97, 0.88, 0.62), cr * 0.7);
                 half3 grid2Col      = lerp(combatGridCol,  half3(0.12, 0.35, 0.72), cm * 0.35);
                 half3 gridCol  = combatGridCol * beatBoost * intensity;
                 half3 floorCol = gridCol * half3(1.10, 1.00, 0.85);
@@ -510,29 +545,62 @@ half3 combatHorizon =
                 result *= lerp(1.0, 0.82, cm);
 
                 // ── Clear-reaction harmony pass ─────────────────────────────────
-                // A single flat target colour reads as "yellow paint", not gold — real
-                // gold is a GRADIENT: dark bronze in the shadows, warm (slightly
-                // desaturated, almost white) highlights. Interpolate the target itself
-                // by luma instead of tinting a fixed colour, and keep enough of the
-                // upstream per-panel hue (from the fogCol pass above) that neighbouring
-                // facets still contrast — this pass shapes tone, it doesn't flatten hue.
+                // Topaz, not gold leaf. The difference is entirely in the ramp:
+                //
+                //   metal — dark end goes brown and DESATURATED, because a metal's
+                //           shadow is just less reflected light.
+                //   gem   — dark end goes deep and MORE saturated, because what you
+                //           see there is light that travelled through the stone. The
+                //           colour peaks in the midtones, and only the specular
+                //           highlight goes white.
+                //
+                // So this is a three-stop ramp (deep amber → saturated citrine →
+                // near-white spec), not a two-stop bronze→cream lerp. The old
+                // two-stop version is exactly why it read as metallic.
                 if (cr > 0.001)
                 {
                     float crS = cr * cr * (3.0 - 2.0 * cr);   // smoothstep(0,1,cr)
 
                     float oluma = dot(result, float3(0.299, 0.587, 0.114));
-                    oluma = saturate((oluma - 0.5) * 1.3 + 0.5);   // contrast, no extra brighten here
+                    // Harder contrast expansion than before: a gem separates its
+                    // facets sharply, a gradient across them reads as glass.
+                    oluma = saturate((oluma - 0.5) * 1.7 + 0.5);
 
-                    half3 bronze    = half3(0.42, 0.26, 0.09);   // shadow gold — deep, coppery
-                    // Brighter, more translucent-glass highlight — "金盈剔透" reads through
-                    // a hotter, near-white-gold top end rather than a matte mid-gold.
-                    half3 highlight = half3(1.55, 1.32, 0.86);
-                    half3 goldTone  = lerp(bronze, highlight, oluma);
+                    // All three stops stay UNDER 1.0. The gem read has to come from
+                    // hue and saturation, not from output level — anything over 1
+                    // blooms, and a blooming sky pulls the eye off the board at
+                    // exactly the moment the player should be reading their score.
+                    half3 deep = half3(0.48, 0.27, 0.07);   // transmission shadow — still saturated, but not a hole
+                    half3 body = half3(0.92, 0.72, 0.28);   // the stone's own colour, where it's most itself
+                    half3 spec = half3(1.00, 0.97, 0.86);   // specular — near-white, still not emissive
 
-                    half3 ordered = lerp(result, goldTone, 0.55);   // keep 45% of upstream hue → panels still contrast
-                    result = lerp(result, ordered, crS * 0.75);
-                    result = SaturationBoost(result, crS * 0.15);
-                    result *= 1.0 + crS * 0.12;
+                    // Body sits at the 0.55 mark, not the middle: the saturated
+                    // colour should own most of the range and the white should be
+                    // a narrow top end, or the whole sky washes out to cream.
+                    half3 gemTone = oluma < 0.55
+                        ? lerp(deep, body, oluma / 0.55)
+                        : lerp(body, spec, (oluma - 0.55) / 0.45);
+
+                    half3 ordered = lerp(result, gemTone, 0.62);   // keep some upstream hue → panels still disagree
+                    result = lerp(result, ordered, crS * 0.8);
+
+                    // ── Facet edges + dispersion ─────────────────────────────────
+                    // VoronoiEdge is ~0 exactly on the straight border between two
+                    // cells, so this works the CUT LINES rather than the faces, and
+                    // the hue split across the line stands in for real dispersion.
+                    // Applied as a TINT, not an additive glow: the edges should
+                    // change colour, not light up. Adding here was most of why the
+                    // whole sky started glaring.
+                    float edge = 1.0 - saturate(VoronoiEdge(sampleDir * 5.5) * 7.0);
+                    edge = pow(edge, 2.0) * crS * 0.35;
+                    half3 disperse = lerp(half3(0.96, 0.60, 0.28),    // orange side of the split
+                                          half3(0.84, 0.94, 0.52),    // green-gold side
+                                          frac(Hash3(floor(sampleDir * 5.5)) * 3.7));
+                    result = lerp(result, disperse, edge);
+
+                    // Light saturation only — enough for the hue to be unmistakably
+                    // topaz, not enough for the sky to become the subject.
+                    result = SaturationBoost(result, crS * 0.10);
 
                     // ── Central crystal core ─────────────────────────────────────
                     // A radiant gem sitting at the zenith, with straight star-rays
@@ -544,7 +612,7 @@ half3 combatHorizon =
                     float  core    = pow(coreDot, 5.0);                 // tight hot core near the top
                     float  coreAng = atan2(dir.z, dir.x) + _Time.y * 0.05;
                     float  rays    = pow(saturate(cos(coreAng * 6.0)), 10.0) * pow(coreDot, 1.5);
-                    half3  coreGlow = half3(1.7, 1.5, 1.05) * (core * 1.1 + rays * 0.6) * crS;
+                    half3  coreGlow = half3(0.85, 0.74, 0.50) * (core * 0.45 + rays * 0.22) * crS;
                     result += coreGlow;
                 }
 
@@ -554,6 +622,42 @@ half3 combatHorizon =
                 // 将原画面压至红黑色调，同时保留发光的线条和几何体质感
                 half3 damagePalette = half3(result.r * 1.3 + finalLuma * 0.3, result.g * 0.1, result.b * 0.12);
                 result = lerp(result, damagePalette, _DamageTint);
+
+                // ── World collapse: material dropout ───────────────────────────
+                // Whole cube cells stop resolving and fall back to the engine's
+                // magenta/black "no material" checker, with a few going to flat
+                // void instead. Deliberately the ugly, unmistakable asset-failure
+                // look — it says the world is losing its data, which distortion
+                // alone never does.
+                if (cl > 0.001)
+                {
+                    float3 mp    = dir * 9.0 + floor(_Time.y * 2.5) * 0.37;
+                    float3 mcell = floor(mp);
+                    // Threshold walks down from "never" as health drains, so the
+                    // first cells only give out well after the tearing starts.
+                    float  gone  = step(1.0 - cl * 0.42, Hash3(mcell + 31.4));
+                    if (gone > 0.5)
+                    {
+                        float3 cf   = frac(mp) * 4.0;
+                        float  chk  = fmod(floor(cf.x) + floor(cf.y) + floor(cf.z), 2.0);
+                        // A minority of dead cells drop out entirely instead of
+                        // checkering — an unbroken checker field over the whole sky
+                        // turns into a texture of its own and stops reading as damage.
+                        float  void_ = step(0.72, Hash3(mcell + 5.9));
+                        half3  miss  = lerp(half3(1.0, 0.0, 1.0) * chk, half3(0.02, 0.0, 0.03), void_);
+                        result = lerp(result, miss, cl * 0.85);
+                    }
+
+                    // Colour desync in the torn bands — the channels stop agreeing
+                    // about what the sky is, on top of where it is.
+                    float dtick = floor(_Time.y * 9.0);
+                    float dband = floor(dir.y * 30.0);
+                    float desync = step(0.86 - cl * 0.3, Hash3(float3(dband, dtick, 2.3))) * cl;
+                    result = lerp(result, result.gbr, desync * 0.6);
+
+                    // The picture as a whole loses grip: contrast crushes toward black.
+                    result *= 1.0 - cl * 0.18;
+                }
 
                 // ── Theme flash (synergy activation) ──────────────────────────
                 // Wash the whole sky toward a theme colour; brightness follows the

@@ -49,12 +49,18 @@ public class AsideBubble : MonoBehaviour
     [Header("Body text auto-size")]
     public float bodyFontMin = 16f;
     public float bodyFontMax = 26f;
+    [Tooltip("Vertical gap between the speaker's name and the line itself, in reference pixels. At 3 the two ran together and read as one block of text.")]
+    public float nameBodyGap = 12f;
     [Tooltip("Extra gap between the portrait and the name/body text, on top of the portrait's own width, in reference pixels.")]
     public float textLeftGap = 60f;
 
     [Header("Timing")]
     public float slideInDuration = 0.3f;
     public float slideOutDuration = 0.3f;
+
+    // Slide time on top of Show()'s `duration` (the hold only) — lets a caller
+    // budget for the whole animation, not just the readable part.
+    public const float SlideSeconds = 0.6f;
     [Tooltip("How long the (now off-screen) popup lingers before its GameObject is destroyed.")]
     public float destroyDelayAfterHidden = 1f;
 
@@ -110,7 +116,7 @@ public class AsideBubble : MonoBehaviour
         textCol.offsetMin = textCol.offsetMax = Vector2.zero;
         var v = textCol.gameObject.AddComponent<VerticalLayoutGroup>();
         v.padding = new RectOffset((int)(portraitSize * 0.55f + textLeftGap), 21, 18, 18);
-        v.spacing = 3f;
+        v.spacing = nameBodyGap;
         v.childAlignment = TextAnchor.UpperLeft;
         v.childControlWidth = v.childControlHeight = true;
         v.childForceExpandWidth = true; v.childForceExpandHeight = false;

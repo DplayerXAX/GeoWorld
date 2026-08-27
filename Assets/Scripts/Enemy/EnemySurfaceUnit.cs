@@ -226,6 +226,9 @@ public class EnemySurfaceUnit : MonoBehaviour
         _rotTo = Quaternion.LookRotation(forwardOnSurface, node.normal);
 
         RewardBlockPass(node.cell);
+        // Devices that react to being stepped on. Kept as a registry lookup rather
+        // than an event so nothing has to be subscribed or unsubscribed per enemy.
+        DeviceRegistry.TrapAt(node.cell)?.TryTrigger(this);
         _prevNode = node;
     }
 

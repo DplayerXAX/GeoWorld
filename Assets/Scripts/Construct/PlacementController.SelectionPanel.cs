@@ -19,6 +19,20 @@ public partial class PlacementController
         && UnityEngine.EventSystems.EventSystem.current != null
         && UnityEngine.EventSystems.EventSystem.current.IsPointerOverGameObject();
 
+    // Generic escape hatch for systems that remove a board object externally.
+    // Owns only this controller's private selection/UI state; the caller owns the
+    // removal and all gameplay consequences.
+    public void ClearBoardSelection()
+    {
+        selectedInstance  = null;
+        _selectedEndpoint = null;
+        _selectedChaos    = null;
+        _selectedShrine   = null;
+        UpdateHighlight(null);
+        HideRangeIndicator();
+        ClearMultiSelection();
+    }
+
     // False only when the level restricts its color pool and excludes
     // Enlightenment — then the turret-upgrade menu is hidden entirely
     // instead of always showing "Locked".
@@ -65,6 +79,19 @@ public partial class PlacementController
 
         var ins = selectedInstance;
         if (mode != PlacementMode.Select || ins == null || ins.visualObject == null || ins.data == null)
+        {
+            infoPanel.Hide();
+            upgradePanel?.Hide();
+            return;
+        }
+
+        // Hold Shift to peek past the detail panel at whatever it's covering.
+        // Deliberately does NOT touch UpdateRangeIndicator (a separate system) —
+        // a turret's attack-range sphere/shadow volume keeps showing, so aiming
+        // sightlines stay visible while just the info/upgrade cards get out of
+        // the way. Selection itself is untouched, so releasing Shift brings the
+        // same panel straight back.
+        if (Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift))
         {
             infoPanel.Hide();
             upgradePanel?.Hide();

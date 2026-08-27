@@ -141,6 +141,34 @@ public class StatusArrows : MonoBehaviour
     Transform _cam;
     float _radius = 0.55f;
 
+    // Cancels whatever scale this object inherits, so the arrows are a fixed WORLD
+    // size no matter what they are attached to.
+    //
+    // Turret visuals are not unit-scaled: SpawnTurretVisual fits each prefab to one
+    // grid cell by its own measured bounds, so a small mesh ends up with a large
+    // multiplier (the legacy path used ×50 outright). TurretController rides that
+    // fitted child, and the arrows parent to it — so they were being blown up by the
+    // prefab's fit factor, which is an artifact of how the art was authored and has
+    // nothing to do with anything the player can see.
+    //
+    // Status feedback is a READOUT. It should be the same size on a big turret and a
+    // small one, for the same reason a health bar is not drawn proportional to the
+    // thing it belongs to.
+    //
+    // Per-frame rather than once at Bind: the parent can be refitted (an upgrade
+    // swapping the prefab) while the arrows are still up.
+    void NeutralizeParentScale()
+    {
+        var p = transform.parent;
+        if (p == null) { transform.localScale = Vector3.one; return; }
+
+        Vector3 s = p.lossyScale;
+        transform.localScale = new Vector3(
+            Mathf.Abs(s.x) > 1e-5f ? 1f / s.x : 1f,
+            Mathf.Abs(s.y) > 1e-5f ? 1f / s.y : 1f,
+            Mathf.Abs(s.z) > 1e-5f ? 1f / s.z : 1f);
+    }
+
     public void Bind(Mesh mesh, Material mat)
     {
         _mesh = mesh;
@@ -150,6 +178,11 @@ public class StatusArrows : MonoBehaviour
 
     public void Refresh(StatusArrowFx.Kind kind, float hold, float radius)
     {
+        // Also here, not just in LateUpdate: Show() calls this on the frame the object
+        // is created, and a single frame at the parent's scale is a visible pop on a
+        // turret fitted by a large factor.
+        NeutralizeParentScale();
+
         _radius = radius;
         float expire = Time.time + Mathf.Max(0.05f, hold);
 
@@ -201,6 +234,8 @@ public class StatusArrows : MonoBehaviour
     void LateUpdate()
     {
         if (_cam == null) { var c = Camera.main; if (c != null) _cam = c.transform; }
+
+        NeutralizeParentScale();
 
         // Unscaled: status feedback should still animate while the planning pause
         // has frozen timeScale, same as the rest of the build-phase UI.

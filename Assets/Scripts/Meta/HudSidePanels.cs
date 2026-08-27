@@ -6,7 +6,10 @@ using TMPro;
 
 // Two expandable edge panels for the gameplay HUD, built at runtime as UGUI:
 //   • LEFT  — active synergies (live from SynergyEvaluator).
-//   • RIGHT — keyboard controls (editable list).
+//   • RIGHT — keyboard controls (editable list), or the other players in a
+//             multiplayer session: with three other people building on the same
+//             board, who is doing what is the thing you actually need the panel
+//             for, and the control list is something you read once.
 // Each panel is a FULL-SCREEN (1920×1080-canvas) Image — your texture has the panel
 // art positioned and the rest transparent. Clicking the edge handle slides the whole
 // image in / out by `slideDistance`. Auto-spawns; only shows in gameplay and hides
@@ -52,6 +55,55 @@ public class HudSidePanels : MonoBehaviour
 
     bool _synOpen, _ctrlOpen;
 
+    // Multiplayer turns the right panel into a roster. Latched at build time rather
+    // than checked per frame: a panel that swapped contents mid-match because someone
+    // dropped out would move the row you were reading out from under you.
+    bool _rightIsRoster;
+
+    class PlayerRow
+    {
+        public int           id;
+        public RectTransform root;
+        public Image         swatch;
+        public TMP_Text      name;
+        public TMP_Text      status;   // second line: ready state, blocks, spend
+    }
+
+    readonly List<PlayerRow> _playerRows = new();
+    TMP_Text _poolText;
+    Button   _cancelReadyBtn;
+    TMP_Text _cancelReadyLabel;
+
+    // Which panel a caller wants shown. Mirrors TutorialStep.openPanel.
+    public enum Side { None, Synergy, Controls }
+
+    // Opens a panel from outside — the tutorial pointing at the thing it's about to
+    // talk about. Static and null-safe on the instance so a step can ask for this
+    // without caring whether the HUD has spawned yet.
+    public static void Open(Side side)
+    {
+        if (side == Side.None) return;
+
+        // Instance is set in Awake, but two instances can briefly race (a
+        // scene-placed one destroying the auto-spawned default), so fall back to a
+        // search rather than silently doing nothing.
+        var inst = Instance != null ? Instance : FindFirstObjectByType<HudSidePanels>();
+        if (inst == null) return;
+
+        if (side == Side.Synergy) inst._synOpen  = true;
+        else                      inst._ctrlOpen = true;
+
+        // The tutorial step that opens a panel is itself advanced BY a click, and
+        // Update's close-on-click-anywhere would see that same still-pressed click
+        // and shut the panel in the frame it opened. Record the frame so that one
+        // click can't both open and close it.
+        inst._openedFrame = Time.frameCount;
+    }
+
+    public static HudSidePanels Instance { get; private set; }
+
+    int _openedFrame = -1;
+
     Canvas        _canvas;
     RectTransform _leftPanel, _rightPanel, _leftHandle, _rightHandle, _leftContent, _rightContent;
 
@@ -77,6 +129,8 @@ public class HudSidePanels : MonoBehaviour
         var all = FindObjectsByType<HudSidePanels>(FindObjectsSortMode.None);
         foreach (var o in all)
             if (o != this && o._autoSpawned) Destroy(o.gameObject);
+
+        Instance = this;
 
         // If this very object is a leftover duplicate auto-spawn, bail.
         if (_autoSpawned && all.Length > 1 && System.Array.Exists(all, o => o != this && !o._autoSpawned))
@@ -105,6 +159,7 @@ public class HudSidePanels : MonoBehaviour
         A("Space",   "Start wave");
         A("R",       "Refresh shop");
         A("Hold R",  "Restart level");
+        A("Hold L Shift", "Hide UI");
         A("RMB drag","Rotate camera");
         A("Scroll",  "Zoom");
         A("Esc",     "Pause / settings");
@@ -119,12 +174,18 @@ public class HudSidePanels : MonoBehaviour
         if (!show) { PointerOver = false; SynergyHoverHighlight.Clear(); return; }
 
         UpdateSynergies();
+        if (_rightIsRoster) UpdatePlayers();
 
         // Click anywhere while a panel is open → collapse it (and swallow that click
         // so it doesn't also place / select in the world).
         bool closedThisClick = false;
-        if (Input.GetMouseButtonDown(0) && (_synOpen || _ctrlOpen))
+        if (Input.GetMouseButtonDown(0) && (_synOpen || _ctrlOpen) && Time.frameCount != _openedFrame
+            && !Contains(_leftContent, Input.mousePosition) && !Contains(_rightContent, Input.mousePosition))
         {
+            // Clicks INSIDE an open panel are for the panel. Without this the
+            // close-on-click-anywhere swallowed the panel's own controls: CANCEL
+            // READY would take the click and shut the panel in the same frame, so
+            // even when it worked there was nothing left on screen to show it had.
             _synOpen = _ctrlOpen = false;
             closedThisClick = true;
         }
@@ -208,8 +269,20 @@ public class HudSidePanels : MonoBehaviour
 
     void BuildRight()
     {
-        _rightPanel   = NewFullScreenPanel("ControlsPanel", rightSprite != null ? rightSprite : leftSprite);
+        _rightIsRoster = MultiplayerSession.ConnectedCount > 1;
+
+        _rightPanel   = NewFullScreenPanel(_rightIsRoster ? "PlayersPanel" : "ControlsPanel",
+                                           rightSprite != null ? rightSprite : leftSprite);
         _rightContent = NewColumn(_rightPanel, right: true);
+
+        if (_rightIsRoster)
+        {
+            AddTitle(_rightContent, "PLAYERS");
+            BuildPlayerRows();
+            _rightHandle = BuildHandle("PLAYERS", _rightPanel, right: true);
+            return;
+        }
+
         AddTitle(_rightContent, "CONTROLS");
 
         foreach (var c in controls)
@@ -233,6 +306,145 @@ public class HudSidePanels : MonoBehaviour
         }
 
         _rightHandle = BuildHandle("CONTROLS", _rightPanel, right: true);
+    }
+
+    // ── Players (multiplayer only) ───────────────────────────────────────────
+
+    // A row per SLOT, not per connected player, and empty ones are simply hidden.
+    // Rows are built once and only their text changes afterwards: rebuilding on every
+    // roster change would make the list jump under the cursor exactly when someone
+    // joins or leaves, which is when you are most likely to be looking at it.
+    void BuildPlayerRows()
+    {
+        _playerRows.Clear();
+
+        // Shared pool, shown once above the roster — see UpdatePlayers on why it is
+        // not repeated per player.
+        _poolText = NewText("Pool", _rightContent, rowSize, GeoPalette.Blue, FontStyles.Bold,
+                            TextAlignmentOptions.MidlineLeft);
+        _poolText.gameObject.AddComponent<LayoutElement>().minHeight = rowSize * 1.8f;
+
+        for (int i = 0; i < MultiplayerSession.MaxPlayers; i++)
+        {
+            // Two lines per player, not one. Name, ready state, blocks and spend do
+            // not fit across a 360px column without truncating, and a truncated name
+            // is the one part of the row that has to stay readable.
+            var row = NewRect($"Player{i}", _rightContent);
+            var h = row.gameObject.AddComponent<HorizontalLayoutGroup>();
+            h.childAlignment = TextAnchor.UpperLeft; h.spacing = 10f;
+            h.childControlWidth = h.childControlHeight = true;
+            h.childForceExpandWidth = false; h.childForceExpandHeight = false;
+            h.padding = new RectOffset(0, 0, 4, 8);
+            row.gameObject.AddComponent<LayoutElement>().minHeight = rowSize * 3.4f;
+
+            var swRect = NewRect("Swatch", row);
+            var swLe = swRect.gameObject.AddComponent<LayoutElement>();
+            swLe.minWidth = swLe.preferredWidth = rowSize * 0.9f;
+            swLe.minHeight = swLe.preferredHeight = rowSize * 0.9f;
+            var sw = swRect.gameObject.AddComponent<Image>();
+            sw.raycastTarget = false;
+
+            var col = NewRect("Lines", row);
+            var v = col.gameObject.AddComponent<VerticalLayoutGroup>();
+            v.childAlignment = TextAnchor.UpperLeft; v.spacing = 2f;
+            v.childControlWidth = v.childControlHeight = true;
+            v.childForceExpandWidth = true; v.childForceExpandHeight = false;
+            col.gameObject.AddComponent<LayoutElement>().flexibleWidth = 1f;
+
+            var name = NewText("Name", col, rowSize, GeoPalette.Ink, FontStyles.Bold,
+                               TextAlignmentOptions.MidlineLeft);
+            name.gameObject.AddComponent<LayoutElement>().minHeight = rowSize * 1.3f;
+
+            var status = NewText("Status", col, rowSize * 0.82f, GeoPalette.Ink, FontStyles.Normal,
+                                 TextAlignmentOptions.MidlineLeft);
+            status.gameObject.AddComponent<LayoutElement>().minHeight = rowSize * 1.2f;
+
+            _playerRows.Add(new PlayerRow { id = i, root = row, swatch = sw, name = name, status = status });
+        }
+
+        BuildCancelReady();
+    }
+
+    // Cancelling from the panel, not just from Space. Space toggles, but once the
+    // panel has opened itself on your ready the panel is where you are looking — and
+    // "press the key that started this again" is not something the screen says
+    // anywhere.
+    void BuildCancelReady()
+    {
+        var rt = NewRect("CancelReady", _rightContent);
+        rt.gameObject.AddComponent<LayoutElement>().minHeight = rowSize * 2.6f;
+
+        var img = rt.gameObject.AddComponent<Image>();
+        img.color = GeoPalette.Signal;
+
+        _cancelReadyBtn = rt.gameObject.AddComponent<Button>();
+        _cancelReadyBtn.targetGraphic = img;
+        _cancelReadyBtn.onClick.AddListener(CancelReady);
+
+        _cancelReadyLabel = NewText("Label", rt, rowSize, GeoPalette.Paper, FontStyles.Bold,
+                                    TextAlignmentOptions.Center);
+        var lrt = _cancelReadyLabel.rectTransform;
+        lrt.anchorMin = Vector2.zero; lrt.anchorMax = Vector2.one;
+        lrt.offsetMin = lrt.offsetMax = Vector2.zero;
+        _cancelReadyLabel.text = "CANCEL READY";
+    }
+
+    // Goes through the bus, exactly like Space, rather than clearing the flag
+    // locally — a ready that only came back on your own machine would leave the other
+    // three still waiting on you.
+    void CancelReady()
+    {
+        if (!(MultiplayerSession.Get(MultiplayerSession.LocalId)?.ready ?? false)) return;
+        CommandBus.Submit(new GameCommand { kind = GameCommandKind.StartWave });
+    }
+
+    void UpdatePlayers()
+    {
+        // Counted per frame from the board rather than tracked incrementally: the
+        // board is the truth, and a counter maintained alongside it is one more thing
+        // that can disagree with what the player can plainly see.
+        var owned = new int[MultiplayerSession.MaxPlayers];
+        var grid  = GridSystem.instance;
+        if (grid != null)
+            foreach (var ins in grid.GetAllInstances())
+                if (ins != null && ins.ownerId >= 0 && ins.ownerId < owned.Length) owned[ins.ownerId]++;
+
+        bool building = GameFlowManager.Instance != null
+                     && (GameFlowManager.Instance.phase == GamePhase.Build
+                      || GameFlowManager.Instance.phase == GamePhase.ReadyToRun);
+
+        // Everyone has their own wallet now, so the header states the split rather
+        // than a balance — the balances are on the rows, where they belong.
+        var rm = ResourceManager.Instance;
+        if (_poolText != null)
+            _poolText.text = rm == null ? ""
+                : (rm.WalletCount > 1 ? $"INCOME SPLIT  1/{rm.WalletCount}" : "");
+
+        foreach (var r in _playerRows)
+        {
+            var p = MultiplayerSession.Get(r.id);
+            bool on = p != null && p.connected;
+            if (r.root != null) r.root.gameObject.SetActive(on);
+            if (!on) continue;
+
+            r.swatch.color = MultiplayerSession.ColorOf(r.id);
+            r.name.text    = p.isLocal ? $"{p.displayName}  (you)" : p.displayName;
+
+            string money  = rm == null ? "" : $"¤{rm.BlockCurrencyOf(r.id)} · {rm.TurretCurrencyOf(r.id)}t";
+            string blocks = owned[r.id] == 1 ? "1 blk" : $"{owned[r.id]} blks";
+
+            // Ready only means something while a wave is being waited on; showing it
+            // mid-combat would report a flag nobody is acting on.
+            r.status.text  = building
+                ? (p.ready ? $"READY  ·  {money}  ·  {blocks}" : $"{money}  ·  {blocks}")
+                : $"{money}  ·  {blocks}";
+            r.status.color = building && p.ready ? GeoPalette.Signal : GeoPalette.Ink;
+        }
+
+        // Only offered while it would do something.
+        bool meReady = MultiplayerSession.Get(MultiplayerSession.LocalId)?.ready ?? false;
+        if (_cancelReadyBtn != null)
+            _cancelReadyBtn.gameObject.SetActive(building && meReady);
     }
 
     RectTransform NewFullScreenPanel(string name, Sprite sprite)

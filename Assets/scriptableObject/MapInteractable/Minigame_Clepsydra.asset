@@ -1,0 +1,27 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: bb3d8a0e57283c644a6a5af3773d64af, type: 3}
+  m_Name: Minigame_Clepsydra
+  m_EditorClassIdentifier: Assembly-CSharp::MapInteractable
+  id: minigame.clepsydra
+  kind: 1
+  displayName: The Water Clock
+  description: The observatory keeps time by water, and the water keeps to pipes.
+    Something has turned every joint in the works. Turn them back — but the pipes
+    are your own blocks, and a block swings its whole body when it turns, so the
+    trouble is as much about room as it is about routing.
+  status: Turn the works back — one round at a time
+  actionLabel: Play
+  approachLabel: Walk over
+  conversation: {fileID: 0}
+  repeatConversation: {fileID: 0}
+  minigame: 2

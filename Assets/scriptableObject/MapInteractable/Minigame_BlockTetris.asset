@@ -1,0 +1,27 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: bb3d8a0e57283c644a6a5af3773d64af, type: 3}
+  m_Name: Minigame_BlockTetris
+  m_EditorClassIdentifier: Assembly-CSharp::MapInteractable
+  id: minigame.blocktetris
+  kind: 1
+  displayName: The Stacking Well
+  description: A bottomless square shaft the neighbours drop blocks into. Fill a
+    whole floor and it collapses away — but the deeper you go, the faster they
+    fall, and the floor itself starts pushing back. Nobody has ever reached the
+    end of it.
+  status: Endless — see how deep you get
+  actionLabel: Play
+  approachLabel: Walk over
+  conversation: {fileID: 0}
+  repeatConversation: {fileID: 0}
+  minigame: 0

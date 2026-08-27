@@ -33,12 +33,14 @@ MonoBehaviour:
       valueGuidInternal: 
       WwiseObjectReference: {fileID: 11400000, guid: 9c4b2b7423b8ea64589b56f8df68804a, type: 2}
   - title: Piecing together
-    description: 'Idle song for regular game play. '
+    description: "An idle theme for regular gameplay. The Deity enjoys listening
+      to this melody while contemplating or solving puzzles. \n\"It brings a sense
+      of calm, clarity, and focus.\""
     track:
       idInternal: 0
       valueGuidInternal: 
       WwiseObjectReference: {fileID: 11400000, guid: 26c61ff29d35a9d4d9b143d2185c8afa, type: 2}
-  - title: Piecing together (no remix)
+  - title: Piecing together (fast version)
     description: It feels even more intense.
     track:
       idInternal: 0
@@ -50,5 +52,26 @@ MonoBehaviour:
       idInternal: 0
       valueGuidInternal: 
       WwiseObjectReference: {fileID: 11400000, guid: 85e3c987bf05d7640b116fb01bd2dd11, type: 2}
+  - title: A Melody Misremembered
+    description: I definitely hear this somewhere before.....
+    track:
+      idInternal: 0
+      valueGuidInternal: 
+      WwiseObjectReference: {fileID: 11400000, guid: c2c3c72bcae93f144b0773aec4b191ad, type: 2}
+  - title: The moment before end
+    description: "Suddenly, you lose everything\u2026 and there is no way back. You
+      can only wait for the final relief\u2014the end."
+    track:
+      idInternal: 0
+      valueGuidInternal: 
+      WwiseObjectReference: {fileID: 11400000, guid: 8ad8997a668a664478226078885baf4c, type: 2}
+  - title: Mock The Obedience
+    description: "A relentless breakbeat \u201Cnoise\u201D emerges as threatening
+      chaos descends. Creatures revel in their frenzy, defying the order we uphold
+      and leaving nothing but disorder in their wake.\r\n"
+    track:
+      idInternal: 0
+      valueGuidInternal: 
+      WwiseObjectReference: {fileID: 11400000, guid: 6d4a22ddef624264fa4a6c9c5e1f4082, type: 2}
   shaders: []
   monsters: []

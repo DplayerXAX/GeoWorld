@@ -10,7 +10,7 @@
     "Type": "Event",
     "GUID": "{79255C4A-16B7-4027-8F85-430C19DD0914}",
     "Language": "SFX",
-    "Hash": "{B7859C59-3D35-EBBD-F974-65E15418EDB9}",
+    "Hash": "{B8E341D3-03F4-B320-0EDD-8609447AC361}",
     "ObjectPath": "Chill_Event",
     "ShortName": "Chill_Event",
     "Path": "Event/Chill_Event.bnk",
@@ -65,6 +65,6 @@
     ]
    }
   ],
-  "FileHash": "{CE9A016F-E6AE-B4E7-A69F-0F737EC38F86}"
+  "FileHash": "{F752A83C-F754-AAA5-4DE6-5D92B9368545}"
  }
 }

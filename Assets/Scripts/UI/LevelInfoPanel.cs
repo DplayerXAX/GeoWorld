@@ -59,6 +59,13 @@ public class LevelInfoPanel : MonoBehaviour
     Image       _buildThumb;
     TMP_Text    _buildThumbLabel;
     Button      _enter;
+    // Read by LevelSelectTutorialGuide to anchor its "click here" arrow beside
+    // the Enter button during the ls.enter tutorial gate.
+    public RectTransform EnterButtonRect => _enter != null ? (RectTransform)_enter.transform : null;
+    // Read by LevelMapController.PointerOverInfoPanel to keep panel clicks from
+    // also raycasting into the map underneath.
+    public RectTransform PanelRect => _panel != null ? _panel : targetPanel;
+    public bool IsShown => _cg != null && _cg.blocksRaycasts;
     Action      _onEnter;
     float       _target;
 
@@ -122,6 +129,25 @@ public class LevelInfoPanel : MonoBehaviour
         ShowBuildThumb(level);
 
         _onEnter = onEnter;
+        _target  = 1f;
+    }
+
+    // Same panel, non-level content (NPCs, minigames — see MapInteractable). The
+    // roster and keepsake thumb are level-only, so they hide themselves on null.
+    public void ShowInteractable(string title, string desc, string status, string best,
+                                 string actionLabel, bool canAct, Action onAct)
+    {
+        _title.text  = title;
+        _status.text = status ?? "";
+        SetOptional(_desc, desc);
+        SetOptional(_best, best);
+        _enterLabel.text    = actionLabel;
+        _enter.interactable = canAct;
+
+        BuildRoster(null);
+        ShowBuildThumb(null);
+
+        _onEnter = onAct;
         _target  = 1f;
     }
 

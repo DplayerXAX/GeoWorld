@@ -1,0 +1,19 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4f1a8c6e2b9d47f4c96a1e5f83d0c72a, type: 3}
+  m_Name: MinigameAudio
+  m_EditorClassIdentifier: Assembly-CSharp::MinigameAudio
+  stackWellMusic:
+    idInternal: 0
+    valueGuidInternal: 
+    WwiseObjectReference: {fileID: 11400000, guid: c2c3c72bcae93f144b0773aec4b191ad, type: 2}
+  stackWellMusicFadeOutMs: 500

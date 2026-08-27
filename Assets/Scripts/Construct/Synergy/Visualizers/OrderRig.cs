@@ -626,7 +626,6 @@ public class OrderRig : MonoBehaviour
     static Material _fillMat;
     static Material _holoMat;
     static Material _outlineMat;
-    static readonly Dictionary<int, Mesh> _gearMeshes = new();
 
     static Material GetLineMaterial()
     {
@@ -731,78 +730,9 @@ public class OrderRig : MonoBehaviour
         return _nodeMesh;
     }
 
-    // Solid extruded gear (unit outer radius = 1) lying flat in the XZ plane,
-    // thickness along Y, with a center hole. Authored normals (top +Y, bottom
-    // −Y, walls radial) so the metal reads correctly. Cached per tooth count.
-    static Mesh GetSolidGearMesh(int teeth)
-    {
-        if (_gearMeshes.TryGetValue(teeth, out var cached) && cached != null) return cached;
+    // Gear geometry now comes from GearMeshFactory — the same cog the 1-2 Order
+    // workshop is built out of. It used to be a local smooth-toothed plate here;
+    // two different gears for the same faction read as two unrelated systems.
+    static Mesh GetSolidGearMesh(int teeth) => GearMeshFactory.Get(teeth);
 
-        const float rOuter = 1f, rRoot = 0.80f, rHole = 0.34f, halfT = 0.12f;
-        float pitch = Mathf.PI * 2f / teeth;
-
-        // Ring samples (angle, radius) tracing square-ish teeth.
-        var ang = new List<float>();
-        var rad = new List<float>();
-        for (int t = 0; t < teeth; t++)
-        {
-            float b = t * pitch;
-            ang.Add(b + pitch * 0.00f); rad.Add(rRoot);
-            ang.Add(b + pitch * 0.12f); rad.Add(rOuter);
-            ang.Add(b + pitch * 0.38f); rad.Add(rOuter);
-            ang.Add(b + pitch * 0.50f); rad.Add(rRoot);
-            ang.Add(b + pitch * 0.90f); rad.Add(rRoot);
-        }
-        int M = ang.Count;
-
-        var verts = new List<Vector3>();
-        var norms = new List<Vector3>();
-        var tris  = new List<int>();
-
-        for (int i = 0; i < M; i++)
-        {
-            int j = (i + 1) % M;
-
-            Vector3 oUp_i = Polar(ang[i], rad[i],  halfT), oUp_j = Polar(ang[j], rad[j],  halfT);
-            Vector3 oDn_i = Polar(ang[i], rad[i], -halfT), oDn_j = Polar(ang[j], rad[j], -halfT);
-            Vector3 hUp_i = Polar(ang[i], rHole,   halfT), hUp_j = Polar(ang[j], rHole,   halfT);
-            Vector3 hDn_i = Polar(ang[i], rHole,  -halfT), hDn_j = Polar(ang[j], rHole,  -halfT);
-
-            // Top face (normal +Y), bottom face (normal −Y).
-            AddQuad(verts, norms, tris, oUp_i, oUp_j, hUp_j, hUp_i, Vector3.up);
-            AddQuad(verts, norms, tris, hDn_i, hDn_j, oDn_j, oDn_i, Vector3.down);
-
-            // Outer rim wall (normal radial out) and hole wall (radial in).
-            Vector3 outN = AvgRadial(ang[i], ang[j],  1f);
-            Vector3 inN  = AvgRadial(ang[i], ang[j], -1f);
-            AddQuad(verts, norms, tris, oUp_i, oDn_i, oDn_j, oUp_j, outN);
-            AddQuad(verts, norms, tris, hUp_j, hDn_j, hDn_i, hUp_i, inN);
-        }
-
-        var m = new Mesh { name = $"OrderMetalGear_{teeth}" };
-        m.SetVertices(verts);
-        m.SetNormals(norms);
-        m.SetTriangles(tris, 0);
-        m.bounds = new Bounds(Vector3.zero, Vector3.one * 1000f);
-        _gearMeshes[teeth] = m;
-        return m;
-    }
-
-    static void AddQuad(List<Vector3> v, List<Vector3> n, List<int> tri,
-                        Vector3 a, Vector3 b, Vector3 c, Vector3 d, Vector3 normal)
-    {
-        int s = v.Count;
-        v.Add(a); v.Add(b); v.Add(c); v.Add(d);
-        n.Add(normal); n.Add(normal); n.Add(normal); n.Add(normal);
-        tri.Add(s); tri.Add(s + 1); tri.Add(s + 2);
-        tri.Add(s); tri.Add(s + 2); tri.Add(s + 3);
-    }
-
-    static Vector3 AvgRadial(float a0, float a1, float sign)
-    {
-        float a = (a0 + a1) * 0.5f;
-        return new Vector3(Mathf.Cos(a) * sign, 0f, Mathf.Sin(a) * sign).normalized;
-    }
-
-    static Vector3 Polar(float a, float r, float y) => new Vector3(Mathf.Cos(a) * r, y, Mathf.Sin(a) * r);
 }

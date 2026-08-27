@@ -111,7 +111,7 @@ Material:
     - _FresnelPower: 5
     - _FresnelStrength: 0.5
     - _GlassAlpha: 0.08
-    - _GlassSharpness: 0
+    - _GlassSharpness: 1
     - _GlossMapScale: 0
     - _Glossiness: 0.2
     - _GlossyReflections: 0
@@ -135,7 +135,7 @@ Material:
     - _Scale: 3.1
     - _ScaleMultiplier: 1.25
     - _SeamWidth: 0.095
-    - _ShardSteps: 4
+    - _ShardSteps: 3.26
     - _Smoothness: 0.5
     - _SmoothnessTextureChannel: 0
     - _Specular: 0.6
@@ -161,8 +161,8 @@ Material:
     - _ColorDark: {r: 0.45, g: 0.27999997, b: 0.079999976, a: 1}
     - _ColorLight: {r: 1, g: 0.92, b: 0.54999995, a: 1}
     - _ColorMid: {r: 0.85, g: 0.62, b: 0.19999996, a: 1}
-    - _CoreColor: {r: 0.062893055, g: 0.11320752, b: 0, a: 1}
-    - _DarkColor: {r: 0.049999982, g: 0.14999998, b: 0.079999976, a: 1}
+    - _CoreColor: {r: 0.9377345, g: 1, b: 0.9276729, a: 1}
+    - _DarkColor: {r: 0.053544115, g: 0.2830189, b: 0, a: 1}
     - _EdgeColor: {r: 0.09999997, g: 0.6, b: 0.19999996, a: 0.8}
     - _EmissionColor: {r: 0, g: 0, b: 0, a: 1}
     - _Green1: {r: 0.049999982, g: 0.17999998, b: 0.09999997, a: 1}
@@ -177,7 +177,7 @@ Material:
     - _InnerColor: {r: 0.19999996, g: 0.7, b: 1, a: 1}
     - _LightDirection: {r: 0.5, g: 0.8, b: -0.3, a: 0}
     - _LiquidColor: {r: 0.39999998, g: 0.9, b: 0.29999998, a: 0.9}
-    - _MidColor: {r: 0.19999996, g: 0.8, b: 0.39999998, a: 1}
+    - _MidColor: {r: 0.0515604, g: 0.49685526, b: 0.19999199, a: 1}
     - _OuterColor: {r: 0.04, g: 0.11999995, b: 0.34999996, a: 1}
     - _SeamColor: {r: 0.04, g: 0.09999997, b: 0.06999998, a: 1}
     - _SpecColor: {r: 0.19999996, g: 0.19999996, b: 0.19999996, a: 1}

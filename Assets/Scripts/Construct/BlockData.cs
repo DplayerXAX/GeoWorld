@@ -76,6 +76,10 @@ public class BlockData : ScriptableObject
     public GameObject bulletPrefab;
     [Tooltip("Uniform scale applied to spawned bullets (1 = prefab's authored size unchanged). 0 = don't override, use TurretController's own bulletScale default.")]
     [Min(0f)] public float bulletScale = 0f;
+
+    [Tooltip("Optional DEVICE behaviour (oscillator / portal / trap). When set, placing this block also attaches the device — see PlacedDevice.Attach. Null for ordinary blocks and turrets.")]
+    public DeviceData device;
+
     [Header("Audio")]
     public AK.Wwise.Event onStepEvent;
     public AK.Wwise.Event previewEvent;
