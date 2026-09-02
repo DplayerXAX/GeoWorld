@@ -311,6 +311,17 @@
 						</Action>
 					</ChildrenList>
 				</Event>
+				<Event Name="Story_Loop" ID="{A5E5A8C2-DD72-4C93-A4AA-1AF7D276B404}">
+					<ChildrenList>
+						<Action Name="" ID="{8BB073CE-6E60-47C7-B742-CAEB89547FC8}" ShortID="773183824">
+							<ReferenceList>
+								<Reference Name="Target">
+									<ObjectRef Name="Story_loop" ID="{D3F79BD4-9210-46C1-82D8-B85B2817A274}" WorkUnitID="{48502AC3-EE10-4952-8017-84D50D1C5C35}"/>
+								</Reference>
+							</ReferenceList>
+						</Action>
+					</ChildrenList>
+				</Event>
 			</ChildrenList>
 		</WorkUnit>
 	</Events>

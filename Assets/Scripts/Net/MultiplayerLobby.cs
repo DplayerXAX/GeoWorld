@@ -43,6 +43,13 @@ public class MultiplayerLobby : MonoBehaviour
     enum Face { Choose, Room }
 
     Face   _face = Face.Choose;
+    // What the joiner types. A ROOM CODE now, not an address — the session hands
+    // one out and it is the only thing a host has to read aloud.
+    string _code = "";
+
+    // Direct IP is kept as an escape hatch for testing two instances on one machine:
+    // it needs no services, costs no quota, and is instant. Held down while clicking
+    // JOIN, so it never gets in a real player's way.
     string _address = "127.0.0.1";
     string _name    = "";
     int    _levelIndex;                       // 0 = endless, then database order
@@ -112,9 +119,30 @@ public class MultiplayerLobby : MonoBehaviour
 
     // ── Actions ──────────────────────────────────────────────────────────────
 
+    // Shift bypasses the session and opens a plain socket — see _address.
+    static bool DirectHeld => Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift);
+
     void HostRoom()
     {
-        NetBootstrap.Host();
+        if (NetBootstrap.Connecting) return;
+
+        if (DirectHeld)
+        {
+            NetBootstrap.Host();
+            EnterRoom();
+            return;
+        }
+
+        _statusText.text = "opening a room…";
+        NetBootstrap.HostSession($"{_name}'s table", ok =>
+        {
+            if (ok) EnterRoom();
+            else    _statusText.text = NetBootstrap.LastError;
+        });
+    }
+
+    void EnterRoom()
+    {
         MultiplayerSession.SetName(MultiplayerSession.LocalId, _name);
         ApplyLevelChoice();
         _face = Face.Room;
@@ -124,11 +152,32 @@ public class MultiplayerLobby : MonoBehaviour
 
     void JoinRoom()
     {
-        NetBootstrap.Join(_address);
+        if (NetBootstrap.Connecting) return;
         _nameSent = false;              // resent once the host tells us which slot we are
-        _face = Face.Room;
-        _roomNameField.SetTextWithoutNotify(_name);
-        Refresh();
+
+        if (DirectHeld)
+        {
+            NetBootstrap.Join(_address);
+            _face = Face.Room;
+            _roomNameField.SetTextWithoutNotify(_name);
+            Refresh();
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(_code))
+        {
+            _statusText.text = "Enter the host's room code.";
+            return;
+        }
+
+        _statusText.text = "joining…";
+        NetBootstrap.JoinSession(_code, ok =>
+        {
+            if (!ok) { _statusText.text = NetBootstrap.LastError; return; }
+            _face = Face.Room;
+            _roomNameField.SetTextWithoutNotify(_name);
+            Refresh();
+        });
     }
 
     // Renaming from inside the room. The host applies its own; a client asks and waits
@@ -281,9 +330,15 @@ public class MultiplayerLobby : MonoBehaviour
         _levelPrev.gameObject.SetActive(host);
         _levelNext.gameObject.SetActive(host);
 
+        // The code is the whole point of the host's half of this screen, so it is
+        // stated as a code and nothing else. Direct connections have none, and say so
+        // rather than showing an empty pair of brackets.
+        string code = NetBootstrap.RoomCode;
         _hostAddrText.text = host
-            ? $"others join at   <b>{NetBootstrap.LocalAddress()}</b>   ·   port {NetBootstrap.DefaultPort}"
-            : (online ? $"connected to {_address}" : $"connecting to {_address}…");
+            ? (string.IsNullOrEmpty(code)
+                ? $"direct   ·   {NetBootstrap.LocalAddress()}   ·   port {NetBootstrap.DefaultPort}"
+                : $"room code   <b>{code}</b>")
+            : (online ? "connected" : "connecting…");
 
         bool meReady = MultiplayerSession.Get(MultiplayerSession.LocalId)?.ready ?? false;
         _readyLabel.text = meReady ? "CANCEL" : "READY";
@@ -346,10 +401,10 @@ public class MultiplayerLobby : MonoBehaviour
 
         var addrLabel = NewText("AddrLabel", _choosePanel, 20f, GeoPalette.WithAlpha(GeoPalette.Paper, 0.55f),
                                 FontStyles.Normal, TextAlignmentOptions.Left);
-        addrLabel.text = "HOST ADDRESS  (only needed to join)";
+        addrLabel.text = "ROOM CODE  (only needed to join)";
         Row(addrLabel.rectTransform, 26f);
 
-        _addressField = NewInput(_choosePanel, _address, v => _address = v);
+        _addressField = NewInput(_choosePanel, _code, v => _code = v);
 
         var spacer = NewRect("Spacer", _choosePanel);
         Row(spacer, 20f);
@@ -359,7 +414,7 @@ public class MultiplayerLobby : MonoBehaviour
 
         var back = NewText("Back", _choosePanel, 18f, GeoPalette.WithAlpha(GeoPalette.Paper, 0.4f),
                            FontStyles.Normal, TextAlignmentOptions.Center);
-        back.text = "Esc  ·  back to title";
+        back.text = "Esc  ·  back to title          Shift + click  ·  direct IP (local testing)";
         Row(back.rectTransform, 40f);
     }
 

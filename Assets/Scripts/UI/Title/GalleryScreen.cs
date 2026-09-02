@@ -191,6 +191,13 @@ public class GalleryScreen : MonoBehaviour
     uint _musicPlayingId;   // currently-playing config track (0 = none)
     int  _musicIndex;       // the track actually playing — persists across overview/detail nav
 
+    // What the record does when a track runs out. A property of the RECORD, not of
+    // the page: it goes on applying while you are off inspecting the monsters, which
+    // is the whole reason the music does not stop when you leave the music room.
+    enum PlayMode { RepeatOne, Sequence, Shuffle }
+    PlayMode _playMode = PlayMode.Sequence;
+    TMP_Text _musicModeText;
+
     // Detail UI
     Canvas   _canvas;
     RectTransform _detailRoot;
@@ -312,6 +319,7 @@ public class GalleryScreen : MonoBehaviour
             // Keyboard browsing — same as the on-screen ‹ › arrows.
             if (Input.GetKeyDown(KeyCode.LeftArrow)  || Input.GetKeyDown(KeyCode.A)) Step(-1);
             if (Input.GetKeyDown(KeyCode.RightArrow) || Input.GetKeyDown(KeyCode.D)) Step(+1);
+            if (_cat == Cat.Music && _configMusic && Input.GetKeyDown(KeyCode.M)) CyclePlayMode();
         }
     }
 
@@ -870,11 +878,90 @@ public class GalleryScreen : MonoBehaviour
         {
             StopMusic();
             var evt = index >= 0 && index < _musicItems.Count ? _musicItems[index].evt : null;
-            if (evt != null && evt.IsValid()) _musicPlayingId = evt.Post(gameObject);
+            // Posted WITH an end-of-event callback, which is the only way to know a
+            // track has finished — there is no polling API for it, and a timer would
+            // have to be told each track's length by hand.
+            if (evt != null && evt.IsValid())
+                _musicPlayingId = evt.Post(gameObject, (uint)AkCallbackType.AK_EndOfEvent,
+                                           OnMusicEvent, null);
         }
         else
         {
             SetMood(index == 1);
+        }
+    }
+
+    // ── The record's playback mode ───────────────────────────────────────────
+
+    void CyclePlayMode()
+    {
+        _playMode = _playMode switch
+        {
+            PlayMode.RepeatOne => PlayMode.Sequence,
+            PlayMode.Sequence  => PlayMode.Shuffle,
+            _                  => PlayMode.RepeatOne,
+        };
+        AudioManager.Instance?.PlayUISound();
+        RefreshMusicMode();
+    }
+
+    void RefreshMusicMode()
+    {
+        if (_musicModeText == null) return;
+        // Labelled with its own shortcut, the same way the browse hint is. A control
+        // that names the key that works it needs no separate legend.
+        _musicModeText.text = _playMode switch
+        {
+            PlayMode.RepeatOne => "[ M ]   REPEAT ONE",
+            PlayMode.Sequence  => "[ M ]   IN ORDER",
+            _                  => "[ M ]   SHUFFLE",
+        };
+    }
+
+    // Wwise's end-of-event, delivered on the main thread by AkCallbackManager.
+    //
+    // A track we STOPPED ourselves raises this too, which would otherwise make every
+    // manual track change advance a second time — you would click one title and land
+    // on the next. StopMusic clears _musicPlayingId before the fade even begins, so
+    // the stopped track's callback arrives carrying an id that no longer matches and
+    // is ignored. No flag, no counter, nothing to get out of step.
+    void OnMusicEvent(object cookie, AkCallbackType type, AkCallbackInfo info)
+    {
+        if (type != AkCallbackType.AK_EndOfEvent) return;
+        if (info is not AkEventCallbackInfo e) return;
+        if (_musicPlayingId == 0 || e.playingID != _musicPlayingId) return;
+
+        _musicPlayingId = 0;
+        AdvanceMusic();
+    }
+
+    void AdvanceMusic()
+    {
+        int n = _musicItems.Count;
+        if (!_configMusic || n == 0) return;
+
+        int next = _musicIndex;
+        if (_playMode == PlayMode.Sequence) next = (_musicIndex + 1) % n;
+        else if (_playMode == PlayMode.Shuffle && n > 1)
+        {
+            // Drawn from the OTHER n-1 tracks and then stepped over the current one.
+            // A free draw repeats a track back to back every so often, and a shuffle
+            // that plays the same song twice reads as broken rather than as random.
+            next = Random.Range(0, n - 1);
+            if (next >= _musicIndex) next++;
+        }
+
+        _musicIndex = next;
+        PlayMusic(_musicIndex);
+
+        // Keep the page honest if the player is standing in the music room. _index is
+        // set FIRST because ApplyItem posts the track itself whenever the two
+        // disagree, and it has just been posted.
+        if (_view == View.Detail && _cat == Cat.Music)
+        {
+            _index = _musicIndex;
+            ApplyItem();
+            HighlightMenu();
         }
     }
 
@@ -1067,6 +1154,18 @@ public class GalleryScreen : MonoBehaviour
         vlg.childForceExpandWidth = true; vlg.childForceExpandHeight = false;
         _menuList.gameObject.AddComponent<ContentSizeFitter>().verticalFit = ContentSizeFitter.FitMode.PreferredSize;
 
+        // Playback mode, at the FOOT of the strip. It belongs to the section rather
+        // than to any one track, so it sits under the list instead of in it — a row
+        // among the titles would read as a fourth thing you could put on the
+        // turntable. Shown only for music, and only when there are authored tracks:
+        // the Calm/Battle fallback is a mood switch with nothing to run out.
+        _musicModeText = BuildTextButton(strip, "MODE", new Vector2(0f, 0f), new Vector2(30f, 30f),
+                                         CyclePlayMode);
+        _musicModeText.fontSize = 20f;
+        _musicModeText.rectTransform.sizeDelta = new Vector2(320f, 44f);
+        _musicModeText.gameObject.SetActive(false);
+        RefreshMusicMode();
+
         // Everything below shares one horizontal band, shifted left off the raw
         // 0.34~1.0 span so it sits centred in the area actually left over once the
         // 380px menu strip is excluded (that span's own centre is ~0.67, well right
@@ -1137,6 +1236,9 @@ public class GalleryScreen : MonoBehaviour
                 Cat.Monster => "MONSTERS",
                 _           => "SHADERS",
             };
+
+        if (_musicModeText != null)
+            _musicModeText.gameObject.SetActive(_cat == Cat.Music && _configMusic);
 
         for (int i = 0; i < _menuButtons.Count; i++)
             if (_menuButtons[i] != null) Destroy(_menuButtons[i].gameObject);

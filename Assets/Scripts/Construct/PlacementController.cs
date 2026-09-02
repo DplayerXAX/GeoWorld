@@ -1736,6 +1736,29 @@ public partial class PlacementController : MonoBehaviour
         ins.visualObject.transform.localScale = Vector3.zero;
         StartCoroutine(GrowIn(ins.visualObject));
 
+        // GrowIn is the block ARRIVING; this is the board RECEIVING it. Neighbours
+        // dip and spring back with distance falloff, and a flat ring runs out across
+        // the ground — so a placement lands on the board instead of just appearing on
+        // it. The new block is excluded: it has its own grow, and pressing it too
+        // would fight that.
+        Vector3 impact = ins.visualObject.transform.position;
+
+        // A turret's shockwave is its ATTACK RANGE. The ripple stops being decoration
+        // and becomes the answer to the question you ask the instant you drop one —
+        // "what does this cover?" — delivered at exactly the moment you are looking,
+        // without the player having to hover it to see the range indicator.
+        //
+        // Read off the live TurretController rather than the BlockData, so upgrades
+        // that widened the range are included: the ring should promise what this
+        // turret actually does, not what its type does in general.
+        float reach = grid.cellSize * 2.2f;
+        var placedTurret = ins.visualObject.GetComponentInChildren<TurretController>();
+        if (placedTurret != null) reach = placedTurret.attackRange;
+
+        ImpactFx.Land(impact, reach, ins.visualObject);
+        ImpactFx.Ripple(impact - Vector3.up * (grid.cellSize * 0.45f),
+                        GameCommand.UnpackRgb(cmd.tintRgb), reach);
+
         BlockPlaced?.Invoke(ins.data, ins.occupiedCells.ToArray());
         GameFlowManager.Instance?.EvaluateGrid();
     }
