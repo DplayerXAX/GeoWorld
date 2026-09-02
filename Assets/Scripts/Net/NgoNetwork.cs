@@ -29,6 +29,7 @@ public class NgoNetwork : MonoBehaviour
     const string MsgReady   = "geo.ready";     // client -> host: my lobby ready flag
     const string MsgBegin   = "geo.begin";     // host -> all: load the match now
     const string MsgName    = "geo.name";      // client -> host: what to call me
+    const string MsgEnemies = "geo.enemies";   // host -> all: the whole fight, 15x a second
 
     // Held-block state as it goes over the wire. Sent unreliably and often, so it's
     // kept to the minimum that can draw a ghost.
@@ -120,6 +121,41 @@ public class NgoNetwork : MonoBehaviour
         CommandBus.Applied += HostRelay;
     }
 
+    // ── Session-started variants ─────────────────────────────────────────────
+    //
+    // When a Multiplayer Services session brings the connection up, NGO is ALREADY
+    // running by the time we get control — the session configured the transport with
+    // its Relay allocation and started the host or client itself. So these do
+    // everything StartHost/StartClient do EXCEPT open the socket. Calling those would
+    // be a second, competing attempt on the same one.
+
+    public void AdoptHostSession()
+    {
+        var nm = NetworkManager.Singleton;
+        if (nm == null) { Debug.LogError("[Ngo] Session reported success with no NetworkManager."); return; }
+
+        nm.OnClientConnectedCallback  -= HostOnClientConnected;
+        nm.OnClientDisconnectCallback -= HostOnClientDisconnected;
+        nm.OnClientConnectedCallback  += HostOnClientConnected;
+        nm.OnClientDisconnectCallback += HostOnClientDisconnected;
+
+        MultiplayerSession.BeginLocal();
+        MultiplayerSession.Begin(NetRole.Host, 0);
+        RegisterHandlers();
+        CommandBus.SetRouter(new NgoCommandRouter());
+        CommandBus.Applied -= HostRelay;
+        CommandBus.Applied += HostRelay;
+    }
+
+    public void AdoptClientSession()
+    {
+        // Slot id is assigned by the host and arrives with the first lobby message;
+        // until then we act as a client with a provisional id.
+        MultiplayerSession.Begin(NetRole.Client, 1);
+        RegisterHandlers();
+        CommandBus.SetRouter(new NgoCommandRouter());
+    }
+
     public void StartClient()
     {
         var nm = NetworkManager.Singleton;
@@ -190,6 +226,7 @@ public class NgoNetwork : MonoBehaviour
         mm.RegisterNamedMessageHandler(MsgReady,   OnReady);
         mm.RegisterNamedMessageHandler(MsgBegin,   OnBegin);
         mm.RegisterNamedMessageHandler(MsgName,    OnName);
+        mm.RegisterNamedMessageHandler(MsgEnemies, OnEnemies);
     }
 
     // -- Lobby ----------------------------------------------------------------
@@ -348,6 +385,52 @@ public class NgoNetwork : MonoBehaviour
         if (st.playerId == MultiplayerSession.LocalId) return;   // our own echo
         if (st.active) RemotePreviews[st.playerId] = st;
         else           RemotePreviews.Remove(st.playerId);
+    }
+
+    // ── Combat ───────────────────────────────────────────────────────────────
+
+    // Unreliable, like the block ghosts and for the same reason: a dropped snapshot
+    // is replaced by the next one 66ms later, and re-sending a stale picture of the
+    // fight would put latency on the traffic that matters instead.
+    //
+    // Sized by count rather than streamed: a wave is a few dozen enemies at 36 bytes
+    // each, which fits a single datagram comfortably.
+    public void BroadcastEnemies(List<EnemyWire> enemies, int lives)
+    {
+        var mm = Msg;
+        if (mm == null || !MultiplayerSession.IsHost) return;
+
+        int count = Mathf.Min(enemies.Count, MaxEnemiesPerSnapshot);
+        using var w = new FastBufferWriter(8 + count * 40, Allocator.Temp);
+        w.WriteValueSafe(lives);
+        w.WriteValueSafe(count);
+        for (int i = 0; i < count; i++)
+        {
+            var e = enemies[i];
+            w.WriteValueSafe(e);
+        }
+        mm.SendNamedMessageToAll(MsgEnemies, w, NetworkDelivery.Unreliable);
+    }
+
+    // A hard bound so one runaway wave cannot produce a datagram the transport
+    // refuses to send — silently dropping the whole fight is worse than clipping
+    // the tail of a crowd nobody can pick apart anyway.
+    const int MaxEnemiesPerSnapshot = 64;
+
+    void OnEnemies(ulong _, FastBufferReader reader)
+    {
+        if (MultiplayerSession.IsHost) return;   // our own echo
+
+        reader.ReadValueSafe(out int lives);
+        reader.ReadValueSafe(out int count);
+
+        var list = new List<EnemyWire>(count);
+        for (int i = 0; i < count; i++)
+        {
+            reader.ReadValueSafe(out EnemyWire e);
+            list.Add(e);
+        }
+        CombatSync.Instance?.ApplySnapshot(list, lives);
     }
 
     // ── Sending ──────────────────────────────────────────────────────────────

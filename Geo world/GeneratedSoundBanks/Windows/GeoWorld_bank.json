@@ -10,7 +10,7 @@
     "Type": "User",
     "GUID": "{FBAC0406-FA36-4CC0-8121-80F7B6376C7E}",
     "Language": "SFX",
-    "Hash": "{3C6BE654-2CDD-D98F-EFE5-926AD5731E10}",
+    "Hash": "{79B83BF7-04EA-B089-45E2-5D4665EFE170}",
     "ObjectPath": "\\SoundBanks\\Default Work Unit\\GeoWorld_bank",
     "ShortName": "GeoWorld_bank",
     "Path": "GeoWorld_bank.bnk",
@@ -230,6 +230,14 @@
       "Location": "Memory",
       "ShortName": "solo_b.wav",
       "CachePath": "7D/{7D33FDDD-17CE-8BDA-C0FB-75D5FB7BA202}.wem"
+     },
+     {
+      "Id": "733391151",
+      "Language": "SFX",
+      "Streaming": "false",
+      "Location": "Memory",
+      "ShortName": "Once Upon a Myth.wav",
+      "CachePath": "9F/{9F6BCB4E-3CB5-CCCE-0BC6-33B898A6582D}.wem"
      },
      {
       "Id": "759153527",
@@ -741,6 +749,18 @@
       ]
      },
      {
+      "Id": "3205990445",
+      "Name": "Story_Loop",
+      "ObjectPath": "\\Events\\Default Work Unit\\Story_Loop",
+      "GUID": "{A5E5A8C2-DD72-4C93-A4AA-1AF7D276B404}",
+      "DurationType": "Infinite",
+      "MediaRefs": [
+       {
+        "Id": "733391151"
+       }
+      ]
+     },
+     {
       "Id": "1299445167",
       "Name": "tetris_Loop",
       "ObjectPath": "\\Events\\Default Work Unit\\tetris_Loop",
@@ -908,6 +928,6 @@
     ]
    }
   ],
-  "FileHash": "{30F53E08-4AD8-F6D6-B63C-DDC845033EED}"
+  "FileHash": "{1311BA06-C0D0-9D00-83E1-CB8079DDB071}"
  }
 }

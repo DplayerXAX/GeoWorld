@@ -29,8 +29,32 @@ public class PlayerHealth : MonoBehaviour
         _lives = maxLives;
     }
 
+    /// <summary>
+    /// Adopt the host's life count. Whether the run is over is the one question that
+    /// absolutely cannot have four answers, so on a client this is the ONLY thing
+    /// that moves the number — local damage is ignored entirely.
+    /// </summary>
+    public void ApplyRemoteLives(int lives)
+    {
+        if (lives == _lives) return;
+        bool dropped = lives < _lives;
+        _lives = Mathf.Clamp(lives, 0, maxLives);
+        OnLivesChanged?.Invoke(_lives);
+
+        // The feedback still fires locally — a spectator should feel the hit even
+        // though it did not compute it.
+        if (dropped)
+        {
+            AudioManager.Instance?.PlayDamage();
+            CameraShake.Damage();
+        }
+        if (_lives == 0) OnGameOver?.Invoke();
+    }
+
     public void TakeDamage(int amount = 1)
     {
+        // On a spectator the host's snapshot is the only thing that may change this.
+        if (CombatSync.IsSpectator) return;
         if (amount <= 0 || _lives <= 0) return;
 
         _lives = Mathf.Max(0, _lives - amount);

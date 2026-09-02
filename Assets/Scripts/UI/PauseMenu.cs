@@ -32,6 +32,7 @@ public class PauseMenu : MonoBehaviour
     public Color overlayColor = new Color(0f, 0f, 0f, 0.6f);
     [Tooltip("Non-blocking dim shown during a planning pause — light enough to still read the board.")]
     public Color pauseDimColor = new Color(0f, 0f, 0f, 0.35f);
+    [Tooltip("No longer used — the menu is a ring around the cube, sized by HexRadius. Kept so the scene's serialized value doesn't move.")]
     public float panelWidth = 500f;
     public float buttonHeight = 58f;
 
@@ -87,7 +88,7 @@ public class PauseMenu : MonoBehaviour
         if ((Input.GetKeyDown(toggleKey) || GamepadInput.TogglePauseDown)
             && !SettingsScreen.Open && !MinigameStage.AnyActive)
         {
-            if (_menuOpen) SetMenuOpen(false);   // Esc backs out of the menu first
+            if (_menuOpen) CloseMenu();          // Esc backs out of the menu first
             else           SetPaused(!_paused);  // otherwise toggles the planning pause
         }
 
@@ -111,6 +112,22 @@ public class PauseMenu : MonoBehaviour
         bool showMenu = _menuOpen && !SettingsScreen.Open;
         _overlayGo.SetActive(showMenu);
         _panelGo.SetActive(showMenu);
+
+        // The cube. In the middle of the ring while nothing is picked out, and
+        // tucked under whichever option the player is pointing at otherwise — the
+        // slide is the cube's own easing, so this only has to say where.
+        //
+        // Guarded on !SettingsScreen.Open so the two screens never fight over it in
+        // the same frame: while settings is up, THAT page is the one asking, and the
+        // cube is over on its left-hand side.
+        if (showMenu)
+        {
+            bool focused = _focusedOption >= 0;
+            SettingsCube.ShowAt(focused ? HexCubeSlot(_focusedOption) : Vector2.zero,
+                                focused ? MenuFocusCubeSize : MenuCubeSize, null);
+        }
+        else _focusedOption = -1;   // including while settings is up, so coming back lands it home
+
         SetCanvasVisible(true);
     }
 
@@ -142,6 +159,38 @@ public class PauseMenu : MonoBehaviour
         ApplyTimeScale();
     }
 
+    // The gear folds the screen away, and the menu arrives on the paper it leaves
+    // behind. Closing unfolds it again.
+    //
+    // The fold belongs HERE, on the icon, rather than on the Settings row inside the
+    // menu: by the time that row is reachable the screen is already put away, and
+    // folding a second time would be folding paper into paper. It is also what the
+    // whole gesture is for — the game going quiet, not one particular page opening.
+    void ToggleMenu()
+    {
+        if (CubeWipe.Busy) return;
+
+        if (_menuOpen) { CloseMenu(); return; }
+
+        // Say where the cube will land BEFORE the fold starts. The wipe spends the
+        // whole close shrinking the cube's silhouette down onto this slot, and it
+        // cannot ask the menu — the menu does not exist yet.
+        SettingsCube.PrepareSlot(Vector2.zero, MenuCubeSize);
+        CubeWipe.Close(() => SetMenuOpen(true));
+    }
+
+    // Every way out of the menu goes through here, so the unfold cannot be forgotten
+    // on one of them — a close with no matching open is how a game ends up stuck on a
+    // white screen.
+    void CloseMenu()
+    {
+        SetMenuOpen(false);
+        CubeWipe.Open();
+    }
+
+    // Inside the menu the screen is already folded away, so this just swaps the page.
+    void OpenSettings() => SettingsScreen.Open = true;
+
     void SetMenuOpen(bool open)
     {
         if (open == _menuOpen) return;
@@ -154,16 +203,35 @@ public class PauseMenu : MonoBehaviour
 
     void GoToTitle()
     {
-        Time.timeScale = 1f;
-        _paused = _menuOpen = false; Paused = false;
+        LeaveMenuHard();
         LoadingScreen.Go(titleScene);
     }
 
     void GoToLevelSelect()
     {
-        Time.timeScale = 1f;
-        _paused = _menuOpen = false; Paused = false;
+        LeaveMenuHard();
         LoadingScreen.Go(levelSelectScene);
+    }
+
+    // Leaving the menu for somewhere else entirely: restore time, clear the flags,
+    // and DROP THE PAPER.
+    //
+    // These paths used to clear the flags by hand and skip the unfold, which left the
+    // wipe's canvas — full screen, sorting order 900, DontDestroyOnLoad — sitting over
+    // the game forever. That is what hid the gear, the speed chip and the pause
+    // button: they were still there, under a sheet of paper that outlived the scene
+    // that put it up.
+    //
+    // Dismissed instantly rather than animated: the screen is about to be replaced by
+    // a scene load, and unfolding into something already going away is a flourish
+    // nobody sees.
+    void LeaveMenuHard()
+    {
+        Time.timeScale = 1f;
+        _paused = _menuOpen = false;
+        Paused = false;
+        SettingsScreen.Open = false;
+        CubeWipe.Dismiss();
     }
 
     void CycleSpeed()
@@ -235,39 +303,44 @@ public class PauseMenu : MonoBehaviour
         var overlayRt = (RectTransform)_overlayGo.transform;
         overlayRt.anchorMin = Vector2.zero; overlayRt.anchorMax = Vector2.one;
         overlayRt.offsetMin = overlayRt.offsetMax = Vector2.zero;
-        _overlayGo.AddComponent<Image>().color = overlayColor;
+        // Transparent, but still a raycast target. Its job here is only to stop
+        // clicks reaching the frozen game underneath; the DIM it used to provide is
+        // now the wipe's paper, and a black sheet over paper just reads as grey.
+        _overlayGo.AddComponent<Image>().color = new Color(0f, 0f, 0f, 0f);
         _overlayGo.SetActive(false);
 
-        // Paper panel (system menu).
-        const float buttonSpacing = 6f;   // tighter gap between menu buttons
+        // The menu: six options at the six corners of the cube's silhouette.
+        //
+        // A cube seen corner-on IS a hexagon, and a hexagon has exactly six corners —
+        // which happens to be exactly how many options this menu has. So the ring is
+        // not an arbitrary arrangement chosen to look nice around a decoration; it is
+        // the shape of the thing in the middle, and each option sits where one of its
+        // corners points.
         var panel = NewRect("Panel", canvasGo.transform);
         panel.anchorMin = panel.anchorMax = panel.pivot = new Vector2(0.5f, 0.5f);
-        panel.sizeDelta = new Vector2(panelWidth, 6f * (buttonHeight + buttonSpacing) + 90f);
+        panel.sizeDelta = new Vector2(HexRadius * 2.6f, HexRadius * 2.6f);
         _panelGo = panel.gameObject;
-        panel.gameObject.AddComponent<Image>().color = GeoPalette.Paper;
 
-        var vlg = panel.gameObject.AddComponent<VerticalLayoutGroup>();
-        vlg.padding = new RectOffset(28, 28, 26, 26);
-        vlg.spacing = buttonSpacing;
-        vlg.childControlWidth = vlg.childControlHeight = true;
-        vlg.childForceExpandWidth = true; vlg.childForceExpandHeight = false;
-        vlg.childAlignment = TextAnchor.UpperCenter;
+        // No background of its own. The wipe has already turned the screen to paper,
+        // and a second panel drawn on top of it would put a rectangle where the
+        // player can plainly see there is none.
+        panel.gameObject.AddComponent<Image>().color = new Color(0f, 0f, 0f, 0f);
 
-        var title = NewText("Title", panel, 34f, GeoPalette.Ink, FontStyles.Bold, TextAlignmentOptions.Center);
-        title.text = "MENU";
-        title.gameObject.AddComponent<LayoutElement>().minHeight = 46f;
+        // Deferred to the end of BuildUI — see the note down there. The chips are
+        // built first now, because they are the controls and this is decoration.
 
-        _firstMenuButton = BuildButton(panel, "Close", GeoPalette.Ink, () => SetMenuOpen(false));
-        BuildButton(panel, "Settings", GeoPalette.Ink, () => SettingsScreen.Open = true);
-        BuildButton(panel, "Restart", GeoPalette.Ink, () =>
-        {
-            Time.timeScale = 1f;
-            _paused = _menuOpen = false; Paused = false;
-            GameFlowManager.Instance?.RestartGame();
-        });
-        BuildButton(panel, "Title", GeoPalette.Ink, GoToTitle);
-        BuildButton(panel, "Select Level", GeoPalette.Ink, GoToLevelSelect);
-        BuildButton(panel, "Quit", GeoPalette.Signal, QuitGame);
+        // Order runs clockwise from the top. Destructive last, at the bottom corner,
+        // furthest from where the eye starts.
+        _firstMenuButton = HexButton(panel, 0, "Close",        GeoPalette.Ink,    CloseMenu);
+                           HexButton(panel, 1, "Settings",     GeoPalette.Ink,    OpenSettings);
+                           HexButton(panel, 2, "Restart",      GeoPalette.Ink,    () =>
+                           {
+                               LeaveMenuHard();
+                               GameFlowManager.Instance?.RestartGame();
+                           });
+                           HexButton(panel, 3, "Quit",         GeoPalette.Ink,    QuitGame);
+                           HexButton(panel, 4, "Select Level", GeoPalette.Ink,    GoToLevelSelect);
+                           HexButton(panel, 5, "Title",        GeoPalette.Ink,    GoToTitle);
 
         _panelGo.SetActive(false);
 
@@ -284,9 +357,14 @@ public class PauseMenu : MonoBehaviour
         hlg.childControlWidth = hlg.childControlHeight = true;
         hlg.childForceExpandWidth = false; hlg.childForceExpandHeight = false;
 
-        BuildSettingsButton(crt, () => SetMenuOpen(!_menuOpen));
+        BuildSettingsButton(crt, ToggleMenu);
         BuildSpeedButton(crt, CycleSpeed);
         _pauseIconImg = BuildIconButton(crt, pauseIcon, () => SetPaused(!_paused));
+
+        // No cube is built here any more. It is SHARED with the settings page and
+        // owned by SettingsCube itself, on a canvas of its own — see the note there.
+        // This screen just says where it wants it, from Update, for as long as the
+        // menu is up.
     }
 
     const float ChipSize     = 80f;
@@ -312,6 +390,138 @@ public class PauseMenu : MonoBehaviour
 
     // Gear/menu chip. Uses settingsIcon if assigned, else a '≡' text glyph so it
     // works with zero art wired up.
+    // Distance from the middle to each option. Large enough that the ring clears the
+    // cube with air to spare — options crowding the thing they surround reads as a
+    // toolbar, not as a ring. Grown with the type: at three times the size the old
+    // ring had the words running into each other and into the cube.
+    const float HexRadius    = 460f;
+    const float HexButtonW   = 560f;
+    const float HexButtonH   = 100f;
+    const float HexFont      = 66f;
+
+    // Resting in the middle, and smaller when it has gone to sit under an option —
+    // there it is a mark BESIDE a word rather than the centrepiece, and at full size
+    // it would not fit under the lower corners of the ring without leaving the screen.
+    const float MenuCubeSize      = 300f;
+    const float MenuFocusCubeSize = 210f;
+
+    // Which option has the player's attention, or -1. Pointer hover and keyboard /
+    // gamepad selection both feed this, because they are the same question asked two
+    // ways and the cube should answer it the same way for either.
+    int _focusedOption = -1;
+
+    void FocusOption(int corner, bool on)
+    {
+        if (on) _focusedOption = corner;
+        // Only the option that CLAIMED the focus may drop it. Moving the pointer
+        // straight from one word to the next fires the new one's enter and the old
+        // one's exit in an order that is not promised — without this the cube can be
+        // sent home for a frame in the middle of a smooth walk along the ring.
+        else if (_focusedOption == corner) _focusedOption = -1;
+    }
+
+    // Where corner `corner` of the hexagon sits.
+    //
+    // Squashed vertically so the six sit on a wide ring rather than a circle — screens
+    // are wider than they are tall, and a true circle wastes the width while crowding
+    // the height. Starts at the top and steps clockwise: screen Y is up, so the sign
+    // on the sine is what turns "counter-clockwise maths" into "clockwise reading".
+    static Vector2 HexPos(int corner)
+    {
+        float ang = Mathf.PI * 0.5f - corner * (Mathf.PI / 3f);
+        return new Vector2(Mathf.Cos(ang) * HexRadius * 1.24f,
+                           Mathf.Sin(ang) * HexRadius * 0.86f);
+    }
+
+    // Where the cube parks when an option is under the pointer: directly beneath the
+    // word, close enough that the two read as one thing.
+    Vector2 HexCubeSlot(int corner)
+    {
+        Vector2 p = HexPos(corner);
+        float gap = HexButtonH * 0.5f + MenuFocusCubeSize * 0.5f + 16f;
+
+        // Measured off the canvas rather than assumed to be 1080 tall. With the
+        // scaler on match 0.5 the canvas is only 1080 units high at 16:9 — a wide
+        // monitor gives it well under 950, and a limit hard-coded for the common case
+        // walks the cube off the bottom of the uncommon one.
+        float halfH = _canvas != null ? ((RectTransform)_canvas.transform).rect.height * 0.5f : 540f;
+        float limit = halfH - MenuFocusCubeSize * 0.5f - 16f;
+
+        // Below by preference, so the word reads as a caption over the cube. Where
+        // there is no room below — the bottom corner of the ring is already near the
+        // edge — it goes above instead. That is the same relationship mirrored, which
+        // is better than a cube half off the screen or one sitting on the word.
+        float below = p.y - gap;
+        return new Vector2(p.x, below >= -limit ? below : p.y + gap);
+    }
+
+    // One option, parked at corner `corner` of the hexagon.
+    //
+    // Placed absolutely rather than through a layout group: a layout group's whole
+    // job is to decide positions, and here the positions are the point.
+    Button HexButton(RectTransform panel, int corner, string label, Color color,
+                     System.Action onClick)
+    {
+        // Built here rather than through BuildButton, because these are WORDS ON
+        // PAPER and not chips. The wipe has already turned the screen to paper; a
+        // filled rectangle behind each option would put six boxes on a surface whose
+        // entire point is that it is bare, and at this size the type carries itself.
+        var rt = NewRect("Option", panel);
+        rt.anchorMin = rt.anchorMax = rt.pivot = new Vector2(0.5f, 0.5f);
+        rt.sizeDelta = new Vector2(HexButtonW, HexButtonH);
+        rt.anchoredPosition = HexPos(corner);
+
+        // WHITE, then tinted to `color` by the button's normalColor.
+        //
+        // Not black-with-a-gold-highlight: Selectable tinting MULTIPLIES the graphic's
+        // own colour, and black times anything is black — the hover would have been
+        // silently dead. The word is white so the state colours are the ones that
+        // actually show.
+        var t = NewText("Label", rt, HexFont, Color.white, FontStyles.Bold, TextAlignmentOptions.Center);
+        // The game's own stamped face. This is the one screen that is entirely
+        // typography — six words on a bare sheet — so the words have to be in the
+        // game's lettering rather than in whatever TMP happened to default to.
+        GeoFont.ApplyStamp(t);
+        t.text = label;
+        // The TEXT is the button's graphic, so the clickable area is the word you can
+        // see and the highlight lands on the word itself. With no plate to tint there
+        // is nothing else for it to land on.
+        t.raycastTarget = true;
+        var lrt = t.rectTransform;
+        lrt.anchorMin = Vector2.zero; lrt.anchorMax = Vector2.one;
+        lrt.offsetMin = lrt.offsetMax = Vector2.zero;
+
+        var btn = rt.gameObject.AddComponent<Button>();
+        btn.targetGraphic = t;
+        var colors = btn.colors;
+        colors.normalColor      = color;
+        colors.highlightedColor = GeoPalette.Gold;
+        colors.selectedColor    = GeoPalette.Gold;
+        colors.pressedColor     = GeoPalette.Signal;
+        btn.colors = colors;
+        btn.onClick.AddListener(() => onClick());
+
+        // Hover and selection, reported to FocusOption so the cube can follow.
+        //
+        // An EventTrigger rather than a component of our own: it is four one-line
+        // handlers on a runtime-built object, and a whole MonoBehaviour to carry them
+        // would be a file to open every time someone wonders what moves the cube.
+        int here = corner;
+        var trig = rt.gameObject.AddComponent<EventTrigger>();
+        void On(EventTriggerType type, bool on)
+        {
+            var entry = new EventTrigger.Entry { eventID = type };
+            entry.callback.AddListener(_ => FocusOption(here, on));
+            trig.triggers.Add(entry);
+        }
+        On(EventTriggerType.PointerEnter, true);
+        On(EventTriggerType.PointerExit,  false);
+        On(EventTriggerType.Select,       true);
+        On(EventTriggerType.Deselect,     false);
+
+        return btn;
+    }
+
     void BuildSettingsButton(RectTransform parent, System.Action onClick)
     {
         var rt = NewRect("SettingsButton", parent);

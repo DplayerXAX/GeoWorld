@@ -36,6 +36,7 @@ namespace AK
         static const AkUniqueID SELECT = 1432588725U;
         static const AkUniqueID SHOP_CLOSE = 2506379688U;
         static const AkUniqueID SHOP_OPEN = 839522188U;
+        static const AkUniqueID STORY_LOOP = 3205990445U;
         static const AkUniqueID TETRIS_LOOP = 1299445167U;
         static const AkUniqueID TEXTBLIP = 1387752797U;
         static const AkUniqueID TIMEDRAIN = 3258153068U;
