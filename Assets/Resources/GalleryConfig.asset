@@ -59,8 +59,8 @@ MonoBehaviour:
       valueGuidInternal: 
       WwiseObjectReference: {fileID: 11400000, guid: c2c3c72bcae93f144b0773aec4b191ad, type: 2}
   - title: The moment before end
-    description: "Suddenly, you lose everything\u2026 and there is no way back. You
-      can only wait for the final relief\u2014the end."
+    description: And then, everything is lost. There is no way back, only the long
+      wait for an ending.
     track:
       idInternal: 0
       valueGuidInternal: 
@@ -73,5 +73,19 @@ MonoBehaviour:
       idInternal: 0
       valueGuidInternal: 
       WwiseObjectReference: {fileID: 11400000, guid: 6d4a22ddef624264fa4a6c9c5e1f4082, type: 2}
+  - title: Once Upon a Myth
+    description: 'Once upon a myth, there was a village.
+
+      Its people sang as
+      they worked the land.
+
+      And when the harvest came,
+
+      the fields were
+      full, and so were their lives.'
+    track:
+      idInternal: 0
+      valueGuidInternal: 
+      WwiseObjectReference: {fileID: 11400000, guid: 7616b446166a0b84283f5b97027808f4, type: 2}
   shaders: []
   monsters: []

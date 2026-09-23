@@ -1251,7 +1251,7 @@ MonoBehaviour:
   timeLoopCleared:
     idInternal: 0
     valueGuidInternal: 
-    WwiseObjectReference: {fileID: 0}
+    WwiseObjectReference: {fileID: 11400000, guid: 7616b446166a0b84283f5b97027808f4, type: 2}
   musicSwapAfterLevelId: Tutorial
   infoPanel: {fileID: 303145625}
   firstVisitConversation: {fileID: 11400000, guid: cc58ee9980f0af044af5f14956b7833c, type: 2}

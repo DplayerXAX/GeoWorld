@@ -109,11 +109,58 @@ public class EnemySurfaceUnit : MonoBehaviour
         return remaining;
     }
 
+    /// <summary>
+    /// True when this unit is a puppet of the host's simulation: it does not path,
+    /// does not fight back and cannot be damaged locally. Its transform and health
+    /// are written by CombatSync from the snapshot stream.
+    /// </summary>
+    public bool IsProxy { get; private set; }
+
+    public void MakeProxy()
+    {
+        IsProxy = true;
+        // This unit walks itself off _path in Update. Leaving that null is all it
+        // takes to hand the transform over to CombatSync — no component juggling,
+        // and the same early-out the class already uses when it has nowhere to go.
+        _path = null;
+    }
+
+    /// <summary>Host's word on this enemy's health. Drives the flinch and the bars.</summary>
+    public void ApplyRemoteHealth(int health, int max)
+    {
+        if (max > 0) maxHealth = max;
+        int before = _health;
+        _health = Mathf.Clamp(health, 0, maxHealth);
+
+        // Flinch on the DELTA rather than on a damage call: a spectator never runs
+        // TakeDamage, and without this the whole fight would read as bloodless on
+        // three of the four screens.
+        if (_health < before && _health > 0) ImpactFx.Hit(transform);
+    }
+
+    /// <summary>Remove a proxy the host stopped reporting — it died or got through.</summary>
+    public void KillProxy()
+    {
+        if (!IsProxy) return;
+        EnemyDeathFx.Explode(transform.position);
+        Destroy(gameObject);
+    }
+
     public void TakeDamage(int amount)
     {
+        // Damage is the host's business. A client that also applied it would kill
+        // enemies the host still considers alive, and the next snapshot would raise
+        // them again — the classic spectator resurrection.
+        if (IsProxy) return;
         if (amount <= 0 || _health <= 0) return;
 
         _health = Mathf.Max(0, _health - amount);
+
+        // The flinch. Before this, taking a hit and missing looked identical: the
+        // health number changed and nothing on the enemy moved until it died. This is
+        // the single largest gap in the game's combat feel, and it costs one line.
+        if (_health > 0) ImpactFx.Hit(transform);
+
         if (_health == 0)
             Die();
     }
@@ -151,7 +198,7 @@ public class EnemySurfaceUnit : MonoBehaviour
 
     void Update()
     {
-        if (_path == null || _health <= 0) return;
+        if (IsProxy || _path == null || _health <= 0) return;
 
         _beatTimer += Time.deltaTime;
         float secPerBeat = _secPerBeat / EffectiveSpeedMultiplier;

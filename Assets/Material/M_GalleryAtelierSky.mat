@@ -64,7 +64,7 @@ Material:
     - _MistWarm: {r: 0.836478, g: 0.5740535, b: 0, a: 1}
     - _MortarColor: {r: 0.11999995, g: 0.11999995, b: 0.13999996, a: 1}
     - _Signal: {r: 1, g: 0.37647063, b: 0, a: 1}
-    - _SkyBottom: {r: 0, g: 0, b: 0, a: 1}
+    - _SkyBottom: {r: 1, g: 0.91650397, b: 0.66981125, a: 1}
     - _SkyTop: {r: 0.86, g: 0.84, b: 0.79, a: 1}
   m_BuildTextureStacks: []
   m_AllowLocking: 1

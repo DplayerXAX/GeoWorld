@@ -281,9 +281,30 @@ public class EnemyBaseManager : MonoBehaviour
         return spawned;
     }
 
+    /// <summary>
+    /// A visual-only enemy for a spectator, built from the same prefab so it gets the
+    /// same materials, outline and death FX as the real thing. It is deliberately
+    /// NOT added to _activeEnemies: wave completion, reroute and the wave counter are
+    /// all the host's to decide, and a client counting its own puppets would end its
+    /// wave early.
+    /// </summary>
+    public EnemySurfaceUnit SpawnProxy()
+    {
+        if (enemyPrefab == null) return null;
+
+        var proxy = Instantiate(enemyPrefab);
+        InjectVisualMaterials(proxy);
+        proxy.faceClearance = enemyFaceClearance;
+        proxy.MakeProxy();
+        return proxy;
+    }
+
     // Instantiates and launches a single enemy of `source` along `path`.
     void SpawnOneEnemy(EnemySurfaceUnit source, List<FaceNode> path)
     {
+        // Spectators never spawn. Their enemies arrive as snapshots.
+        if (CombatSync.IsSpectator) return;
+
         EnemySurfaceUnit enemy = Instantiate(source);
         // Prefabs can be lean: drop in EnemyChaoticVisual + BlockOutlineApplier
         // with empty material slots and we fill them with the manager's

@@ -23,6 +23,7 @@ Event	ID	Name			Wwise Object Path	Notes
 	2506379688	Shop_close			\Default Work Unit\Shop_close	
 	2833906173	Ending_Loop			\Default Work Unit\Ending_Loop	
 	3140303807	lose_Loop			\Default Work Unit\lose_Loop	
+	3205990445	Story_Loop			\Default Work Unit\Story_Loop	
 	3258153068	TimeDrain			\Default Work Unit\TimeDrain	
 	3688152761	boss_fight			\Default Work Unit\boss_fight	
 	4131907033	Piece_Normal			\Default Work Unit\Piece_Normal	
@@ -79,6 +80,7 @@ In Memory Audio	ID	Name	Audio source file		Wwise Object Path	Notes	Data Size
 	577639329	Firmament's Farewell	.cache\78\{789133AD-F88C-D585-E24A-AA2F0F54BD84}.wem		\Containers\Default Work Unit\Ending song\Firmament's Farewell\Firmament's Farewell		28772136
 	586490051	geo tetris	.cache\7A\{7A55ACED-79D7-E2AC-813A-38C24F3C439E}.wem		\Containers\Default Work Unit\tetris loop\tetris\geo tetris		4838496
 	633751974	New Music Track_06	.cache\7D\{7D33FDDD-17CE-8BDA-C0FB-75D5FB7BA202}.wem		\Containers\Default Work Unit\Bdim\New Music Track_06		352896
+	733391151	geo tetris	.cache\9F\{9F6BCB4E-3CB5-CCCE-0BC6-33B898A6582D}.wem		\Containers\Default Work Unit\Story_loop\tetris\geo tetris		13547616
 	759153527	ambient bgm	.cache\EA\{EAE24123-C675-595C-B50B-C5C8DBB2DC3C}.wem		\Containers\Default Work Unit\Music_BGM\Calm_BGM\ambient bgm\ambient bgm		5644896
 	799708269	New Music Track_06	.cache\19\{1911F0A7-4D8E-A328-97B7-A96A592875B7}.wem		\Containers\Default Work Unit\G\New Music Track_06		352896
 	888948449	ambient bgm	.cache\80\{802F01CA-1B7C-C650-FF9E-451F3BE2007C}.wem		\Containers\Default Work Unit\Music_BGM\Calm_BGM\up bgm\ambient bgm		5644896
