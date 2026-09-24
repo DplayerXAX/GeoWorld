@@ -110,6 +110,27 @@ public class LevelDefinition : ScriptableObject
     [Tooltip("Ordered guided placements. Each shows a ghost the player must match exactly before they can place.")]
     public List<TutorialStep> tutorialSteps = new();
 
+    [Header("Chapter inheritance")]
+    // A chapter is one growing base. This level starts from the board the player
+    // most recently CLEARED `inheritFrom` with — the keepsake DoLevelClear already
+    // writes into LevelRecord.buildSnapshot on every clear. Replaying that earlier
+    // level therefore changes where this one starts.
+    //
+    // Only the blocks carry over. The old spawn and defence points do not: this
+    // level generates its own, out beyond the edge of the inherited build, so the
+    // base sits in the middle and the new routes have to cross it.
+    //
+    // An explicit reference rather than parsing "1-2" into chapter 1 level 2, so a
+    // tutorial or a chapter opener opts out simply by leaving this empty.
+    [Tooltip("Start from the board the player last cleared this level with. Empty = start fresh.")]
+    public LevelDefinition inheritFrom;
+
+    [Tooltip("How far beyond the edge of the inherited build the new spawn and defence points appear, in cells. This is how much the board grows per level.")]
+    [Min(1f)] public float inheritRing = 4f;
+
+    [Tooltip("Carry turret upgrade levels over with the turrets.")]
+    public bool inheritUpgrades = true;
+
     [Header("Starting layout")]
     [Tooltip("Optional pre-built blocks placed on the grid at level start, authored with LevelMapAuthor "
            + "in any scene with a GridSystem + PlacementController (save under a level-specific map name, "

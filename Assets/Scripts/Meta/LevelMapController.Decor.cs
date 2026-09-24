@@ -69,6 +69,25 @@ public class MapDecorConfig
     // Name of the plot's root GameObject. Cosmetic, but it's what you look for in
     // the hierarchy. Not a field: Unity would serialize it and let it drift.
     public virtual string RootName => "MapDecor";
+
+    // Ground colour for ONE column, before the per-block jitter.
+    //
+    // Exists so a plot can draw INTO its own floor — the grove cuts pale paths
+    // through its green with it. The alternative was a second pass hunting the right
+    // renderers back out of the hierarchy after the fact, which only works while the
+    // Nth renderer is still the Nth cell, and that mapping is fragile enough already
+    // (see the comment on soilRenderers below). Deciding the colour where the colour
+    // is set costs nothing and cannot drift.
+    public virtual Color SoilAt(Vector2Int column) => soilColor;
+
+    // Chance this column gets ground at all, 0..1. Same reasoning as SoilAt: a plot
+    // that wants a shape other than its own rectangle has to say so while the ground
+    // is being laid, not carve it back out afterwards.
+    //
+    // 1 everywhere by default, so the workshop and the observatory stay the complete
+    // slabs they are meant to be. The farm has its own coverage rules and does not
+    // route through this.
+    public virtual float CoverageAt(Vector2Int column) => 1f;
 }
 
 // Bundled into one field (LevelMapController.decor) instead of ~30 flat fields,
@@ -129,6 +148,8 @@ public partial class LevelMapController : MonoBehaviour
     public OrderWorkshopConfig workshop = new();
     [Header("Observatory (1-3)")]
     public ObservatoryConfig observatory = new();
+    [Header("Harmony grove")]
+    public HarmonyGroveConfig grove = new();
 
     // Every plot in build order. Each is independent: its own gate level, its own
     // reveal. Add a theme here and the rest of this file already handles it.
@@ -137,6 +158,10 @@ public partial class LevelMapController : MonoBehaviour
         yield return decor;
         yield return workshop;
         yield return observatory;
+        // LAST: the wood spills past its own plot, and its scatter checks what is
+        // already standing before it plants anything. Built first it would have had
+        // nothing to check against and would happily grow into the farm.
+        yield return grove;
     }
 
     // One built plot. Kept per-plot rather than in the old single _decorRoot /
@@ -268,6 +293,10 @@ public partial class LevelMapController : MonoBehaviour
                         && RunConfig.PendingMapGrowthLevelId == cfg.gateLevelId;
             if (grow) RunConfig.PendingMapGrowthLevelId = null;
 
+            // The grove is placed relative to the farm's windmill, which only exists
+            // once the farm has been built — hence both "grove builds last" and this.
+            if (cfg is HarmonyGroveConfig grove_) AnchorGrove(grove_);
+
             var plot = BuildDecor(cfg, grow);
             if (plot != null && grow) pending = plot;
         }
@@ -370,7 +399,7 @@ public partial class LevelMapController : MonoBehaviour
             // Lanes are deliberately MORE likely to be covered — they're the
             // farm's walkways, and a frayed walkway just looks like a mistake.
             // Non-farm plots are complete: coverage 1, no fray. See MapDecorConfig.
-            float coverageHere = farm == null ? 1f
+            float coverageHere = farm == null ? cfg.CoverageAt(worldCol)
                 : kind == RowKind.Lane ? Mathf.Clamp01(farm.coverage + farm.pathRowExtraCoverage)
                 : farm.coverage;
 
@@ -431,7 +460,7 @@ public partial class LevelMapController : MonoBehaviour
             var c = cellsArr[i];
             float k = Mathf.Lerp(1f - cfg.soilJitter, 1f + cfg.soilJitter,
                                   Hash01(DecorHash(c.x, c.z) ^ (c.y * 92821)));
-            MpbColor.Set(soilRenderers[i], Tint(cfg.soilColor, k));
+            MpbColor.Set(soilRenderers[i], Tint(cfg.SoilAt(new Vector2Int(c.x, c.z)), k));
         }
 
         // ── Walkability ──────────────────────────────────────────────────────
@@ -507,6 +536,11 @@ public partial class LevelMapController : MonoBehaviour
             case ObservatoryConfig s:
                 BuildObservatory(s, coveredCols, colTop, ext, cs);
                 break;
+
+            case HarmonyGroveConfig g:
+                BuildHarmonyGrove(g, coveredCols, colTop, ext, cs);
+                break;
+
         }
     }
 

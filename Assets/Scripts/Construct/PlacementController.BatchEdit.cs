@@ -171,45 +171,6 @@ public partial class PlacementController
         MultiSelectPanel.Hide();
     }
 
-    // ── Batch guard: turret-support check generalized to a WHOLE removal set ──
-    // Same rule as FindOrphanedTurret (a turret must keep at least one 26-neighbour
-    // outside whatever's being removed), just checked against every cell in the
-    // batch at once instead of one instance's cells.
-    PlacedBlockInstance FindOrphanedTurretForBatch(HashSet<PlacedBlockInstance> toRemove)
-    {
-        if (toRemove == null || toRemove.Count == 0 || grid == null) return null;
-
-        var excludeCells = new HashSet<Vector3Int>();
-        foreach (var r in toRemove)
-            if (r?.occupiedCells != null)
-                foreach (var c in r.occupiedCells) excludeCells.Add(c);
-
-        foreach (var other in grid.GetAllInstances())
-        {
-            if (other == null || toRemove.Contains(other) || other.data == null) continue;
-            if (!TurretTypes.Is(other.data.blockType)) continue;
-            if (!HasExternalSupportExcluding(other, excludeCells)) return other;
-        }
-        return null;
-    }
-
-    bool HasExternalSupportExcluding(PlacedBlockInstance instance, HashSet<Vector3Int> excludeCells)
-    {
-        foreach (var cell in instance.occupiedCells)
-            for (int dx = -1; dx <= 1; dx++)
-            for (int dy = -1; dy <= 1; dy++)
-            for (int dz = -1; dz <= 1; dz++)
-            {
-                if (dx == 0 && dy == 0 && dz == 0) continue;
-                var n = new Vector3Int(cell.x + dx, cell.y + dy, cell.z + dz);
-                if (!grid.IsOccupied(n)) continue;
-                if (excludeCells.Contains(n)) continue;
-                if (instance.occupiedCells.Contains(n)) continue;   // own cell — not external
-                return true;
-            }
-        return false;
-    }
-
     // ── Sell all ──────────────────────────────────────────────────────────────
     void SellAllSelected()
     {
@@ -242,16 +203,8 @@ public partial class PlacementController
             return;
         }
 
-        // Orphan check is all-or-nothing: figuring out which SUBSET could be sold
-        // without stranding the turret is a much harder problem than this needs
-        // to solve — reject the whole action and tell the player to move the
-        // turret first, exactly like the single-sell guard already does.
-        var orphan = FindOrphanedTurretForBatch(new HashSet<PlacedBlockInstance>(sellable));
-        if (orphan != null)
-        {
-            ShowPlacementPopup("Selling this would strand a turret with nothing to attach to — move it first.");
-            return;
-        }
+        // No "would strand a turret" veto: a turret left without support is flagged
+        // and holds its fire instead (BoardValidity), same as for a single sale.
 
         int totalRefund = 0;
         foreach (var ins in sellable)
@@ -309,13 +262,8 @@ public partial class PlacementController
             }
         }
 
-        var moveSet = new HashSet<PlacedBlockInstance>(_multiSelection);
-        var orphan  = FindOrphanedTurretForBatch(moveSet);
-        if (orphan != null)
-        {
-            ShowPlacementPopup("Moving this would strand a turret with nothing to attach to.");
-            return;
-        }
+        // Same as a single pickup: lifting a group is never vetoed for the turrets it
+        // leaves behind — they are flagged until something holds them up again.
 
         // Snapshot + clear the selection UI now, BEFORE anything is destroyed —
         // every member is about to be removed unconditionally (the guards above

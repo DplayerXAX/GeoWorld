@@ -99,6 +99,9 @@ public class GameFlowManager : MonoBehaviour
     void Start()
     {
         Instance = this;
+        // Setup builds a board (inherited, authored) before the player has done
+        // anything — flag islands, but do not pop up messages about them.
+        BoardValidity.Quiet = true;
         graph = new SurfaceGraphBuilder();
         endpoints.gridSystem = gridSystem;
         enemyBaseManager = enemyBaseManager != null
@@ -124,6 +127,9 @@ public class GameFlowManager : MonoBehaviour
         // Also static, also survives a scene load: without this a restarted run
         // inherits the last one's reserved cells and phantom portal pairs.
         DeviceRegistry.Clear();
+        // Static, so it survives the scene load — a leftover +50% damage from the
+        // last run would carry straight into this one.
+        Modifiers.Global.Clear();
         CommandBus.Reset();
         CellClaims.Clear();
         PlayerSpend.Clear();
@@ -151,12 +157,87 @@ public class GameFlowManager : MonoBehaviour
 
         RunStats.BeginRun();   // reset kill/blocks/time counters for score-keeping
         ApplyRunConfig();   // Level vs Endless setup (seed, pacing, authored waves)
+        // BEFORE the first endpoints, not after: the new spawn and defence points are
+        // placed around the inherited build, so it has to be standing already.
+        SpawnInheritedLayout();
         CreateFirstStage();
+        if (_inheritCentre.HasValue) EvaluateGrid();   // pathing/synergy over the inherited board, now that endpoints exist
         SpawnStartingLayout();       // pre-built blocks authored via LevelMapAuthor, if any
         FocusCameraOnFirstStage();   // centre the camera between the first start & end
+        // Once unconditionally: the placement ghost asks BoardValidity from the first
+        // frame, and a level with no authored or inherited layout would otherwise
+        // reach this point without ever having been reconciled.
+        BoardValidity.Reconcile(gridSystem, allStarts, allEnds);
+        BoardValidity.Quiet = false;
 
         phase = GamePhase.Build;
         StartTurn();
+    }
+
+    // ── Chapter inheritance ──────────────────────────────────────────────────
+    // Footprint of the board carried over from LevelDefinition.inheritFrom, in grid
+    // columns. Null when this level starts from nothing — CreateFirstStage reads it
+    // to decide where the new endpoints go.
+    Vector2? _inheritCentre;
+    Vector2  _inheritHalf;
+
+    // Lay down the board the player last cleared the previous level with: blocks
+    // only, editable, no refund on removal (see PlacedBlockInstance.inherited).
+    void SpawnInheritedLayout()
+    {
+        _inheritCentre = null;
+
+        var lv   = RunConfig.Mode == GameMode.Level ? RunConfig.Level : null;
+        var from = lv?.inheritFrom;
+        if (from == null || string.IsNullOrEmpty(from.levelId)) return;
+
+        var snap = SaveSystem.Profile.GetRecord(from.levelId)?.buildSnapshot;
+        if (snap?.blocks == null || snap.blocks.Count == 0) return;   // never cleared: start fresh
+
+        var placed = SnapshotManager.PlaceBlocks(snap, inherited: true, withUpgrades: lv.inheritUpgrades);
+        if (placed.Count == 0) return;
+
+        int x0 = int.MaxValue, x1 = int.MinValue, z0 = int.MaxValue, z1 = int.MinValue;
+        foreach (var ins in placed)
+        {
+            foreach (var c in ins.occupiedCells)
+            {
+                if (c.x < x0) x0 = c.x; if (c.x > x1) x1 = c.x;
+                if (c.z < z0) z0 = c.z; if (c.z > z1) z1 = c.z;
+            }
+
+            ResourceManager.Instance?.OnBlockPlaced(ins.data.blockType);
+
+            // Handed to IntroDirector with the authored layout, so the inherited base
+            // pops in with the endpoints instead of standing at full size through the
+            // whole intro.
+            if (ins.visualObject != null) startingLayoutVisuals.Add(ins.visualObject);
+        }
+
+        // Half-extents to the cells' EDGES, so "ring cells beyond the edge" is
+        // measured from where the blocks actually stop.
+        _inheritCentre = new Vector2((x0 + x1) * 0.5f, (z0 + z1) * 0.5f);
+        _inheritHalf   = new Vector2((x1 - x0 + 1) * 0.5f, (z1 - z0 + 1) * 0.5f);
+    }
+
+    // Remove any INHERITED block covering one of these cells. Only inherited ones —
+    // a player's own block from this level, an endpoint or authored furniture is
+    // never touched by this.
+    void ClearInheritedAt(IEnumerable<Vector3Int> cells)
+    {
+        if (cells == null || gridSystem == null) return;
+
+        var seen = new HashSet<PlacedBlockInstance>();
+        foreach (var c in cells)
+        {
+            var ins = gridSystem.GetInstanceAt(c);
+            if (ins == null || !ins.inherited || !seen.Add(ins)) continue;
+
+            if (ins.visualObject != null) startingLayoutVisuals.Remove(ins.visualObject);
+            ResourceManager.Instance?.OnBlockRemoved(ins.data.blockType);
+            SynergyEvaluator.Instance?.OnPieceRemoved(ins.placedPiece);
+            gridSystem.RemoveInstance(ins);   // destroys visualObject
+        }
     }
 
     // Populated by SpawnStartingLayout(); IntroDirector reads this to pop the pre-built
@@ -179,6 +260,11 @@ public class GameFlowManager : MonoBehaviour
         foreach (var node in layout.data.nodes)
         {
             if (node.cells == null || node.cells.Length == 0) continue;
+
+            // Level furniture outranks the inherited base: where the two want the
+            // same cell, the inherited block gives way. Anything else in the way —
+            // an endpoint, other furniture — still makes this piece skip as before.
+            ClearInheritedAt(node.cells);
 
             bool clash = false;
             foreach (var c in node.cells) if (gridSystem.IsOccupied(c)) { clash = true; break; }
@@ -452,7 +538,15 @@ public class GameFlowManager : MonoBehaviour
         // Tutorials / authored levels can pin the start & end instead of randomising.
         var lv = RunConfig.Mode == GameMode.Level ? RunConfig.Level : null;
         if (lv != null && lv.fixedEndpoints)
+        {
+            // An authored level's pinned endpoints win over an inherited block that
+            // happens to sit on one of them — the level was designed around those
+            // cells; the inherited base was not designed around anything.
+            ClearInheritedAt(new[] { lv.startCell, lv.endCell });
             endpoints.GenerateFixed(lv.startCell, lv.endCell);
+        }
+        else if (_inheritCentre.HasValue)
+            endpoints.GenerateAround(_inheritCentre.Value, _inheritHalf, lv != null ? lv.inheritRing : 4f);
         else
             endpoints.Generate();
 
@@ -791,6 +885,12 @@ public class GameFlowManager : MonoBehaviour
     {
         graph.SetData(gridSystem);
         graph.Build();
+
+        // Every board edit lands here — place, lift, sell, delete, undo, a network
+        // command — so this is where the board's pieces find out whether they are
+        // still part of the build. Before the Running early-out below: a turret
+        // losing its support mid-combat must stop firing mid-combat.
+        BoardValidity.Reconcile(gridSystem, allStarts, allEnds);
 
         var path = FindCurrentPath();
         _currentPathLength = path != null ? path.Count : 0;

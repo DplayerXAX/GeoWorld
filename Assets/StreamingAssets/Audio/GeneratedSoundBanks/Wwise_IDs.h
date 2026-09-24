@@ -82,6 +82,7 @@ namespace AK
 
     namespace GAME_PARAMETERS
     {
+        static const AkUniqueID HURTPULSE = 2515456893U;
         static const AkUniqueID MASTERVOLUME = 2918011349U;
         static const AkUniqueID MUSICVOLUME = 2346531308U;
         static const AkUniqueID NOTEVALUE = 2992552588U;

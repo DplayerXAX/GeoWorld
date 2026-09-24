@@ -46,6 +46,7 @@ public class PlayerHealth : MonoBehaviour
         if (dropped)
         {
             AudioManager.Instance?.PlayDamage();
+            AudioManager.Instance?.PulseHurt();
             CameraShake.Damage();
         }
         if (_lives == 0) OnGameOver?.Invoke();
@@ -60,6 +61,7 @@ public class PlayerHealth : MonoBehaviour
         _lives = Mathf.Max(0, _lives - amount);
         OnLivesChanged?.Invoke(_lives);
         AudioManager.Instance?.PlayDamage();
+        AudioManager.Instance?.PulseHurt();
         CameraShake.Damage();
 
         // Not shaken here on the killing blow — HandleGameOver's own, much harder

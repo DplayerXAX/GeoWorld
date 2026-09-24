@@ -14,7 +14,7 @@ public static class SnapshotManager
     {
         var snap = new GridSnapshot
         {
-            version   = 1,
+            version   = 2,
             timestamp = DateTime.Now.ToString("yyyy-MM-dd_HH-mm-ss"),
         };
         snap.name = $"snapshot_{snap.timestamp}";
@@ -32,10 +32,16 @@ public static class SnapshotManager
 
             var firstRend = ins.visualObject.GetComponentInChildren<Renderer>();
             snap.blocks.Add(new BlockSnapshot {
-                blockTypeName = ins.data.blockType.ToString(),
-                color         = MpbColor.Get(firstRend),
-                rotation      = ins.visualObject.transform.rotation,
-                occupiedCells = ins.occupiedCells.ToArray(),
+                blockTypeName  = ins.data.blockType.ToString(),
+                color          = MpbColor.Get(firstRend),
+                rotation       = ins.visualObject.transform.rotation,
+                occupiedCells  = ins.occupiedCells.ToArray(),
+                blockAssetName = ins.data.name,
+                synergyColor   = ins.color,
+                upBasicPower   = ins.basicPowerUpgradeLevel,
+                upBasicBurst   = ins.basicBurstUpgradeLevel,
+                upAoeFire      = ins.aoeFireUpgradeLevel,
+                upAoeGravity   = ins.aoeGravityUpgradeLevel,
             });
         }
 
@@ -76,21 +82,7 @@ public static class SnapshotManager
         foreach (var c in starts) gfm.endpoints.SpawnEndpointAt(c, true);
         foreach (var c in ends)   gfm.endpoints.SpawnEndpointAt(c, false);
 
-        foreach (var b in snap.blocks)
-        {
-            if (!Enum.TryParse<BlockType>(b.blockTypeName, out var bt))
-            {
-                Debug.LogWarning($"[Snapshot] unknown blockType: {b.blockTypeName}");
-                continue;
-            }
-            var data = pc.FindBlockData(bt);
-            if (data == null)
-            {
-                Debug.LogWarning($"[Snapshot] no BlockData for {bt}");
-                continue;
-            }
-            pc.PlaceBlockDirect(data, b.occupiedCells, b.rotation, b.color);
-        }
+        PlaceBlocks(snap, inherited: false, withUpgrades: true);
 
         gfm.RestoreRoundState(snap.roundIndex, snap.runsSinceLastEndpoint, starts, ends);
 
@@ -99,6 +91,73 @@ public static class SnapshotManager
             cam.ApplyState(snap.camera.focusPoint, snap.camera.distance, snap.camera.yaw, snap.camera.pitch);
 
         gfm.EvaluateGrid();
+    }
+
+    // Place a snapshot's BLOCKS — not its endpoints — and return what was placed.
+    //
+    // Shared by the dev restore above and by chapter inheritance, so there is one
+    // way to turn a snapshot back into a board. Two paths that each resolve blocks
+    // their own way is how a restore and an inheritance end up disagreeing about
+    // what the same snapshot contains.
+    //
+    // Cells already taken are skipped rather than overwritten, so this can run onto
+    // a board that already has something on it.
+    public static System.Collections.Generic.List<PlacedBlockInstance> PlaceBlocks(
+        GridSnapshot snap, bool inherited, bool withUpgrades)
+    {
+        var placed = new System.Collections.Generic.List<PlacedBlockInstance>();
+        var pc   = PlacementController.Instance;
+        var grid = GameFlowManager.Instance?.gridSystem;
+        if (snap?.blocks == null || pc == null || grid == null) return placed;
+
+        foreach (var b in snap.blocks)
+        {
+            if (b?.occupiedCells == null || b.occupiedCells.Length == 0) continue;
+
+            bool clash = false;
+            foreach (var c in b.occupiedCells) if (grid.IsOccupied(c)) { clash = true; break; }
+            if (clash) continue;
+
+            var data = Resolve(pc, b);
+            if (data == null)
+            {
+                Debug.LogWarning($"[Snapshot] can't resolve block '{b.blockAssetName}'/'{b.blockTypeName}', skipped.");
+                continue;
+            }
+
+            var ins = pc.PlaceBlockDirect(data, b.occupiedCells, b.rotation, b.color, SynergyOf(snap, b),
+                                          -1,
+                                          withUpgrades ? b.upBasicPower : 0,
+                                          withUpgrades ? b.upBasicBurst : 0,
+                                          withUpgrades ? b.upAoeFire    : 0,
+                                          withUpgrades ? b.upAoeGravity : 0);
+            if (ins == null) continue;
+
+            ins.inherited = inherited;
+            placed.Add(ins);
+        }
+        return placed;
+    }
+
+    // The exact asset when the snapshot names one (v2); by type otherwise (v1).
+    static BlockData Resolve(PlacementController pc, BlockSnapshot b)
+    {
+        var data = !string.IsNullOrEmpty(b.blockAssetName) ? pc.FindBlockDataByName(b.blockAssetName) : null;
+        if (data == null && Enum.TryParse<BlockType>(b.blockTypeName, out var bt)) data = pc.FindBlockData(bt);
+        return data;
+    }
+
+    // v2 stores the tag. v1 only has the display colour, which IS the palette colour
+    // of the piece's tag — so snap it back onto the palette. The one thing that
+    // cannot be recovered that way is Universal: an untagged block is drawn grey,
+    // and grey snaps to Universal, which would turn every plain block into a joker.
+    // So a grey v1 block comes back untagged, and a genuine v1 Universal piece loses
+    // its tag. That is the smaller of the two errors.
+    static BlockColor SynergyOf(GridSnapshot snap, BlockSnapshot b)
+    {
+        if (snap.version >= 2) return b.synergyColor;
+        var t = BlockColorPalette.Nearest(b.color);
+        return t == BlockColor.Universal ? BlockColor.None : t;
     }
 
     // ── File IO ──────────────────────────────────────────────────────────────

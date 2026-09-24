@@ -157,12 +157,12 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::VineEffect
   segments: 6
   segmentLength: 0.35
-  randomness: 0.25
+  randomness: 0.12
   upBias: 1
   outwardBias: 0.85
   spreadAngleDeg: 35
   outwardDrift: 0.04
-  baseWidth: 0.1
-  tipWidth: 0.005
+  baseWidth: 0.05
+  tipWidth: 0.007
   segmentGrowDuration: 0.08
   witherDuration: 0.25

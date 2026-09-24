@@ -32,6 +32,25 @@ public class PlacedBlockInstance
     // delete paths, same shape as the existing combat-phase lock.
     public bool locked;
 
+    // Carried over from the previous level of the chapter. The player may move,
+    // pick up and remove it freely — it is their own build — but removing it pays
+    // nothing back. The sell refund is priced off the block's base cost, not off
+    // anything spent THIS level, so without this the first move of every chapter
+    // level would be to sell the entire inherited base for cash.
+    public bool inherited;
+
+    // Not connected back to an endpoint — see BoardValidity. Shown with hazard
+    // stripes; a turret in this state holds its fire.
+    public bool detached;
+
+    // The renderers this piece was BUILT with, recorded at placement before any
+    // synergy effect hangs its own geometry off the visual. BoardValidity restyles
+    // exactly these, so flagging a block never stripes the vines growing on it.
+    public Renderer[] ownRenderers;
+
+    // Materials to restore when a detached piece reconnects, one array per renderer.
+    public Material[][] savedMaterials;
+
     // Sealed by an EnemyBlockSealer that walked over it. Blocks pickup and delete
     // (delete is undoable, which would launder the seal away) but NOT selling —
     // the 50% sell refund is the punishment, and it keeps a badly-placed seal from

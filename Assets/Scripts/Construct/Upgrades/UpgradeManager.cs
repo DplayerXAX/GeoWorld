@@ -15,11 +15,10 @@ using UnityEngine;
 //                 → card.effect.Apply(game)
 //                 → add to _owned
 //
-// Persistence: cards picked stay applied for the whole run. RestartGame
-// calls ResetForNewRun() to clear ownership; effects' subscriptions are
-// orphaned at that point, so currently effects must be idempotent against
-// repeated subscription. GameEffect already has Revoke() — wire it up here
-// a problem.
+// Persistence: cards picked stay applied for the whole run. Each pick creates
+// its own ItemEffectInstance, and every instance is RELEASED — on
+// ResetForNewRun, and again on OnDestroy for a scene that unloads mid-run — so
+// no stat change or event subscription outlives the run that earned it.
 public class UpgradeManager : MonoBehaviour
 {
     public static UpgradeManager Instance;
@@ -36,6 +35,7 @@ public class UpgradeManager : MonoBehaviour
 
     // Run-scoped ownership state.
     readonly List<UpgradeCard> _owned = new();
+    readonly List<ItemEffectInstance> _instances = new();
     readonly Dictionary<UpgradeCard, int> _ownedCounts = new();
 
     public IReadOnlyList<UpgradeCard> Owned => _owned;
@@ -92,11 +92,17 @@ public class UpgradeManager : MonoBehaviour
 
         try
         {
-            card.effect?.Apply(GameFlowManager.Instance);
+            var inst = card.effect != null ? card.effect.CreateInstance() : null;
+            if (inst != null)
+            {
+                inst.Card = card;
+                _instances.Add(inst);
+                inst.Acquire(GameFlowManager.Instance);
+            }
         }
         catch (Exception e)
         {
-            Debug.LogError($"[UpgradeManager] Effect.Apply threw on '{card.displayName}': {e}");
+            Debug.LogError($"[UpgradeManager] item acquire threw on '{card.displayName}': {e}");
         }
 
         OnCardPicked?.Invoke(card);
@@ -144,7 +150,25 @@ public class UpgradeManager : MonoBehaviour
 
     public void ResetForNewRun()
     {
+        ReleaseAll();
         _owned.Clear();
         _ownedCounts.Clear();
+    }
+
+    // A scene unloading mid-run never calls ResetForNewRun, and an item subscribed
+    // to a static event would otherwise keep firing into a board that no longer
+    // exists.
+    void OnDestroy()
+    {
+        ReleaseAll();
+        if (Instance == this) Instance = null;
+    }
+
+    // Newest first, so an item that built on an earlier one is undone before it.
+    void ReleaseAll()
+    {
+        var game = GameFlowManager.Instance;
+        for (int i = _instances.Count - 1; i >= 0; i--) _instances[i]?.Release(game);
+        _instances.Clear();
     }
 }

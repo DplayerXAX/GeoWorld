@@ -1434,6 +1434,51 @@ MonoBehaviour:
     constellationLinks: 10
     linkColor: {r: 0.55, g: 0.7, b: 1, a: 1}
     meridianSegments: 14
+  grove:
+    enabled: 1
+    gateLevelId: 
+    origin: {x: -30, y: 2, z: -14}
+    size: {x: 40, y: 40}
+    rotationSteps: 0
+    soilColor: {r: 0.16, g: 0.29, b: 0.21, a: 1}
+    soilJitter: 0.12
+    growRiseHeight: 3
+    growRiseDuration: 1.8
+    growHoldSeconds: 1.4
+    growZoom: 0
+    growYawOffset: 60
+    transitionFadeDuration: 0.6
+    growAsideText: 
+    growAsideSeconds: 4.5
+    npc: {fileID: 0}
+    minigame: {fileID: 0}
+    minigamePedestalLift: 2
+    depth: 9
+    arcHalf: 100
+    irregularity: 0.24
+    pathColor: {r: 0.66, g: 0.55, b: 0.41, a: 1}
+    pathWidth: 2
+    pathWander: 1.6
+    pathWaves: 1.6
+    pathSpur: 1
+    avenueSpacing: 1.7
+    avenueOffset: 0.9
+    avenueJitter: 0.18
+    elderTree: 1
+    elderScale: 2.2
+    clearing: 2.8
+    groves: 6
+    treesPerGrove: 3
+    shrubs: 30
+    tufts: 70
+    spacing: 1.1
+    wayMarkers: 10
+    stoneColor: {r: 0.63, g: 0.63, b: 0.6, a: 1}
+    bark: {r: 0.74, g: 0.67, b: 0.57, a: 1}
+    leafDeep: {r: 0.2, g: 0.52, b: 0.3, a: 1}
+    leafLight: {r: 0.47, g: 0.8, b: 0.42, a: 1}
+    variants: 6
+    castShadows: 1
   monumentMaterial: {fileID: 0}
   monumentScale: 1
   monumentLight: 1.6

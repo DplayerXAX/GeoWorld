@@ -188,7 +188,7 @@ public partial class PlacementController
 
             float fireRate = t.fireInterval > 0.0001f ? 1f / t.fireInterval : 0f;
             sb.AppendLine($"Damage     <b>{t.bulletDamage}</b>");
-            sb.AppendLine($"Range      <b>{t.attackRange:0.#}</b>");
+            sb.AppendLine($"Range      <b>{t.EffectiveRange:0.#}</b>");
             // Combined synergy buff × enemy-suppression debuff.
             float rateMult = t.FireRateMultiplier;
             if (rateMult > 1.0001f)
@@ -651,7 +651,7 @@ public partial class PlacementController
         float fireRate = turret.fireInterval > 0.0001f ? 1f / turret.fireInterval : 0f;
 
         PanelRow("Damage",    turret.bulletDamage.ToString());
-        PanelRow("Range",     turret.attackRange.ToString("0.#"));
+        PanelRow("Range",     turret.EffectiveRange.ToString("0.#"));
         if (turret.SynergyFireRateMultiplier > 1.0001f)
             PanelRow("Fire rate", turret.EffectiveFireRate.ToString("0.0") + "/s  (+"
                                   + ((turret.SynergyFireRateMultiplier - 1f) * 100f).ToString("0") + "%)");

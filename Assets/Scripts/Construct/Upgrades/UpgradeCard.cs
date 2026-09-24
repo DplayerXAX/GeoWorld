@@ -23,8 +23,8 @@ public class UpgradeCard : ScriptableObject
     public List<BlockColor> tags = new();
 
     [Header("Behavior")]
-    [Tooltip("The effect to apply when picked. Author as a separate ScriptableObject subclass of GameEffect and drag it here.")]
-    public GameEffect effect;
+    [Tooltip("What the card does. An ItemEffect asset — StatModifierItem for plain stat changes, or a custom subclass. Each pick makes its own instance, so two copies of one card never share state.")]
+    public ItemEffect effect;
 
     [Header("Pool")]
     [Tooltip("Relative selection weight when offered. 0 excludes from the pool.")]

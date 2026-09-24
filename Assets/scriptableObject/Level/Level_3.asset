@@ -279,6 +279,9 @@ MonoBehaviour:
     speaker: {fileID: 11400000, guid: 80993e3c86b4337429c2d6273c8eedc2, type: 2}
     speakerSlot: 1
     speakerPortrait:
+  inheritFrom: {fileID: 11400000, guid: fb1db61d4cd59c545b71466b020d5f0e, type: 2}
+  inheritRing: 4
+  inheritUpgrades: 1
   startingLayout: {fileID: 11400000, guid: 9843050dd6dbe5841a144ca40094ed6a, type: 2}
   overrideEndpointDistance: 1
   endpointMinDistance: 8

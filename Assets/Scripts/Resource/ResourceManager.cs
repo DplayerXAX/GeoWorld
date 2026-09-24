@@ -268,6 +268,16 @@ public class ResourceManager : MonoBehaviour
     public int ComputePrice(BlockData data, float fluctuation)
     {
         if (data == null) return 0;
+        int raw = ComputeBasePrice(data, fluctuation);
+
+        // Price modifiers go on AFTER both formulas, so the balance asset and the
+        // fallback below cannot disagree about whether a discount applies.
+        var stat = TurretTypes.Is(data.blockType) ? Stat.TurretPrice : Stat.BlockPrice;
+        return Mathf.Max(0, Mathf.RoundToInt(Modifiers.Eval(stat, raw)));
+    }
+
+    int ComputeBasePrice(BlockData data, float fluctuation)
+    {
         int round = GameFlowManager.Instance?.RoundIndex ?? 0;
 
         // Route through the balance asset's identical formula when wired.

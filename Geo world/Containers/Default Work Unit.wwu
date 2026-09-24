@@ -2188,7 +2188,7 @@
 							<ChildrenList>
 								<MusicSegment Name="Piecing together" ID="{B9883AD3-6659-488E-9D67-B5A237A5AE9C}" ShortID="908011813">
 									<PropertyList>
-										<Property Name="EndPosition" Type="Real64" Value="43875.0113378685"/>
+										<Property Name="EndPosition" Type="Real64" Value="48295.0242260022"/>
 										<Property Name="PlaybackSpeed" Type="Real64">
 											<ValueList>
 												<Value>0.85</Value>
@@ -2228,7 +2228,7 @@
 												</Reference>
 											</ReferenceList>
 											<ChildrenList>
-												<AudioFileSource Name="Piecing together" ID="{3B64A7B9-46C4-40F5-8845-58E47E1654FD}">
+												<AudioFileSource Name="Piecing together" ID="{A5ADE2EE-6EB5-4FA7-8F3A-52D6DE92D15A}">
 													<Language>SFX</Language>
 													<AudioFile>Piecing together.wav</AudioFile>
 													<MediaIDList>
@@ -2241,39 +2241,13 @@
 													<MusicTrackSequence Name="" ID="{043E2FB7-2A4F-4A44-B432-2124382B1ADF}">
 														<ObjectLists>
 															<ObjectList Name="Clips">
-																<MusicClip Name="Piecing together" ID="{7771FF5E-5A9D-4A0D-9FE9-6EA7EA87C5FC}">
+																<MusicClip Name="Piecing together" ID="{39FB48F1-D72E-4C01-B627-564F3A991C04}">
 																	<PropertyList>
 																		<Property Name="EndTrimOffset" Type="Real64" Value="40200"/>
 																		<Property Name="FadeInMode" Type="int16" Value="0"/>
 																		<Property Name="FadeOutMode" Type="int16" Value="0"/>
 																	</PropertyList>
-																	<AudioSourceRef Name="Piecing together" ID="{3B64A7B9-46C4-40F5-8845-58E47E1654FD}"/>
-																	<PropertyCurveList>
-																		<PropertyCurve PropertyName="Volume">
-																			<Curve Name="" ID="{FFFC3D05-D377-46E6-AE53-1D0A2F940347}">
-																				<PropertyList>
-																					<Property Name="Flags" Type="int32" Value="3"/>
-																				</PropertyList>
-																				<PointList>
-																					<Point>
-																						<XPos>0</XPos>
-																						<YPos>0</YPos>
-																						<Flags>5</Flags>
-																					</Point>
-																					<Point>
-																						<XPos>1.00405</XPos>
-																						<YPos>0</YPos>
-																						<Flags>0</Flags>
-																					</Point>
-																					<Point>
-																						<XPos>40.2</XPos>
-																						<YPos>0</YPos>
-																						<Flags>37</Flags>
-																					</Point>
-																				</PointList>
-																			</Curve>
-																		</PropertyCurve>
-																	</PropertyCurveList>
+																	<AudioSourceRef Name="Piecing together" ID="{A5ADE2EE-6EB5-4FA7-8F3A-52D6DE92D15A}"/>
 																</MusicClip>
 															</ObjectList>
 														</ObjectLists>
@@ -2982,13 +2956,8 @@
 					<ChildrenList>
 						<MusicSegment Name="Piecing together" ID="{AEACCE3C-A75F-454A-B15A-558DD428B5FA}" ShortID="286784959">
 							<PropertyList>
-								<Property Name="EndPosition" Type="Real64" Value="43875.0113378685"/>
+								<Property Name="EndPosition" Type="Real64" Value="48200"/>
 								<Property Name="OverrideOutput" Type="bool" Value="True"/>
-								<Property Name="PlaybackSpeed" Type="Real64">
-									<ValueList>
-										<Value>0.85</Value>
-									</ValueList>
-								</Property>
 							</PropertyList>
 							<ReferenceList>
 								<Reference Name="Conversion">
@@ -3023,7 +2992,7 @@
 										</Reference>
 									</ReferenceList>
 									<ChildrenList>
-										<AudioFileSource Name="Piecing together" ID="{B4D5B1A6-31D8-4C76-96F6-017500CA6A51}">
+										<AudioFileSource Name="Piecing together" ID="{D54867DB-8752-415E-B64F-B98E46CDCBB0}">
 											<Language>SFX</Language>
 											<AudioFile>Piecing together.wav</AudioFile>
 											<MediaIDList>
@@ -3036,39 +3005,13 @@
 											<MusicTrackSequence Name="" ID="{4264184D-D314-4E09-B395-81F8BA12EDE9}">
 												<ObjectLists>
 													<ObjectList Name="Clips">
-														<MusicClip Name="Piecing together" ID="{891E6416-1D20-4802-85EC-19A6F4358483}">
+														<MusicClip Name="Piecing together" ID="{2BCFAF58-6C22-406F-BDAA-D12601A00A69}">
 															<PropertyList>
 																<Property Name="EndTrimOffset" Type="Real64" Value="40200"/>
 																<Property Name="FadeInMode" Type="int16" Value="0"/>
 																<Property Name="FadeOutMode" Type="int16" Value="0"/>
 															</PropertyList>
-															<AudioSourceRef Name="Piecing together" ID="{B4D5B1A6-31D8-4C76-96F6-017500CA6A51}"/>
-															<PropertyCurveList>
-																<PropertyCurve PropertyName="Volume">
-																	<Curve Name="" ID="{A41E9DCE-22E9-4455-A101-0654A86C4CF1}">
-																		<PropertyList>
-																			<Property Name="Flags" Type="int32" Value="3"/>
-																		</PropertyList>
-																		<PointList>
-																			<Point>
-																				<XPos>0</XPos>
-																				<YPos>0</YPos>
-																				<Flags>5</Flags>
-																			</Point>
-																			<Point>
-																				<XPos>1.00405</XPos>
-																				<YPos>0</YPos>
-																				<Flags>0</Flags>
-																			</Point>
-																			<Point>
-																				<XPos>40.2</XPos>
-																				<YPos>0</YPos>
-																				<Flags>37</Flags>
-																			</Point>
-																		</PointList>
-																	</Curve>
-																</PropertyCurve>
-															</PropertyCurveList>
+															<AudioSourceRef Name="Piecing together" ID="{D54867DB-8752-415E-B64F-B98E46CDCBB0}"/>
 														</MusicClip>
 													</ObjectList>
 												</ObjectLists>

@@ -185,6 +185,9 @@ public partial class PlacementController : MonoBehaviour
     [Tooltip("Fraction of a block's recomputed base price returned when sold.")]
     [Range(0f, 1f)] public float sellRefundFraction = 0.5f;
 
+    [Tooltip("Keep the black outline on pieces flagged as not connected (hazard stripes). Off = the flagged piece is stripes only. Applies to pieces flagged after the change — pick one up and put it down to compare.")]
+    public bool hazardKeepsOutline = false;
+
     // The shared turret model (BlockData.turretPrefab → tryprism) is authored
     // tiny, so every spawn site has to scale it up by the same amount. It used to
     // be a bare 50 in PlaceBlock and a bare 1 in the two PlaceBlockDirect paths —
@@ -265,11 +268,36 @@ public partial class PlacementController : MonoBehaviour
     {
         Instance        = this;
         editFocusAnchor = new GameObject("EditFocusAnchor").transform;
+        BoardValidity.BecameDetached += OnPiecesDetached;
 
         // Every block this scene can hand the player gets a wire id. Without this the
         // catalog was empty unless someone had hand-populated a Resources folder, and
         // an empty catalog silently disables every networked block preview.
         BlockCatalog.RegisterAll(blocks);
+    }
+
+    void OnDestroy() => BoardValidity.BecameDetached -= OnPiecesDetached;
+
+    // Tell the player what just went dead, and why it matters.
+    //
+    // Only about THEIR pieces: in a shared game, another player's edit is theirs to
+    // be told about. The turret message wins when both apply — a block off the
+    // path is a missed opportunity, a turret that will not fire is a hole in the
+    // defence.
+    void OnPiecesDetached(IReadOnlyList<PlacedBlockInstance> pieces)
+    {
+        int turrets = 0, blocks = 0;
+        foreach (var p in pieces)
+        {
+            if (p == null || p.ownerId != MultiplayerSession.LocalId) continue;
+            if (p.data != null && TurretTypes.Is(p.data.blockType)) turrets++; else blocks++;
+        }
+
+        if (turrets > 0)
+            ShowPlacementPopup(turrets == 1 ? "This turret has no support — it can't attack"
+                                            : $"{turrets} turrets have no support — they can't attack", 2.6f);
+        else if (blocks > 0)
+            ShowPlacementPopup("Not connected to other blocks — can't hold turrets or join the enemy path", 2.6f);
     }
 
     public void ShowPlacementPopup(string msg, float duration = 1.5f)
@@ -875,11 +903,8 @@ public partial class PlacementController : MonoBehaviour
             ShowPlacementPopup("Sealed by the enemy — this block can't be moved. You can still sell it.");
             return false;
         }
-        if (FindOrphanedTurret(selectedInstance) != null)
-        {
-            ShowPlacementPopup("There's still turret on this block, try move it first");
-            return false;
-        }
+        // No "a turret would be left unsupported" guard: that turret is now flagged
+        // (and stops firing) instead, and comes back the moment it is supported again.
 
         isPickingUpObject = true;
         lastObjectPos   = selectedInstance.visualObject.transform.position;
@@ -1156,8 +1181,10 @@ public partial class PlacementController : MonoBehaviour
     int ComputeSellRefund(PlacedBlockInstance ins)
     {
         if (ins?.data == null || ResourceManager.Instance == null) return 0;
+        if (ins.inherited) return 0;   // paid for in an earlier level — see PlacedBlockInstance.inherited
         int basePrice = ResourceManager.Instance.ComputePrice(ins.data, 1f);
-        return Mathf.Max(1, Mathf.RoundToInt(basePrice * sellRefundFraction));
+        float fraction = Mathf.Max(0f, Modifiers.Eval(Stat.SellRefund, 1f) * sellRefundFraction);
+        return Mathf.Max(1, Mathf.RoundToInt(basePrice * fraction));
     }
 
     // Upgrading a turret costs turret currency equal to the turret's own price
@@ -1310,11 +1337,6 @@ public partial class PlacementController : MonoBehaviour
             Debug.Log("[Placement] This block is part of the level's fixed layout and can't be sold.");
             return;
         }
-        if (FindOrphanedTurret(ins) != null)
-        {
-            ShowPlacementPopup("There's still turret on this block, try move it first");
-            return;
-        }
         if (!TutorialDirector.CanSell()) { ShowPlacementPopup("Sell banned during tutorial!"); return; }   // tutorial gate
 
         int refund = ComputeSellRefund(ins);
@@ -1329,12 +1351,15 @@ public partial class PlacementController : MonoBehaviour
         UpdateHighlight(null);
         HideRangeIndicator();
 
-        if (isTurret) ResourceManager.Instance?.AddTurretCurrency(refund);
-        else          ResourceManager.Instance?.RefundBlock(refund);
-        CurrencyFlyFx.Fly(soldPos, isTurret, refund);
+        if (refund > 0)
+        {
+            if (isTurret) ResourceManager.Instance?.AddTurretCurrency(refund);
+            else          ResourceManager.Instance?.RefundBlock(refund);
+            CurrencyFlyFx.Fly(soldPos, isTurret, refund);
+        }
 
         GameFlowManager.Instance?.EvaluateGrid();
-        ShowPlacementPopup($"Sold for +{refund}");
+        ShowPlacementPopup(refund > 0 ? $"Sold for +{refund}" : "Cleared (inherited — no refund)");
         BlockSold?.Invoke(ins.data);
     }
 
@@ -1574,11 +1599,18 @@ public partial class PlacementController : MonoBehaviour
         for (int i = 0; i < previewCubes.Count; i++)
             previewCubes[i].SetActive(i < cells.Length);
 
-        // Valid green, invalid red. Preview always reads as a placement hint;
-        // the random per-block color is applied only on successful placement.
-        Color tint = valid
-            ? new Color(0.25f, 1.00f, 0.35f, 0.55f)
-            : new Color(1.00f, 0.20f, 0.20f, 0.45f);
+        // Three states, not two. Green: goes down and is part of the build. Orange:
+        // CAN go down, but will not connect back to an endpoint, so it will be
+        // flagged the moment it lands (and a turret there will not fire). Red:
+        // cannot go down at all — overlap, a reserved or claimed cell.
+        //
+        // Orange exists because placement stopped refusing unconnected pieces. With
+        // only green and red, "legal but dead" would have to show as green, and the
+        // player would learn it was a mistake only after paying for it.
+        bool attached = valid && BoardValidity.WouldAttach(WorldCells(currentGridPos, cells));
+        Color tint = !valid   ? new Color(1.00f, 0.20f, 0.20f, 0.45f)
+                   : attached ? new Color(0.25f, 1.00f, 0.35f, 0.55f)
+                              : new Color(1.00f, 0.58f, 0.12f, 0.55f);
 
         // Cells stay snapped (for validity + TryPlace); cubes draw offset from an
         // eased anchor so a one-cell move slides instead of popping — same technique
@@ -1601,6 +1633,13 @@ public partial class PlacementController : MonoBehaviour
                 _ghostVisualAnchor + (grid.GridToWorld(currentGridPos + cells[i]) - targetAnchor);
             previewCubes[i].GetComponent<Renderer>().material.color = tint;
         }
+    }
+
+    static Vector3Int[] WorldCells(Vector3Int basePos, Vector3Int[] rel)
+    {
+        var w = new Vector3Int[rel.Length];
+        for (int i = 0; i < rel.Length; i++) w[i] = basePos + rel[i];
+        return w;
     }
 
     Vector3Int[] GetRotatedCells()
@@ -1753,7 +1792,7 @@ public partial class PlacementController : MonoBehaviour
         // turret actually does, not what its type does in general.
         float reach = grid.cellSize * 2.2f;
         var placedTurret = ins.visualObject.GetComponentInChildren<TurretController>();
-        if (placedTurret != null) reach = placedTurret.attackRange;
+        if (placedTurret != null) reach = placedTurret.EffectiveRange;
 
         ImpactFx.Land(impact, reach, ins.visualObject);
         ImpactFx.Ripple(impact - Vector3.up * (grid.cellSize * 0.45f),
@@ -1843,58 +1882,15 @@ public partial class PlacementController : MonoBehaviour
             worldCells[i] = p;
         }
 
-        // Underground (y < 0) is allowed — you can build down into the earth — but
-        // a block must still touch an existing block or endpoint. The Chaos Block
-        // doesn't count as support (HasSupportingNeighbor18 skips it), so you can't
-        // stack a turret straight onto it to attack it. Corner-only contact doesn't
-        // count either — see GridSystem.IsCornerOffset.
-        if (!grid.HasSupportingNeighbor18(worldCells))
-            return PlaceFailureReason.NotAdjacent;
-
+        // No adjacency rule any more — for blocks OR turrets. A piece may go down
+        // anywhere free; one that does not connect back to an endpoint is flagged
+        // afterwards instead of refused (hazard stripes, and a turret there holds
+        // its fire). See BoardValidity. The old Chaos Block rule survives there:
+        // its cells conduct nothing, so a turret anchored only to it cannot fire.
+        //
+        // This also frees the ghost: SnapToNearestSupported pulls the held block to
+        // the nearest cell CanPlace accepts, and that is now simply any free cell.
         return PlaceFailureReason.None;
-    }
-
-    // ── Turret-support check (pickup / sell guard) ────────────────────────────
-    // Mirrors Validate()'s NotAdjacent rule but in reverse: placing a block
-    // requires it to touch something existing; removing one must not leave a
-    // TURRET with nothing left to attach to. Only turrets are checked — regular
-    // blocks are allowed to end up disconnected (no such rule exists for them).
-
-    // First turret that would have zero occupied 26-neighbor cells if
-    // `toRemove` were taken off the grid — null if none. Skips `toRemove`
-    // itself (picking a turret up doesn't need to "support" itself).
-    PlacedBlockInstance FindOrphanedTurret(PlacedBlockInstance toRemove)
-    {
-        if (toRemove == null || grid == null) return null;
-
-        foreach (var other in grid.GetAllInstances())
-        {
-            if (other == null || other == toRemove || other.data == null) continue;
-            if (!TurretTypes.Is(other.data.blockType)) continue;
-            if (!HasExternalSupport(other, toRemove.occupiedCells)) return other;
-        }
-        return null;
-    }
-
-    // True if ANY cell of `instance` has a 26-neighbor occupied by something
-    // OTHER than `instance` itself or a cell in `excludeCells` (the block about
-    // to be removed) — i.e. it would still have something to attach to.
-    bool HasExternalSupport(PlacedBlockInstance instance, IList<Vector3Int> excludeCells)
-    {
-        foreach (var cell in instance.occupiedCells)
-            for (int dx = -1; dx <= 1; dx++)
-            for (int dy = -1; dy <= 1; dy++)
-            for (int dz = -1; dz <= 1; dz++)
-            {
-                if (dx == 0 && dy == 0 && dz == 0) continue;
-                if (GridSystem.IsCornerOffset(dx, dy, dz)) continue;   // same 18-neighbourhood placement uses
-                var n = new Vector3Int(cell.x + dx, cell.y + dy, cell.z + dz);
-                if (!grid.IsOccupied(n)) continue;
-                if (excludeCells.Contains(n)) continue;
-                if (instance.occupiedCells.Contains(n)) continue;   // own cell — not external
-                return true;
-            }
-        return false;
     }
 
     static string ReasonToMessage(PlaceFailureReason r) => r switch
@@ -2368,6 +2364,12 @@ public partial class PlacementController : MonoBehaviour
 
     void RegisterPlacedBlock(PlacedBlockInstance ins, int ownerId = -1)
     {
+        // Now, before the turret controller, a device or any synergy effect adds
+        // renderers of its own under this visual. BoardValidity restyles exactly
+        // these — see PlacedBlockInstance.ownRenderers.
+        if (ins.visualObject != null)
+            ins.ownRenderers = ins.visualObject.GetComponentsInChildren<Renderer>(true);
+
         // -1 means "mine". A block arriving from the wire belongs to whoever issued
         // the command, not to whoever is applying it — stamping the local id here is
         // what would make every player think they owned the whole board.

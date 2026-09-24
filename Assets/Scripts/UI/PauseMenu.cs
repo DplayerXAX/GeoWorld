@@ -112,19 +112,20 @@ public class PauseMenu : MonoBehaviour
         bool showMenu = _menuOpen && !SettingsScreen.Open;
         _overlayGo.SetActive(showMenu);
         _panelGo.SetActive(showMenu);
+        if (_paperGo != null && _paperGo.activeSelf != showMenu) _paperGo.SetActive(showMenu);
 
-        // The cube. In the middle of the ring while nothing is picked out, and
-        // tucked under whichever option the player is pointing at otherwise — the
-        // slide is the cube's own easing, so this only has to say where.
+        // The cube, opened. It arrives whole from the wipe, then comes apart — and the
+        // six options ride out on its faces.
         //
         // Guarded on !SettingsScreen.Open so the two screens never fight over it in
-        // the same frame: while settings is up, THAT page is the one asking, and the
-        // cube is over on its left-hand side.
+        // the same frame: while settings is up, THAT page is the one asking, the cube
+        // closes back into a solid and goes to sit in its left-hand column.
         if (showMenu)
         {
-            bool focused = _focusedOption >= 0;
-            SettingsCube.ShowAt(focused ? HexCubeSlot(_focusedOption) : Vector2.zero,
-                                focused ? MenuFocusCubeSize : MenuCubeSize, null);
+            SettingsCube.ShowAt(Vector2.zero, MenuCubeSize, null, explode: true);
+            SettingsCube.SetPulled(_focusedOption);
+            LayOutOptions();
+            RefreshField();
         }
         else _focusedOption = -1;   // including while settings is up, so coming back lands it home
 
@@ -309,6 +310,11 @@ public class PauseMenu : MonoBehaviour
         _overlayGo.AddComponent<Image>().color = new Color(0f, 0f, 0f, 0f);
         _overlayGo.SetActive(false);
 
+        // Built BEFORE the panel so it draws under the words, and guarded, because it
+        // is decoration and the six options are the controls.
+        try { BuildPaperFurniture(canvasGo.transform); }
+        catch (System.Exception e) { Debug.LogWarning($"[PauseMenu] Paper furniture skipped: {e.Message}"); }
+
         // The menu: six options at the six corners of the cube's silhouette.
         //
         // A cube seen corner-on IS a hexagon, and a hexagon has exactly six corners —
@@ -331,16 +337,19 @@ public class PauseMenu : MonoBehaviour
 
         // Order runs clockwise from the top. Destructive last, at the bottom corner,
         // furthest from where the eye starts.
-        _firstMenuButton = HexButton(panel, 0, "Close",        GeoPalette.Ink,    CloseMenu);
-                           HexButton(panel, 1, "Settings",     GeoPalette.Ink,    OpenSettings);
-                           HexButton(panel, 2, "Restart",      GeoPalette.Ink,    () =>
+        // Indexed by FACE now, in SettingsCube's viewer order — top, front, right,
+        // back, left, bottom. CLOSE takes the lid because that is where the eye starts
+        // and it is the way out; QUIT takes the underside, furthest from it.
+        _firstMenuButton = HexButton(panel, 0, "CLOSE",        GeoPalette.Ink, CloseMenu);
+                           HexButton(panel, 1, "SETTINGS",     GeoPalette.Ink, OpenSettings);
+                           HexButton(panel, 2, "RESTART",      GeoPalette.Ink, () =>
                            {
                                LeaveMenuHard();
                                GameFlowManager.Instance?.RestartGame();
                            });
-                           HexButton(panel, 3, "Quit",         GeoPalette.Ink,    QuitGame);
-                           HexButton(panel, 4, "Select Level", GeoPalette.Ink,    GoToLevelSelect);
-                           HexButton(panel, 5, "Title",        GeoPalette.Ink,    GoToTitle);
+                           HexButton(panel, 3, "SELECT LEVEL", GeoPalette.Ink, GoToLevelSelect);
+                           HexButton(panel, 4, "TITLE",        GeoPalette.Ink, GoToTitle);
+                           HexButton(panel, 5, "QUIT",         GeoPalette.Ink, QuitGame);
 
         _panelGo.SetActive(false);
 
@@ -365,6 +374,82 @@ public class PauseMenu : MonoBehaviour
         // owned by SettingsCube itself, on a canvas of its own — see the note there.
         // This screen just says where it wants it, from Update, for as long as the
         // menu is up.
+    }
+
+    // ── The room the menu stands in ──────────────────────────────────────────
+    //
+    // Not a drawing any more. The cube opens into a ONE-POINT PERSPECTIVE field:
+    // hairline rays converging on the middle, and hexagonal rings receding into it on
+    // a log scale — each twice as far out as the last — so the recession has no final
+    // ring and no loop to spot. The rings are HEXAGONS because that is the cube's own
+    // silhouette: the space recedes in the shape of the thing standing in it.
+    //
+    // The flat grids, the slicing bars and the title block that used to be here are
+    // gone. A flat ruled ground and a perspective field are two accounts of the same
+    // space and only one of them can be true; the bars were the heaviest marks on a
+    // sheet whose whole job is to stay under six words; and a table of figures is the
+    // least spatial object there is to put on a screen that wants to feel like depth.
+
+    GameObject _paperGo;
+    Material   _fieldMat;
+
+    void BuildPaperFurniture(Transform canvas)
+    {
+        _paperGo = NewRect("Paper", canvas).gameObject;
+        var root = (RectTransform)_paperGo.transform;
+        root.anchorMin = Vector2.zero; root.anchorMax = Vector2.one;
+        root.offsetMin = root.offsetMax = Vector2.zero;
+        _paperGo.SetActive(false);
+
+        var field = NewRect("DeepField", root);
+        field.anchorMin = Vector2.zero; field.anchorMax = Vector2.one;
+        field.offsetMin = field.offsetMax = Vector2.zero;
+        var fieldImg = field.gameObject.AddComponent<RawImage>();
+        fieldImg.raycastTarget = false;
+
+        var sh = Shader.Find("GeoWorld/DeepField");
+        if (sh != null)
+        {
+            _fieldMat = new Material(sh) { name = "DeepField" };
+            fieldImg.material = _fieldMat;
+        }
+        else
+        {
+            // No shader, no field. Bare paper is a perfectly good backdrop and it is
+            // already there; drawing a white sheet over it would be worse than nothing.
+            fieldImg.enabled = false;
+            Debug.LogWarning("[PauseMenu] GeoWorld/DeepField missing — the menu falls back to bare paper.");
+        }
+
+        // Nothing out here at all. The corner brackets went first, then the
+        // registration crosses, and now the edge stamp: what is left on the paper is
+        // the field, the cube and six words, and there was nothing the label told
+        // anyone that the screen was not already saying.
+        //
+        // The CanvasGroup that used to fade these in went with them — a group with
+        // nothing in it is a lever nobody is holding.
+    }
+
+    // The field drifts outward for ever, on UNSCALED time.
+    //
+    // The menu freezes the game, and the shader's own _Time freezes with it — a space
+    // that stops dead the instant you open the menu is the one thing an endless one
+    // must not do.
+    void RefreshField()
+    {
+        // Driven by the CUBE's own opening, not by a clock of its own. One gesture,
+        // one curve: the room arrives at the rate the solid comes apart, which is why
+        // it reads as the cube making room rather than as two effects that happen to
+        // start together.
+        float open = SettingsCube.Opening;
+        float eased = open * open * (3f - 2f * open);
+
+        if (_fieldMat == null) return;
+        _fieldMat.SetFloat("_Aspect", Screen.width / Mathf.Max(1f, (float)Screen.height));
+        _fieldMat.SetFloat("_Phase", -Time.unscaledTime * 0.08f);
+        // Out to 1.3, which clears the far corner of a wide screen. Starting just
+        // above zero rather than at it keeps the first frame from flashing a dot.
+        _fieldMat.SetFloat("_Open", Mathf.Lerp(0.03f, 1.30f, eased));
     }
 
     const float ChipSize     = 80f;
@@ -394,16 +479,55 @@ public class PauseMenu : MonoBehaviour
     // cube with air to spare — options crowding the thing they surround reads as a
     // toolbar, not as a ring. Grown with the type: at three times the size the old
     // ring had the words running into each other and into the cube.
-    const float HexRadius    = 460f;
-    const float HexButtonW   = 560f;
-    const float HexButtonH   = 100f;
-    const float HexFont      = 66f;
+    // The ring is now a FALLBACK. Ordinarily each word hangs off the face of the
+    // cube it belongs to, and the cube decides where that is; these numbers only get
+    // used when the cube's stage failed to build. This is the pause menu — it has to
+    // stay usable when the decoration does not.
+    const float HexRadius  = 460f;
+    const float HexButtonW = 560f;
+    const float HexButtonH = 120f;
 
-    // Resting in the middle, and smaller when it has gone to sit under an option —
-    // there it is a mark BESIDE a word rather than the centrepiece, and at full size
-    // it would not fit under the lower corners of the ring without leaving the screen.
-    const float MenuCubeSize      = 300f;
-    const float MenuFocusCubeSize = 210f;
+    // The cube's slot, before it opens. SettingsCube widens both this and its own
+    // camera by the same factor as the faces travel, so the cube stays the same size
+    // on screen and only the space between its pieces grows.
+    const float MenuCubeSize = 300f;
+
+    // WHERE THE BACKDROP'S SIX SECTORS ARE.
+    //
+    // DeepField cuts the field at ang * 6, with ang = atan2(y,x)/2pi + 0.5 — so the
+    // cuts land on the hexagon's vertices and each sector is centred on the edge
+    // midpoint between two of them, at k*60 - 150 degrees. One option per sector, sat
+    // on that centre line.
+    //
+    // Indexed by FACE, and each face's plate really does land in the sector its word
+    // is given: +Y projects to 90 degrees, -Z to about -148, +X to -8, +Z to 32, -X to
+    // 172, -Y to -90. Snapping the words to the sector centres is what turns those six
+    // uneven bearings into a set.
+    static readonly float[] FaceSectorDeg = { 90f, -150f, -30f, 30f, 150f, -90f };
+
+    // Sized in MIRRORED PAIRS, because the sectors are. The old ramp ran 104 down to
+    // 32 with every word a different size; on a scattered layout that read as six
+    // unrelated things, and on a regular one it would read as a mistake. The hierarchy
+    // is kept — the way out is biggest, the destructive one smallest — but the two
+    // options facing each other across the field now match.
+    static readonly float[] OptionFont = { 84f, 62f, 62f, 54f, 54f, 46f };
+
+    // Mirrored too: each word leans the way the one opposite it leans back.
+    static readonly float[] OptionTilt = { 0f, 5f, -5f, 5f, -5f, 0f };
+
+    // Clearance between the ring the plates land on and the near edge of the words.
+    const float StandoffPad = 40f;
+
+    readonly RectTransform[] _optionRects  = new RectTransform[6];
+    readonly CanvasGroup[]   _optionGroups = new CanvasGroup[6];
+
+    // Half the width and height each word actually occupies, measured once.
+    //
+    // A radial standoff alone is not enough: a word is pushed out from its own MIDDLE,
+    // and SELECT LEVEL is six times wider than it is tall. Offset by one distance in
+    // every direction and the long words still lie across the plate they were supposed
+    // to have cleared — which is exactly what they were doing.
+    readonly Vector2[] _optionHalf = new Vector2[6];
 
     // Which option has the player's attention, or -1. Pointer hover and keyboard /
     // gamepad selection both feed this, because they are the same question asked two
@@ -433,43 +557,93 @@ public class PauseMenu : MonoBehaviour
                            Mathf.Sin(ang) * HexRadius * 0.86f);
     }
 
-    // Where the cube parks when an option is under the pointer: directly beneath the
-    // word, close enough that the two read as one thing.
-    Vector2 HexCubeSlot(int corner)
+    // The six words, hung off the six faces.
+    //
+    // Re-solved EVERY FRAME rather than laid out once, because the faces are moving:
+    // they burst outward when the menu opens, lean with the pointer, and the one under
+    // the pointer comes further forward. A word that stayed put while its face
+    // travelled would stop being that face's label and go back to being a list item.
+    void LayOutOptions()
     {
-        Vector2 p = HexPos(corner);
-        float gap = HexButtonH * 0.5f + MenuFocusCubeSize * 0.5f + 16f;
+        bool haveCentre = SettingsCube.TryProjectCentre(out var centre);
 
-        // Measured off the canvas rather than assumed to be 1080 tall. With the
-        // scaler on match 0.5 the canvas is only 1080 units high at 16:9 — a wide
-        // monitor gives it well under 950, and a limit hard-coded for the common case
-        // walks the cube off the bottom of the uncommon one.
-        float halfH = _canvas != null ? ((RectTransform)_canvas.transform).rect.height * 0.5f : 540f;
-        float limit = halfH - MenuFocusCubeSize * 0.5f - 16f;
+        // ONE RING for all six, taken from whichever plate has travelled furthest.
+        //
+        // Measured rather than fixed, so the words spread outward with the burst and
+        // stand still once it has landed — and taken as the MAXIMUM, so the ring clears
+        // every plate however far through the opening it is. Six equal sectors deserve
+        // six equally distant names; the old per-plate standoff put one word 112px out
+        // and another 350px out, and that difference was most of what read as a jumbled
+        // layout.
+        float ring = 0f;
+        if (haveCentre)
+            for (int i = 0; i < _optionRects.Length; i++)
+                if (SettingsCube.TryProjectFace(i, out var fp))
+                    ring = Mathf.Max(ring, (fp - centre).magnitude);
 
-        // Below by preference, so the word reads as a caption over the cube. Where
-        // there is no room below — the bottom corner of the ring is already near the
-        // edge — it goes above instead. That is the same relationship mirrored, which
-        // is better than a cube half off the screen or one sitting on the word.
-        float below = p.y - gap;
-        return new Vector2(p.x, below >= -limit ? below : p.y + gap);
+        // ...to the plate's OUTER EDGE, not its middle. A plate is about 170px across;
+        // standing the words a fixed 40 past its centre left them lying over the far
+        // half of it.
+        ring += SettingsCube.PlateHalfPx;
+
+        for (int i = 0; i < _optionRects.Length; i++)
+        {
+            var rt = _optionRects[i];
+            if (rt == null) continue;
+
+            float open = SettingsCube.FaceOpen(i);
+
+            if (haveCentre)
+            {
+                float a = FaceSectorDeg[i] * Mathf.Deg2Rad;
+                var dir = new Vector2(Mathf.Cos(a), Mathf.Sin(a));
+
+                // The word's own half-extent, applied along the way it is being pushed.
+                // A word is placed by its MIDDLE, so without this the wide ones lie
+                // back across the ring while the short ones float clear of it. Same
+                // term as before; its job now is keeping the NEAR EDGES of six
+                // differently shaped words on one line.
+                Vector2 half = _optionHalf[i];
+                rt.anchoredPosition = centre
+                                    + dir * (ring + StandoffPad)
+                                    + new Vector2(dir.x * half.x, dir.y * half.y);
+            }
+            else
+            {
+                rt.anchoredPosition = HexPos(i);
+                open = 1f;
+            }
+
+            if (_optionGroups[i] != null) _optionGroups[i].alpha = open;
+        }
     }
 
     // One option, parked at corner `corner` of the hexagon.
     //
     // Placed absolutely rather than through a layout group: a layout group's whole
     // job is to decide positions, and here the positions are the point.
-    Button HexButton(RectTransform panel, int corner, string label, Color color,
+    Button HexButton(RectTransform panel, int face, string label, Color color,
                      System.Action onClick)
     {
         // Built here rather than through BuildButton, because these are WORDS ON
         // PAPER and not chips. The wipe has already turned the screen to paper; a
         // filled rectangle behind each option would put six boxes on a surface whose
         // entire point is that it is bare, and at this size the type carries itself.
-        var rt = NewRect("Option", panel);
+        var rt = NewRect($"Option{face}", panel);
         rt.anchorMin = rt.anchorMax = rt.pivot = new Vector2(0.5f, 0.5f);
         rt.sizeDelta = new Vector2(HexButtonW, HexButtonH);
-        rt.anchoredPosition = HexPos(corner);
+        rt.anchoredPosition = HexPos(face);
+        // Fixed at build time, not driven per frame: the tilt belongs to the word, and
+        // re-writing the whole transform every frame just to keep it would fight
+        // LayOutOptions for the same field.
+        rt.localRotation = Quaternion.Euler(0f, 0f, OptionTilt[face]);
+
+        // Faded in by its own face's arrival, so the six words land in the order the
+        // faces do instead of all appearing at once.
+        var group = rt.gameObject.AddComponent<CanvasGroup>();
+        group.alpha = 0f;
+        _optionRects[face]  = rt;
+        _optionGroups[face] = group;
 
         // WHITE, then tinted to `color` by the button's normalColor.
         //
@@ -477,12 +651,16 @@ public class PauseMenu : MonoBehaviour
         // own colour, and black times anything is black — the hover would have been
         // silently dead. The word is white so the state colours are the ones that
         // actually show.
-        var t = NewText("Label", rt, HexFont, Color.white, FontStyles.Bold, TextAlignmentOptions.Center);
+        var t = NewText("Label", rt, OptionFont[face], Color.white, FontStyles.Bold, TextAlignmentOptions.Center);
         // The game's own stamped face. This is the one screen that is entirely
         // typography — six words on a bare sheet — so the words have to be in the
         // game's lettering rather than in whatever TMP happened to default to.
         GeoFont.ApplyStamp(t);
         t.text = label;
+        // Measured now, with the real font and the real size. GetPreferredValues does
+        // not need a layout pass to have run, which matters because this is the frame
+        // the object is built on.
+        _optionHalf[face] = t.GetPreferredValues() * 0.5f;
         // The TEXT is the button's graphic, so the clickable area is the word you can
         // see and the highlight lands on the word itself. With no plate to tint there
         // is nothing else for it to land on.
@@ -506,7 +684,7 @@ public class PauseMenu : MonoBehaviour
         // An EventTrigger rather than a component of our own: it is four one-line
         // handlers on a runtime-built object, and a whole MonoBehaviour to carry them
         // would be a file to open every time someone wonders what moves the cube.
-        int here = corner;
+        int here = face;
         var trig = rt.gameObject.AddComponent<EventTrigger>();
         void On(EventTriggerType type, bool on)
         {

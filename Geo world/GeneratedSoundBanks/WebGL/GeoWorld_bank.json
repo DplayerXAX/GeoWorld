@@ -10,7 +10,7 @@
     "Type": "User",
     "GUID": "{FBAC0406-FA36-4CC0-8121-80F7B6376C7E}",
     "Language": "SFX",
-    "Hash": "{79B83BF7-04EA-B089-45E2-5D4665EFE170}",
+    "Hash": "{BE93965C-CEDA-B84A-2519-D8A8D527CCEC}",
     "ObjectPath": "\\SoundBanks\\Default Work Unit\\GeoWorld_bank",
     "ShortName": "GeoWorld_bank",
     "Path": "GeoWorld_bank.bnk",
@@ -152,6 +152,14 @@
       "CachePath": "E2/{E2DE449C-0EEB-898D-16AF-0B755598F832}.wem"
      },
      {
+      "Id": "441044606",
+      "Language": "SFX",
+      "Streaming": "false",
+      "Location": "Memory",
+      "ShortName": "混沌的戏弄Mock The Obedience.wav",
+      "CachePath": "26/{269F6129-E60E-56E0-2E9F-0C78C0EAF762}.wem"
+     },
+     {
       "Id": "442785962",
       "Language": "SFX",
       "Streaming": "false",
@@ -277,15 +285,7 @@
       "Streaming": "false",
       "Location": "Memory",
       "ShortName": "Piecing together.wav",
-      "CachePath": "07/{07380261-5851-21B4-FB73-0AA3725DE03D}.wem"
-     },
-     {
-      "Id": "1057243432",
-      "Language": "SFX",
-      "Streaming": "false",
-      "Location": "Memory",
-      "ShortName": "Mock The Obedience.wav",
-      "CachePath": "D9/{D9CB22BD-D355-3E7C-48F9-59B84978D8FD}.wem"
+      "CachePath": "14/{143438C0-996E-325E-54D8-B368E312A0F1}.wem"
      },
      {
       "Id": "1062488858",
@@ -400,7 +400,7 @@
       "DurationType": "Infinite",
       "MediaRefs": [
        {
-        "Id": "1057243432"
+        "Id": "441044606"
        }
       ]
      },
@@ -928,6 +928,6 @@
     ]
    }
   ],
-  "FileHash": "{B58AD5CB-7956-704D-7BFA-F3984178EF54}"
+  "FileHash": "{3B996E31-1EAA-EE75-4659-AED487C82BD2}"
  }
 }
