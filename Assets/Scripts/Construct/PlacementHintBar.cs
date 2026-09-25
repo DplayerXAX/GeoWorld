@@ -4,10 +4,10 @@ using UnityEngine.SceneManagement;
 using TMPro;
 
 // Dead-by-Daylight-style fixed prompt bar: while PlacementController is in Edit
-// mode (a block is held), shows WASDQE adjust / scroll zoom / 1/2/3 rotate
+// mode (a block is held), shows WASDQE adjust / scroll distance / Alt rotate
 // docked to the bottom-center of the SCREEN (screen-space, not world-space —
 // this is a HUD reminder, not a spatial indicator; PlacementHintOverlay handles
-// the spatial arrows/rings on the block itself). Auto-spawns, no scene wiring.
+// the spatial arrows on the block itself). Auto-spawns, no scene wiring.
 [DisallowMultipleComponent]
 public class PlacementHintBar : MonoBehaviour
 {
@@ -109,19 +109,9 @@ public class PlacementHintBar : MonoBehaviour
         var fit = bar.gameObject.AddComponent<ContentSizeFitter>();
         fit.horizontalFit = fit.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
 
-        // Ring colors from the live PlacementHintOverlay (1=X axis, 2=Y axis, 3=Z axis) —
-        // falls back to that component's own field defaults if none is spawned yet.
-        var ringOverlay = FindFirstObjectByType<PlacementHintOverlay>();
-        Color cx = ringOverlay != null ? ringOverlay.axisColorX : new Color(1.00f, 0.30f, 0.30f);
-        Color cy = ringOverlay != null ? ringOverlay.axisColorY : new Color(0.35f, 0.95f, 0.40f);
-        Color cz = ringOverlay != null ? ringOverlay.axisColorZ : new Color(0.35f, 0.55f, 1.00f);
-        string rotateLabel = $"<color=#{ColorUtility.ToHtmlStringRGB(cx)}>1</color>/" +
-                              $"<color=#{ColorUtility.ToHtmlStringRGB(cy)}>2</color>/" +
-                              $"<color=#{ColorUtility.ToHtmlStringRGB(cz)}>3</color> Rotate";
-
         AddPrompt(bar, adjustIcon, "WASDQE Adjust");
         AddPrompt(bar, zoomIcon,   "Scroll Set Dis");
-        AddPrompt(bar, rotateIcon, rotateLabel);
+        AddPrompt(bar, rotateIcon, "Hold Alt + Mouse/Wheel Rotate");
         AddPrompt(bar, rotateIcon, "Tap Cancel");
     }
 
@@ -145,7 +135,7 @@ public class PlacementHintBar : MonoBehaviour
 
         var t = NewText("Label", cell, fontSize, textColor);
         t.text = label;
-        t.gameObject.AddComponent<LayoutElement>().preferredWidth = fontSize * 8f;
+        t.gameObject.AddComponent<LayoutElement>().preferredWidth = t.preferredWidth;
     }
 
     RectTransform NewRect(string name, Transform parent)

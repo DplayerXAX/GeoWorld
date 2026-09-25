@@ -124,7 +124,7 @@ public class BlockData : ScriptableObject
             BlockShape.I3       => new[] { V(0,0,0), V(1,0,0), V(2,0,0) },
             BlockShape.I4       => new[] { V(0,0,0), V(1,0,0), V(2,0,0), V(3,0,0) },
 
-            // L-shapes in XZ plane — all rotations (incl. J mirror) via keys 1/2/3
+            // L-shapes in XZ plane — all orientations via placement rotation
             BlockShape.L3       => new[] { V(0,0,0), V(1,0,0), V(1,0,1) },
             BlockShape.L4       => new[] { V(0,0,0), V(1,0,0), V(2,0,0), V(2,0,1) },
 

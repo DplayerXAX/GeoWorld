@@ -264,7 +264,7 @@ public class TutorialStep
     public BlockData block;
     [Tooltip("Grid cell the block's origin (its 0,0,0 cell) lands on. Ghost = (rotated) block.cells + this.")]
     public Vector3Int origin;
-    [Tooltip("Required rotation in 90° turns around X / Y / Z. (0,0,0) = default. The ghost shows this orientation; the player must rotate (1/2/3) to match.")]
+    [Tooltip("Required rotation in 90° turns around X / Y / Z. (0,0,0) = default. The ghost shows this orientation; the player must hold Alt and move the mouse or scroll to match.")]
     public Vector3Int rotation90;
     [Tooltip("Advanced: explicit absolute cells; overrides block+origin+rotation when set.")]
     public Vector3Int[] cellsOverride;

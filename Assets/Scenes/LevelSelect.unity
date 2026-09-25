@@ -1282,7 +1282,7 @@ MonoBehaviour:
   - {fileID: 11400000, guid: a8fa6df35bf1b6c438e02427ec8409c0, type: 2}
   - {fileID: 11400000, guid: 820a88ddf0392914889d66c41c3658a0, type: 2}
   buildModeKey: 102
-  rotateSpeed: 10
+  rotateSpeed: 30
   ghostFollowSpeed: 16
   ghostValidColor: {r: 0.35, g: 1, b: 0.45, a: 0.55}
   ghostInvalidColor: {r: 1, g: 0.3, b: 0.3, a: 0.55}
