@@ -110,6 +110,15 @@ public class LevelDefinition : ScriptableObject
     [Tooltip("Ordered guided placements. Each shows a ghost the player must match exactly before they can place.")]
     public List<TutorialStep> tutorialSteps = new();
 
+    [Header("Map reveal")]
+    // This level's region of the level-select map stays hidden until THIS level
+    // has been cleared, then rises out of the ground on the next visit — see
+    // LevelMapController.Reveal. Every level is unlocked by default and the regions
+    // are joined by blocks the player builds, so the unlock flags cannot say what
+    // should be visible; this does.
+    [Tooltip("Hide this level's region of the map until that level is cleared. Empty = visible from the start.")]
+    public LevelDefinition revealAfter;
+
     [Header("Chapter inheritance")]
     // A chapter is one growing base. This level starts from the board the player
     // most recently CLEARED `inheritFrom` with — the keepsake DoLevelClear already

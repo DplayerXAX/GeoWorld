@@ -51,6 +51,7 @@ MonoBehaviour:
   startCell: {x: 0, y: 0, z: 0}
   endCell: {x: 0, y: 0, z: 0}
   tutorialSteps: []
+  revealAfter: {fileID: 11400000, guid: 1b45f2b9e94ad084180100d47c626f51, type: 2}
   startingLayout: {fileID: 0}
   overrideEndpointDistance: 0
   endpointMinDistance: 5

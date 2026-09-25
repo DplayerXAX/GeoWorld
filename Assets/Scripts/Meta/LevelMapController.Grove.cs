@@ -99,6 +99,16 @@ public class HarmonyGroveConfig : MapDecorConfig
     public Color leafDeep  = new(0.20f, 0.52f, 0.30f);
     public Color leafLight = new(0.47f, 0.80f, 0.42f);
 
+    [Header("Ground mist")]
+    [Tooltip("A low, thin mist lying in the wood. It is lit through the shadow map, so the trees throw shafts of shade through it and the sun between them stands out as light beams — the Tyndall look. Needs Cast Shadows on.")]
+    public bool groundMist = true;
+    public MistBank.Settings groundMistStyle = new()
+    {
+        color = new Color(0.86f, 0.90f, 0.84f), strength = 0.7f, density = 0.7f,
+        height = 5f, scatter = 2.6f, anisotropy = 0.6f, steps = 24,
+        edge = 2.5f, clearance = 0f, edgeWarp = 1.2f,
+    };
+
     [Header("Render")]
     [Range(1, 10)] public int variants = 6;
 
@@ -110,7 +120,9 @@ public class HarmonyGroveConfig : MapDecorConfig
     public HarmonyGroveConfig()
     {
         enabled     = true;
-        gateLevelId = "";          // ungated: the wood was always here
+        // With the farm: the wood half-rings it, and a wood around an empty
+        // clearing — or a farm with its wood still missing — is neither picture.
+        gateLevelId = "1-1";
 
         // Placeholder only: WrapFarm replaces origin and size with the crescent's
         // own bounds, derived from wherever the farm actually is.
@@ -478,6 +490,16 @@ public partial class LevelMapController : MonoBehaviour
              cfg.tufts,  verge: false, cfg.spacing * 0.35f, new Vector2(0.7f, 1.3f), "Tuft");
 
         BuildWayMarkers(root, cfg, colTop, paths, cs, rng);
+
+        // ── 5. Ground mist ───────────────────────────────────────────────────
+        // Parented to the grove, which is still at rest here — so on the visit it
+        // grows in, the mist sinks and rises with the wood like everything else.
+        if (cfg.groundMist)
+        {
+            var pts = new List<Vector3>(coveredCols.Count);
+            foreach (var c in coveredCols) pts.Add(GroveGround(new Vector2(c.x, c.y), colTop, cfg, cs));
+            MistBank.Create(root, "GroundMist", pts, cs, cfg.groundMistStyle, rng.Next());
+        }
     }
 
     // Trees down BOTH sides of a line, evenly spaced and staggered by half a step.
@@ -650,7 +672,8 @@ public partial class LevelMapController : MonoBehaviour
     {
         var col = new Vector2Int(Mathf.RoundToInt(p.x), Mathf.RoundToInt(p.y));
         float y = ColumnSurface(colTop, col, cfg, cs).y;
-        return new Vector3((p.x + 0.5f) * cs, y, (p.y + 0.5f) * cs);
+        var o = gridSystem.Origin;   // the map may sit on a shifted grid (GridSystem.originCells)
+        return new Vector3(o.x + (p.x + 0.5f) * cs, y, o.z + (p.y + 0.5f) * cs);
     }
 
     // Trees are NOT built with MakeMeshProp. That helper tints a prop with MpbColor on

@@ -268,14 +268,14 @@ public partial class LevelMapController : MonoBehaviour
     // Local +X (the row / sowing direction) expressed in world space.
     Vector3 DecorRowDirWorld => Quaternion.Euler(0f, DecorRotationDegrees, 0f) * Vector3.right;
 
-    // Builds every unlocked plot. Returns the one whose grow-in cutscene should
-    // play, or null — at most one can be pending, since PendingMapGrowthLevelId
-    // names a single level.
-    DecorPlot TryBuildDecors()
+    // Builds every unlocked plot. Returns EVERY plot whose grow-in should play —
+    // one clear can unlock several (the farm and the grove both wait on 1-1), and
+    // they rise together in PlayRevealCutscene.
+    List<DecorPlot> TryBuildDecors()
     {
-        if (gridSystem == null || cubePrefab == null) return null;
+        var pending = new List<DecorPlot>();
+        if (gridSystem == null || cubePrefab == null) return pending;
 
-        DecorPlot pending = null;
         foreach (var cfg in AllDecorConfigs())
         {
             if (cfg == null || !cfg.enabled) continue;
@@ -288,73 +288,19 @@ public partial class LevelMapController : MonoBehaviour
             }
 
             // Only the visit right after first clear plays the cutscene; later
-            // revisits just rebuild the plot instantly.
-            bool grow = !string.IsNullOrEmpty(cfg.gateLevelId)
-                        && RunConfig.PendingMapGrowthLevelId == cfg.gateLevelId;
-            if (grow) RunConfig.PendingMapGrowthLevelId = null;
+            // revisits just rebuild the plot instantly. Read from the copy
+            // VeilUnrevealedRegions captured — clearing the flag per plot, as this
+            // used to, let only the FIRST plot gated on a level ever rise.
+            bool grow = !string.IsNullOrEmpty(cfg.gateLevelId) && _growthLevelId == cfg.gateLevelId;
 
             // The grove is placed relative to the farm's windmill, which only exists
             // once the farm has been built — hence both "grove builds last" and this.
             if (cfg is HarmonyGroveConfig grove_) AnchorGrove(grove_);
 
             var plot = BuildDecor(cfg, grow);
-            if (plot != null && grow) pending = plot;
+            if (plot != null && grow) pending.Add(plot);
         }
         return pending;
-    }
-
-    // Camera-locked reveal played once, right after this field's gate level is
-    // first cleared. Blocks player input (_decorCutscenePlaying) for its duration.
-    IEnumerator PlayDecorGrowthCutscene(DecorPlot plot)
-    {
-        if (plot == null) yield break;
-        var cfg = plot.cfg;
-        _decorCutscenePlaying = true;
-
-        if (_orbit != null)
-        {
-            _orbit.focusViewport = new Vector2(0.5f, 0.5f);
-            _orbit.FocusOnPoint(plot.center, snap: false);
-            if (cfg.growZoom > 0f) _orbit.SetZoom(cfg.growZoom);
-            _orbit.AddYaw(cfg.growYawOffset);   // position eases to the new angle, so this still reads as a swing
-        }
-
-        if (!string.IsNullOrEmpty(cfg.growAsideText))
-            AsideBubble.Show(defaultCharacter, "default", cfg.growAsideText, cfg.growAsideSeconds);
-
-        Vector3 sunk = plot.root != null ? plot.root.transform.position : plot.restPos;
-        float t = 0f;
-        while (t < cfg.growRiseDuration)
-        {
-            t += Time.deltaTime;
-            float e = 1f - Mathf.Pow(1f - Mathf.Clamp01(t / cfg.growRiseDuration), 3f);   // ease-out cubic, no overshoot
-            if (plot.root != null) plot.root.transform.position = Vector3.Lerp(sunk, plot.restPos, e);
-            yield return null;
-        }
-        if (plot.root != null) plot.root.transform.position = plot.restPos;
-        foreach (var r in plot.residents) if (r != null) r.SetActive(true);   // the plot has arrived — its people with it
-
-        // Camera waits for the line to finish (its clock started at the rise, so
-        // only what's left of it needs covering).
-        float hold = cfg.growHoldSeconds;
-        if (!string.IsNullOrEmpty(cfg.growAsideText))
-            hold = Mathf.Max(hold, cfg.growAsideSeconds + AsideBubble.SlideSeconds - cfg.growRiseDuration);
-        yield return new WaitForSeconds(hold);
-
-        // Fade to black for the hand-off — focusViewport resets with no lerp of its
-        // own right below, so an eased pan would still pop.
-        yield return FadeScreen(0f, 1f, cfg.transitionFadeDuration);
-
-        if (_orbit != null)
-        {
-            _orbit.focusViewport = new Vector2(focusViewportX, focusViewportY);
-            _orbit.FocusOnPoint(_camFocus, snap: true);
-        }
-
-        PlayEntryDialogueIfAny();   // may re-focus again (reward conversation) — still hidden
-
-        yield return FadeScreen(1f, 0f, cfg.transitionFadeDuration);
-        _decorCutscenePlaying = false;
     }
 
     DecorPlot BuildDecor(MapDecorConfig cfg, bool grow)
@@ -487,7 +433,7 @@ public partial class LevelMapController : MonoBehaviour
         PlantResidents(plot, cfg, colTop, ext, cs);
 
         // Sink the WHOLE plot below ground — every prop is a child of plot.root, so
-        // one offset on the root moves them all together. PlayDecorGrowthCutscene
+        // one offset on the root moves them all together. PlayRevealCutscene
         // animates this back up to plot.restPos.
         //
         // The controller's own GameObject isn't at the world origin in LevelSelect,
@@ -567,7 +513,7 @@ public partial class LevelMapController : MonoBehaviour
         // animated back up by the grow-in cutscene, which would drag residents with
         // it and leave MapInteractableSpot's own bob fighting the rise. They're
         // hidden outright for the duration instead (see plot.residents /
-        // PlayDecorGrowthCutscene) so they don't hover over an empty plot while
+        // PlayRevealCutscene) so they don't hover over an empty plot while
         // it's still underground.
         var go = new GameObject($"Resident_{data.name}");
         go.transform.SetParent(transform, false);

@@ -662,7 +662,8 @@ public partial class PlacementController : MonoBehaviour
             // Ortho: intersect the mouse ray with the build-plane (world Y).
             // Plane sits at the centre of cell row _buildY (= cellSize * y + cs/2).
             float cs       = grid != null ? grid.cellSize : 1f;
-            float planeY   = _buildY * cs + cs * 0.5f;
+            float planeY   = grid != null ? grid.GridToWorld(new Vector3Int(0, _buildY, 0)).y   // honours GridSystem.originCells
+                                          : _buildY * cs + cs * 0.5f;
             float t        = (planeY - r.origin.y) / r.direction.y;
             world          = t > 0f ? r.origin + r.direction * t
                                     : r.origin + r.direction * _depth; // fallback

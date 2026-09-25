@@ -35,6 +35,12 @@ public class OrbitCamera : MonoBehaviour
 
     public float transitionSpeed = 6f;
 
+    [Header("Floor")]
+    [Tooltip("Lowest world Y the focus point may be panned to. -Infinity = no floor (gameplay). LevelMapController sets it to the underside of the map, so Q/E can't sink the view under the ground into the fog.")]
+    public float minFocusY = float.NegativeInfinity;
+    [Tooltip("Lowest world Y the camera BODY may sit at — also holds when orbiting to look up from below the focus.")]
+    public float minCameraY = float.NegativeInfinity;
+
     // Set true while a modal camera view (e.g. WavePreview) owns the framing — blocks
     // player-driven orbit/zoom/pan input, but NOT programmatic FocusOnPoint/SetZoom/
     // SetPhysicalDistance calls (those are how the modal view drives the camera itself).
@@ -228,6 +234,15 @@ public class OrbitCamera : MonoBehaviour
     public void Pan(Vector3 worldDelta)
     {
         if (InputLocked) return;
+
+        // Floor: a downward pan stops where the focus meets minFocusY (an upward one
+        // is never limited). Clamped HERE, before the rigid shift below, so the rig
+        // stops dead rather than sinking and being pulled back up by LateUpdate.
+        if (worldDelta.y < 0f && !float.IsNegativeInfinity(minFocusY))
+            worldDelta.y = Mathf.Max(worldDelta.y, Mathf.Min(0f, minFocusY - currentFocusPoint.y));
+        if (worldDelta.y < 0f && !float.IsNegativeInfinity(minCameraY))
+            worldDelta.y = Mathf.Max(worldDelta.y, Mathf.Min(0f, minCameraY - transform.position.y));
+
         _panOffset += worldDelta;
 
         // Carry the smoothed focus and the rig itself along by the same amount
@@ -264,6 +279,11 @@ public class OrbitCamera : MonoBehaviour
 
 
         Vector3 focusGoal = desiredTarget.position + _panOffset;
+        if (focusGoal.y < minFocusY)
+        {
+            _panOffset.y += minFocusY - focusGoal.y;   // absorb it, so it doesn't build up below the floor
+            focusGoal.y   = minFocusY;
+        }
 
         currentFocusPoint = Vector3.Lerp(
             currentFocusPoint,
@@ -340,6 +360,7 @@ public class OrbitCamera : MonoBehaviour
         Vector3 shift  = ViewportBiasShift(rot);
         Vector3 offset = rot * new Vector3(0, 0, -distance);
         Vector3 desiredPos = currentFocusPoint + offset + shift;
+        if (desiredPos.y < minCameraY) desiredPos.y = minCameraY;
 
         // Last frame's shake is subtracted BEFORE the lerp so the easing always
         // operates on the clean, unshaken position — otherwise the jitter feeds

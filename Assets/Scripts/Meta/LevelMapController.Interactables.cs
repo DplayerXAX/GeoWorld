@@ -31,6 +31,11 @@ public partial class LevelMapController : MonoBehaviour
         foreach (var s in FindObjectsByType<MapInteractableSpot>(FindObjectsInactive.Include, FindObjectsSortMode.None))
         {
             if (s == null || s.data == null) continue;
+
+            // Standing on a region that has not been revealed — hidden with it,
+            // and not clickable, until the region arrives.
+            if (_veiledCols.Contains(s.Column)) { s.gameObject.SetActive(false); continue; }
+
             _spots[s.Column] = s;
             if (_columnTop.TryGetValue(s.Column, out var top)) s.PlaceOn(BlockTop(top));
         }

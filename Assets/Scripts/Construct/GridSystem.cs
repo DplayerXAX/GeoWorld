@@ -61,6 +61,13 @@ public class PlacedBlockInstance
 public class GridSystem : MonoBehaviour
 {
     public float cellSize = 1f;
+
+    [Tooltip("Where cell (0,0,0) sits, in WHOLE CELLS. Moves everything built on this grid — map blocks, decor, the pawn, mist — without changing any saved cell coordinates, and without taking the grid off its lattice (a whole-cell shift lands every cell exactly where another cell used to be).")]
+    public Vector3Int originCells = Vector3Int.zero;
+
+    // World position of cell (0,0,0)'s corner.
+    public Vector3 Origin => (Vector3)originCells * cellSize;
+
     // Unused at runtime — the grid is unbounded. Kept as an inspector hint.
     public Vector3Int size = new Vector3Int(10, 5, 10);
     public static GridSystem instance;
@@ -88,11 +95,12 @@ public class GridSystem : MonoBehaviour
 
     public Vector3 GridToWorld(Vector3Int gp)
     {
-        return new Vector3(gp.x * cellSize + cellSize * 0.5f, gp.y * cellSize + cellSize * 0.5f, gp.z * cellSize + cellSize * 0.5f);
+        return Origin + new Vector3(gp.x * cellSize + cellSize * 0.5f, gp.y * cellSize + cellSize * 0.5f, gp.z * cellSize + cellSize * 0.5f);
     }
 
     public Vector3Int WorldToGrid(Vector3 w)
     {
+        w -= Origin;
         return new Vector3Int(Mathf.FloorToInt(w.x / cellSize), Mathf.FloorToInt(w.y / cellSize), Mathf.FloorToInt(w.z / cellSize));
     }
 

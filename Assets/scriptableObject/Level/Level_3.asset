@@ -282,6 +282,7 @@ MonoBehaviour:
   inheritFrom: {fileID: 11400000, guid: fb1db61d4cd59c545b71466b020d5f0e, type: 2}
   inheritRing: 4
   inheritUpgrades: 1
+  revealAfter: {fileID: 11400000, guid: fb1db61d4cd59c545b71466b020d5f0e, type: 2}
   startingLayout: {fileID: 11400000, guid: 9843050dd6dbe5841a144ca40094ed6a, type: 2}
   overrideEndpointDistance: 1
   endpointMinDistance: 8
