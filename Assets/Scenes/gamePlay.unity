@@ -486,7 +486,7 @@ MonoBehaviour:
   minDepth: 2
   maxDepth: 40
   scrollSpeed: 3
-  rotateSpeed: 10
+  rotateSpeed: 30
   panSpeed: 8
   blockPalette:
   - {r: 0.85, g: 0.18, b: 0.12, a: 1}
@@ -3326,10 +3326,12 @@ MonoBehaviour:
   controls:
   - key: W A S D
     action: Move / Adjust
-  - key: Q / E
+  - key: E / Q
     action: Raise / lower
-  - key: 1 / 2 / 3
+  - key: Alt + mouse
     action: Rotate block
+  - key: Alt + scroll
+    action: Turn block
   - key: F
     action: Shop
   - key: LMB

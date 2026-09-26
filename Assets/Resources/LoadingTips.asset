@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: LoadingTips
   m_EditorClassIdentifier: Assembly-CSharp::LoadingTipsData
   tips:
-  - 'You may rotate a held block with 1 / 2 / 3. '
+  - 'Hold left Alt and move the mouse or scroll to rotate a held block. '
   - "Turrets need a block touching them to stay powered \u2014 moving their support
     strands them."
   - Hold right-click and drag to orbit the camera; scroll to zoom.

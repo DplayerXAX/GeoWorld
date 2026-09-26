@@ -46,7 +46,7 @@ public partial class PlacementController
     readonly List<BatchMoveRecord> _batchRecords = new();
     readonly List<GameObject>      _batchPreviewCubes = new();
 
-    // Group-rotation animation. _batchTargetRot snaps 90° per keypress (drives the
+    // Group-rotation animation. _batchTargetRot snaps 90° per turn (drives the
     // committed layout); _batchDisplayRot slerps toward it and drives ONLY the
     // preview cube positions — the exact same "slerp the rotation, round the cells"
     // trick single-block editing uses (GetRotatedCells rounds the slerped
@@ -332,6 +332,7 @@ public partial class PlacementController
         foreach (var c in previewCubes) if (c != null) c.SetActive(false);
 
         _batchTargetRot = _batchDisplayRot = Quaternion.identity;
+        _mouseRotation.Reset();
         previewParent.gameObject.SetActive(true);
         _batchMoving = true;
     }
@@ -341,12 +342,9 @@ public partial class PlacementController
     // gate in Update().
     void UpdateBatchMove()
     {
-        // 1/2/3 rotate the WHOLE group 90° about world X/Y/Z — same keys and world
-        // frame as single-block editing (HandleRotate), so the two feel identical.
-        if (Input.GetKeyDown(KeyCode.Alpha1)) RotateBatch(Quaternion.Euler(90, 0, 0));
-        if (Input.GetKeyDown(KeyCode.Alpha2)) RotateBatch(Quaternion.Euler(0, 90, 0));
-        if (Input.GetKeyDown(KeyCode.Alpha3)) RotateBatch(Quaternion.Euler(0, 0, 90));
-        if (GamepadInput.RotateDown)          RotateBatch(Quaternion.Euler(0, 90, 0));   // shoulder mirrors yaw, same as single-block
+        if (_mouseRotationDelta != Quaternion.identity) RotateBatch(_mouseRotationDelta);
+        else if (GamepadInput.RotateDown && Quaternion.Angle(_batchDisplayRot, _batchTargetRot) < 1f)
+            RotateBatch(Quaternion.Euler(0, 90, 0));   // shoulder mirrors yaw, same as single-block
 
         // Ease the preview toward the snapped target — identical curve to the
         // single-block _currentRotation slerp (same rotateSpeed), so the group spin
@@ -354,6 +352,8 @@ public partial class PlacementController
         // (relCells) is already the fully-rotated target set in RotateBatch.
         _batchDisplayRot = Quaternion.Slerp(_batchDisplayRot, _batchTargetRot,
                                             1f - Mathf.Exp(-rotateSpeed * Time.deltaTime));
+        if (Quaternion.Angle(_batchDisplayRot, _batchTargetRot) < 1f)
+            _batchDisplayRot = _batchTargetRot;
 
         Vector3Int anchor = baseGridPos;   // cursor-tracked, same field HandleMouseMove already updates
 
@@ -372,7 +372,7 @@ public partial class PlacementController
 
         RenderBatchPreview(anchor, allValid);
 
-        if (Input.GetMouseButtonDown(0))
+        if (!_mouseRotation.Active && Input.GetMouseButtonDown(0))
         {
             if (IsPointerOverSelectionPanel() || HudSidePanels.PointerOver || PointerOverInfoPanel())
             {
@@ -499,6 +499,8 @@ public partial class PlacementController
 
     void CancelBatchMove()
     {
+        VirtualCursor.EndRotation();
+        _mouseRotation.Reset();
         HideBatchPreview();
 
         foreach (var rec in _batchRecords)

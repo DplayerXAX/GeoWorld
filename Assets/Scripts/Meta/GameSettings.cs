@@ -47,7 +47,8 @@ public static class GameSettings
     public static readonly KeyCode[] ReservedKeys =
     {
         KeyCode.W, KeyCode.A, KeyCode.S, KeyCode.D, KeyCode.Q, KeyCode.E,   // move / raise / lower
-        KeyCode.Alpha1, KeyCode.Alpha2, KeyCode.Alpha3,                     // rotate
+        KeyCode.Alpha1, KeyCode.Alpha2, KeyCode.Alpha3,                     // minigame rotation
+        KeyCode.LeftAlt,                                                  // placement mouse rotation
         KeyCode.F,                                                          // shop
         KeyCode.R,                                                          // refresh / hold-restart
         KeyCode.Z,                                                          // undo (with Ctrl)

@@ -151,8 +151,9 @@ public class HudSidePanels : MonoBehaviour
         if (controls.Count > 0) return;
         void A(string k, string a) => controls.Add(new Control { key = k, action = a });
         A("W A S D", "Move block");
-        A("Q / E",   "Raise / lower");
-        A("1 / 2 / 3", "Rotate block");
+        A("E / Q",   "Raise / lower");
+        A("Alt + mouse", "Rotate block");
+        A("Alt + scroll", "Turn block");
         A("Tab", "Switch mode");
         A("F", "Open / Close shop");
         A("LMB",     "Select / place");

@@ -45,7 +45,7 @@ public partial class PlacementController : MonoBehaviour
     public Vector3Int HeldGridPos => currentGridPos;
     public Vector3Int CurrentGridPos => currentGridPos;
     [Range(0.5f, 4f)] public float snapGridRadius = 1.5f;
-    public float minDepth = 2f, maxDepth = 40f, scrollSpeed = 3f, rotateSpeed = 10f;
+    public float minDepth = 2f, maxDepth = 40f, scrollSpeed = 3f, rotateSpeed = 30f;
     public float panSpeed = 8f;
 
     [Header("Cube Palette (Constructivism)")]
@@ -103,6 +103,9 @@ public partial class PlacementController : MonoBehaviour
     [Tooltip("Clamp range for the ortho build-plane Y.")]
     public Vector2Int buildYRange = new Vector2Int(0, 20);
     private Quaternion _currentRotation = Quaternion.identity, _targetRotation = Quaternion.identity;
+    readonly PlacementRotationInput _mouseRotation = new();
+    Quaternion _mouseRotationDelta;
+    public bool IsMouseRotating => _mouseRotation.Active;
 
 
     [Header("Shop Refresh")]
@@ -263,6 +266,12 @@ public partial class PlacementController : MonoBehaviour
     float _rHeld;
     bool  _rRestarting;
     bool  _rArmed;   // a fresh key-press is required — see UpdateRestartHold
+
+    void OnDisable()
+    {
+        if (_mouseRotation.Active) VirtualCursor.EndRotation();
+        _mouseRotation.Reset();
+    }
 
     void Awake()
     {
@@ -509,13 +518,31 @@ public partial class PlacementController : MonoBehaviour
 
     void Update()
     {
-        if (SettingsScreen.Open || IntroDirector.Playing || GameFlowManager.SettlementUp) return;   // modal / intro / clear settlement — block placement input
+        if (SettingsScreen.Open || IntroDirector.Playing || GameFlowManager.SettlementUp)
+        {
+            VirtualCursor.EndRotation();
+            _mouseRotation.Reset();
+            return;
+        }
 
         _currentRotation = Quaternion.Slerp(
             _currentRotation,
             _targetRotation,
             1f - Mathf.Exp(-rotateSpeed * Time.unscaledDeltaTime)
         );
+        if (Quaternion.Angle(_currentRotation, _targetRotation) < 1f)
+            _currentRotation = _targetRotation;
+
+        bool holding = (mode == PlacementMode.Edit && currentBlock != null) || _batchMoving;
+        if (!holding) _mouseRotation.Reset();
+        bool canRotate = _batchMoving
+            ? Quaternion.Angle(_batchDisplayRot, _batchTargetRot) < 1f
+            : _currentRotation == _targetRotation;
+        bool rotating = holding && Application.isFocused && Input.GetKey(KeyCode.LeftAlt);
+        if (rotating && !_mouseRotation.Active) AlignPlacementCursor();
+        VirtualCursor.SetRotationAnchor(rotating, cam.myCam, grid.GridToWorld(currentGridPos));
+        _mouseRotationDelta = _mouseRotation.Read(rotating,
+            VirtualCursor.MouseDelta, Input.mouseScrollDelta.y, cam.transform.right, canRotate);
 
         HandleScroll();
         HandleMouseMove();
@@ -536,7 +563,7 @@ public partial class PlacementController : MonoBehaviour
 
         if (mode == PlacementMode.Edit)
         {
-            HandleKeyboardOffset();
+            if (!_mouseRotation.Active) HandleKeyboardOffset();
             HandleRotate();
         }
         else
@@ -559,7 +586,7 @@ public partial class PlacementController : MonoBehaviour
 
         UpdateRestartHold();
 
-        if (Input.GetMouseButtonDown(0) || VirtualCursor.ConfirmPressedThisFrame)
+        if (!_mouseRotation.Active && (Input.GetMouseButtonDown(0) || VirtualCursor.ConfirmPressedThisFrame))
         {
             if (IsPointerOverSelectionPanel() || HudSidePanels.PointerOver || PointerOverInfoPanel()
                 || MultiSelectPanel.IsPointerOver(VirtualCursor.Position))
@@ -625,6 +652,7 @@ public partial class PlacementController : MonoBehaviour
 
     void HandleScroll()
     {
+        if (_mouseRotation.Active) return;
         float s = Input.GetAxis("Mouse ScrollWheel");
         if (Mathf.Abs(s) < 0.001f) return;
 
@@ -654,6 +682,7 @@ public partial class PlacementController : MonoBehaviour
 
     void HandleMouseMove()
     {
+        if (_mouseRotation.Active) return;
         Ray r = cam.myCam.ScreenPointToRay(VirtualCursor.Position);
         Vector3 world;
 
@@ -744,7 +773,7 @@ public partial class PlacementController : MonoBehaviour
     // Edit mode only.
     // A / D move block left/right relative to camera's horizontal facing
     // W / S move block forward / back relative to camera's horizontal facing
-    // Q / E move block UP / DOWN in world Y
+    // E / Q move block UP / DOWN in world Y
     void HandleKeyboardOffset()
     {
         Vector3Int right   = SnapToHorizontalAxis(cam.transform.right);
@@ -754,8 +783,8 @@ public partial class PlacementController : MonoBehaviour
         if (Input.GetKeyDown(KeyCode.D)) Nudge(right);
         if (Input.GetKeyDown(KeyCode.W)) Nudge(forward);
         if (Input.GetKeyDown(KeyCode.S)) Nudge(-forward);
-        if (Input.GetKeyDown(KeyCode.Q)) Nudge(Vector3Int.up);
-        if (Input.GetKeyDown(KeyCode.E)) Nudge(Vector3Int.down);
+        if (Input.GetKeyDown(KeyCode.E)) Nudge(Vector3Int.up);
+        if (Input.GetKeyDown(KeyCode.Q)) Nudge(Vector3Int.down);
 
         // Gamepad d-pad mirrors A/D/W/S (Q/E depth stays mouse/keyboard-only, low value on a pad).
         if (GamepadInput.CycleBlockPrevDown) Nudge(-right);
@@ -764,25 +793,34 @@ public partial class PlacementController : MonoBehaviour
         if (GamepadInput.DPadDownDown)       Nudge(Vector3Int.down);
     }
 
-    // One step of keyboard/d-pad nudge.
-    //
-    // In snapping mode the nudge can't just add to manualOffset and hope. The snap
-    // solver runs again next frame, re-derives baseGridPos from the (unmoved) mouse
-    // ray, and tests `raw + manualOffset` — so when the nudged cell isn't placeable
-    // it goes hunting for a base that makes some OTHER nearby cell valid, and the
-    // one it finds is usually the cell we just left. The block visibly refuses to
-    // move, and pressing again does nothing. Rejecting the step here is honest
-    // about what happened instead of letting the solver quietly undo it.
+    // Move the anchor, then put the cursor and build plane at that same position.
     void Nudge(Vector3Int delta)
     {
         if (delta == Vector3Int.zero) return;
-
-        // Free move has no support constraint at all — the offset IS the position.
-        if (GameSettings.FreeMove) { manualOffset += delta; return; }
-
-        var cells = GetRotatedCells();
-        if (cells.Length > 0 && !CanPlace(currentGridPos + delta, cells)) return;
+        if (!GameSettings.FreeMove)
+        {
+            var cells = GetRotatedCells();
+            if (cells.Length > 0 && !CanPlace(baseGridPos + manualOffset + delta, cells)) return;
+        }
         manualOffset += delta;
+        AlignPlacementCursor();
+    }
+
+    void AlignPlacementCursor()
+    {
+        currentGridPos = baseGridPos + manualOffset;
+        baseGridPos = currentGridPos;
+        manualOffset = Vector3Int.zero;
+        _buildY = currentGridPos.y;
+        _ghostAnchorSnap = true;   // cursor and ghost arrive at the manual anchor together
+        _lastSnappedBaseGridPos = baseGridPos;
+        _hasLastRawCell = false;
+
+        Vector3 world = grid.GridToWorld(currentGridPos);
+        Vector2 screen = cam.myCam.WorldToScreenPoint(world);
+        Ray ray = cam.myCam.ScreenPointToRay(screen);
+        _depth = Vector3.Dot(world - ray.origin, ray.direction);
+        VirtualCursor.Warp(screen);
     }
 
     // Select mode: WASD pans the camera continuously along its horizontal facing,
@@ -822,44 +860,22 @@ public partial class PlacementController : MonoBehaviour
 
     void HandleRotate()
     {
-        bool shift = Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift);
+        if (_currentRotation != _targetRotation) return;
+        bool rotated = _mouseRotationDelta != Quaternion.identity;
+        if (rotated) _targetRotation = _mouseRotationDelta * _targetRotation;
 
-        // World-space rotation (pre-multiply). delta * old applies delta in
-        // world frame, so 1/2/3 always rotate around world X/Y/Z regardless
-        // of how the block has been turned before. Keeps the visual ring
-        // overlay axis-aligned and predictable.
-        bool rotated = false;
-        if (Input.GetKeyDown(KeyCode.Alpha1))
+        // Keep the gamepad's existing yaw action.
+        else if (GamepadInput.RotateDown)
         {
-            AudioManager.Instance.PlayRotate();
-            _targetRotation = Quaternion.Euler(90, 0, 0) * _targetRotation;
-            rotated = true;
-        }
-
-        if (Input.GetKeyDown(KeyCode.Alpha2))
-        {
-            AudioManager.Instance.PlayRotate();
             _targetRotation = Quaternion.Euler(0, 90, 0) * _targetRotation;
             rotated = true;
         }
 
-        if (Input.GetKeyDown(KeyCode.Alpha3))
+        if (rotated)
         {
-            AudioManager.Instance.PlayRotate();
-            _targetRotation = Quaternion.Euler(0, 0, 90) * _targetRotation;
-            rotated = true;
+            AudioManager.Instance?.PlayRotate();
+            BlockRotated?.Invoke();
         }
-
-        // Right shoulder — a single gamepad button can't cover all 3 axes, so it
-        // mirrors the most common one (yaw, same as Alpha2).
-        if (GamepadInput.RotateDown)
-        {
-            AudioManager.Instance.PlayRotate();
-            _targetRotation = Quaternion.Euler(0, 90, 0) * _targetRotation;
-            rotated = true;
-        }
-
-        if (rotated) BlockRotated?.Invoke();
     }
 
     void HandleModeSwitch()
@@ -938,6 +954,8 @@ public partial class PlacementController : MonoBehaviour
 
     void CancelEditMode()
     {
+        VirtualCursor.EndRotation();
+        _mouseRotation.Reset();
         if (isPickingUpObject)
         {
             CancelAndReturnObject();
@@ -1382,6 +1400,8 @@ public partial class PlacementController : MonoBehaviour
     // focusPos: if provided, camera pivots there once. Pass null to leave camera in place.
     void EnterEditMode(Vector3? focusPos)
     {
+        VirtualCursor.EndRotation();
+        _mouseRotation.Reset();
         ClearMultiSelection();   // single choke point — edit mode and a box-selection can never coexist
         mode = PlacementMode.Edit;
         _selectedEndpoint = null;   // leaving Select hides the spawn-intel panel

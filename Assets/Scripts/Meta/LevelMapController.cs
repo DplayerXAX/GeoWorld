@@ -90,7 +90,7 @@ public partial class LevelMapController : MonoBehaviour
     [Tooltip("Key that opens/closes the build bar (place earned reward blocks). Matches gameplay's shop key.")]
     public KeyCode buildModeKey = KeyCode.F;
     [Tooltip("Ghost rotation ease speed — same formula/feel as PlacementController's HandleRotate.")]
-    public float rotateSpeed = 10f;
+    public float rotateSpeed = 30f;
     [Tooltip("How fast the held ghost GLIDES toward its snapped grid target. Purely visual — placement still lands on the exact snapped cell — but easing the render position (instead of hard-snapping cell to cell) is what makes moving a held block feel fluid instead of jumpy. Higher = snappier.")]
     public float ghostFollowSpeed = 16f;
     public Color ghostValidColor   = new Color(0.35f, 1f, 0.45f, 0.55f);
@@ -142,17 +142,15 @@ public partial class LevelMapController : MonoBehaviour
     BlockData    _ghostBlock;
     // Full 3-axis — some shapes (e.g. "corner") have a vertical arm a Y-only spin
     // could never reach. Two-value split mirrors PlacementController.HandleRotate
-    // exactly: _ghostTargetRotation snaps instantly on 1/2/3, _ghostCurrentRotation
+    // exactly: _ghostTargetRotation snaps in 90-degree steps, _ghostCurrentRotation
     // eases toward it every frame and is what actually drives the preview cells —
     // so the ghost visibly flips through intermediate orientations, not an instant
     // snap, same as gameplay.
     Quaternion   _ghostTargetRotation  = Quaternion.identity;
     Quaternion   _ghostCurrentRotation = Quaternion.identity;
+    readonly PlacementRotationInput _mouseRotation = new();
+    public bool IsMouseRotating => _mouseRotation.Active;
     Vector3Int   _ghostOrigin;
-    // WASDQE nudge on top of wherever the mouse is hovering — same convention as
-    // gameplay's manualOffset (HandleKeyboardOffset): additive, persists across
-    // mouse movement, reset to zero only when a fresh hold begins.
-    Vector3Int   _ghostManualOffset;
     bool         _ghostHoveringPawnColumn;   // cursor is over the column the pawn is standing on — never a valid target
     Vector3Int[] _ghostCells;
     bool         _placementValid;
@@ -165,6 +163,7 @@ public partial class LevelMapController : MonoBehaviour
     bool    _ghostAnchorSnap;
     // Last surface height the cursor crossed, for gliding past the built edge.
     int     _ghostPlaneY;
+    bool    _ghostPlanePinned;   // manual movement/rotation keeps the chosen height
 
     // True when the held ghost was SPENT from inventory at grab time (a fresh tray
     // pick). Cancelling refunds it; committing just keeps it spent. A re-picked
@@ -600,6 +599,12 @@ public partial class LevelMapController : MonoBehaviour
     // The loop was Post()'d against this GameObject — Wwise doesn't stop it on its own
     // just because the scene unloads, so stop it explicitly or it bleeds into gameplay.
     void OnDestroy() => _activeLoop?.Stop(this.gameObject);
+
+    void OnDisable()
+    {
+        if (_mouseRotation.Active) VirtualCursor.EndRotation();
+        _mouseRotation.Reset();
+    }
 
     void LateUpdate()
     {
@@ -1214,7 +1219,12 @@ public partial class LevelMapController : MonoBehaviour
         HandleFocusViewportDrag();   // middle-mouse drag — no conflict with build mode, so it runs unconditionally
         // No clicking/walking/building while the grow-in reveal owns the camera, or
         // while a minigame is running on top of this scene.
-        if (SettingsScreen.Open || _decorCutscenePlaying || MinigameStage.AnyActive) return;
+        if (SettingsScreen.Open || _decorCutscenePlaying || MinigameStage.AnyActive)
+        {
+            VirtualCursor.EndRotation();
+            _mouseRotation.Reset();
+            return;
+        }
 
         if (_buildMode) { UpdateBuildMode(); return; }   // scroll is reserved for HandleGhostScroll in there
 
@@ -1805,6 +1815,8 @@ public partial class LevelMapController : MonoBehaviour
 
         if (_ghostBlock == null)
         {
+            VirtualCursor.EndRotation();
+            _mouseRotation.Reset();
             // Nothing held — a click tries to pick an EXISTING player-built piece
             // back up for re-editing (gameplay's PickUpSelected). Picking a NEW
             // block is the tray buttons' job (SpawnTrayEntry), not this click.
@@ -1812,26 +1824,28 @@ public partial class LevelMapController : MonoBehaviour
             return;
         }
 
-        // 1/2/3 = world X/Y/Z, same keys as gameplay's HandleRotate — full 3-axis,
-        // since a shape like "corner" has a vertical arm a Y-only spin could never
-        // reach. Only the TARGET snaps on keypress; the actual preview/placement
-        // rotation eases toward it every frame below, so the ghost visibly flips
-        // through intermediate orientations exactly like gameplay's block editing.
-        if (Input.GetKeyDown(KeyCode.Alpha1)) _ghostTargetRotation = Quaternion.Euler(90, 0, 0) * _ghostTargetRotation;
-        if (Input.GetKeyDown(KeyCode.Alpha2)) _ghostTargetRotation = Quaternion.Euler(0, 90, 0) * _ghostTargetRotation;
-        if (Input.GetKeyDown(KeyCode.Alpha3)) _ghostTargetRotation = Quaternion.Euler(0, 0, 90) * _ghostTargetRotation;
-
         _ghostCurrentRotation = Quaternion.Slerp(_ghostCurrentRotation, _ghostTargetRotation,
                                                  1f - Mathf.Exp(-rotateSpeed * Time.deltaTime));
+        bool canRotate = Quaternion.Angle(_ghostCurrentRotation, _ghostTargetRotation) < 1f;
+        if (canRotate) _ghostCurrentRotation = _ghostTargetRotation;
 
-        HandleGhostKeyboardOffset();   // WASDQE nudge, same convention as gameplay's HandleKeyboardOffset
-        HandleGhostScroll();           // wheel = push the held block forward / back, like gameplay's edit-mode scroll
+        bool rotating = Application.isFocused && Input.GetKey(KeyCode.LeftAlt);
+        if (rotating && !_mouseRotation.Active) PinGhostPlane();
+        VirtualCursor.SetRotationAnchor(rotating, _cam, gridSystem.GridToWorld(_ghostOrigin));
+        var turn = _mouseRotation.Read(rotating,
+            VirtualCursor.MouseDelta, Input.mouseScrollDelta.y, _cam.transform.right, canRotate);
+        _ghostTargetRotation = turn * _ghostTargetRotation;
 
-        TrackGhostOrigin();
+        if (!_mouseRotation.Active)
+        {
+            TrackGhostOrigin();
+            HandleGhostKeyboardOffset();
+            HandleGhostScroll();
+        }
 
         UpdateGhostPreview();   // every frame (not just on change) so the rotation ease actually animates
 
-        if (Input.GetMouseButtonDown(0))
+        if (!_mouseRotation.Active && Input.GetMouseButtonDown(0))
         {
             if (_placementValid) CommitPlacement();
             // Explain the ONE refusal the player can't reason about from the ghost
@@ -1851,7 +1865,8 @@ public partial class LevelMapController : MonoBehaviour
         float cs = gridSystem.cellSize;
         Ray ray = _cam.ScreenPointToRay(VirtualCursor.Position);
 
-        if (Physics.Raycast(ray, out var hit))
+        Vector3Int hoverColumn;
+        if (!_ghostPlanePinned && Physics.Raycast(ray, out var hit))
         {
             // Nudge slightly INTO the surface so a hit right on a face boundary
             // resolves to the block, not the empty cell beyond it.
@@ -1889,22 +1904,37 @@ public partial class LevelMapController : MonoBehaviour
     Vector3Int _ghostHover;   // last column the cursor resolved to — see TrackGhostOrigin
 
     // Same WASDQE convention as gameplay's HandleKeyboardOffset: A/D shift relative
-    // to camera-right, W/S shift relative to camera-forward, Q/E shift world up/down.
-    // Nudges accumulate into _ghostManualOffset, layered on top of wherever the
-    // mouse is hovering (see UpdateBuildMode) — persists across mouse movement,
-    // reset to zero only when a fresh hold begins (tray pick or re-pickup).
+    // to camera-right, W/S shift relative to camera-forward, E/Q shift world up/down.
+    // Cursor and build plane follow the anchor, so the nudge needs no offset.
     void HandleGhostKeyboardOffset()
     {
         if (_cam == null) return;
         Vector3Int right   = SnapToHorizontalAxis(_cam.transform.right);
         Vector3Int forward = SnapToHorizontalAxis(_cam.transform.forward);
 
-        if (Input.GetKeyDown(KeyCode.A)) _ghostManualOffset -= right;
-        if (Input.GetKeyDown(KeyCode.D)) _ghostManualOffset += right;
-        if (Input.GetKeyDown(KeyCode.W)) _ghostManualOffset += forward;
-        if (Input.GetKeyDown(KeyCode.S)) _ghostManualOffset -= forward;
-        if (Input.GetKeyDown(KeyCode.Q)) _ghostManualOffset += Vector3Int.up;
-        if (Input.GetKeyDown(KeyCode.E)) _ghostManualOffset += Vector3Int.down;
+        Vector3Int delta = Vector3Int.zero;
+        if (Input.GetKeyDown(KeyCode.A)) delta -= right;
+        if (Input.GetKeyDown(KeyCode.D)) delta += right;
+        if (Input.GetKeyDown(KeyCode.W)) delta += forward;
+        if (Input.GetKeyDown(KeyCode.S)) delta -= forward;
+        if (Input.GetKeyDown(KeyCode.E)) delta += Vector3Int.up;
+        if (Input.GetKeyDown(KeyCode.Q)) delta += Vector3Int.down;
+        if (delta != Vector3Int.zero) MoveGhost(delta);
+    }
+
+    void PinGhostPlane()
+    {
+        _ghostPlaneY = _ghostOrigin.y;
+        _ghostPlanePinned = true;
+        _ghostAnchorSnap = true;
+        _ghostHoveringPawnColumn = _ghostOrigin.x == _currentCell.x && _ghostOrigin.z == _currentCell.z;
+    }
+
+    void MoveGhost(Vector3Int delta)
+    {
+        _ghostOrigin += delta;
+        PinGhostPlane();
+        VirtualCursor.Warp(_cam.WorldToScreenPoint(gridSystem.GridToWorld(_ghostOrigin)));
     }
 
     // Mouse wheel pushes the held block away from / toward the camera, one cell per
@@ -1918,7 +1948,7 @@ public partial class LevelMapController : MonoBehaviour
         if (Mathf.Abs(s) < 0.001f) return;
 
         Vector3Int forward = SnapToHorizontalAxis(_cam.transform.forward);
-        _ghostManualOffset += s > 0f ? forward : -forward;
+        MoveGhost(s > 0f ? forward : -forward);
     }
 
     static Vector3Int SnapToHorizontalAxis(Vector3 dir)
@@ -1966,7 +1996,7 @@ public partial class LevelMapController : MonoBehaviour
         _ghostBlock            = block;
         _ghostTargetRotation   = rotation;
         _ghostCurrentRotation  = rotation;   // snap — no need to animate INTO its own current orientation
-        _ghostManualOffset     = Vector3Int.zero;
+        _ghostPlanePinned      = false;
         _pickedOrigCells       = origCells;
         _pickedOrigRotation    = rotation;
         _ghostFromInventory    = false;      // already paid for on its first placement
@@ -1980,6 +2010,8 @@ public partial class LevelMapController : MonoBehaviour
     // clean round-trip — never a silent loss of an already-placed bridge.
     void CancelGhostHold()
     {
+        VirtualCursor.EndRotation();
+        _mouseRotation.Reset();
         if (_pickedOrigCells != null && _ghostBlock != null)
         {
             SpawnMapBlockNode(_pickedOrigCells, _ghostBlock, _pickedOrigRotation);
@@ -2220,7 +2252,7 @@ public partial class LevelMapController : MonoBehaviour
         }
 
         _trayHint.text = _ghostBlock != null
-            ? $"Placing {_ghostBlock.ShapeName} — click the map to place, 1/2/3 to rotate, Esc to cancel."
+            ? $"Placing {_ghostBlock.ShapeName} — click to place, hold Alt + mouse / wheel to rotate, Esc to cancel."
             : (any ? "Pick a reward block, or click a piece you've already placed to move it." : "No blocks earned yet — clear levels to earn map blocks.");
     }
 
@@ -2249,7 +2281,7 @@ public partial class LevelMapController : MonoBehaviour
 
             _ghostBlock = bd;
             _ghostTargetRotation = _ghostCurrentRotation = Quaternion.identity;
-            _ghostManualOffset = Vector3Int.zero;
+            _ghostPlanePinned = false;
             _ghostAnchorSnap = true;   // appear at the cursor, don't glide in from wherever the last hold sat
             RefreshTray();
             _trayTargetScale = 0f;   // tuck the bars away so the map is fully visible while placing

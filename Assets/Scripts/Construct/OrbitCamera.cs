@@ -291,20 +291,22 @@ public class OrbitCamera : MonoBehaviour
             1f - Mathf.Exp(-transitionSpeed * Time.unscaledDeltaTime)
         );
 
-        Vector2 lookInput = InputLocked ? Vector2.zero : GamepadInput.Look;   // right stick — orbits without a button hold
+        bool rotatingBlock = (PlacementController.Instance != null && PlacementController.Instance.IsMouseRotating)
+                          || (LevelMapController.Instance != null && LevelMapController.Instance.IsMouseRotating);
+        Vector2 lookInput = InputLocked || rotatingBlock ? Vector2.zero : GamepadInput.Look;
 
         // Consume the refocus guard for this frame; also clamp the raw axis reading
         // itself (defense in depth against any other source of a one-frame delta
         // spike, not just refocus — a stuttered frame, a driver hiccup, ...).
         // MaxAxisPerFrame is generous for a genuinely fast intentional mouse flick
         // but well below what a multi-frame backlog dump reports.
-        bool suppressMouse = _suppressMouseLookOnce;
+        bool suppressMouse = _suppressMouseLookOnce || VirtualCursor.IgnoreMouseDelta;
         _suppressMouseLookOnce = false;
         const float MaxAxisPerFrame = 6f;
         float mx = suppressMouse ? 0f : Mathf.Clamp(Input.GetAxis("Mouse X"), -MaxAxisPerFrame, MaxAxisPerFrame);
         float my = suppressMouse ? 0f : Mathf.Clamp(Input.GetAxis("Mouse Y"), -MaxAxisPerFrame, MaxAxisPerFrame);
 
-        if (!InputLocked)
+        if (!InputLocked && !rotatingBlock)
         {
         if (!useOrthographic)
         {
