@@ -1032,11 +1032,19 @@ public class GameFlowManager : MonoBehaviour
         public List<WaveGenerator.WaveForecastGroup> groups;
     }
 
-    // 1-based ordinal of the upcoming run. Each Run() is one wave from the
-    // player's POV, but roundIndex only ticks every runsPerEndpoint runs — so
-    // this derived counter is the monotonic "which wave is this" number for UI.
-    public int UpcomingWaveNumber =>
-        roundIndex * Mathf.Max(1, runsPerEndpoint) + _runsSinceLastEndpoint + 1;
+    // 1-based "which wave is this": the wave being fought during combat, the next
+    // one in the build phase. Read straight off the waves actually completed.
+    //
+    // It used to be rebuilt from roundIndex × runsPerEndpoint + runs since the last
+    // endpoint, which went wrong twice:
+    //   * at the moment a wave ENDS, HandleWaveProgress counts the wave (and may
+    //     clear the level) before those counters move on — so a level cleared
+    //     straight after wave 2 still read "wave 2", and a "Reach wave 3" objective
+    //     scored no star although the player had plainly reached it;
+    //   * with an authored endpoint schedule the run counter resets whenever the
+    //     schedule adds an endpoint, not every runsPerEndpoint runs, so the number
+    //     drifted from the real wave (HUD, tutorial/mechanic wave gates).
+    public int UpcomingWaveNumber => _wavesCompleted + 1;
 
     public WaveForecast GetNextWaveForecast()
     {

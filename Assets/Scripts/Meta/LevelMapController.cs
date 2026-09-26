@@ -1896,7 +1896,7 @@ public partial class LevelMapController : MonoBehaviour
         // ALWAYS rebuilt, even when the hover column could not be updated this frame.
         // Returning early here used to skip it, so WASDQE nudges piled up in
         // _ghostManualOffset without the ghost ever moving — "the keys don't work".
-        _ghostOrigin = _ghostHover + Vector3Int.up + _ghostManualOffset;
+        _ghostOrigin = _ghostHover + Vector3Int.up;
         // Never let a placement stack directly on the column the pawn is standing
         // on right now — it would bury/trap the pawn under the new piece.
         _ghostHoveringPawnColumn = _ghostHover.x == _currentCell.x && _ghostHover.z == _currentCell.z;

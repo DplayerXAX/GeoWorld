@@ -36,6 +36,9 @@ Shader "GeoWorld/HeightFog"
         _Scatter     ("Scatter intensity", Range(0, 4))      = 0.8
         _SkyBlend    ("Sky blend",         Range(0, 1))      = 0.7
         _SkyMip      ("Sky blur (mip)",    Float)            = 3
+        _MapClear    ("Keep the map clear", Range(0, 1))     = 1
+        _ClearFrom   ("Map clear starts (above top, units)", Float) = 0
+        _ClearTo     ("Map fully clear (above top, units)",  Float) = 0.6
     }
 
     SubShader
@@ -57,6 +60,11 @@ Shader "GeoWorld/HeightFog"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/DeclareDepthTexture.hlsl"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
 
+            // GLOBAL, set by MistBank.SetProtected: a top-down map of the ground on
+            // show, and its rect (x0, z0, 1/width, 1/depth).
+            TEXTURE2D(_MistProtect); SAMPLER(sampler_MistProtect);
+            float4 _MistProtectRect;
+
             CBUFFER_START(UnityPerMaterial)
                 float4 _FogColor;
                 float4 _ScatterTint;
@@ -72,6 +80,9 @@ Shader "GeoWorld/HeightFog"
                 float  _Scatter;
                 float  _SkyBlend;
                 float  _SkyMip;
+                float  _MapClear;
+                float  _ClearFrom;
+                float  _ClearTo;
             CBUFFER_END
 
             struct Attributes { float4 positionOS : POSITION; };
@@ -164,6 +175,26 @@ Shader "GeoWorld/HeightFog"
 
                 float tau    = OpticalDepth(cam.y, rd.y, L, top, max(_Falloff, 1e-3), _Density);
                 float amount = saturate((1.0 - exp(-tau)) * _Strength);
+
+                // Keep the map itself clear. The fog above its top thins out but never
+                // quite reaches nothing, so every ray down to a block, tree or the pawn
+                // picked up a faint veil and the whole map read slightly soft. Where
+                // the surface a pixel shows stands on the ground that is on show
+                // (MistBank's protect map) and above the fog line, the fog in front of
+                // it is let go over a short height: the feet of the blocks still sink
+                // into the fog, everything above is crisp. The fog itself is untouched —
+                // rays into the sea between blocks, or off the edge of the map, end in
+                // the void (isSky) and keep all of it.
+                if (!isSky && _MapClear > 0.001)
+                {
+                    float2 puv = (scene.xz - _MistProtectRect.xy) * _MistProtectRect.zw;
+                    if (all(puv > 0.0) && all(puv < 1.0))
+                    {
+                        float onMap = SAMPLE_TEXTURE2D_LOD(_MistProtect, sampler_MistProtect, puv, 0).r;
+                        float above = smoothstep(_ClearFrom, max(_ClearTo, _ClearFrom + 1e-3), scene.y - top);
+                        amount *= 1.0 - _MapClear * onMap * above;
+                    }
+                }
                 if (amount <= 0.001) return 0;
 
                 // Colour: the fog's own, pulled toward the sky on grazing rays.
