@@ -21,6 +21,7 @@ State	ID	Name	State Group			Notes
 Game Parameter	ID	Name			Wwise Object Path	Notes
 	988953028	SFXVolume			\Default Work Unit\SFXVolume	
 	2346531308	MusicVolume			\Default Work Unit\MusicVolume	
+	2515456893	HurtPulse			\Default Work Unit\HurtPulse	
 	2918011349	MasterVolume			\Default Work Unit\MasterVolume	
 
 Audio Bus	ID	Name			Wwise Object Path	Notes
@@ -33,6 +34,7 @@ Audio Bus	ID	Name			Wwise Object Path	Notes
 	4084199202	SFX Audio Bus			\Default Work Unit\SFX Audio Bus	
 
 Effect plug-ins	ID	Name	Type				Notes
+	701863527	Inside_My_Head	Wwise RoomVerb			
 	3216246379	Space_Dreaming	Wwise RoomVerb			
 
 Audio Devices	ID	Name	Type				Notes

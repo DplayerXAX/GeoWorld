@@ -345,7 +345,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Image
   m_Material: {fileID: 0}
-  m_Color: {r: 0, g: 0, b: 0, a: 0.9490196}
+  m_Color: {r: 0, g: 0, b: 0, a: 0}
   m_RaycastTarget: 1
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1
@@ -1265,6 +1265,9 @@ MonoBehaviour:
   trailWidth: 0.07
   mapPanSpeed: 8
   entryPullBack: 3.2
+  rewardFocusPullBack: 2.5
+  cameraFloorOffset: 0
+  cameraBodyAboveFloor: 1.5
   cameraFocus: 1
   cameraLerp: 4
   focusViewportX: 0.4
@@ -1288,7 +1291,7 @@ MonoBehaviour:
   ghostInvalidColor: {r: 1, g: 0.3, b: 0.3, a: 0.55}
   playerBuiltColor: {r: 0.55, g: 0.85, b: 0.95, a: 1}
   pawnScale: 1.1
-  resetSaveOnStart: 0
+  resetSaveOnStart: 1
   autoFill: 0
   autoReward: 0
   editorAutoFillBlocks:
@@ -1434,6 +1437,68 @@ MonoBehaviour:
     constellationLinks: 10
     linkColor: {r: 0.55, g: 0.7, b: 1, a: 1}
     meridianSegments: 14
+  grove:
+    enabled: 1
+    gateLevelId: 1-1
+    origin: {x: -30, y: 2, z: -14}
+    size: {x: 40, y: 40}
+    rotationSteps: 0
+    soilColor: {r: 0.16, g: 0.29, b: 0.21, a: 1}
+    soilJitter: 0.12
+    growRiseHeight: 3
+    growRiseDuration: 1.8
+    growHoldSeconds: 1.4
+    growZoom: 0
+    growYawOffset: 60
+    transitionFadeDuration: 0.6
+    growAsideText: 
+    growAsideSeconds: 4.5
+    npc: {fileID: 0}
+    minigame: {fileID: 0}
+    minigamePedestalLift: 2
+    depth: 9
+    arcHalf: 100
+    irregularity: 0.24
+    pathColor: {r: 0.66, g: 0.55, b: 0.41, a: 1}
+    pathWidth: 2
+    pathWander: 1.6
+    pathWaves: 1.6
+    pathSpur: 1
+    avenueSpacing: 1.7
+    avenueOffset: 0.9
+    avenueJitter: 0.18
+    elderTree: 1
+    elderScale: 2.2
+    clearing: 2.8
+    groves: 6
+    treesPerGrove: 3
+    shrubs: 30
+    tufts: 70
+    spacing: 1.1
+    wayMarkers: 10
+    stoneColor: {r: 0.63, g: 0.63, b: 0.6, a: 1}
+    bark: {r: 0.74, g: 0.67, b: 0.57, a: 1}
+    leafDeep: {r: 0.2, g: 0.52, b: 0.3, a: 1}
+    leafLight: {r: 0.47, g: 0.8, b: 0.42, a: 1}
+    groundMist: 1
+    groundMistStyle:
+      color: {r: 0.86, g: 0.9, b: 0.84, a: 1}
+      strength: 0.7
+      density: 0.7
+      height: 5
+      depth: 0
+      offset: 0
+      falloff: 0
+      skyBlend: 0
+      scatter: 2.6
+      anisotropy: 0.6
+      steps: 24
+      edge: 2.5
+      clearance: 0
+      edgeWarp: 1.2
+      noiseScale: 0
+    variants: 6
+    castShadows: 1
   monumentMaterial: {fileID: 0}
   monumentScale: 1
   monumentLight: 1.6
@@ -1443,6 +1508,67 @@ MonoBehaviour:
   windWidth: 0.3
   windLift: 0.08
   windFadeSpeed: 2.5
+  revealWholeMap: 0
+  revealRiseHeight: 3
+  revealCubeDuration: 0.6
+  revealCubeInterval: 0.05
+  revealShuffle: 2.5
+  revealMaxSpread: 3.5
+  revealOvershoot: 0.08
+  mistEnabled: 0
+  mistStyle:
+    color: {r: 0.94, g: 0.91, b: 0.86, a: 1}
+    strength: 0.92
+    density: 1.7
+    height: 3
+    depth: 6
+    offset: -3
+    falloff: 0.9
+    skyBlend: 0.3
+    scatter: 1.8
+    anisotropy: 0.55
+    steps: 24
+    edge: 5
+    clearance: 1.4
+    edgeWarp: 1.4
+    noiseScale: 0
+  mistDisperse: 1.4
+  mistLead: 0.6
+  heightFogEnabled: 1
+  heightFogStyle:
+    color: {r: 0.9, g: 0.89, b: 0.87, a: 1}
+    density: 0.35
+    topOffset: 0.2
+    falloff: 0.8
+    wave: 0.6
+    maxDistance: 25
+    skyBlend: 0.7
+    scatter: 0.8
+    anisotropy: 0.5
+  hazeEnabled: 0
+  hazeStyle:
+    color: {r: 0.93, g: 0.9, b: 0.86, a: 1}
+    strength: 0.95
+    density: 0.45
+    height: 7
+    depth: 10
+    offset: -3
+    falloff: 0.7
+    skyBlend: 0.85
+    scatter: 1.6
+    anisotropy: 0.5
+    steps: 28
+    edge: 24
+    clearance: 2.5
+    edgeWarp: 3
+    noiseScale: 0.1
+  hazeMargin: 30
+  hazeAtBanks: 0.4
+  hazeSink:
+    start: 14
+    rate: 0.35
+    max: 12
+    soft: 8
 --- !u!114 &1293787489
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1456,6 +1582,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::GridSystem
   cellSize: 1
+  originCells: {x: 0, y: -190, z: 0}
   size: {x: 10, y: 5, z: 10}
 --- !u!4 &1293787490
 Transform:
@@ -1670,6 +1797,8 @@ MonoBehaviour:
   projectionToggleKey: 289
   perspectiveFov: 50
   transitionSpeed: 6
+  minFocusY: -Infinity
+  minCameraY: -Infinity
   myCam: {fileID: 1386953392}
 --- !u!1 &1911354781
 GameObject:

@@ -58,6 +58,12 @@ public partial class LevelMapController : MonoBehaviour
     public float mapPanSpeed = 8f;
     [Tooltip("World units the opening shot backs off by, so an entry dialogue doesn't sit on top of whatever the camera framed. Matches LevelSelectTutorialGuide.walkFocusPullBack.")]
     public float entryPullBack = 3.2f;
+    [Tooltip("World units the camera backs off (the way S pans) when a level's reward conversation opens — e.g. the one after clearing the tutorial — so the level it frames isn't sitting under the dialogue box.")]
+    public float rewardFocusPullBack = 2.5f;
+    [Tooltip("Lowest the view's focus may be panned (Q/E), in cells relative to the underside of the map's lowest block. 0 = level with the underside.")]
+    public float cameraFloorOffset = 0f;
+    [Tooltip("How far above that floor the camera body itself must stay, in cells.")]
+    public float cameraBodyAboveFloor = 1.5f;
     [Tooltip("Used by the fallback framer only (scenes with no OrbitCamera). Clicking a cell no longer moves the camera either way — the player pans it themselves.")]
     public bool  cameraFocus = true;
     public float cameraLerp  = 4f;
@@ -242,6 +248,10 @@ public partial class LevelMapController : MonoBehaviour
         if (buildFromFile) BuildMap();
         else _nodes.AddRange(FindObjectsByType<LevelNode>(FindObjectsSortMode.None));
 
+        // Before anything links, surfaces or replays onto the map: a region that has
+        // not been revealed yet must not be walkable ground for any of that.
+        VeilUnrevealedRegions();
+
         RebuildPlacedMapBlocks();   // replay the player's own map-building from the save
         MaybeEditorAutoFill();      // editor/QA: restore the carved bridge blocks so everything's reachable
         LinkAllNodes();             // adjacency across BOTH the authored map and player-built nodes
@@ -259,6 +269,8 @@ public partial class LevelMapController : MonoBehaviour
         // cleared — in which case the grow-in cutscene below plays before any dialogue.
         var decorGrowthPending = TryBuildDecors();
         CollectInteractableSpots();   // after the surface — the spots snap onto it
+        SinkRisingRegions();          // after markers and spots are placed at full height — see there
+        BuildMist();                  // over everything still hidden, and what is about to rise
 
         // Resume on the cell the pawn last left from, if it still exists — a block
         // the player picked up since then leaves nothing to stand on, so fall back
@@ -296,6 +308,16 @@ public partial class LevelMapController : MonoBehaviour
             // is the one frame in the whole tutorial that ISN'T pulled back — and
             // it's the one with a dialogue box over it.
             _orbit.FocusOnPoint(PulledBack(_camFocus, entryPullBack));
+
+            // Floor: the view can't be panned down under the map into the fog sea.
+            // Focus stops at the underside of the lowest block; the camera body a
+            // little above it, so it can't dip below the ground it looks at either.
+            float lowest = MapLowestY();
+            if (lowest < float.MaxValue && gridSystem != null)
+            {
+                _orbit.minFocusY  = lowest + cameraFloorOffset * gridSystem.cellSize;
+                _orbit.minCameraY = _orbit.minFocusY + cameraBodyAboveFloor * gridSystem.cellSize;
+            }
         }
         else if (_cam != null)
         {
@@ -323,8 +345,8 @@ public partial class LevelMapController : MonoBehaviour
         // the new decoration while it rises into place), THEN fires whichever of the
         // two dialogue beats below applies — never the other way around, or the
         // player would be mid-conversation while the camera yanks away to the field.
-        if (decorGrowthPending != null) StartCoroutine(PlayDecorGrowthCutscene(decorGrowthPending));
-        else                            PlayEntryDialogueIfAny();
+        if (HasReveal(decorGrowthPending)) StartCoroutine(PlayRevealCutscene(decorGrowthPending));
+        else                               PlayEntryDialogueIfAny();
     }
 
     void PlayEntryDialogueIfAny()
@@ -349,8 +371,10 @@ public partial class LevelMapController : MonoBehaviour
             LevelNode grantingNode = null;
             if (!string.IsNullOrEmpty(levelId))
                 grantingNode = _nodes.Find(n => n != null && n.level != null && n.level.levelId == levelId);
+            // Backed off along the camera's facing, as a tap of S would — the
+            // dialogue box otherwise sits right over the level it is talking about.
             if (_orbit != null && grantingNode != null)
-                _orbit.FocusOnPoint(grantingNode.transform.position, snap: false);
+                _orbit.FocusOnPoint(PulledBack(grantingNode.transform.position, rewardFocusPullBack), snap: false);
 
             // Remembered so the build-tutorial gate (below) knows whose
             // rewardSuggestCubeSide/rewardSuggestOrigin to show a hint box at.
@@ -891,7 +915,7 @@ public partial class LevelMapController : MonoBehaviour
     // off, tips onto its point, and spins — no legend needed to tell them apart.
     class MapLevelMarker : MonoBehaviour
     {
-        Vector3    _base;          // resting spot ON the block, captured on first frame
+        Vector3    _base;          // resting spot ON the block, in the block's local space — captured on first frame
         bool       _captured;
         Renderer   _rend;
         Transform  _badge;         // the tilted cube child — tips upright/flat with power
@@ -1109,13 +1133,23 @@ public partial class LevelMapController : MonoBehaviour
 
         void Update()
         {
-            if (!_captured) { _base = transform.position; _captured = true; }
+            // Resting spot held RELATIVE TO THE BLOCK, not in the world: a block on
+            // newly revealed ground is already sunk for its rise when this first
+            // runs, and a world-space rest would pin the badge down there while the
+            // block rose away without it.
+            var parent = transform.parent;
+            if (!_captured)
+            {
+                _base = parent != null ? parent.InverseTransformPoint(transform.position) : transform.position;
+                _captured = true;
+            }
+            Vector3 rest = parent != null ? parent.TransformPoint(_base) : _base;
 
             _t = Mathf.Lerp(_t, _powered ? 1f : 0f, 1f - Mathf.Exp(-4f * Time.deltaTime));
 
             // Height: grounded when dead, risen + bobbing when alive.
             float h = Mathf.Lerp(_grounded, _rise, _t) + Mathf.Sin(Time.time * 2f) * 0.12f * _t;
-            transform.position = _base + Vector3.up * h;
+            transform.position = rest + Vector3.up * h;
 
             // Spin: driven from an accumulator scaled by _t, so a dying badge eases to
             // a stop instead of freezing mid-turn (and a waking one spins up smoothly).
@@ -1836,26 +1870,38 @@ public partial class LevelMapController : MonoBehaviour
         {
             // Nudge slightly INTO the surface so a hit right on a face boundary
             // resolves to the block, not the empty cell beyond it.
-            hoverColumn = TopOfColumn(gridSystem.WorldToGrid(hit.point - ray.direction * (cs * 0.05f)));
-            _ghostPlaneY = hoverColumn.y + 1;   // remember this layer for empty-space gliding
+            _ghostHover  = TopOfColumn(gridSystem.WorldToGrid(hit.point - ray.direction * (cs * 0.05f)));
+            _ghostPlaneY = _ghostHover.y + 1;   // remember this layer for empty-space gliding
         }
         else
         {
             // Empty space: intersect the ray with the build plane at the remembered
             // layer's centre. Its own cell IS the placement layer (no +up).
-            float planeY = _ghostPlaneY * cs + cs * 0.5f;
-            if (Mathf.Abs(ray.direction.y) < 1e-4f) return;   // ray parallel to plane — keep last origin
-            float t = (planeY - ray.origin.y) / ray.direction.y;
-            if (t <= 0f) return;                              // plane is behind the camera — keep last origin
-            var cell = gridSystem.WorldToGrid(ray.origin + ray.direction * t);
-            hoverColumn = new Vector3Int(cell.x, _ghostPlaneY - 1, cell.z);   // -1 so the +up below lands on _ghostPlaneY
+            // Through the grid, not `y * cs`: the map's grid can be shifted
+            // (GridSystem.originCells), and a hand-rolled height put this plane 190
+            // units above the map — the ghost flew off whenever the cursor left a block.
+            float planeY = gridSystem.GridToWorld(new Vector3Int(0, _ghostPlaneY, 0)).y;
+            if (Mathf.Abs(ray.direction.y) >= 1e-4f)
+            {
+                float t = (planeY - ray.origin.y) / ray.direction.y;
+                if (t > 0f)
+                {
+                    var cell = gridSystem.WorldToGrid(ray.origin + ray.direction * t);
+                    _ghostHover = new Vector3Int(cell.x, _ghostPlaneY - 1, cell.z);   // -1 so the +up below lands on _ghostPlaneY
+                }
+            }
+            // else: parallel / behind the camera — keep the last hover column.
         }
 
-        _ghostOrigin = hoverColumn + Vector3Int.up;
+        // ALWAYS rebuilt, even when the hover column could not be updated this frame.
+        // Returning early here used to skip it, so WASDQE nudges piled up in
+        // _ghostManualOffset without the ghost ever moving — "the keys don't work".
+        _ghostOrigin = _ghostHover + Vector3Int.up + _ghostManualOffset;
         // Never let a placement stack directly on the column the pawn is standing
         // on right now — it would bury/trap the pawn under the new piece.
-        _ghostHoveringPawnColumn = hoverColumn.x == _currentCell.x && hoverColumn.z == _currentCell.z;
+        _ghostHoveringPawnColumn = _ghostHover.x == _currentCell.x && _ghostHover.z == _currentCell.z;
     }
+    Vector3Int _ghostHover;   // last column the cursor resolved to — see TrackGhostOrigin
 
     // Same WASDQE convention as gameplay's HandleKeyboardOffset: A/D shift relative
     // to camera-right, W/S shift relative to camera-forward, E/Q shift world up/down.

@@ -10,12 +10,20 @@
     "Type": "User",
     "GUID": "{701ECBBD-9C7B-4030-8CDB-749EE5D1C7B9}",
     "Language": "SFX",
-    "Hash": "{9137ADB3-EFF8-1514-785B-59B72B783481}",
+    "Hash": "{390838FE-D796-FCA1-8B35-6110DC310178}",
     "ObjectPath": "Init",
     "ShortName": "Init",
     "Path": "Init.bnk",
     "Plugins": {
      "ShareSets": [
+      {
+       "Id": "701863527",
+       "Name": "Inside_My_Head",
+       "ObjectPath": "\\Effects\\Factory Effects\\RoomVerb\\Claustrophobia\\Inside_My_Head",
+       "GUID": "{94B53301-9AA1-468F-8419-92AEDAAE39DF}",
+       "LibName": "Wwise RoomVerb",
+       "LibId": "7733251"
+      },
       {
        "Id": "3216246379",
        "Name": "Space_Dreaming",
@@ -62,7 +70,14 @@
       "Id": "493417818",
       "Name": "Music Audio Bus",
       "ObjectPath": "\\Busses\\Default Work Unit\\Master Audio Bus\\Music Audio Bus",
-      "GUID": "{70C2307A-1E32-4D4D-8E87-001C15FD39EB}"
+      "GUID": "{70C2307A-1E32-4D4D-8E87-001C15FD39EB}",
+      "PluginRefs": {
+       "ShareSets": [
+        {
+         "Id": "701863527"
+        }
+       ]
+      }
      },
      {
       "Id": "1530229465",
@@ -138,6 +153,12 @@
       "Name": "MusicVolume",
       "ObjectPath": "\\Game Parameters\\Default Work Unit\\MusicVolume",
       "GUID": "{CDDE6338-9412-45A1-9160-327DE1EB228F}"
+     },
+     {
+      "Id": "2515456893",
+      "Name": "HurtPulse",
+      "ObjectPath": "\\Game Parameters\\Default Work Unit\\HurtPulse",
+      "GUID": "{E31FB1D4-20EB-4A45-8235-5224AC604859}"
      },
      {
       "Id": "2648548617",
@@ -756,6 +777,6 @@
     ]
    }
   ],
-  "FileHash": "{AE2E2872-9DE4-92D5-906D-B1708B9EF0FE}"
+  "FileHash": "{0991602A-C8D3-70DA-C7A1-9265F9CAB88C}"
  }
 }

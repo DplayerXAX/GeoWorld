@@ -41,10 +41,30 @@ public class TurretController : MonoBehaviour
 
     EnemySurfaceUnit _target;
     float _fireTimer;
-    float _synergyFireRateMult = 1f;   // reversible synergy attack-speed buff (1 = none)
-    float _debuffFireRateMult  = 1f;   // reversible enemy attack-speed debuff (1 = none)
-    float _shrineFireRateMult  = 1f;   // reversible Enlightenment-shrine aura buff (1 = none)
-    float _shrineDamageMult    = 1f;   // reversible Enlightenment-shrine aura buff (1 = none)
+
+    // Every REVERSIBLE change to this turret's stats. The permanent upgrade paths
+    // (AddAttackSpeed, AddDamagePercent, AddRangePercent) still write the base
+    // values directly — an upgrade is the turret changing, not a buff on it.
+    //
+    // This replaces four hand-written channels (synergy / debuff / shrine fire
+    // rate, shrine damage), each its own field and setter, multiplied together by
+    // hand. That shape needed an edit here for every new source; an item that
+    // bends one turret now just adds an entry: turret.Mods.Set(stat, this, ...).
+    public readonly ModifierSet Mods = new();
+
+    // False while nothing connects this turret back to the build (BoardValidity).
+    // It stays on the board and can be picked up and moved — it just will not fire
+    // until something holds it up again.
+    public bool Supported = true;
+
+    // The type-specific animation of this turret's model (TurretAnimator), set by
+    // PlacementController.AttachTurretController. Told when the turret is held up,
+    // what it is aiming at and when it fires — the seam attack animations hang on.
+    public TurretAnimator Visual;
+
+    // The old channels, kept as named sources so their setters still work
+    // unchanged for the systems that call them.
+    static readonly object SrcSynergy = new(), SrcDebuff = new(), SrcShrine = new();
 
     [SerializeField, Range(0, 3)] int _powerPathLevel;
     [SerializeField, Range(0, 3)] int _burstPathLevel;
@@ -77,31 +97,27 @@ public class TurretController : MonoBehaviour
     // real step up rather than a marginal one.
     public float AoeBurnGroundDuration => _aoeFirePathLevel >= 2 ? 3f : 1.4f;
     public float AoeBurnTickInterval => 0.75f;
-    public int AoeBurnDamagePerTick => Mathf.Max(1, Mathf.CeilToInt(bulletDamage * (_aoeFirePathLevel >= 3 ? 0.67f : 0.34f)));
+    public int AoeBurnDamagePerTick => Mathf.Max(1, Mathf.CeilToInt(EffectiveBulletDamage * (_aoeFirePathLevel >= 3 ? 0.67f : 0.34f)));
 
     public bool AoeGravityWellEnabled => mode == Mode.Aoe && _aoeGravityPathLevel >= 1;
     public float AoeGravityRadius => aoeRadius * (_aoeGravityPathLevel >= 2 ? 1.33f : 1f);
     public float AoeGravityDuration => _aoeGravityPathLevel >= 3 ? 0.8f : 0.45f;
     public float AoeGravityPullSpeed => _aoeGravityPathLevel >= 3 ? 1.35f : 0.85f;
-    public int AoeGravityFinalDamage => _aoeGravityPathLevel >= 3 ? Mathf.Max(1, Mathf.CeilToInt(bulletDamage * 0.5f)) : 0;
+    public int AoeGravityFinalDamage => _aoeGravityPathLevel >= 3 ? Mathf.Max(1, Mathf.CeilToInt(EffectiveBulletDamage * 0.5f)) : 0;
 
     // Reversible fire-rate multiplier from synergies (e.g. Harmony turrets-on-
     // the-synergy buff). >1 = faster. Set back to 1 to remove. Kept separate from
     // the PERMANENT AddAttackSpeed path so a synergy can cleanly grant/revoke.
-    public void SetSynergyFireRateMultiplier(float multiplier)
-    {
-        _synergyFireRateMult = Mathf.Max(0.01f, multiplier);
-    }
+    public void SetSynergyFireRateMultiplier(float multiplier) =>
+        SetChannel(Stat.TurretFireRate, SrcSynergy, multiplier);
 
     // Reversible fire-rate multiplier from ENEMY debuffs (EnemyTurretSuppressor,
     // via TurretSuppressionEffect). <1 = slower. Its own channel so a suppressor
     // and a Harmony buff compose instead of clobbering each other's restore-to-1.
-    public void SetDebuffFireRateMultiplier(float multiplier)
-    {
-        _debuffFireRateMult = Mathf.Max(0.01f, multiplier);
-    }
+    public void SetDebuffFireRateMultiplier(float multiplier) =>
+        SetChannel(Stat.TurretFireRate, SrcDebuff, multiplier);
 
-    public float DebuffFireRateMultiplier => _debuffFireRateMult;
+    public float DebuffFireRateMultiplier => Mods.MulOf(Stat.TurretFireRate, SrcDebuff);
 
     // Reversible aura buff from a nearby Enlightenment shrine (ShrineController).
     // Its OWN channels so it composes with (never clobbers) the synergy buff and
@@ -110,23 +126,38 @@ public class TurretController : MonoBehaviour
     // walks out of the aura (or whose shrine vanishes) is cleared automatically.
     public void SetShrineBuff(float fireRateMult, float damageMult)
     {
-        _shrineFireRateMult = Mathf.Max(0.01f, fireRateMult);
-        _shrineDamageMult   = Mathf.Max(0.01f, damageMult);
+        SetChannel(Stat.TurretFireRate, SrcShrine, fireRateMult);
+        SetChannel(Stat.TurretDamage,   SrcShrine, damageMult);
     }
 
-    public bool  ShrineBuffActive => _shrineFireRateMult > 1.0001f || _shrineDamageMult > 1.0001f;
-    public float ShrineFireRateMultiplier => _shrineFireRateMult;
+    // A channel at exactly 1 is REMOVED rather than stored, so "set it back to 1 to
+    // clear" — the contract every caller already relies on — leaves nothing behind.
+    void SetChannel(Stat stat, object src, float mult)
+    {
+        if (Mathf.Approximately(mult, 1f)) Mods.Remove(stat, src);
+        else Mods.Set(stat, src, 0f, Mathf.Max(0.01f, mult));
+    }
+
+    public bool  ShrineBuffActive => Mods.MulOf(Stat.TurretFireRate, SrcShrine) > 1.0001f
+                                  || Mods.MulOf(Stat.TurretDamage,   SrcShrine) > 1.0001f;
+    public float ShrineFireRateMultiplier => Mods.MulOf(Stat.TurretFireRate, SrcShrine);
 
     // Damage a bullet fired RIGHT NOW deals — base bulletDamage scaled by the
     // reversible shrine channel (base is left untouched so the buff reverts cleanly).
     // TurretBullet reads this at spawn, so removing the aura instantly stops boosting
     // NEW shots without needing to rewind any permanent stat.
-    public int EffectiveBulletDamage => Mathf.Max(1, Mathf.RoundToInt(bulletDamage * _shrineDamageMult));
+    public int EffectiveBulletDamage =>
+        Mathf.Max(1, Mathf.RoundToInt(Modifiers.Eval(Stat.TurretDamage, bulletDamage, Mods)));
+
+    // Range after every bonus. Targeting, the range ring and the selection panel all
+    // read THIS — the ring has to promise what the turret actually does.
+    public float EffectiveRange => Mathf.Max(0f, Modifiers.Eval(Stat.TurretRange, attackRange, Mods));
 
     // Current fire-rate multipliers (1 = none) and the effective shots/sec after
-    // them — used by the selection panel to show the live buff.
-    public float SynergyFireRateMultiplier => _synergyFireRateMult;
-    public float FireRateMultiplier => _synergyFireRateMult * _debuffFireRateMult * _shrineFireRateMult;
+    // them — used by the selection panel to show the live buff. Base 1, so every
+    // source's entry — the old channels, and any item — composes here.
+    public float SynergyFireRateMultiplier => Mods.MulOf(Stat.TurretFireRate, SrcSynergy);
+    public float FireRateMultiplier => Mathf.Max(0.01f, Modifiers.Eval(Stat.TurretFireRate, 1f, Mods));
     public float EffectiveFireRate => fireInterval > 0.0001f ? FireRateMultiplier / fireInterval : 0f;
 
     public void AddAttackSpeed(float percent)
@@ -509,23 +540,39 @@ public class TurretController : MonoBehaviour
 
     void Update()
     {
+        // Before any early-out: support changes in the build phase too, and an
+        // unsupported turret should visibly wind down whenever it happens.
+        if (Visual != null) Visual.Powered = Supported;
+
         var flow = GameFlowManager.Instance;
-        if (flow == null || flow.phase != GamePhase.Running) return;
+        if (flow == null || flow.phase != GamePhase.Running) { ReportTarget(null); return; }
+        if (!Supported) { _target = null; ReportTarget(null); return; }
 
         _fireTimer -= Time.deltaTime;
         if (_fireTimer > 0f) return;   // not ready — skip the (expensive) target search entirely
 
         _target = FindClosest();
+        ReportTarget(_target);
         if (_target == null) return;
 
         Fire(_target);
         _fireTimer = fireInterval / FireRateMultiplier;
     }
 
+    // Only on change — the target search runs once per shot, not every frame, so
+    // this is the only moment the turret knows what it is looking at.
+    EnemySurfaceUnit _reported;
+    void ReportTarget(EnemySurfaceUnit t)
+    {
+        if (Visual == null || t == _reported) return;
+        _reported = t;
+        Visual.OnTarget(t);
+    }
+
     bool InRange(EnemySurfaceUnit e)
     {
         return e != null && e.CurrentHealth > 0
-            && (e.transform.position - Origin).sqrMagnitude <= attackRange * attackRange;
+            && (e.transform.position - Origin).sqrMagnitude <= EffectiveRange * EffectiveRange;
     }
 
     EnemySurfaceUnit FindClosest()
@@ -537,7 +584,8 @@ public class TurretController : MonoBehaviour
         if (enemies == null) return null;
 
         EnemySurfaceUnit best = null;
-        float bestSqr = attackRange * attackRange;
+        float range   = EffectiveRange;
+        float bestSqr = range * range;
         int bestPriority = int.MinValue;
 
         for (int i = 0; i < enemies.Count; i++)
@@ -548,7 +596,7 @@ public class TurretController : MonoBehaviour
             if (!CanShoot(e)) continue;   // InRange short-circuits before the LOS raycast
 
             float sqr = (e.transform.position - Origin).sqrMagnitude;
-            if (sqr > attackRange * attackRange) continue;
+            if (sqr > range * range) continue;
 
             int priority = e.targetPriority;
             if (priority > bestPriority || (priority == bestPriority && sqr <= bestSqr))
@@ -572,6 +620,10 @@ public class TurretController : MonoBehaviour
 
     void Fire(EnemySurfaceUnit target)
     {
+        if (Visual != null) Visual.OnFire(target.transform.position);
+        var audio = AudioManager.Instance;
+        if (audio != null) audio.PlayTurretFire(mode, gameObject);
+
         // Slow fires a BEAM, not a projectile: the effect is a hold, and a hold
         // has to land the instant the turret decides to apply it. Damage and the
         // debuff are applied here rather than on a bullet's impact — there is no
@@ -684,6 +736,6 @@ public class TurretController : MonoBehaviour
     void OnDrawGizmosSelected()
     {
         Gizmos.color = new Color(1f, 0.85f, 0.15f, 0.35f);
-        Gizmos.DrawWireSphere(Origin, attackRange);
+        Gizmos.DrawWireSphere(Origin, EffectiveRange);
     }
 }

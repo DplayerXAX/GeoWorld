@@ -57,6 +57,48 @@ public class LevelEndpointGenerator : MonoBehaviour
         SpawnVisual();
     }
 
+    // First stage of a level that INHERITS a board.
+    //
+    // The spawn and the defence point go on OPPOSITE sides of the inherited build,
+    // each `ring` cells beyond its edge. Opposite, so the route between them has to
+    // cross the old base rather than skirt it — the base is the thing this level is
+    // about, and a pair of endpoints on the same side would let the player ignore it.
+    //
+    // Distance is measured from the build's rectangular edge along the ray, not from
+    // its centre: a long base would otherwise put endpoints beside its short ends
+    // miles further out than beside its long sides.
+    public void GenerateAround(Vector2 centre, Vector2 half, float ring)
+    {
+        float a = RandFloat(0f, Mathf.PI * 2f);
+        startCell = RingCell(centre, half, ring, a);
+        endCell   = RingCell(centre, half, ring, a + Mathf.PI + RandFloat(-0.6f, 0.6f));
+        SpawnVisual();
+    }
+
+    Vector3Int RingCell(Vector2 centre, Vector2 half, float ring, float angle)
+    {
+        // Step outward, then widen the angle, until a free cell turns up. The
+        // inherited build is exactly the thing most likely to be in the way.
+        for (int extra = 0; extra < 10; extra++)
+            for (int tries = 0; tries < 8; tries++)
+            {
+                float ang = angle + (tries == 0 ? 0f : RandFloat(-0.35f, 0.35f));
+                var u = new Vector2(Mathf.Cos(ang), Mathf.Sin(ang));
+                float t = Mathf.Min(half.x / Mathf.Max(1e-4f, Mathf.Abs(u.x)),
+                                    half.y / Mathf.Max(1e-4f, Mathf.Abs(u.y))) + ring + extra;
+                var cell = new Vector3Int(
+                    Mathf.RoundToInt(centre.x + u.x * t),
+                    Mathf.Clamp(RandInt(0, yMax + 1), 0, yMax),
+                    Mathf.RoundToInt(centre.y + u.y * t));
+                if (!gridSystem.IsOccupied(cell)) return cell;
+            }
+
+        // Nothing free in ten rings — a pathological base. Fall back to the plain
+        // shell sampler around the centre rather than fail to start the level.
+        var c0 = new Vector3Int(Mathf.RoundToInt(centre.x), 0, Mathf.RoundToInt(centre.y));
+        return ShellSample(c0, Mathf.Max(half.x, half.y) + ring, Mathf.Max(half.x, half.y) + ring + 10f);
+    }
+
     void SpawnVisual()
     {
         SpawnEndpointAt(startCell, true);
