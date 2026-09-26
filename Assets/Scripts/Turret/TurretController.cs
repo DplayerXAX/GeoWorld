@@ -57,6 +57,11 @@ public class TurretController : MonoBehaviour
     // until something holds it up again.
     public bool Supported = true;
 
+    // The type-specific animation of this turret's model (TurretAnimator), set by
+    // PlacementController.AttachTurretController. Told when the turret is held up,
+    // what it is aiming at and when it fires — the seam attack animations hang on.
+    public TurretAnimator Visual;
+
     // The old channels, kept as named sources so their setters still work
     // unchanged for the systems that call them.
     static readonly object SrcSynergy = new(), SrcDebuff = new(), SrcShrine = new();
@@ -535,18 +540,33 @@ public class TurretController : MonoBehaviour
 
     void Update()
     {
+        // Before any early-out: support changes in the build phase too, and an
+        // unsupported turret should visibly wind down whenever it happens.
+        if (Visual != null) Visual.Powered = Supported;
+
         var flow = GameFlowManager.Instance;
-        if (flow == null || flow.phase != GamePhase.Running) return;
-        if (!Supported) { _target = null; return; }
+        if (flow == null || flow.phase != GamePhase.Running) { ReportTarget(null); return; }
+        if (!Supported) { _target = null; ReportTarget(null); return; }
 
         _fireTimer -= Time.deltaTime;
         if (_fireTimer > 0f) return;   // not ready — skip the (expensive) target search entirely
 
         _target = FindClosest();
+        ReportTarget(_target);
         if (_target == null) return;
 
         Fire(_target);
         _fireTimer = fireInterval / FireRateMultiplier;
+    }
+
+    // Only on change — the target search runs once per shot, not every frame, so
+    // this is the only moment the turret knows what it is looking at.
+    EnemySurfaceUnit _reported;
+    void ReportTarget(EnemySurfaceUnit t)
+    {
+        if (Visual == null || t == _reported) return;
+        _reported = t;
+        Visual.OnTarget(t);
     }
 
     bool InRange(EnemySurfaceUnit e)
@@ -600,6 +620,10 @@ public class TurretController : MonoBehaviour
 
     void Fire(EnemySurfaceUnit target)
     {
+        if (Visual != null) Visual.OnFire(target.transform.position);
+        var audio = AudioManager.Instance;
+        if (audio != null) audio.PlayTurretFire(mode, gameObject);
+
         // Slow fires a BEAM, not a projectile: the effect is a hold, and a hold
         // has to land the instant the turret decides to apply it. Damage and the
         // debuff are applied here rather than on a bullet's impact — there is no

@@ -2330,7 +2330,10 @@ public partial class PlacementController : MonoBehaviour
         float target = (grid != null ? grid.cellSize : 1f) * TurretVisualCellFraction;
         FitTurretToCell(visual, target);
 
-        visual.AddComponent<TurretBeacon>();    // idle spin + bob (rotation/pos only, doesn't touch scale)
+        // Type-specific motion (rotation/position only — never scale, which
+        // CombatRipple owns): Basic tumbles, Slow turns its pieces in sequence, AOE
+        // moves its three parts together. See TurretAnimator.
+        TurretAnimator.Attach(visual, TurretTypes.Mode(data.blockType));
 
         // Type colour, NOT the block's synergy colour — turret BlockDatas share (or
         // reuse) a prefab, so this tint is the only thing telling Basic / Slow / AOE
@@ -2419,6 +2422,8 @@ public partial class PlacementController : MonoBehaviour
         if (turret == null)
             turret = target.gameObject.AddComponent<TurretController>();
         turret.Configure(ins.data.blockType, ins.data.bulletPrefab, ins.data.bulletScale);
+        turret.Visual = ins.visualObject.GetComponentInChildren<TurretAnimator>();
+        if (turret.Visual != null) turret.Visual.Turret = turret;
         turret.SetBasicUpgradeLevels(ins.basicPowerUpgradeLevel, ins.basicBurstUpgradeLevel);
         turret.SetAoeUpgradeLevels(ins.aoeFireUpgradeLevel, ins.aoeGravityUpgradeLevel);
     }

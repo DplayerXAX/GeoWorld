@@ -44,6 +44,20 @@ public class AudioManager : MonoBehaviour
     public AK.Wwise.Event Defeat;
     [Tooltip("Posted every time a life is lost (PlayerHealth.TakeDamage) — including the killing hit, which plays alongside Defeat.")]
     public AK.Wwise.Event Damage;
+
+    [Header("Turret fire")]
+    [Tooltip("Posted each time a Basic turret fires (TurretController.Fire).")]
+    public AK.Wwise.Event TurretFireBasic;
+    [Tooltip("Posted each time a Slow turret fires its beam.")]
+    public AK.Wwise.Event TurretFireSlow;
+    [Tooltip("Posted each time an AOE turret lobs a blast.")]
+    public AK.Wwise.Event TurretFireAoe;
+    [Tooltip("Post from the turret itself instead of from this manager — only useful if the events are authored as 3D (positioned) in Wwise.")]
+    public bool turretFireSpatial = false;
+    [Tooltip("Shortest gap between two posts of the SAME turret type, in seconds. A full board has many turrets firing in the same frame; without a gap they stack into one loud clipped burst.")]
+    [Min(0f)] public float turretFireMinGap = 0.04f;
+
+    readonly float[] _lastTurretFire = { -1f, -1f, -1f };   // per TurretController.Mode
     [Header("Volume RTPCs (Wwise global, 0..100)")]
     [Tooltip("Global Wwise RTPC names bound to your bus volumes. SettingsScreen drives these 0..1 → 0..100. Set them up on the Master / Music / SFX buses in Wwise.")]
     public string masterVolumeRtpc = "MasterVolume";
@@ -219,6 +233,25 @@ public class AudioManager : MonoBehaviour
     public void PlayDamage()
     {
         if (Damage != null && Damage.IsValid()) Damage.Post(this.gameObject);
+    }
+
+    // One event per turret type, rate-limited per type (see turretFireMinGap).
+    public void PlayTurretFire(TurretController.Mode mode, GameObject turret)
+    {
+        var e = mode switch
+        {
+            TurretController.Mode.Slow => TurretFireSlow,
+            TurretController.Mode.Aoe  => TurretFireAoe,
+            _                          => TurretFireBasic,
+        };
+        if (e == null || !e.IsValid()) return;
+
+        int i = Mathf.Clamp((int)mode, 0, _lastTurretFire.Length - 1);
+        float now = Time.unscaledTime;
+        if (_lastTurretFire[i] >= 0f && now - _lastTurretFire[i] < turretFireMinGap) return;
+        _lastTurretFire[i] = now;
+
+        e.Post(turretFireSpatial && turret != null ? turret : this.gameObject);
     }
 
     // Call once when a typewriter starts revealing a new line/hint.
