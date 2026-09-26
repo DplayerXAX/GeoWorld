@@ -1545,6 +1545,9 @@ MonoBehaviour:
     skyBlend: 0.7
     scatter: 0.8
     anisotropy: 0.5
+    mapClear: 1
+    clearFrom: 0
+    clearTo: 0.6
   hazeEnabled: 0
   hazeStyle:
     color: {r: 0.93, g: 0.9, b: 0.86, a: 1}

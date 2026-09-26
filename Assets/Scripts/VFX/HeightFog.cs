@@ -26,6 +26,14 @@ public class HeightFog : MonoBehaviour
         [Range(0f, 1f)] public float skyBlend;
         [Range(0f, 4f)] public float scatter;
         [Range(-0.9f, 0.9f)] public float anisotropy;
+
+        [Header("Keep the map clear")]
+        [Tooltip("How completely the fog in front of the map's own blocks and props is removed (1 = fully). Only surfaces standing on ground that is on show, and above the fog line — the fog sea itself is unchanged.")]
+        [Range(0f, 1f)] public float mapClear;
+        [Tooltip("Height above the fog's top, in cells, where the map starts to clear.")]
+        public float clearFrom;
+        [Tooltip("Height above the fog's top, in cells, by which the map is fully clear. The feet of the blocks below this still sink into the fog.")]
+        public float clearTo;
     }
 
     Material _mat;
@@ -73,6 +81,9 @@ public class HeightFog : MonoBehaviour
         _mat.SetFloat("_SkyBlend",    s.skyBlend);
         _mat.SetFloat("_Scatter",     s.scatter);
         _mat.SetFloat("_Anisotropy",  s.anisotropy);
+        _mat.SetFloat("_MapClear",    s.mapClear);
+        _mat.SetFloat("_ClearFrom",   s.clearFrom * cs);
+        _mat.SetFloat("_ClearTo",     s.clearTo * cs);
     }
 
     void LateUpdate()

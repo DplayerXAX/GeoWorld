@@ -118,6 +118,25 @@ public abstract class TurretAnimator : MonoBehaviour
         };
     }
 
+    // World centre of the model as it stands right now (its renderers' bounds) —
+    // where a shot that should come out of the turret's HEART, not its muzzle, leaves
+    // from (the Slow turret's beam). Read per shot, so it follows the animation.
+    Renderer[] _rends;
+    public Vector3 WorldCenter
+    {
+        get
+        {
+            if (_rends == null) _rends = GetComponentsInChildren<Renderer>();
+            bool any = false; Bounds b = default;
+            foreach (var r in _rends)
+            {
+                if (r == null) continue;
+                if (!any) { b = r.bounds; any = true; } else b.Encapsulate(r.bounds);
+            }
+            return any ? b.center : transform.position;
+        }
+    }
+
     // ── Hooks ────────────────────────────────────────────────────────────────
     public virtual void OnFire(Vector3 targetPos)
     {

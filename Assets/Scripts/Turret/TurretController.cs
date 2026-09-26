@@ -630,7 +630,10 @@ public class TurretController : MonoBehaviour
         // impact to wait for. Line of sight was already cleared by CanShoot.
         if (mode == Mode.Slow)
         {
-            TurretShotFx.Beam(MuzzlePosition, target.transform.position);
+            // From the heart of the turret, not the muzzle point above it: the beam
+            // is the stack itself discharging, so it leaves from where the stack is.
+            Vector3 from = Visual != null ? Visual.WorldCenter : Origin;
+            TurretShotFx.Beam(from, target.transform.position);
             target.TakeDamage(EffectiveBulletDamage);
             EnemySlowEffect.Apply(target, slowDuration, slowMultiplier);
             return;

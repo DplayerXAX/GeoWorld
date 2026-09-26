@@ -85,6 +85,7 @@ public partial class LevelMapController : MonoBehaviour
         color = new Color(0.90f, 0.89f, 0.87f), density = 0.35f,
         topOffset = -0.5f, falloff = 0.8f, wave = 0.6f, maxDistance = 400f,
         skyBlend = 0.7f, scatter = 0.8f, anisotropy = 0.5f,
+        mapClear = 1f, clearFrom = 0f, clearTo = 0.6f,
     };
     HeightFog _heightFog;
 
