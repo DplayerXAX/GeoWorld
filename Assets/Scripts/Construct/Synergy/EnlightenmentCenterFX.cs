@@ -68,7 +68,17 @@ public class EnlightenmentCenterFX : MonoBehaviour
         Teardown();
     }
 
-    void OnDestroy() => Teardown();
+    void OnDestroy()
+    {
+        SynergyVisualFX.OnReleased -= BuildAfterHold;
+        Teardown();
+    }
+
+    void BuildAfterHold()
+    {
+        SynergyVisualFX.OnReleased -= BuildAfterHold;
+        if (_activeRule != null && _root == null) Build();
+    }
 
     void TryHook()
     {
@@ -80,6 +90,16 @@ public class EnlightenmentCenterFX : MonoBehaviour
     void HandleClaimChanged(SynergyRule rule, ActiveSynergy active)
     {
         if (!(rule is EnlightenmentRule er)) return;
+
+        // Held for the intro (SynergyVisualFX.Hold): note the state, build on release.
+        if (SynergyVisualFX.Held)
+        {
+            _activeRule = active != null ? er : null;
+            if (active == null) Teardown();
+            SynergyVisualFX.OnReleased -= BuildAfterHold;
+            SynergyVisualFX.OnReleased += BuildAfterHold;
+            return;
+        }
 
         if (active == null)
         {

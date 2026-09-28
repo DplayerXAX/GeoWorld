@@ -31,6 +31,8 @@ public partial class LevelMapController : MonoBehaviour
     public AK.Wwise.Event timeLoopCleared;
     [Tooltip("Level whose clear swaps the map's ambient loop. Tutorial, not 1-1: it's the earliest win, and clearing 1-1 implies it anyway.")]
     public string musicSwapAfterLevelId = "Tutorial";
+    [Tooltip("Typewriter blip for dialogue on this map. LevelSelect has no AudioManager (which carries the blip in gameplay), so without this every conversation here types in silence. Same Wwise event as AudioManager.TextBlip.")]
+    public AK.Wwise.Event textBlip;
     [Tooltip("UGUI level-info panel (right side). Wire it and the old IMGUI box is skipped.")]
     public LevelInfoPanel infoPanel;
     [Tooltip("Played once, the very first time the player ever lands on this scene (SaveSystem.Profile.seenLevelSelectIntro). Author it like any other DialogueConversation asset. Leave null for no intro.")]
@@ -208,6 +210,7 @@ public partial class LevelMapController : MonoBehaviour
     {
         Instance = this;
         LevelRegistry.Register(database);   // so the multiplayer lobby can resolve level ids
+        TextBlip.SetFallback(textBlip, gameObject);   // this scene has no AudioManager to carry it
     }
 
     void Start()
@@ -347,6 +350,26 @@ public partial class LevelMapController : MonoBehaviour
         // player would be mid-conversation while the camera yanks away to the field.
         if (HasReveal(decorGrowthPending)) StartCoroutine(PlayRevealCutscene(decorGrowthPending));
         else                               PlayEntryDialogueIfAny();
+
+        // A level was left part-way through — say so once the map has settled.
+        if (SaveSystem.Profile.runSaves != null && SaveSystem.Profile.runSaves.Count > 0)
+            StartCoroutine(RemindUnfinishedLevel());
+    }
+
+    [Header("Unfinished level reminder")]
+    [Tooltip("Aside shown on arriving at the map while a level has been left part-way through (its badge breathes).")]
+    public string unfinishedLevelText = "You have an unfinished level. Find it, and see it through.";
+    public float  unfinishedLevelSeconds = 4.5f;
+
+    // Waits out the reveal cutscene and any conversation, so the aside never talks
+    // over either.
+    IEnumerator RemindUnfinishedLevel()
+    {
+        yield return new WaitForSeconds(0.8f);
+        while (_decorCutscenePlaying || (DialogueRunner.Instance != null && DialogueRunner.Instance.IsPlaying))
+            yield return null;
+        if (!string.IsNullOrEmpty(unfinishedLevelText))
+            AsideBubble.Show(defaultCharacter, "default", unfinishedLevelText, unfinishedLevelSeconds);
     }
 
     void PlayEntryDialogueIfAny()
@@ -598,7 +621,11 @@ public partial class LevelMapController : MonoBehaviour
 
     // The loop was Post()'d against this GameObject — Wwise doesn't stop it on its own
     // just because the scene unloads, so stop it explicitly or it bleeds into gameplay.
-    void OnDestroy() => _activeLoop?.Stop(this.gameObject);
+    void OnDestroy()
+    {
+        _activeLoop?.Stop(this.gameObject);
+        TextBlip.SetFallback(null, null);   // stops a blip still ringing, and forgets this scene's emitter
+    }
 
     void OnDisable()
     {
@@ -966,6 +993,11 @@ public partial class LevelMapController : MonoBehaviour
 
         public void SetPowered(bool on) => _powered = on;
 
+        // A level left part-way through (LevelRunSave): the badge breathes — swells
+        // and brightens toward white and back — so it can be picked out on the map.
+        bool _resumable;
+        public void SetResumable(bool on) => _resumable = on;
+
         // `color` is the synergy theme active at the moment this level was last
         // cleared (LevelRecord.clearSynergyColor). Resolved once, the first time
         // `cleared` goes true:
@@ -1163,8 +1195,17 @@ public partial class LevelMapController : MonoBehaviour
                                                         Quaternion.Euler(45f, 0f, 45f), _t);
 
             transform.localScale = Vector3.one * Mathf.Lerp(0.8f, 1f, _t);
+            Color col = Color.Lerp(_dark, _lit, _t);
 
-            if (_rend != null) MpbColor.Set(_rend, Color.Lerp(_dark, _lit, _t));
+            if (_resumable)
+            {
+                float breath = 0.5f + 0.5f * Mathf.Sin(Time.time * 3f);
+                transform.localScale *= 1f + 0.28f * breath;
+                col = Color.Lerp(col, Color.white, 0.6f * breath) * (1f + 0.8f * breath);   // over 1 = a flare where bloom is on
+                col.a = 1f;
+            }
+
+            if (_rend != null) MpbColor.Set(_rend, col);
 
             UpdateRing();
         }
@@ -1219,7 +1260,7 @@ public partial class LevelMapController : MonoBehaviour
         HandleFocusViewportDrag();   // middle-mouse drag — no conflict with build mode, so it runs unconditionally
         // No clicking/walking/building while the grow-in reveal owns the camera, or
         // while a minigame is running on top of this scene.
-        if (SettingsScreen.Open || _decorCutscenePlaying || MinigameStage.AnyActive)
+        if (SettingsScreen.Open || _decorCutscenePlaying || MinigameStage.AnyActive || ConfirmDialog.BlockingInput)
         {
             VirtualCursor.EndRotation();
             _mouseRotation.Reset();
@@ -1718,8 +1759,11 @@ public partial class LevelMapController : MonoBehaviour
         // "No route" is its own message: the player hasn't failed a requirement,
         // they just haven't built the road there yet — pointing them at the F panel
         // is far more useful than a flat "Locked".
+        var    unfinished = SaveSystem.Profile.GetRunSave(lv.levelId);
         string status = _selected.Unreachable
             ? "No route — build a path from the start"
+            : unfinished != null
+            ? $"Unfinished — resumes at wave {unfinished.wavesCompleted + 1}"
             : _selected.NodeState switch
               {
                   LevelNode.State.Locked  => "Locked",
@@ -1729,6 +1773,22 @@ public partial class LevelMapController : MonoBehaviour
         string best   = (rec != null && rec.bestWave > 0) ? $"Best wave: {rec.bestWave}" : null;
         bool   canEnter = _selected.NodeState != LevelNode.State.Locked;
         infoPanel.Show(title, lv.description, status, best, canEnter, () => EnterLevel(lv), lv);
+        if (unfinished != null && canEnter && !_selected.Unreachable)
+            infoPanel.SetResume(() => AskRestartLevel(lv));
+    }
+
+    // Throw the unfinished save away and start the level over — after asking, since
+    // what goes is a whole attempt's progress.
+    void AskRestartLevel(LevelDefinition lv)
+    {
+        ConfirmDialog.Ask("RESTART THIS LEVEL?",
+            "Your unfinished progress in this level will be lost, and it starts again from the beginning.",
+            "Restart",
+            () =>
+            {
+                if (SaveSystem.Profile.ClearRunSave(lv.levelId)) SaveSystem.Save();
+                EnterLevel(lv);
+            });
     }
 
     // ── Build mode ────────────────────────────────────────────────────────────

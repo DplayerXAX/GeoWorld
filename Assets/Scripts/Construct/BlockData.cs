@@ -16,7 +16,8 @@ public enum BlockType
     Turret,
     Empty,
     SlowTurret,
-    AoeTurret
+    AoeTurret,
+    DebuffTurret   // appended: BlockType is serialized as an int, so new values go at the END
 }
 
 public enum BlockShape

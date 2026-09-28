@@ -108,8 +108,7 @@ public partial class PlacementController
         if (hit.transform.GetComponentInParent<SelectableBlock>()  != null) return true;
         if (hit.transform.GetComponentInParent<GridEndpoint>()     != null) return true;
 
-        Vector3Int gPos = grid.WorldToGrid(hit.point - hit.normal * (grid.cellSize * 0.1f));
-        return grid.GetInstanceAt(gPos) != null;
+        return InstanceFromHit(hit) != null;
     }
 
     // ── Finalize the drag into a selection ───────────────────────────────────

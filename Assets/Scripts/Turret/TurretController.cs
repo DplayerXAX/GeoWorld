@@ -9,7 +9,8 @@ public class TurretController : MonoBehaviour
     const float MinFireInterval = 0.05f;
     const float BasicUpgradePercent = 0.33f;
 
-    public enum Mode { Basic, Slow, Aoe }
+    // Append only — Mode indexes per-type arrays (e.g. AudioManager's rate limiter).
+    public enum Mode { Basic, Slow, Aoe, Debuff }
 
     [Header("Balance")]
     [Tooltip("Central balance asset. When set, Configure(BlockType) overrides damage / range / fireRate / slow / AOE stats from BalanceTable.GetTurretStats(mode). Leave empty to use the Inspector defaults below.")]
@@ -548,6 +549,9 @@ public class TurretController : MonoBehaviour
         if (flow == null || flow.phase != GamePhase.Running) { ReportTarget(null); return; }
         if (!Supported) { _target = null; ReportTarget(null); return; }
 
+        // The Debuff turret never fires: its whole effect is the field.
+        if (mode == Mode.Debuff) { TickDebuffField(); return; }
+
         _fireTimer -= Time.deltaTime;
         if (_fireTimer > 0f) return;   // not ready — skip the (expensive) target search entirely
 
@@ -567,6 +571,59 @@ public class TurretController : MonoBehaviour
         if (Visual == null || t == _reported) return;
         _reported = t;
         Visual.OnTarget(t);
+    }
+
+    // ── Debuff field ─────────────────────────────────────────────────────────────
+    // Everything inside the range is cursed for a moment, re-applied every frame, so
+    // an enemy is cursed exactly while it is in the field (plus a short grace, so
+    // one that dies on the edge as it leaves still counts):
+    //   * its heals land at (1 - debuffHealReduction) — see EnemySurfaceUnit.Heal;
+    //   * if it dies cursed, the table gets debuffKillBonus turret currency (once
+    //     per enemy — see OnAnyEnemyDied).
+    // No line of sight: it's a field, not a shot.
+    const float DebuffGrace = 0.3f;
+
+    void TickDebuffField()
+    {
+        HookKillBonus();
+        var mgr = EnemyBaseManager.Instance;
+        var enemies = mgr != null ? mgr.ActiveEnemies : null;
+        if (enemies == null) { ReportTarget(null); return; }
+
+        var   table = balance != null ? balance : BalanceTable.Active;
+        float mult  = 1f - (table != null ? table.debuffHealReduction : 0.4f);
+        float range = EffectiveRange, r2 = range * range, best = float.MaxValue;
+        EnemySurfaceUnit nearest = null;
+
+        for (int i = 0; i < enemies.Count; i++)
+        {
+            var e = enemies[i];
+            if (e == null || e.CurrentHealth <= 0) continue;
+            float d = (e.transform.position - Origin).sqrMagnitude;
+            if (d > r2) continue;
+            e.ApplyHealDebuff(mult, DebuffGrace);
+            if (d < best) { best = d; nearest = e; }
+        }
+        ReportTarget(nearest);   // the animator knows when something is in the field
+    }
+
+    static bool _killBonusHooked;
+    static void HookKillBonus()
+    {
+        if (_killBonusHooked) return;
+        _killBonusHooked = true;
+        EnemySurfaceUnit.AnyDied += OnAnyEnemyDied;
+    }
+
+    // One handler for every field on the board, keyed off the enemy's own curse
+    // flag — so overlapping fields pay once, not once per turret.
+    static void OnAnyEnemyDied(EnemySurfaceUnit e)
+    {
+        if (e == null || !e.InHealDebuff) return;
+        var table = BalanceTable.Active;
+        int bonus = table != null ? table.debuffKillBonus : 1;
+        var rm = ResourceManager.Instance;
+        if (bonus > 0 && rm != null) rm.AddTurretCurrency(bonus);
     }
 
     bool InRange(EnemySurfaceUnit e)

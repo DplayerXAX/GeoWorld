@@ -75,6 +75,52 @@ public class LevelEndpointGenerator : MonoBehaviour
         SpawnVisual();
     }
 
+    // First stage of a level that inherits a board AND its cores (the points the
+    // player defends). The cores stay exactly where the last level left them — the
+    // base is the same place, defended from the same spots — and only a new SPAWN
+    // point is made, `ring` cells beyond the edge of the build (`centre`/`half`, which
+    // the caller has grown to take the cores in).
+    //
+    // Where on that ring:
+    //   * the far side from the cores, give or take — so the route in has to cross
+    //     the old base, just as GenerateAround puts its pair on opposite sides;
+    //   * and, among a spread of candidates on that side, the one furthest round
+    //     from where the monsters came from LAST level (`avoidStarts`), so each level
+    //     brings the attack from somewhere new.
+    public void GenerateKeepingEnds(List<Vector3Int> ends, Vector2 centre, Vector2 half, float ring,
+                                    List<Vector3Int> avoidStarts)
+    {
+        foreach (var e in ends) SpawnEndpointAt(e, false);
+        endCell = ends[0];
+
+        Vector2 toEnds = Vector2.zero;
+        foreach (var e in ends) toEnds += new Vector2(e.x - centre.x, e.z - centre.y);
+        float away = toEnds.sqrMagnitude > 1e-4f
+            ? Mathf.Atan2(-toEnds.y, -toEnds.x)
+            : RandFloat(0f, Mathf.PI * 2f);
+
+        float best = away, bestScore = -1f;
+        for (int k = 0; k < 12; k++)
+        {
+            float a = away + RandFloat(-1.1f, 1.1f);
+            float score;
+            if (avoidStarts == null || avoidStarts.Count == 0) score = RandFloat(0f, 1f);
+            else
+            {
+                score = float.MaxValue;
+                foreach (var s in avoidStarts)
+                {
+                    float sa = Mathf.Atan2(s.z - centre.y, s.x - centre.x);
+                    score = Mathf.Min(score, Mathf.Abs(Mathf.DeltaAngle(a * Mathf.Rad2Deg, sa * Mathf.Rad2Deg)));
+                }
+            }
+            if (score > bestScore) { bestScore = score; best = a; }
+        }
+
+        startCell = RingCell(centre, half, ring, best);
+        SpawnEndpointAt(startCell, true);
+    }
+
     Vector3Int RingCell(Vector2 centre, Vector2 half, float ring, float angle)
     {
         // Step outward, then widen the angle, until a free cell turns up. The

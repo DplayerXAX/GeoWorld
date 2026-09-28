@@ -396,6 +396,13 @@ public partial class PlacementController : MonoBehaviour
     {
         currentRefreshCost = refreshBaseCost;
     }
+
+    // Mid-level resume: the refresh cost the player had climbed to this turn.
+    public void SetRefreshCost(int cost) => currentRefreshCost = Mathf.Max(0, cost);
+
+    // Mid-level resume: the opening shop was used up long ago — a refresh on the
+    // resumed turn must not stamp it into the shop a second time.
+    public void MarkStartingShopApplied() => _startingShopApplied = true;
     // Clears all shop items for the new round.
     public void ClearTray()
     {
@@ -413,11 +420,17 @@ public partial class PlacementController : MonoBehaviour
 
         var turretTypes = new List<BlockData>();
         var normalTypes = new List<BlockData>();
+        // A level can hold a turret type back until the level that introduces it
+        // (LevelDefinition.turretPool). Endless and levels without a list roll them all.
+        var level = RunConfig.Mode == GameMode.Level ? RunConfig.Level : null;
         foreach (var b in blocks)
         {
             if (b == null) continue;
-            if (TurretTypes.Is(b.blockType)) turretTypes.Add(b);
-            else                                 normalTypes.Add(b);
+            if (TurretTypes.Is(b.blockType))
+            {
+                if (level == null || level.AllowsTurret(b.blockType)) turretTypes.Add(b);
+            }
+            else normalTypes.Add(b);
         }
 
         // Use the run-scoped seeded RNG so a fixed runSeed gives a deterministic
@@ -1102,8 +1115,7 @@ public partial class PlacementController : MonoBehaviour
         // --- Placed blocks: single-click selects, double-click picks up for re-edit ---
         // Step slightly inward along the surface normal before snapping to grid so
         // a hit exactly on a face boundary doesn't round into the adjacent empty cell.
-        Vector3Int gPos    = grid.WorldToGrid(hit.point - hit.normal * (grid.cellSize * 0.1f));
-        var        instance = grid.GetInstanceAt(gPos);
+        var instance = InstanceFromHit(hit);
 
         if (instance != null)
         {
@@ -1133,6 +1145,26 @@ public partial class PlacementController : MonoBehaviour
             if (isDouble)
                 PickUpSelected();
         }
+    }
+
+    // The placed block a raycast hit belongs to: the one whose visual the hit
+    // collider sits under. Only if the collider isn't part of any block does it
+    // fall back to "which cell is just inside the hit point".
+    //
+    // Cell-only lookup is what made turrets hard to click: a turret's model tumbles
+    // and bobs, so much of what you see sticks out of its own cell, and a click on
+    // a corner stepped "inward" into the empty neighbouring cell and found nothing.
+    PlacedBlockInstance InstanceFromHit(RaycastHit hit)
+    {
+        var t = hit.collider != null ? hit.collider.transform : hit.transform;
+        if (t != null)
+            foreach (var ins in grid.GetAllInstances())
+            {
+                if (ins?.visualObject == null) continue;
+                var root = ins.visualObject.transform;
+                if (t == root || t.IsChildOf(root)) return ins;
+            }
+        return grid.GetInstanceAt(grid.WorldToGrid(hit.point - hit.normal * (grid.cellSize * 0.1f)));
     }
 
     void UpdateHighlight(GameObject target)
@@ -2369,21 +2401,19 @@ public partial class PlacementController : MonoBehaviour
     // identity rotation (SpawnTurretVisual sets that up).
     void FitTurretToCell(GameObject visual, float targetSize)
     {
-        if (TurretVisualFit.Fit(visual, targetSize, out var localCenter, out var maxDim))
-        {
-            // Collider lives on `visual`, so it inherits the fitted scale: local size
-            // maxDim × that scale == targetSize in world. center scales with the mesh,
-            // so the box stays on the gun rather than drifting to origin.
-            var col = visual.AddComponent<BoxCollider>();
-            col.center = localCenter;
-            col.size   = Vector3.one * maxDim;
-            return;
-        }
+        if (!TurretVisualFit.Fit(visual, targetSize, out _, out _))
+            // No renderers / degenerate bounds — fall back to the legacy fixed scale
+            // so the turret is at least present.
+            visual.transform.localScale = Vector3.one * TurretVisualScale;
 
-        // No renderers / degenerate bounds — fall back to the legacy fixed scale so
-        // the turret is at least present and clickable.
-        visual.transform.localScale = Vector3.one * TurretVisualScale;
-        visual.AddComponent<BoxCollider>().size = Vector3.one / TurretVisualScale;
+        // The click box goes on the BLOCK root, not on the model: the model tumbles,
+        // bobs and squashes (TurretAnimator) and CombatRipple scales it to nothing,
+        // and a box riding along with all that was a moving, sometimes vanishing
+        // target. The root never moves — an axis-aligned box of exactly the cell.
+        var host = visual.transform.parent != null ? visual.transform.parent.gameObject : visual;
+        var col  = host.AddComponent<BoxCollider>();
+        col.center = Vector3.zero;
+        col.size   = Vector3.one * targetSize;
     }
 
     void RegisterPlacedBlock(PlacedBlockInstance ins, int ownerId = -1)

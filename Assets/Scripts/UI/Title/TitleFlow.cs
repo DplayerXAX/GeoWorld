@@ -47,18 +47,24 @@ public class TitleFlow : MonoBehaviour
     // Attach a SaveSlotButton to each save button under savePanel, in order, so
     // HOVERING shows that slot's stats (SaveSlotInfoDisplay). Selecting the slot
     // is NOT done here — see SelectSlotAndPlay below and the class comment on why.
+    //
+    // Which slot each button is comes from its own onClick argument (SaveSlotButton.
+    // SlotOf) — the panel itself also carries a Button, and the slot buttons sit in
+    // it as slots 1, 3, 2, so taking them in order put a hover card (and a Delete)
+    // on the panel and gave the rest the wrong slots.
     void WireSaveSlots()
     {
         if (savePanel == null) return;
-        var buttons = savePanel.GetComponentsInChildren<Button>(true);
-        int n = Mathf.Min(buttons.Length, SaveSystem.SlotCount);
-        for (int i = 0; i < n; i++)
+        foreach (var b in savePanel.GetComponentsInChildren<Button>(true))
         {
-            var go = buttons[i].gameObject;
-            var comp = go.GetComponent<SaveSlotButton>();
-            if (comp == null) comp = go.AddComponent<SaveSlotButton>();
-            comp.Init(i);
+            if (b.transform == savePanel.transform) continue;
+            int slot = SaveSlotButton.SlotOf(b);
+            if (slot < 0 || slot >= SaveSystem.SlotCount) continue;   // not a slot button
+            var comp = b.GetComponent<SaveSlotButton>();
+            if (comp == null) comp = b.gameObject.AddComponent<SaveSlotButton>();
+            comp.Init(slot);
         }
+        SaveSlotDelete.Attach(savePanel.gameObject);
     }
 
     // Each of the 3 save-slot buttons' onClick() calls THIS directly with its own
@@ -74,6 +80,8 @@ public class TitleFlow : MonoBehaviour
 
     void Update()
     {
+        if (ConfirmDialog.BlockingInput) return;   // its Esc is "no", not "back a screen"
+
         if (CurrentFace == Face.Title && (Input.anyKeyDown || Input.GetMouseButtonDown(0) || GamepadInput.ConfirmDown))
             GoToMainMenu();
         else if (CurrentFace == Face.SaveSelect && (Input.GetKeyDown(KeyCode.Escape) || GamepadInput.CancelDown))

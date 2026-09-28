@@ -42,6 +42,8 @@ public static class SnapshotManager
                 upBasicBurst   = ins.basicBurstUpgradeLevel,
                 upAoeFire      = ins.aoeFireUpgradeLevel,
                 upAoeGravity   = ins.aoeGravityUpgradeLevel,
+                inherited      = ins.inherited,
+                sealedByEnemy  = ins.sealedByEnemy,
             });
         }
 
@@ -102,8 +104,11 @@ public static class SnapshotManager
     //
     // Cells already taken are skipped rather than overwritten, so this can run onto
     // a board that already has something on it.
+    // keepFlags: take each block's inherited / sealed flags from the snapshot (a
+    // mid-level resume) instead of stamping `inherited` on every block (inheritance).
+    // skipTurrets: leave every turret out (chapter inheritance without turrets).
     public static System.Collections.Generic.List<PlacedBlockInstance> PlaceBlocks(
-        GridSnapshot snap, bool inherited, bool withUpgrades)
+        GridSnapshot snap, bool inherited, bool withUpgrades, bool keepFlags = false, bool skipTurrets = false)
     {
         var placed = new System.Collections.Generic.List<PlacedBlockInstance>();
         var pc   = PlacementController.Instance;
@@ -119,6 +124,7 @@ public static class SnapshotManager
             if (clash) continue;
 
             var data = Resolve(pc, b);
+            if (data != null && skipTurrets && TurretTypes.Is(data.blockType)) continue;
             if (data == null)
             {
                 Debug.LogWarning($"[Snapshot] can't resolve block '{b.blockAssetName}'/'{b.blockTypeName}', skipped.");
@@ -133,7 +139,12 @@ public static class SnapshotManager
                                           withUpgrades ? b.upAoeGravity : 0);
             if (ins == null) continue;
 
-            ins.inherited = inherited;
+            if (keepFlags)
+            {
+                ins.inherited     = b.inherited;
+                ins.sealedByEnemy = b.sealedByEnemy;
+            }
+            else ins.inherited = inherited;
             placed.Add(ins);
         }
         return placed;

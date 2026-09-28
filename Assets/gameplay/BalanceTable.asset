@@ -78,7 +78,7 @@ MonoBehaviour:
     cost: 3
     damage: 1
     range: 4
-    fireRate: 1.85
+    fireRate: 1.6
     slowFactor: 1
     slowDuration: 0
     aoeRadius: 0
