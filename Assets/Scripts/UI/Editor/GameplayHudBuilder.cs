@@ -27,6 +27,74 @@ public static class GameplayHudBuilder
     const string HudPath    = Folder + "/GameplayHUD.prefab";
     const string ShopPath   = Folder + "/ShopUI.prefab";
     const string WavePath   = Folder + "/WaveBar.prefab";
+    const string TrayPath   = Folder + "/BuildTrayUI.prefab";
+
+    // LevelSelect's build tray — same strip as the shop. Places the prefab (built
+    // the first time) and wires LevelMapController.buildTray. Run it in LevelSelect
+    // and save the scene; after that edit the prefab by hand.
+    [MenuItem("GeoWorld/UI/Place LevelSelect Build Tray")]
+    static void PlaceBuildTray()
+    {
+        EnsureFolder();
+        var map = Object.FindFirstObjectByType<LevelMapController>(FindObjectsInactive.Include);
+        if (map == null)
+        {
+            EditorUtility.DisplayDialog("Place LevelSelect Build Tray", "No LevelMapController in the open scene.", "OK");
+            return;
+        }
+        var go = PlaceOrBuild(TrayPath, false, BuildTray);
+        Undo.RecordObject(map, "Wire Build Tray");
+        map.buildTray = go != null ? go.GetComponent<BuildTrayView>() : null;
+        EditorUtility.SetDirty(map);
+        EditorSceneManager.MarkSceneDirty(EditorSceneManager.GetActiveScene());
+    }
+
+    static GameObject BuildTray()
+    {
+        var root = NewCanvas("BuildTrayUI", 60);
+        var v = root.AddComponent<BuildTrayView>();
+        v.canvas = root.GetComponent<Canvas>();
+
+        // The strip — bottom-right, grows leftward with the number of entries.
+        var panel = Rect("TrayPanel", root.transform);
+        panel.anchorMin = panel.anchorMax = panel.pivot = new Vector2(1f, 0f);
+        panel.anchoredPosition = new Vector2(-16f, 16f);
+        var bg = panel.gameObject.AddComponent<Image>();
+        bg.sprite = Skin("UISprite"); bg.type = Image.Type.Sliced; bg.color = PanelBg;
+        var hl = panel.gameObject.AddComponent<HorizontalLayoutGroup>();
+        hl.padding = new RectOffset(16, 16, 14, 14); hl.spacing = 12f;
+        hl.childAlignment = TextAnchor.LowerRight;
+        hl.childControlWidth = hl.childControlHeight = true;
+        hl.childForceExpandWidth = hl.childForceExpandHeight = false;
+        var fit = panel.gameObject.AddComponent<ContentSizeFitter>();
+        fit.horizontalFit = fit.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+        v.panel = panel;
+        v.panelGroup = panel.gameObject.AddComponent<CanvasGroup>();
+
+        v.list = Row("List", panel, 10f);
+
+        // One entry: the shop's slot, made clickable.
+        var slot = Slot("EntryTemplate", v.list, new Vector2(110f, 134f), 100f, 16f, null);
+        slot.group.blocksRaycasts = true; slot.group.interactable = true;
+        slot.background.raycastTarget = true;
+        var btn = slot.gameObject.AddComponent<Button>();
+        btn.targetGraphic = slot.background;
+        btn.transition = Selectable.Transition.None;   // the hover look is driven by LevelMapController
+        v.entryTemplate = slot;
+
+        // What to do — on the strip's top edge, outside the layout.
+        v.hintLabel = Text("Hint", panel, "Pick a reward block.", 18f, new Color(0.92f, 0.92f, 0.94f), FontStyles.Bold,
+                           TextAlignmentOptions.BottomLeft, null);
+        v.hintLabel.textWrappingMode = TextWrappingModes.Normal;
+        v.hintLabel.gameObject.AddComponent<LayoutElement>().ignoreLayout = true;
+        var hrt = (RectTransform)v.hintLabel.transform;
+        hrt.anchorMin = hrt.anchorMax = new Vector2(0f, 1f);
+        hrt.pivot = new Vector2(0f, 0f);
+        hrt.anchoredPosition = new Vector2(10f, 6f);
+        hrt.sizeDelta = new Vector2(760f, 28f);
+
+        return root;
+    }
     const string SpriteDir  = Folder + "/Sprites";
 
     [MenuItem("GeoWorld/UI/Place Gameplay HUD")]

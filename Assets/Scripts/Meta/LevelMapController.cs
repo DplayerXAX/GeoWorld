@@ -179,18 +179,16 @@ public partial class LevelMapController : MonoBehaviour
     Vector3Int[] _pickedOrigCells;
     Quaternion   _pickedOrigRotation;
 
-    Canvas        _trayCanvas;
-    RectTransform _trayTop, _trayBottom;
-    RectTransform _trayList;
-    TMP_Text      _trayHint;
-    const float   TrayBarHeight   = 180f;   // ≈ gameplay shop's 0.16 × 1080
-    const float   TrayListMargin  = 80f;    // reference-px kept clear at each end of the strip
-    const float   TrayEntrySize   = 120f;   // natural entry size before any fit-to-width shrink
-    const float   TrayEntrySpacing = 12f;
-    [Tooltip("Bar open/close speed — matches gameplay shop's expandSpeed feel.")]
+    [Header("Build tray (scene UGUI)")]
+    [Tooltip("The authored build-tray layout (BuildTrayUI prefab). Found in the scene if left empty.")]
+    public BuildTrayView buildTray;
+    [Tooltip("Tray open/close speed — matches gameplay shop's expandSpeed feel.")]
     public float  trayExpandSpeed = 9f;
     float         _trayScale;        // 0 = fully closed, 1 = fully open — animated
     float         _trayTargetScale;  // what _trayScale eases toward
+    Vector2       _trayHome;         // the panel's authored (open) position
+    bool          _trayBound, _trayWarned;
+    readonly List<ShopItemView> _trayEntries = new();
 
     // ── "Can't reach" toast ────────────────────────────────────────────────────
     Canvas      _toastCanvas;
@@ -1808,7 +1806,7 @@ public partial class LevelMapController : MonoBehaviour
         if (_moving) return;   // don't interrupt a walk
         if (!CanOpenBuildPanel()) { ShowToast("Finish the current tutorial step first."); return; }
         _buildMode = true;
-        BuildTrayUIIfNeeded();
+        BindTray();
         RefreshTray();
         _trayTargetScale = 1f;   // bars ease open — see UpdateTrayAnim
         DialogueRunner.Instance?.CompleteGate(TutorialGateIds.OpenBuild);
@@ -1821,45 +1819,71 @@ public partial class LevelMapController : MonoBehaviour
         _trayTargetScale = 0f;   // bars ease closed — UpdateTrayAnim disables the canvas once fully shut
     }
 
-    // Eases the build-panel bars open/closed, same feel (and formula) as
-    // ShopController.AnimateRift's letterbox: exponential approach to the target,
-    // bar height = TrayBarHeight × scale. Runs every frame regardless of
+    // Slides the tray strip open/closed, same feel (and formula) as the gameplay
+    // shop: exponential approach to the target. Runs every frame regardless of
     // _buildMode so closing finishes its animation even after Exit has already
     // flipped _buildMode off.
     void UpdateTrayAnim()
     {
-        if (_trayCanvas == null) return;
+        if (!_trayBound || buildTray == null) return;
+        var v = buildTray;
 
         float t = 1f - Mathf.Exp(-trayExpandSpeed * Time.deltaTime);
         _trayScale = Mathf.Lerp(_trayScale, _trayTargetScale, t);
+        if (Mathf.Abs(_trayScale - _trayTargetScale) < 0.002f) _trayScale = _trayTargetScale;
 
-        float h = TrayBarHeight * _trayScale;
-        bool show = h > 0.5f;
-        _trayCanvas.enabled = show;
+        bool show = _trayScale > 0.01f;
+        if (v.canvas != null) v.canvas.enabled = show;
         if (!show) return;
 
-        _trayTop.sizeDelta    = new Vector2(0f, h);
-        _trayBottom.sizeDelta = new Vector2(0f, h);
-        FitTrayList();
+        if (v.panel != null)
+        {
+            float drop = v.panel.rect.height + v.closedDrop;
+            v.panel.anchoredPosition = _trayHome + Vector2.down * (drop * (1f - _trayScale));
+        }
+        if (v.panelGroup != null)
+        {
+            v.panelGroup.alpha          = Mathf.Clamp01(_trayScale * 1.4f);
+            v.panelGroup.blocksRaycasts = _trayScale > 0.5f;
+            v.panelGroup.interactable   = _trayScale > 0.5f;
+        }
+        FitTray();
+        UpdateTrayHover();
     }
 
-    // Shrink the whole strip uniformly if the entries don't fit the window's width.
-    // Scaling the container beats resizing each entry: the thumbnails keep their
-    // aspect (so nothing stretches, the bug we already fixed once in the shop) and
-    // the layout group's spacing shrinks in proportion. Never scales ABOVE 1 — a
-    // wide window gets a centred strip at natural size, not a blown-up one.
-    void FitTrayList()
+    // Shrink the whole strip uniformly if it's wider than the screen — the entries
+    // keep their aspect, nothing stretches. Never above 1.
+    void FitTray()
     {
-        if (_trayList == null) return;
-        int n = _trayList.childCount;
-        if (n == 0) { _trayList.localScale = Vector3.one; return; }
-
-        float needed    = n * TrayEntrySize + (n - 1) * TrayEntrySpacing;
-        float available = _trayList.rect.width;
-        if (available <= 1f) return;   // layout hasn't resolved yet this frame
-
-        _trayList.localScale = Vector3.one * Mathf.Min(1f, available / needed);
+        var v = buildTray;
+        if (v.panel == null || v.canvas == null) return;
+        float maxW = ((RectTransform)v.canvas.transform).rect.width - v.screenMargin * 2f;
+        float w    = v.panel.rect.width;
+        v.panel.localScale = Vector3.one * (w > 1f && maxW > 1f ? Mathf.Min(1f, maxW / w) : 1f);
     }
+
+    // Hovered entry: its icon grows to its laid-out size (rest is a little smaller,
+    // so a hovered icon never spills out of its slot) and its slot lights.
+    void UpdateTrayHover()
+    {
+        var v = buildTray;
+        float k = 1f - Mathf.Exp(-12f * Time.deltaTime);
+        float rest = 1f / Mathf.Max(1f, v.hoverScale);
+        bool open = _trayScale > 0.5f;
+        foreach (var e in _trayEntries)
+        {
+            if (e == null) continue;
+            bool hover = open && e.rect != null
+                      && RectTransformUtility.RectangleContainsScreenPoint(e.rect, VirtualCursor.Position, null);
+            if (e.scaleRoot != null)
+                e.scaleRoot.localScale = Vector3.one * Mathf.Lerp(e.scaleRoot.localScale.x, hover ? 1f : rest, k);
+            if (e.background != null) e.background.color = hover ? e.backgroundHoverColor : e.backgroundColor;
+        }
+    }
+
+    bool PointerOverTray() =>
+        _trayBound && buildTray != null && _trayScale > 0.5f && buildTray.panel != null
+        && RectTransformUtility.RectangleContainsScreenPoint(buildTray.panel, VirtualCursor.Position, null);
 
     void UpdateBuildMode()
     {
@@ -1880,7 +1904,7 @@ public partial class LevelMapController : MonoBehaviour
             // Nothing held — a click tries to pick an EXISTING player-built piece
             // back up for re-editing (gameplay's PickUpSelected). Picking a NEW
             // block is the tray buttons' job (SpawnTrayEntry), not this click.
-            if (Input.GetMouseButtonDown(0)) TryPickUpExisting();
+            if (Input.GetMouseButtonDown(0) && !PointerOverTray()) TryPickUpExisting();
             return;
         }
 
@@ -2220,74 +2244,37 @@ public partial class LevelMapController : MonoBehaviour
         return r;
     }
 
-    // ── Build panel (UGUI — cinematic letterbox bars, like gameplay's shop) ─────
-    // Same visual language as ShopController's letterbox: a black bar top AND
-    // bottom, animated open/closed (see UpdateTrayAnim). Instead of selling, the
-    // bottom bar lists every reward block the player owns — shown as an actual
-    // rendered miniature of the block's shape (BlockShapeThumbnail), not just a
-    // name — click one, then click the map to place it. No close button: press
-    // the build key again (or Esc) to leave, same as gameplay's shop.
-    void BuildTrayUIIfNeeded()
+    // ── Build tray (scene UGUI — the BuildTrayUI prefab, see BuildTrayView) ────
+    // Lists every reward block the player owns — each shown as the same 45°
+    // photograph the gameplay shop uses (ShopThumbnail) — click one, then click the
+    // map to place it. No close button: press the build key again (or Esc) to
+    // leave, same as gameplay's shop.
+    bool BindTray()
     {
-        if (_trayCanvas != null) return;
-
-        var canvasGo = new GameObject("BuildTrayCanvas", typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster));
-        canvasGo.transform.SetParent(transform, false);
-        _trayCanvas = canvasGo.GetComponent<Canvas>();
-        _trayCanvas.renderMode = RenderMode.ScreenSpaceOverlay;
-        _trayCanvas.sortingOrder = 60;
-        var sc = canvasGo.GetComponent<CanvasScaler>();
-        sc.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-        sc.referenceResolution = new Vector2(1920f, 1080f);
-        sc.matchWidthOrHeight = 1f;   // match height, so the bars stay a fixed fraction of screen height
-        BlockInfoPanel.EnsureEventSystem();
-
-        var barColor = new Color(0f, 0f, 0f, 1f);    // solid black cinematic bars
-
-        // Top bar — pure black, no content (just the letterbox framing).
-        _trayTop = NewRect("TopBar", canvasGo.transform);
-        _trayTop.anchorMin = new Vector2(0f, 1f); _trayTop.anchorMax = new Vector2(1f, 1f); _trayTop.pivot = new Vector2(0.5f, 1f);
-        _trayTop.sizeDelta = Vector2.zero; _trayTop.anchoredPosition = Vector2.zero;   // starts closed — UpdateTrayAnim grows it
-        _trayTop.gameObject.AddComponent<Image>().color = barColor;
-
-        // Bottom bar — holds the reward-block strip.
-        _trayBottom = NewRect("BottomBar", canvasGo.transform);
-        _trayBottom.anchorMin = new Vector2(0f, 0f); _trayBottom.anchorMax = new Vector2(1f, 0f); _trayBottom.pivot = new Vector2(0.5f, 0f);
-        _trayBottom.sizeDelta = Vector2.zero; _trayBottom.anchoredPosition = Vector2.zero;
-        _trayBottom.gameObject.AddComponent<Image>().color = barColor;
-
-        // sizeDelta.x is NEGATIVE against a full-width stretch: "parent width minus
-        // 40", so the hint reflows with the window instead of clipping at 1920.
-        _trayHint = NewText("Hint", _trayBottom, 22f, new Color(0.9f, 0.9f, 0.92f),
-                            TextAlignmentOptions.Top, new Vector2(0f, -10f), new Vector2(-40f, 30f));
-        _trayHint.rectTransform.anchorMin = new Vector2(0f, 1f);
-        _trayHint.rectTransform.anchorMax = new Vector2(1f, 1f);
-        _trayHint.textWrappingMode = TMPro.TextWrappingModes.Normal;
-
-        // Stretch the strip across the bar instead of pinning it to a fixed 1500px.
-        // At the 1920×1080 reference those are the same thing, which is why this only
-        // showed up off-ratio: on any window narrower than 1500 reference units (a
-        // 4:3 or portrait "free aspect" game view, where matching HEIGHT makes the
-        // canvas' reference WIDTH shrink) the strip ran off both edges of the screen.
-        _trayList = NewRect("List", _trayBottom);
-        _trayList.anchorMin = new Vector2(0f, 0.5f);
-        _trayList.anchorMax = new Vector2(1f, 0.5f);
-        _trayList.pivot = new Vector2(0.5f, 0.5f);
-        _trayList.anchoredPosition = new Vector2(0f, -10f);
-        _trayList.sizeDelta = new Vector2(-TrayListMargin * 2f, TrayBarHeight - 60f);
-        var hlg = _trayList.gameObject.AddComponent<HorizontalLayoutGroup>();
-        hlg.spacing = TrayEntrySpacing; hlg.childAlignment = TextAnchor.MiddleCenter;
-        hlg.childControlWidth = hlg.childControlHeight = false;
-        hlg.childForceExpandWidth = hlg.childForceExpandHeight = false;
-
-        _trayCanvas.enabled = false;
+        if (_trayBound) return buildTray != null;
+        if (buildTray == null) buildTray = FindFirstObjectByType<BuildTrayView>(FindObjectsInactive.Include);
+        if (buildTray == null)
+        {
+            if (!_trayWarned)
+            {
+                _trayWarned = true;
+                Debug.LogWarning("[LevelMap] No BuildTrayView in the scene — run GeoWorld ▸ UI ▸ Place LevelSelect Build Tray and save the scene.");
+            }
+            return false;
+        }
+        _trayBound = true;
+        if (buildTray.panel != null) _trayHome = buildTray.panel.anchoredPosition;
+        if (buildTray.entryTemplate != null) buildTray.entryTemplate.gameObject.SetActive(false);
+        if (buildTray.canvas != null) buildTray.canvas.enabled = false;
+        BlockInfoPanel.EnsureEventSystem();   // the entries are Buttons
+        return true;
     }
 
     void RefreshTray()
     {
-        if (_trayList == null) return;
-        for (int i = _trayList.childCount - 1; i >= 0; i--)
-            Destroy(_trayList.GetChild(i).gameObject);
+        if (!BindTray()) return;
+        foreach (var e in _trayEntries) if (e != null) Destroy(e.gameObject);
+        _trayEntries.Clear();
 
         // Merge earned inventory with (optionally) the full reward set for testing.
         // Every reward block is capped at 1 in stock (see GrantMapBlock) — a
@@ -2311,9 +2298,10 @@ public partial class LevelMapController : MonoBehaviour
             SpawnTrayEntry(bd);
         }
 
-        _trayHint.text = _ghostBlock != null
-            ? $"Placing {_ghostBlock.ShapeName} — click to place, hold Alt + mouse / wheel to rotate, Esc to cancel."
-            : (any ? "Pick a reward block, or click a piece you've already placed to move it." : "No blocks earned yet — clear levels to earn map blocks.");
+        if (buildTray.hintLabel != null)
+            buildTray.hintLabel.text = _ghostBlock != null
+                ? $"Placing {_ghostBlock.ShapeName} — click to place, hold Alt + mouse / wheel to rotate, Esc to cancel."
+                : (any ? "Pick a reward block, or click a piece you've already placed to move it." : "No blocks earned yet — clear levels to earn map blocks.");
     }
 
     // Warm gold tint for reward-block thumbnails — distinct from the cool cyan
@@ -2323,12 +2311,16 @@ public partial class LevelMapController : MonoBehaviour
 
     void SpawnTrayEntry(BlockData bd)
     {
-        var rt = NewRect("Entry", _trayList);
-        rt.sizeDelta = new Vector2(TrayEntrySize, TrayEntrySize);
-        var img = rt.gameObject.AddComponent<Image>();
-        img.color = new Color(0.16f, 0.17f, 0.20f, 1f);
-        var btn = rt.gameObject.AddComponent<Button>();
-        btn.targetGraphic = img;
+        var v = buildTray;
+        if (v.entryTemplate == null || v.list == null) return;
+
+        var e = Instantiate(v.entryTemplate, v.list);
+        e.name = bd.name;
+        e.gameObject.SetActive(true);
+
+        var btn = e.GetComponent<Button>();
+        if (btn == null) btn = e.gameObject.AddComponent<Button>();
+        btn.onClick.RemoveAllListeners();
         btn.onClick.AddListener(() =>
         {
             CancelGhostHold();   // if something was already held (esp. a re-picked piece), restore/drop it first
@@ -2344,16 +2336,23 @@ public partial class LevelMapController : MonoBehaviour
             _ghostPlanePinned = false;
             _ghostAnchorSnap = true;   // appear at the cursor, don't glide in from wherever the last hold sat
             RefreshTray();
-            _trayTargetScale = 0f;   // tuck the bars away so the map is fully visible while placing
+            _trayTargetScale = 0f;   // tuck the tray away so the map is fully visible while placing
         });
 
-        var shapeRt = NewRect("Shape", rt);
-        shapeRt.anchorMin = Vector2.zero; shapeRt.anchorMax = Vector2.one;
-        shapeRt.offsetMin = new Vector2(6f, 6f); shapeRt.offsetMax = new Vector2(-6f, -6f);
-        var shapeImg = shapeRt.gameObject.AddComponent<Image>();
-        shapeImg.raycastTarget = false;
-        float cellSize = gridSystem != null ? gridSystem.cellSize : 1f;
-        BlockShapeThumbnail.Apply(shapeImg, BlockShapeThumbnail.GetOrCreate(bd, cubePrefab, RewardBlockTint, cellSize));
+        float cs  = gridSystem != null ? gridSystem.cellSize : 1f;
+        float yaw = v.iconYaw + (System.Array.IndexOf(v.flipIconShapes, bd.blockShape) >= 0 ? 180f : 0f);
+        var sprite = ShopThumbnail.Block(bd, cubePrefab, RewardBlockTint, cs, yaw, v.iconPitch, v.iconPadding);
+        if (e.icon != null)
+        {
+            e.icon.sprite = sprite;
+            e.icon.preserveAspect = true;
+            e.icon.color = Color.white;
+            e.icon.enabled = sprite != null;
+        }
+        if (e.price != null) e.price.text = bd.ShapeName;   // the entry's label: the shape
+        if (e.background != null) e.background.color = e.backgroundColor;
+        if (e.scaleRoot != null) e.scaleRoot.localScale = Vector3.one / Mathf.Max(1f, v.hoverScale);
+        _trayEntries.Add(e);
     }
 
     RectTransform NewRect(string name, Transform parent)
@@ -2361,20 +2360,6 @@ public partial class LevelMapController : MonoBehaviour
         var go = new GameObject(name, typeof(RectTransform));
         go.transform.SetParent(parent, false);
         return (RectTransform)go.transform;
-    }
-
-    // Top-anchored, fixed-height strip (used for the hint line).
-    TMP_Text NewText(string name, Transform parent, float size, Color color,
-                     TextAlignmentOptions align, Vector2 anchoredPos, Vector2 sizeDelta)
-    {
-        var rt = NewRect(name, parent);
-        rt.anchorMin = new Vector2(0f, 1f); rt.anchorMax = new Vector2(1f, 1f); rt.pivot = new Vector2(0.5f, 1f);
-        rt.anchoredPosition = anchoredPos;
-        rt.sizeDelta = sizeDelta;
-        var t = rt.gameObject.AddComponent<TextMeshProUGUI>();
-        t.fontSize = size; t.color = color; t.alignment = align;
-        t.raycastTarget = false;
-        return t;
     }
 
     // Stretches to fill its parent's whole rect (used for button/entry labels).

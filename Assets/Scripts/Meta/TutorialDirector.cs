@@ -180,8 +180,6 @@ public class TutorialDirector : MonoBehaviour
     Canvas        _hintCanvas;
     CanvasGroup   _hintGroup;
 
-    [Tooltip("Opacity the hint box drops to while the player is mid-placement — matches DialogueRunner.editDim so a speakerless step gets out of the way exactly like a spoken one.")]
-    [Range(0f, 1f)] public float hintEditDim = 0.25f;
     RectTransform _hintPanel;
     TMP_Text      _hintText;
     Image         _continueBar;
@@ -523,6 +521,9 @@ public class TutorialDirector : MonoBehaviour
 
     void Advance()
     {
+        var done = Cur;
+        if (done != null && done.freeRefreshAfter) PlacementController.Instance?.FreeRefreshShop();
+
         int next = _step + 1;
         if (IsWaveGated(next))
         {
@@ -625,6 +626,8 @@ public class TutorialDirector : MonoBehaviour
         }
 
         if (pc != null) pc.placementConstraint = MatchesStep;   // re-arm (Place restricts; others pass)
+        if (pc != null && step.shopOnlyTarget && step.block != null && IsPurchaseKind(step.kind))
+            pc.StockShopWith(step.block, step.shopOnlyColor);
         if (step.kind == TutorialStepKind.Place) BuildGhost(step);
         // A transient box belongs to the step that asked for it — drop the previous
         // one before this step gets a chance to build its own.
@@ -1113,17 +1116,9 @@ public class TutorialDirector : MonoBehaviour
             return;
         }
 
-        // Dim (don't hide) while a block is being placed — same rule and same
-        // reason as DialogueRunner's editDim: the box sits over the board the
-        // player is aiming at, and reading it isn't what they're doing right now.
+        // Fully shown, placing or not.
         if (_hintGroup != null)
-        {
-            var pc = PlacementController.Instance;
-            bool editing = (pc != null && pc.mode == PlacementMode.Edit)
-                        || (LevelMapController.Instance != null && LevelMapController.Instance.BuildMode);
-            _hintGroup.alpha = Mathf.MoveTowards(_hintGroup.alpha, editing ? hintEditDim : 1f,
-                                                 6f * Time.unscaledDeltaTime);
-        }
+            _hintGroup.alpha = Mathf.MoveTowards(_hintGroup.alpha, 1f, 6f * Time.unscaledDeltaTime);
 
         // (Re)set text & typewriter clock when the step's message changes.
         if (_typedStep != _step || _hintMsg != msg)
@@ -1148,7 +1143,7 @@ public class TutorialDirector : MonoBehaviour
         float centerFrac = 1f - hintScreenPos.y;                       // from bottom
         float minCenter  = barFrac + (8f / RefH) + halfHFrac;
         float pushUp     = Mathf.Max(0f, minCenter - centerFrac) * RefH;
-        _hintPanel.anchoredPosition = new Vector2(0f, pushUp);
+        _hintPanel.anchoredPosition = new Vector2(ShopDodgeX(pushUp), pushUp);
 
         // Typewriter reveal via TMP's visible-character clip (keeps rich text intact).
         int  shown = _hintTypeSkipped || hintCharsPerSecond <= 0f
@@ -1182,6 +1177,33 @@ public class TutorialDirector : MonoBehaviour
             _continueBar.rectTransform.sizeDelta = new Vector2(d, d);
             PositionContinueBall(shown);
         }
+    }
+
+    // While the shop strip is open, the hint box slides left just far enough that
+    // its right edge clears the strip (and its refresh tab), and slides back when
+    // the shop closes. Measured from where the box would sit with no shift, so it
+    // can't chase its own offset.
+    float _hintDodgeX;
+    const float HintShopGap = 16f;   // screen pixels between the box and the strip
+
+    float ShopDodgeX(float y)
+    {
+        float target = 0f;
+        var shop = ShopController.Instance;
+        if (shop != null && shop.TryGetScreenRect(out var sr))
+        {
+            var c = new Vector3[4];
+            _hintPanel.GetWorldCorners(c);
+            float scale = Mathf.Max(1e-4f, _hintPanel.lossyScale.x);   // canvas units → screen px
+            float shiftPx = _hintDodgeX * scale;
+            float right = c[2].x - shiftPx, left = c[0].x - shiftPx;
+            float bottom = c[0].y, top = c[2].y;
+            bool vertical = bottom < sr.yMax + HintShopGap && top > sr.yMin - HintShopGap;
+            if (vertical && right > sr.xMin - HintShopGap && left < sr.xMax)
+                target = (sr.xMin - HintShopGap - right) / scale;
+        }
+        _hintDodgeX = Mathf.Lerp(_hintDodgeX, target, 1f - Mathf.Exp(-10f * Time.unscaledDeltaTime));
+        return _hintDodgeX;
     }
 
     // Mirrors DialogueRunner.PositionContinueBar.

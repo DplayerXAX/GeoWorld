@@ -10,6 +10,10 @@ Shader "Custom/ManifoldSkybox"
         _FlashColor  ("Flash Color",  Color)      = (1,1,1,1)
         _FlashAmount ("Flash Amount", Range(0,1)) = 0
         _GridColor     ("Grid Line Color",Color) = (0.25, 0.35, 0.65, 1)
+        // How far the stained-glass haze (and the music colour shift) may turn hue.
+        // 1 = the full chapel-glass spread; low = the sky stays in its own colours
+        // (a level's environment sets this with its palette).
+        _HueRange      ("Stained-glass hue range", Range(0, 1)) = 1
         _GridScale     ("Grid Scale",     Float) = 12.0
         _GridThickness ("Grid Thickness", Range(0.01, 0.1)) = 0.03
 
@@ -61,6 +65,7 @@ Shader "Custom/ManifoldSkybox"
             float _FogStart, _FogDensity, _FogStrength;
             float _HorizonSharp, _TimeSpeed;
             float _BeatPulse, _MusicIntensity, _ColorShift, _TypeHue, _PitchGlow;
+            float _HueRange;
             float _CombatMode;
             float _ClearReact;
             float _KillReact;
@@ -436,6 +441,7 @@ half3 combatHorizon =
                 fogCol = lerp(fogCol, half3(0.06, 0.02, 0.35), cm * fogLayer * 0.7);
 
                 float3 panel   = StainedGlassPanel(p);
+                panel.x *= _HueRange;   // panel hue offset (turns), narrowed for themed skies
                 // Clear: keep panels in a GOLD FAMILY instead of one identical hue — each
                 // panel's hash (panel.x) offsets it a little toward bronze/amber/champagne,
                 // so neighbouring facets still contrast against each other instead of
@@ -450,7 +456,7 @@ half3 combatHorizon =
                 panel.y = saturate((panel.y - 0.5) * (1.0 + cr * 1.5) + 0.5 + cr * 0.04);
                 // Clear: fade _ColorShift's contribution out too — same reasoning as the
                 // final hue rotation below, it's what was pulling fogCol off gold.
-                float panelHue = (_ColorShift + panel.x + cm * 0.30) * (1.0 - cr) + panel.x * cr;
+                float panelHue = ((_ColorShift + cm * 0.30) * _HueRange + panel.x) * (1.0 - cr) + panel.x * cr;
                 fogCol = HsvShift(fogCol, panelHue);
                 // Clear: a touch more saturation than a flat metallic read, short of
                 // neon-pigment territory.
@@ -533,7 +539,7 @@ half3 combatHorizon =
                 // was reading as a random pink/brown instead of gold).
                 result = HsvShift(
                     result,
-                    (_ColorShift + cm * 0.04) * (1.0 - cr)
+                    (_ColorShift + cm * 0.04) * _HueRange * (1.0 - cr)
                 );
                 
                 // ── Combat comfort pass ─────────────────────────────────────────

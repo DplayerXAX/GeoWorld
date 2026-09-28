@@ -15,7 +15,7 @@ using UnityEngine.UI;
 public class SaveSlotDelete : MonoBehaviour
 {
     [Tooltip("Gap between the centred slot's right edge and the button, in panel units. Negative tucks it over the slot's edge.")]
-    public float gap = -6f;
+    public float gap = -50f;
 
     CarouselMenu  _carousel;
     RectTransform _rt;

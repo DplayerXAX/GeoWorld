@@ -17,7 +17,7 @@ MonoBehaviour:
   description: 
   runSeed: 0
   blocksPerTurn: 3
-  startingBlockCurrencyMult: 0.35
+  startingBlockCurrencyMult: 1
   environment: {fileID: 11400000, guid: 71fe97475a0540a788498eba0c8f3a71, type: 2}
   turretsPerTurn: 3
   synergyEnabled: 1

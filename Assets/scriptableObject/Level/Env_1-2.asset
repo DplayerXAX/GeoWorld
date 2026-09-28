@@ -11,17 +11,17 @@ MonoBehaviour:
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 805a189660094c8b95283a23b742e707, type: 3}
   m_Name: Env_1-2
-  m_EditorClassIdentifier: 
+  m_EditorClassIdentifier:
   prebuiltAge: 4
   maxAge: 4
-  wearTint: {r: 0.38, g: 0.6, b: 0.46, a: 1}
+  wearTint: {r: 0.3, g: 0.62, b: 0.52, a: 1}
   wearStrength: 1.1
   crackStrength: 1.1
-  contactShadow: 0.42
+  contactShadow: 0.45
   contactRadius: 0.32
   rain: 1
   rainIntensity: 1
-  rainColor: {r: 0.72, g: 0.8, b: 0.8, a: 0.32}
+  rainColor: {r: 0.6, g: 0.95, b: 0.92, a: 0.3}
   rainWind: {x: 1.6, y: 0.5}
   splashes: 1
   wetness: 0.85
@@ -32,36 +32,38 @@ MonoBehaviour:
   streaks: 0.7
   corrosion: 0.65
   overrideSky: 1
-  skyZenith: {r: 0.42, g: 0.47, b: 0.52, a: 1}
-  skyHorizon: {r: 0.55, g: 0.6, b: 0.62, a: 1}
-  skyHaze: {r: 0.64, g: 0.69, b: 0.7, a: 1}
-  skyHazeDensity: 1.3
+  skyZenith: {r: 0.03, g: 0.08, b: 0.13, a: 1}
+  skyHorizon: {r: 0.07, g: 0.36, b: 0.4, a: 1}
+  skyHaze: {r: 0.18, g: 0.72, b: 0.64, a: 1}
+  skyGrid: {r: 0.15, g: 0.65, b: 0.62, a: 1}
+  skyHueRange: 0.2
+  skyHazeDensity: 1.4
   heightFogEnabled: 1
   heightFog:
-    color: {r: 0.6, g: 0.66, b: 0.66, a: 1}
-    density: 0.4
+    color: {r: 0.1, g: 0.42, b: 0.42, a: 1}
+    density: 0.45
     topOffset: 0.2
     falloff: 0.8
     wave: 0.6
     maxDistance: 60
-    skyBlend: 0.7
-    scatter: 0.5
-    anisotropy: 0.4
+    skyBlend: 0.25
+    scatter: 1.2
+    anisotropy: 0.5
     mapClear: 1
     clearFrom: 0
     clearTo: 0.6
   farHazeEnabled: 1
   farHaze:
-    color: {r: 0.62, g: 0.67, b: 0.68, a: 1}
+    color: {r: 0.14, g: 0.55, b: 0.52, a: 1}
     strength: 0.95
-    density: 0.5
+    density: 0.55
     height: 9
     depth: 10
     offset: -3
     falloff: 0.7
-    skyBlend: 0.85
-    scatter: 0.9
-    anisotropy: 0.4
+    skyBlend: 0.25
+    scatter: 1.6
+    anisotropy: 0.5
     steps: 28
     edge: 24
     clearance: 2.5
@@ -74,18 +76,27 @@ MonoBehaviour:
     rate: 0.35
     max: 12
     soft: 8
-  sunIntensity: 0.6
-  sunTint: {r: 0.8, g: 0.87, b: 0.95, a: 1}
+  sunIntensity: 0.85
+  sunTint: {r: 0.7, g: 0.95, b: 0.95, a: 1}
   overrideSunDirection: 1
-  sunPitch: 62
-  sunYaw: 210
-  motes: 0
-  moteDensity: 1
+  sunPitch: 35
+  sunYaw: 200
+  motes: 5
+  moteDensity: 1.2
   moteTint: {r: 1, g: 1, b: 1, a: 1}
   backdrop: 2
-  backdropColor: {r: 0.3, g: 0.34, b: 0.36, a: 1}
-  backdropHaze: {r: 0.62, g: 0.67, b: 0.68, a: 1}
-  backdropCount: 16
-  backdropDistance: {x: 45, y: 100}
+  backdropColor: {r: 0.04, g: 0.1, b: 0.12, a: 1}
+  backdropHaze: {r: 0.12, g: 0.52, b: 0.5, a: 1}
+  backdropHazeMax: 0.9
+  backdropCount: 18
+  backdropDistance: {x: 40, y: 105}
   backdropSeed: 12
-  dissolveEdge: {r: 0.55, g: 1, b: 0.35, a: 1}
+  backdropSunGlow: {r: 0.25, g: 0.9, b: 0.75, a: 1}
+  backdropRim: {r: 0.3, g: 1.1, b: 0.9, a: 1}
+  backdropAccent: {r: 0.4, g: 1.6, b: 0.8, a: 1}
+  backdropAccentAmount: 0.55
+  sunGlow: 1
+  sunGlowColor: {r: 0.3, g: 0.95, b: 0.85, a: 0.55}
+  sunGlowSize: 110
+  sunGlowDistance: 170
+  dissolveEdge: {r: 0.45, g: 1, b: 0.55, a: 1}
