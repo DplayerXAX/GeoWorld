@@ -38,6 +38,7 @@ public class PlacedBlockInstance
     // anything spent THIS level, so without this the first move of every chapter
     // level would be to sell the entire inherited base for cash.
     public bool inherited;
+    public bool rainGranted; // Free environment supply: no sale refund.
 
     // Not connected back to an endpoint — see BoardValidity. Shown with hazard
     // stripes; a turret in this state holds its fire.
@@ -188,6 +189,7 @@ public class GridSystem : MonoBehaviour
 
     public void RemoveInstance(PlacedBlockInstance instance)
     {
+        ChapterEnvironmentController.Instance?.BoardChanged();
         foreach (var pos in instance.occupiedCells)
         {
             occupied.Remove(pos);

@@ -156,7 +156,8 @@ public partial class GameFlowManager : MonoBehaviour
         OrbitCamera.InputLocked = false;
 
         RunStats.BeginRun();   // reset kill/blocks/time counters for score-keeping
-        ApplyRunConfig();   // Level vs Endless setup (seed, pacing, authored waves)
+        ApplyRunConfig();
+        ChapterEnvironmentController.Ensure(this);   // Level vs Endless setup (seed, pacing, authored waves)
 
         // Everything placed from here on is placed while hidden for the intro —
         // synergy visuals wait until the board has popped in (SynergyVisualFX.Hold).
@@ -441,6 +442,7 @@ public partial class GameFlowManager : MonoBehaviour
     {
         if (_levelDone) return;
         _levelDone = true;
+        ChapterEnvironmentController.Instance?.EndCombat();
         DiscardRunSave();   // cleared: there is nothing left to come back to
 
         if (phase == GamePhase.Running)
@@ -540,6 +542,7 @@ public partial class GameFlowManager : MonoBehaviour
     void HandleGameOver()
     {
         if (phase == GamePhase.GameOver) return;
+        ChapterEnvironmentController.Instance?.EndCombat();
         DiscardRunSave();   // lost: a save would just resume a dead run
         Debug.Log("[GameFlow] Game Over — last life lost.");
         AbortRun(quiet: true);   // no fight_end stinger — this is a loss, not a survived wave
@@ -972,6 +975,7 @@ public partial class GameFlowManager : MonoBehaviour
         // scratch, which is why enemies still came out of a spawn point that
         // looked unconnected.)
         EvaluateGrid();
+        ChapterEnvironmentController.Instance?.BeginWave(UpcomingWaveNumber);
     }
 
     // Called after every block place/remove — rebuilds graph, refreshes live
@@ -986,6 +990,7 @@ public partial class GameFlowManager : MonoBehaviour
         // still part of the build. Before the Running early-out below: a turret
         // losing its support mid-combat must stop firing mid-combat.
         BoardValidity.Reconcile(gridSystem, allStarts, allEnds);
+        ChapterEnvironmentController.Instance?.RefreshBoard();
 
         var path = FindCurrentPath();
         _currentPathLength = path != null ? path.Count : 0;
@@ -998,6 +1003,7 @@ public partial class GameFlowManager : MonoBehaviour
                 ArpeggiatorManager.Instance?.StopRecording();
                 if (currentUnit != null) { Destroy(currentUnit.gameObject); currentUnit = null; }
                 enemyBaseManager?.CancelWave();
+                ChapterEnvironmentController.Instance?.EndCombat();
                 ResourceManager.Instance?.SetCombatActive(false);
                 phase = GamePhase.Build;
                 // No live line yet — will appear on next block placement.
@@ -1055,6 +1061,7 @@ public partial class GameFlowManager : MonoBehaviour
         currentUnit = null;
 
         phase = GamePhase.Running;
+        ChapterEnvironmentController.Instance?.BeginCombat();
         enemyBaseManager?.BeginWave(spawnPaths, PickWaveForThisRound());
         ResourceManager.Instance?.SetCombatActive(true);   // start turret currency regen
         ShopController.Instance?.OnCombatStart();           // collapse and hide shop
@@ -1336,6 +1343,7 @@ public partial class GameFlowManager : MonoBehaviour
     public void AbortRun(bool quiet = false)
     {
         if (phase != GamePhase.Running) return;
+        ChapterEnvironmentController.Instance?.EndCombat();
 
         ArpeggiatorManager.Instance?.StopRecording();
         if (currentUnit != null) { Destroy(currentUnit.gameObject); currentUnit = null; }
@@ -1351,6 +1359,7 @@ public partial class GameFlowManager : MonoBehaviour
     public void EndRunningPhase()
     {
         if (phase != GamePhase.Running) return;
+        ChapterEnvironmentController.Instance?.EndCombat();
 
         // Legacy SurfaceUnit-driven path: promote to loop layer. With the
         // wave-driven flow currentUnit is null and we skip this entirely.

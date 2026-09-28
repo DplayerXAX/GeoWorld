@@ -50,6 +50,7 @@ public struct GameCommand
     /// machine has to make the SAME deduction — a remote machine cannot look up the
     /// price itself, since the shop that set it was rolled locally by the buyer.</summary>
     public int price;
+    public bool rainGranted; // Local single-player environment supply.
 
     /// <summary>BlockColor as an int, and the exact tint packed as 0xRRGGBB.
     /// The tint is sent rather than re-derived because an uncoloured block picks its

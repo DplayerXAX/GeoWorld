@@ -10,6 +10,8 @@ public class LevelDefinition : ScriptableObject
     [Header("Identity")]
     [Tooltip("Stable key used in the save file (unlocks / records). Don't rename casually.")]
     public string levelId;
+    [Header("Chapter environment (shared across the chapter)")]
+    public ChapterEnvironmentProfile environment;
     public string displayName;
     [TextArea] public string description;
 

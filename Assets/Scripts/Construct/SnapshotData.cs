@@ -33,6 +33,7 @@ public class BlockSnapshot
     // Per-piece flags a mid-level save must bring back as they were: an inherited
     // block refunds nothing when removed, a sealed one can't be sold.
     public bool inherited;
+    public bool rainGranted;
     public bool sealedByEnemy;
 }
 
@@ -55,7 +56,7 @@ public class CameraSnapshot
 [Serializable]
 public class GridSnapshot
 {
-    public int    version = 2;   // 2: BlockSnapshot gained asset name, synergy tag, upgrades
+    public int    version = 3;   // 2: BlockSnapshot gained asset name, synergy tag, upgrades
     public string name;
     public string timestamp;     // ISO-ish: "2026-05-19_14-30-22"
     public int    roundIndex;

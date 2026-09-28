@@ -10,7 +10,8 @@ using UnityEngine;
 [Serializable]
 public class LevelRunSave
 {
-    public int    version = 1;
+    public int    version = 2;
+    public EnvironmentRunState environment;
     public string levelId;
     public string savedAt;
 

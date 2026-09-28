@@ -214,7 +214,9 @@ public class EnemySurfaceUnit : MonoBehaviour
     // StatusEffectWatcher to decide whether to show buff / debuff arrows —
     // baseSpeedMultiplier is deliberately excluded, since that's the archetype's
     // authored speed, not a status effect.
-    public float TemporarySpeedMultiplier => _temporarySpeedMultiplier;
+    public float EnvironmentSpeedMultiplier => ChapterEnvironmentController.Instance?.SpeedAt(
+        CurrentCell ?? Vector3Int.zero, CurrentNormal ?? Vector3.zero) ?? 1f;
+    public float TemporarySpeedMultiplier => _temporarySpeedMultiplier * EnvironmentSpeedMultiplier;
 
     public void AddExternalDisplacement(Vector3 delta)
     {
@@ -275,7 +277,8 @@ public class EnemySurfaceUnit : MonoBehaviour
     {
         _moveFrom = transform.position;
         _moveTo = FaceCenter(node);
-        _moveDuration = (_secPerBeat / EffectiveSpeedMultiplier) * moveRatio;
+        float environmentSpeed = ChapterEnvironmentController.Instance?.SpeedAt(node.cell, node.normal) ?? 1f;
+        _moveDuration = (_secPerBeat / Mathf.Max(0.01f, baseSpeedMultiplier * _temporarySpeedMultiplier * environmentSpeed)) * moveRatio;
         _moveTimer = 0f;
         _isMoving = true;
 
@@ -342,5 +345,5 @@ public class EnemySurfaceUnit : MonoBehaviour
         AnyDied?.Invoke(this);
     }
 
-    float EffectiveSpeedMultiplier => Mathf.Max(0.01f, baseSpeedMultiplier * _temporarySpeedMultiplier);
+    float EffectiveSpeedMultiplier => Mathf.Max(0.01f, baseSpeedMultiplier * _temporarySpeedMultiplier * EnvironmentSpeedMultiplier);
 }

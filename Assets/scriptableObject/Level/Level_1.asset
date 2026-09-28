@@ -13,6 +13,7 @@ MonoBehaviour:
   m_Name: Level_1
   m_EditorClassIdentifier: Assembly-CSharp::LevelDefinition
   levelId: 1-1
+  environment: {fileID: 11400000, guid: 6f7c645fbe624bd1815eb9cb113b710a, type: 2}
   displayName: 1-1
   description: More portals appear! Try to build up synergy.
   runSeed: 1

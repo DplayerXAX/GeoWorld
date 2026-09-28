@@ -126,6 +126,7 @@ public partial class PlacementController : MonoBehaviour
     private Color currentColor;
 
     private bool isPickingUpObject = false;
+    private bool _heldRainGranted;
     private int  _pendingShopPrice = 0;    // price of the current shop item being held
     private Vector3 lastObjectPos;
     private Quaternion lastObjectRot;
@@ -151,6 +152,7 @@ public partial class PlacementController : MonoBehaviour
 
     class UndoRecord
     {
+        public bool rainGranted;
         public UndoType     actionType;
         public BlockData    data;
         public Color        color;
@@ -608,6 +610,10 @@ public partial class PlacementController : MonoBehaviour
                 // UGUI selection panel — it handles the click. Skip world
                 // selection / placement underneath.
             }
+            else if (ChapterEnvironmentController.Instance?.TryPickAt(VirtualCursor.Position) == true)
+            {
+                // A supply pickup consumed this click.
+            }
             else if (mode == PlacementMode.Edit)
             {
                 if (currentBlock != null) TryPlace();
@@ -937,6 +943,7 @@ public partial class PlacementController : MonoBehaviour
         // (and stops firing) instead, and comes back the moment it is supported again.
 
         isPickingUpObject = true;
+        _heldRainGranted = selectedInstance.rainGranted;
         lastObjectPos   = selectedInstance.visualObject.transform.position;
         lastObjectRot   = selectedInstance.visualObject.transform.rotation;
         lastObjectCells = selectedInstance.occupiedCells.ToArray();
@@ -967,6 +974,7 @@ public partial class PlacementController : MonoBehaviour
 
     void CancelEditMode()
     {
+        ReleaseHeldRainBlock();
         VirtualCursor.EndRotation();
         _mouseRotation.Reset();
         if (isPickingUpObject)
@@ -983,6 +991,7 @@ public partial class PlacementController : MonoBehaviour
         }
 
 
+        _heldRainGranted = false;
         mode = PlacementMode.Select;
         previewParent.gameObject.SetActive(false);
         SetTrayVisible(true);
@@ -1050,6 +1059,7 @@ public partial class PlacementController : MonoBehaviour
                 return;
             }
 
+            _heldRainGranted = false;
             currentBlock        = sb.data;
             currentSynergyColor = sb.color;
             _ghostAnchorSnap    = true;   // appear at the cursor, don't glide in from the last hold
@@ -1232,7 +1242,7 @@ public partial class PlacementController : MonoBehaviour
     int ComputeSellRefund(PlacedBlockInstance ins)
     {
         if (ins?.data == null || ResourceManager.Instance == null) return 0;
-        if (ins.inherited) return 0;   // paid for in an earlier level — see PlacedBlockInstance.inherited
+        if (ins.inherited || ins.rainGranted) return 0;   // paid for in an earlier level — see PlacedBlockInstance.inherited
         int basePrice = ResourceManager.Instance.ComputePrice(ins.data, 1f);
         float fraction = Mathf.Max(0f, Modifiers.Eval(Stat.SellRefund, 1f) * sellRefundFraction);
         return Mathf.Max(1, Mathf.RoundToInt(basePrice * fraction));
@@ -1410,7 +1420,7 @@ public partial class PlacementController : MonoBehaviour
         }
 
         GameFlowManager.Instance?.EvaluateGrid();
-        ShowPlacementPopup(refund > 0 ? $"Sold for +{refund}" : "Cleared (inherited — no refund)");
+        ShowPlacementPopup(refund > 0 ? $"Sold for +{refund}" : "Cleared (free block — no refund)");
         BlockSold?.Invoke(ins.data);
     }
 
@@ -1545,6 +1555,7 @@ public partial class PlacementController : MonoBehaviour
             rotation90   = RotationSteps(_currentRotation),
             blockAssetId = BlockCatalog.IdOf(currentBlock),
             price        = placedPrice,
+            rainGranted  = _heldRainGranted,
             colorIndex   = (int)currentSynergyColor,
             tintRgb      = GameCommand.PackRgb(currentColor),
             upBasicPower = isPickingUpObject ? lastBasicPowerUpgradeLevel : 0,
@@ -1558,6 +1569,7 @@ public partial class PlacementController : MonoBehaviour
         {
             PushUndo(new UndoRecord {
                 actionType  = UndoType.Reposition,
+                rainGranted = _heldRainGranted,
                 data        = placedData,
                 color       = currentColor,
                 rotation    = _currentRotation,
@@ -1580,6 +1592,7 @@ public partial class PlacementController : MonoBehaviour
         {
             PushUndo(new UndoRecord {
                 actionType  = UndoType.NewPlace,
+                rainGranted = _heldRainGranted,
                 data        = placedData,
                 color       = currentColor,
                 rotation    = _currentRotation,
@@ -1616,6 +1629,8 @@ public partial class PlacementController : MonoBehaviour
             //  placement — it flooded the shop. Use the Refresh button instead.)
         }
 
+        _heldRainPickup = null;
+        _heldRainGranted = false;
         isPickingUpObject = false;
         currentBlock = null;
         currentColor = GetRandomColor();
@@ -1815,6 +1830,7 @@ public partial class PlacementController : MonoBehaviour
                                    (BlockColor)cmd.colorIndex, cmd.playerId,
                                    cmd.upBasicPower, cmd.upBasicBurst, cmd.upAoeFire, cmd.upAoeGravity);
         if (ins == null) return;
+        ins.rainGranted = cmd.rainGranted;
 
         // The pool is shared, so the charge happens on every machine — not just the
         // buyer's — or four players would each see a different balance.
@@ -1993,6 +2009,7 @@ public partial class PlacementController : MonoBehaviour
                             ?.GetComponentInChildren<Renderer>());
         PushUndo(new UndoRecord {
             actionType  = UndoType.Delete,
+            rainGranted = selectedInstance.rainGranted,
             data        = selectedInstance.data,
             color       = blockColor,
             rotation    = selectedInstance.visualObject?.transform.rotation ?? Quaternion.identity,
@@ -2116,7 +2133,7 @@ public partial class PlacementController : MonoBehaviour
             PlaceBlockFromRecord(
                 rec.data, rec.color, rec.prevCells, rec.prevCenter, rec.prevRotation,
                 rec.prevBasicPowerUpgradeLevel, rec.prevBasicBurstUpgradeLevel,
-                rec.prevAoeFireUpgradeLevel, rec.prevAoeGravityUpgradeLevel);
+                rec.prevAoeFireUpgradeLevel, rec.prevAoeGravityUpgradeLevel, rec.rainGranted);
         else
             Debug.LogWarning("[Undo] Reposition origin cells now occupied block removed without restore.");
     }
@@ -2139,7 +2156,7 @@ public partial class PlacementController : MonoBehaviour
         PlaceBlockFromRecord(
             rec.data, rec.color, rec.cells, rec.worldCenter, rec.rotation,
             rec.basicPowerUpgradeLevel, rec.basicBurstUpgradeLevel,
-            rec.aoeFireUpgradeLevel, rec.aoeGravityUpgradeLevel);
+            rec.aoeFireUpgradeLevel, rec.aoeGravityUpgradeLevel, rec.rainGranted);
     }
 
     // ── Shared: instantiate a placed block from saved state ───────────────────
@@ -2152,7 +2169,8 @@ public partial class PlacementController : MonoBehaviour
     int basicPowerUpgradeLevel = 0,
     int basicBurstUpgradeLevel = 0,
     int aoeFireUpgradeLevel = 0,
-    int aoeGravityUpgradeLevel = 0)
+    int aoeGravityUpgradeLevel = 0,
+    bool rainGranted = false)
     {
         var obj = new GameObject("PlacedBlock");
         obj.transform.position = center;
@@ -2189,7 +2207,8 @@ public partial class PlacementController : MonoBehaviour
             basicPowerUpgradeLevel = basicPowerUpgradeLevel,
             basicBurstUpgradeLevel = basicBurstUpgradeLevel,
             aoeFireUpgradeLevel = aoeFireUpgradeLevel,
-            aoeGravityUpgradeLevel = aoeGravityUpgradeLevel
+            aoeGravityUpgradeLevel = aoeGravityUpgradeLevel,
+            rainGranted = rainGranted
         };
 
         foreach (var c in cells)
@@ -2242,6 +2261,8 @@ public partial class PlacementController : MonoBehaviour
     public void GrabFromShop(SelectableBlock sb)
     {
         if (sb == null || sb.data == null) return;
+        if (_heldRainPickup != null) { ShowPlacementPopup("Place or cancel the rain block first."); return; }
+        _heldRainGranted = false;
         if (GameFlowManager.SettlementUp) return;   // locked during clear settlement
 
         // Buying NEW items is allowed during combat. Tutorial may restrict to the
@@ -2303,6 +2324,7 @@ public partial class PlacementController : MonoBehaviour
             PlacedBlockInstance ins = new()
             {
                 data         = currentBlock,
+                rainGranted  = _heldRainGranted,
                 visualObject = obj,
                 color        = currentSynergyColor,
                 basicPowerUpgradeLevel = lastBasicPowerUpgradeLevel,

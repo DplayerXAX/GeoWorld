@@ -14,7 +14,7 @@ public static class SnapshotManager
     {
         var snap = new GridSnapshot
         {
-            version   = 2,
+            version   = 3,
             timestamp = DateTime.Now.ToString("yyyy-MM-dd_HH-mm-ss"),
         };
         snap.name = $"snapshot_{snap.timestamp}";
@@ -43,6 +43,7 @@ public static class SnapshotManager
                 upAoeFire      = ins.aoeFireUpgradeLevel,
                 upAoeGravity   = ins.aoeGravityUpgradeLevel,
                 inherited      = ins.inherited,
+                rainGranted    = ins.rainGranted,
                 sealedByEnemy  = ins.sealedByEnemy,
             });
         }
@@ -139,6 +140,7 @@ public static class SnapshotManager
                                           withUpgrades ? b.upAoeGravity : 0);
             if (ins == null) continue;
 
+            ins.rainGranted = b.rainGranted;
             if (keepFlags)
             {
                 ins.inherited     = b.inherited;

@@ -33,6 +33,7 @@ public partial class GameFlowManager
         var save = new LevelRunSave
         {
             levelId          = RunConfig.Level.levelId,
+            environment      = ChapterEnvironmentController.Instance?.Capture(),
             savedAt          = System.DateTime.Now.ToString("yyyy-MM-dd HH:mm"),
             board            = SnapshotManager.Capture(),
             challengeCell    = _challengeCell,
@@ -152,5 +153,6 @@ public partial class GameFlowManager
         ChaosBlockController.Instance?.Restore(s.chaosBlocks);
         ShrineController.Instance?.Restore(s.shrines);
         EvaluateGrid();   // the mechanics' cells are on the board now
+        ChapterEnvironmentController.Instance?.Restore(s.environment, UpcomingWaveNumber);
     }
 }

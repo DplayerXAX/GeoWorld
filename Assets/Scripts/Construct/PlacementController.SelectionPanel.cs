@@ -190,7 +190,7 @@ public partial class PlacementController
             if (t.mode == TurretController.Mode.Debuff)
             {
                 DebuffNumbers(out int healPct, out int bonus);
-                sb.AppendLine($"Range      <b>{t.EffectiveRange:0.#}</b>");
+                sb.AppendLine($"Range      <b>{t.EffectiveRange:0.#}</b>{EnvironmentRangeLabel(t)}");
                 sb.AppendLine($"Heals at   <b>{healPct}%</b>  <color=#A85CF2>(enemies in range)</color>");
                 sb.AppendLine($"Kill bonus <b>+{bonus} turret ¤</b>  <color=#A85CF2>(dies in range)</color>");
                 return sb.ToString().TrimEnd();
@@ -198,7 +198,7 @@ public partial class PlacementController
 
             float fireRate = t.fireInterval > 0.0001f ? 1f / t.fireInterval : 0f;
             sb.AppendLine($"Damage     <b>{t.bulletDamage}</b>");
-            sb.AppendLine($"Range      <b>{t.EffectiveRange:0.#}</b>");
+            sb.AppendLine($"Range      <b>{t.EffectiveRange:0.#}</b>{EnvironmentRangeLabel(t)}");
             // Combined synergy buff × enemy-suppression debuff.
             float rateMult = t.FireRateMultiplier;
             if (rateMult > 1.0001f)
@@ -670,7 +670,7 @@ public partial class PlacementController
         if (turret.mode == TurretController.Mode.Debuff)
         {
             DebuffNumbers(out int healPct, out int bonus);
-            PanelRow("Range",      turret.EffectiveRange.ToString("0.#"));
+            PanelRow("Range",      turret.EffectiveRange.ToString("0.#") + EnvironmentRangeLabel(turret));
             PanelRow("Heals at",   healPct + "% (in range)");
             PanelRow("Kill bonus", "+" + bonus + " turret ¤");
             return;
@@ -679,7 +679,7 @@ public partial class PlacementController
         float fireRate = turret.fireInterval > 0.0001f ? 1f / turret.fireInterval : 0f;
 
         PanelRow("Damage",    turret.bulletDamage.ToString());
-        PanelRow("Range",     turret.EffectiveRange.ToString("0.#"));
+        PanelRow("Range",     turret.EffectiveRange.ToString("0.#") + EnvironmentRangeLabel(turret));
         if (turret.SynergyFireRateMultiplier > 1.0001f)
             PanelRow("Fire rate", turret.EffectiveFireRate.ToString("0.0") + "/s  (+"
                                   + ((turret.SynergyFireRateMultiplier - 1f) * 100f).ToString("0") + "%)");
