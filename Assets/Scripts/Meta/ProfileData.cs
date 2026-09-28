@@ -42,6 +42,8 @@ public class ProfileData
     // Blocks the player has already placed on the LevelSelect map — replayed at
     // load so the extended walkable network persists across sessions.
     public List<PlacedMapBlock> placedMapBlocks = new();
+    // Levels left part-way through, one per level (LevelRunSave).
+    public List<LevelRunSave> runSaves = new();
 
     // ── Queries ─────────────────────────────────────────────────────────────
     public bool IsUnlocked(string levelId) =>
@@ -76,6 +78,25 @@ public class ProfileData
         e.best = score;
         return true;
     }
+
+    public LevelRunSave GetRunSave(string levelId)
+    {
+        if (string.IsNullOrEmpty(levelId) || runSaves == null) return null;
+        return runSaves.Find(s => s != null && s.levelId == levelId);
+    }
+
+    public bool HasRunSave(string levelId) => GetRunSave(levelId) != null;
+
+    public void SetRunSave(LevelRunSave save)
+    {
+        if (save == null || string.IsNullOrEmpty(save.levelId)) return;
+        runSaves ??= new List<LevelRunSave>();
+        runSaves.RemoveAll(s => s == null || s.levelId == save.levelId);
+        runSaves.Add(save);
+    }
+
+    public bool ClearRunSave(string levelId) =>
+        runSaves != null && runSaves.RemoveAll(s => s == null || s.levelId == levelId) > 0;
 
     public LevelRecord GetRecord(string levelId)
     {

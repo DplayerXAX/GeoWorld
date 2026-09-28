@@ -36,6 +36,29 @@ public class SynergyVisualFX : MonoBehaviour
     public static void ReplayGrowIn(Func<Vector3, float> delayForWorldPos)
         => OnReplayGrowIn?.Invoke(delayForWorldPos);
 
+    // ── Hold ─────────────────────────────────────────────────────────────
+    // A level that opens on a board — prebuilt blocks, an inherited build, a
+    // resumed save — forms its synergies the instant those blocks are placed,
+    // which is while they are still hidden for the intro. Without a hold, vines,
+    // gears and flowers stood there on nothing and the blocks popped in under them.
+    //
+    // While held, claim changes are only noted; Release() then brings every
+    // synergy's visuals in at once, on blocks that are there, each growing in as
+    // it would when formed by hand. GameFlowManager holds at level start and
+    // releases once the intro has popped the board in.
+    public static bool Held { get; private set; }
+    public static event Action OnReleased;
+
+    public static void Hold() => Held = true;
+
+    public static void Release()
+    {
+        if (!Held) return;
+        Held = false;
+        if (Instance != null) Instance.HandleClaimChanged(null, null);   // catch up in one diff
+        OnReleased?.Invoke();
+    }
+
     [Header("Joker tint")]
     [Tooltip("If true, Universal (grey) pieces that get claimed by a synergy are tinted to that synergy's theme color via MaterialPropertyBlock. Original colour is restored on release.")]
     public bool tintJokerPieces = true;
@@ -77,6 +100,13 @@ public class SynergyVisualFX : MonoBehaviour
             SynergyEvaluator.Instance.OnClaimChanged -= HandleClaimChanged;
     }
 
+    // Static, so it would outlive the scene — a level left mid-hold must not start
+    // the next one with every synergy invisible.
+    void OnDestroy()
+    {
+        if (Instance == this) { Held = false; Instance = null; }
+    }
+
     void TryHook()
     {
         if (SynergyEvaluator.Instance == null) return;
@@ -88,6 +118,7 @@ public class SynergyVisualFX : MonoBehaviour
 
     void HandleClaimChanged(SynergyRule changedRule, ActiveSynergy changedActive)
     {
+        if (Held) return;   // Release() replays the whole state
         var evaluator = SynergyEvaluator.Instance;
         if (evaluator == null) return;
 

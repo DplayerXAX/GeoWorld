@@ -137,6 +137,28 @@ public class ResourceManager : MonoBehaviour
     /// Called again from GameFlowManager.Start once the session roster is settled —
     /// Awake runs before that, so the count it sees there is not yet trustworthy.
     /// </summary>
+    // Mid-level save: every wallet as it stands.
+    public int[] CaptureBlockWallets()  => (int[])_block.Clone();
+    public int[] CaptureTurretWallets() => (int[])_turret.Clone();
+
+    public void RestoreWallets(int[] block, int[] turret)
+    {
+        for (int i = 0; i < MultiplayerSession.MaxPlayers; i++)
+        {
+            if (block  != null && i < block.Length)  _block[i]  = block[i];
+            if (turret != null && i < turret.Length) _turret[i] = turret[i];
+        }
+        RaiseLocal();
+    }
+
+    // A level's own starting purse (LevelDefinition.startingBlockCurrencyMult).
+    public void ScaleBlockWallets(float mult)
+    {
+        for (int i = 0; i < MultiplayerSession.MaxPlayers; i++)
+            _block[i] = Mathf.Max(0, Mathf.RoundToInt(_block[i] * Mathf.Max(0f, mult)));
+        RaiseLocal();
+    }
+
     public void InitWallets()
     {
         _walletCount = Mathf.Max(1, MultiplayerSession.ConnectedCount);
@@ -256,6 +278,7 @@ public class ResourceManager : MonoBehaviour
         BlockType.Turret     => 0.7f,
         BlockType.SlowTurret => 0.9f,
         BlockType.AoeTurret  => 1.2f,
+        BlockType.DebuffTurret => 0.8f,
         _                    => 1.0f
     };
 

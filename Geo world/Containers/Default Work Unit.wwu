@@ -91,7 +91,7 @@
 							<PropertyList>
 								<Property Name="Volume" Type="Real64">
 									<ValueList>
-										<Value>11</Value>
+										<Value>6</Value>
 									</ValueList>
 								</Property>
 							</PropertyList>
@@ -2140,13 +2140,18 @@
 						<MusicPlaylistContainer Name="Piece_BGM" ID="{1ADB3116-59D9-49B5-BDAE-EDC5D67F9BDE}" ShortID="818180628">
 							<PropertyList>
 								<Property Name="OverrideOutput" Type="bool" Value="True"/>
+								<Property Name="Volume" Type="Real64">
+									<ValueList>
+										<Value>-4</Value>
+									</ValueList>
+								</Property>
 							</PropertyList>
 							<ReferenceList>
 								<Reference Name="Conversion">
 									<ObjectRef Name="Default Conversion Settings" ID="{6D1B890C-9826-4384-BF07-C15223E9FB56}" WorkUnitID="{BFF35AA4-1BFB-41E4-BB7F-8AF0856339D0}"/>
 								</Reference>
 								<Reference Name="OutputBus">
-									<ObjectRef Name="SFX Audio Bus_" ID="{270F1998-4F74-4055-9A42-A7EB8F18F8BC}" WorkUnitID="{CBCBEBED-FDBD-448E-BC87-77DA2A9E2E45}"/>
+									<ObjectRef Name="Music Audio Bus" ID="{70C2307A-1E32-4D4D-8E87-001C15FD39EB}" WorkUnitID="{CBCBEBED-FDBD-448E-BC87-77DA2A9E2E45}"/>
 								</Reference>
 								<Reference Name="PlaylistRoot">
 									<Custom>
@@ -2630,13 +2635,6 @@
 					</ReferenceList>
 					<ChildrenList>
 						<MusicTrack Name="freesound_community-medium-text-blip-14855" ID="{E9067070-AA22-474D-9C83-D3E32DD5C9DA}" ShortID="808893993">
-							<PropertyList>
-								<Property Name="Volume" Type="Real64">
-									<ValueList>
-										<Value>12</Value>
-									</ValueList>
-								</Property>
-							</PropertyList>
 							<ReferenceList>
 								<Reference Name="OutputBus">
 									<ObjectRef Name="Main Audio Bus" ID="{1514A4D8-1DA6-412A-A17E-75CA0C2149F3}" WorkUnitID="{CBCBEBED-FDBD-448E-BC87-77DA2A9E2E45}"/>
@@ -3744,6 +3742,13 @@
 					</ObjectLists>
 				</MusicSegment>
 				<MusicPlaylistContainer Name="boss_fight" ID="{C426CA7C-7926-412C-84D1-97392649C79A}" ShortID="998432912">
+					<PropertyList>
+						<Property Name="Volume" Type="Real64">
+							<ValueList>
+								<Value>-4</Value>
+							</ValueList>
+						</Property>
+					</PropertyList>
 					<ReferenceList>
 						<Reference Name="Conversion">
 							<ObjectRef Name="Default Conversion Settings" ID="{6D1B890C-9826-4384-BF07-C15223E9FB56}" WorkUnitID="{BFF35AA4-1BFB-41E4-BB7F-8AF0856339D0}"/>
@@ -3870,6 +3875,13 @@
 					</ChildrenList>
 				</MusicPlaylistContainer>
 				<MusicPlaylistContainer Name="Story_loop" ID="{D3F79BD4-9210-46C1-82D8-B85B2817A274}" ShortID="976567555">
+					<PropertyList>
+						<Property Name="Volume" Type="Real64">
+							<ValueList>
+								<Value>-4</Value>
+							</ValueList>
+						</Property>
+					</PropertyList>
 					<ReferenceList>
 						<Reference Name="Conversion">
 							<ObjectRef Name="Default Conversion Settings" ID="{6D1B890C-9826-4384-BF07-C15223E9FB56}" WorkUnitID="{BFF35AA4-1BFB-41E4-BB7F-8AF0856339D0}"/>
@@ -3992,6 +4004,155 @@
 						</MusicSegment>
 					</ChildrenList>
 				</MusicPlaylistContainer>
+				<SwitchContainer Name="turret sound" ID="{84C1610A-87FF-46DC-B446-911861AEA73E}" ShortID="151058610">
+					<PropertyList>
+						<Property Name="Volume" Type="Real64">
+							<ValueList>
+								<Value>-9</Value>
+							</ValueList>
+						</Property>
+					</PropertyList>
+					<ReferenceList>
+						<Reference Name="Conversion">
+							<ObjectRef Name="Default Conversion Settings" ID="{6D1B890C-9826-4384-BF07-C15223E9FB56}" WorkUnitID="{BFF35AA4-1BFB-41E4-BB7F-8AF0856339D0}"/>
+						</Reference>
+						<Reference Name="OutputBus">
+							<ObjectRef Name="Main Audio Bus" ID="{1514A4D8-1DA6-412A-A17E-75CA0C2149F3}" WorkUnitID="{CBCBEBED-FDBD-448E-BC87-77DA2A9E2E45}"/>
+						</Reference>
+						<Reference Name="SwitchGroupOrStateGroup">
+							<ObjectRef Name="turretType" ID="{1036FAF8-A42E-4140-A114-C22F3C753D5A}" WorkUnitID="{0854B76A-184C-4BCC-9177-73812C70D762}"/>
+						</Reference>
+					</ReferenceList>
+					<ChildrenList>
+						<Sound Name="base" ID="{9C9A6D4C-DE84-466A-AC8D-C10530855F2A}" ShortID="280111881">
+							<ReferenceList>
+								<Reference Name="Conversion">
+									<ObjectRef Name="Default Conversion Settings" ID="{6D1B890C-9826-4384-BF07-C15223E9FB56}" WorkUnitID="{BFF35AA4-1BFB-41E4-BB7F-8AF0856339D0}"/>
+								</Reference>
+								<Reference Name="OutputBus">
+									<ObjectRef Name="Main Audio Bus" ID="{1514A4D8-1DA6-412A-A17E-75CA0C2149F3}" WorkUnitID="{CBCBEBED-FDBD-448E-BC87-77DA2A9E2E45}"/>
+								</Reference>
+							</ReferenceList>
+							<ChildrenList>
+								<AudioFileSource Name="bright attack" ID="{ED3C6AA2-CD7E-4E5B-986F-79DDF1C7E017}">
+									<Language>SFX</Language>
+									<AudioFile>Geo world\Originals\SFX\bright attack.wav</AudioFile>
+									<MediaIDList>
+										<MediaID ID="1007467710"/>
+									</MediaIDList>
+								</AudioFileSource>
+								<AudioFileSource Name="toy xylopho" ID="{BE881750-4164-42AD-BB97-1F47BC121768}">
+									<Language>SFX</Language>
+									<AudioFile>Geo world\Originals\SFX\toy xylopho.wav</AudioFile>
+									<MediaIDList>
+										<MediaID ID="315589151"/>
+									</MediaIDList>
+								</AudioFileSource>
+							</ChildrenList>
+							<ActiveSourceList>
+								<ActiveSource Name="toy xylopho" ID="{BE881750-4164-42AD-BB97-1F47BC121768}" Platform="Linked"/>
+							</ActiveSourceList>
+						</Sound>
+						<Sound Name="freeze lazer" ID="{1CA8B1BB-C111-4014-9035-1B8546AED8B3}" ShortID="103874507">
+							<PropertyList>
+								<Property Name="Volume" Type="Real64">
+									<ValueList>
+										<Value>-6</Value>
+									</ValueList>
+								</Property>
+							</PropertyList>
+							<ReferenceList>
+								<Reference Name="Conversion">
+									<ObjectRef Name="Default Conversion Settings" ID="{6D1B890C-9826-4384-BF07-C15223E9FB56}" WorkUnitID="{BFF35AA4-1BFB-41E4-BB7F-8AF0856339D0}"/>
+								</Reference>
+								<Reference Name="OutputBus">
+									<ObjectRef Name="Main Audio Bus" ID="{1514A4D8-1DA6-412A-A17E-75CA0C2149F3}" WorkUnitID="{CBCBEBED-FDBD-448E-BC87-77DA2A9E2E45}"/>
+								</Reference>
+							</ReferenceList>
+							<ChildrenList>
+								<AudioFileSource Name="freeze lazer" ID="{A226537A-EB63-46C0-8DFE-4F08E843944C}">
+									<Language>SFX</Language>
+									<AudioFile>Geo world\Originals\SFX\freeze lazer.wav</AudioFile>
+									<MediaIDList>
+										<MediaID ID="679910087"/>
+									</MediaIDList>
+								</AudioFileSource>
+								<AudioFileSource Name="freeze" ID="{7F75443D-97EF-4ED8-BCAE-F1C080A704FE}">
+									<Language>SFX</Language>
+									<AudioFile>Geo world\Originals\SFX\freeze.wav</AudioFile>
+									<MediaIDList>
+										<MediaID ID="1027731834"/>
+									</MediaIDList>
+								</AudioFileSource>
+								<AudioFileSource Name="lab ambient" ID="{14366D8F-A8FD-4144-992E-FE514DCBDBF7}">
+									<Language>SFX</Language>
+									<AudioFile>Geo world\Originals\SFX\lab ambient.wav</AudioFile>
+									<MediaIDList>
+										<MediaID ID="688574386"/>
+									</MediaIDList>
+								</AudioFileSource>
+							</ChildrenList>
+							<ActiveSourceList>
+								<ActiveSource Name="lab ambient" ID="{14366D8F-A8FD-4144-992E-FE514DCBDBF7}" Platform="Linked"/>
+							</ActiveSourceList>
+						</Sound>
+						<Sound Name="heavy expand" ID="{9C2A959C-1767-46DC-A2F9-30B8F298CB93}" ShortID="796812587">
+							<ReferenceList>
+								<Reference Name="Conversion">
+									<ObjectRef Name="Default Conversion Settings" ID="{6D1B890C-9826-4384-BF07-C15223E9FB56}" WorkUnitID="{BFF35AA4-1BFB-41E4-BB7F-8AF0856339D0}"/>
+								</Reference>
+								<Reference Name="OutputBus">
+									<ObjectRef Name="Main Audio Bus" ID="{1514A4D8-1DA6-412A-A17E-75CA0C2149F3}" WorkUnitID="{CBCBEBED-FDBD-448E-BC87-77DA2A9E2E45}"/>
+								</Reference>
+							</ReferenceList>
+							<ChildrenList>
+								<AudioFileSource Name="hammer bass" ID="{6DA514D8-A0AE-462D-BBF8-2E5B9F68755D}">
+									<Language>SFX</Language>
+									<AudioFile>Geo world\Originals\SFX\hammer bass.wav</AudioFile>
+									<MediaIDList>
+										<MediaID ID="153929351"/>
+									</MediaIDList>
+								</AudioFileSource>
+							</ChildrenList>
+							<ActiveSourceList>
+								<ActiveSource Name="hammer bass" ID="{6DA514D8-A0AE-462D-BBF8-2E5B9F68755D}" Platform="Linked"/>
+							</ActiveSourceList>
+						</Sound>
+					</ChildrenList>
+					<GroupingInfo>
+						<GroupingBehaviorList>
+							<GroupingBehavior>
+								<ItemRef Name="base" ID="{9C9A6D4C-DE84-466A-AC8D-C10530855F2A}"/>
+							</GroupingBehavior>
+							<GroupingBehavior>
+								<ItemRef Name="heavy expand" ID="{9C2A959C-1767-46DC-A2F9-30B8F298CB93}"/>
+							</GroupingBehavior>
+							<GroupingBehavior>
+								<ItemRef Name="freeze lazer" ID="{1CA8B1BB-C111-4014-9035-1B8546AED8B3}"/>
+							</GroupingBehavior>
+						</GroupingBehaviorList>
+						<GroupingList>
+							<Grouping>
+								<SwitchRef Name="slow" ID="{5B76AF07-17EC-440B-AAA7-B9729762D059}"/>
+								<ItemList>
+									<ItemRef Name="freeze lazer" ID="{1CA8B1BB-C111-4014-9035-1B8546AED8B3}"/>
+								</ItemList>
+							</Grouping>
+							<Grouping>
+								<SwitchRef Name="aoe" ID="{107B1A54-4357-43B4-AD4C-24CA54A49518}"/>
+								<ItemList>
+									<ItemRef Name="heavy expand" ID="{9C2A959C-1767-46DC-A2F9-30B8F298CB93}"/>
+								</ItemList>
+							</Grouping>
+							<Grouping>
+								<SwitchRef Name="base" ID="{DB4D86DD-456E-46CF-88A8-6F04217CB3CE}"/>
+								<ItemList>
+									<ItemRef Name="base" ID="{9C9A6D4C-DE84-466A-AC8D-C10530855F2A}"/>
+								</ItemList>
+							</Grouping>
+						</GroupingList>
+					</GroupingInfo>
+				</SwitchContainer>
 			</ChildrenList>
 		</WorkUnit>
 	</Containers>

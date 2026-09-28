@@ -5,12 +5,14 @@ public static class TurretTypes
     public static bool Is(BlockType type) =>
         type == BlockType.Turret
         || type == BlockType.SlowTurret
-        || type == BlockType.AoeTurret;
+        || type == BlockType.AoeTurret
+        || type == BlockType.DebuffTurret;
 
     public static TurretController.Mode Mode(BlockType type) => type switch
     {
         BlockType.SlowTurret => TurretController.Mode.Slow,
         BlockType.AoeTurret  => TurretController.Mode.Aoe,
+        BlockType.DebuffTurret => TurretController.Mode.Debuff,
         _                    => TurretController.Mode.Basic,
     };
 
@@ -18,6 +20,7 @@ public static class TurretTypes
     {
         BlockType.SlowTurret => "Slow Turret",
         BlockType.AoeTurret  => "AOE Turret",
+        BlockType.DebuffTurret => "Debuff Turret",
         BlockType.Turret     => "Basic Turret",
         _                    => type.ToString(),
     };
@@ -31,10 +34,12 @@ public static class TurretTypes
     //   Basic → steel white  (the plain workhorse)
     //   Slow  → ice blue     (frost)
     //   Aoe   → hot orange   (explosive)
+    //   Debuff → violet      (a curse — the one hue none of the others is near)
     public static Color DisplayColor(TurretController.Mode mode) => mode switch
     {
         TurretController.Mode.Slow => new Color(0.30f, 0.68f, 1.00f),
         TurretController.Mode.Aoe  => new Color(1.00f, 0.42f, 0.18f),
+        TurretController.Mode.Debuff => new Color(0.66f, 0.36f, 0.95f),
         _                          => new Color(0.88f, 0.91f, 0.95f),
     };
 }

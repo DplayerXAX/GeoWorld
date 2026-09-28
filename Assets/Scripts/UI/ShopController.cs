@@ -781,6 +781,51 @@ public class ShopController : MonoBehaviour
     /// "can't afford it" apart from "there is nothing there".</summary>
     public bool HasItems => _items.Count > 0;
 
+    // ── Mid-level save (GameFlowManager.RunSave) ─────────────────────────────
+    // What is on offer right now, in display order (blocks, then turrets), with
+    // each item's ROLLED price — the price carries a per-item fluctuation drawn at
+    // spawn, so re-rolling on load would quietly re-price the shop.
+    public List<ShopItemSave> CaptureItems()
+    {
+        var list = new List<ShopItemSave>();
+        foreach (var it in _items)
+        {
+            if (it?.sb == null || it.sb.data == null) continue;
+            list.Add(new ShopItemSave
+            {
+                blockAssetName = it.sb.data.name,
+                color          = it.sb.color,
+                price          = it.sb.cachedPrice,
+                isTurret       = TurretTypes.Is(it.sb.data.blockType),
+            });
+        }
+        return list;
+    }
+
+    // Puts a captured shop back: same items, same colours, same prices.
+    public void RestoreItems(List<ShopItemSave> saved, System.Func<string, BlockData> resolve,
+                             GameObject cubePrefab, GridSystem grid)
+    {
+        var blocks  = new List<BlockData>(); var blockCols  = new List<BlockColor>();
+        var turrets = new List<BlockData>(); var turretCols = new List<BlockColor>();
+        var bPrices = new List<int>();       var tPrices    = new List<int>();
+        if (saved != null)
+            foreach (var s in saved)
+            {
+                var data = s != null ? resolve(s.blockAssetName) : null;
+                if (data == null) continue;
+                if (s.isTurret) { turrets.Add(data); turretCols.Add(s.color); tPrices.Add(s.price); }
+                else            { blocks.Add(data);  blockCols.Add(s.color);  bPrices.Add(s.price); }
+            }
+
+        SetShopItems(blocks.ToArray(), turrets.ToArray(), blockCols.ToArray(), turretCols.ToArray(), cubePrefab, grid);
+
+        // SetShopItems spawns blocks first, then turrets — the same order as here.
+        var prices = new List<int>(bPrices); prices.AddRange(tPrices);
+        for (int i = 0; i < _items.Count && i < prices.Count; i++)
+            if (_items[i]?.sb != null) _items[i].sb.cachedPrice = prices[i];
+    }
+
     public void ClearItems()
     {
         foreach (var item in _items) if (item.root != null) Destroy(item.root);

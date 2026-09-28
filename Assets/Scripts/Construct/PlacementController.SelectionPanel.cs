@@ -186,6 +186,16 @@ public partial class PlacementController
             var t = ins.visualObject.GetComponentInChildren<TurretController>();
             if (t == null) { sb.Append("(turret stats unavailable)"); return sb.ToString(); }
 
+            // No shot, so no damage / fire rate / bullets — just what the field does.
+            if (t.mode == TurretController.Mode.Debuff)
+            {
+                DebuffNumbers(out int healPct, out int bonus);
+                sb.AppendLine($"Range      <b>{t.EffectiveRange:0.#}</b>");
+                sb.AppendLine($"Heals at   <b>{healPct}%</b>  <color=#A85CF2>(enemies in range)</color>");
+                sb.AppendLine($"Kill bonus <b>+{bonus} turret ¤</b>  <color=#A85CF2>(dies in range)</color>");
+                return sb.ToString().TrimEnd();
+            }
+
             float fireRate = t.fireInterval > 0.0001f ? 1f / t.fireInterval : 0f;
             sb.AppendLine($"Damage     <b>{t.bulletDamage}</b>");
             sb.AppendLine($"Range      <b>{t.EffectiveRange:0.#}</b>");
@@ -509,7 +519,8 @@ public partial class PlacementController
             else
             {
                 rows = 3;   // Damage, Range, Fire rate
-                if      (t.mode == TurretController.Mode.Slow) rows += 2;
+                if      (t.mode == TurretController.Mode.Debuff) { }   // Range, Heals at, Kill bonus — also 3
+                else if (t.mode == TurretController.Mode.Slow) rows += 2;
                 else if (t.mode == TurretController.Mode.Aoe)
                 {
                     rows += 1;
@@ -639,12 +650,29 @@ public partial class PlacementController
         return 1f - xm * xm * xm;
     }
 
+    // What a Debuff turret's field does, from the live balance table.
+    static void DebuffNumbers(out int healPct, out int bonus)
+    {
+        var table = BalanceTable.Active;
+        healPct = Mathf.RoundToInt((1f - (table != null ? table.debuffHealReduction : 0.4f)) * 100f);
+        bonus   = table != null ? table.debuffKillBonus : 1;
+    }
+
     void DrawTurretStats(PlacedBlockInstance ins)
     {
         var turret = ins.visualObject.GetComponentInChildren<TurretController>();
         if (turret == null)
         {
             GUILayout.Label("(turret stats unavailable)", _panelLabel);
+            return;
+        }
+
+        if (turret.mode == TurretController.Mode.Debuff)
+        {
+            DebuffNumbers(out int healPct, out int bonus);
+            PanelRow("Range",      turret.EffectiveRange.ToString("0.#"));
+            PanelRow("Heals at",   healPct + "% (in range)");
+            PanelRow("Kill bonus", "+" + bonus + " turret ¤");
             return;
         }
 

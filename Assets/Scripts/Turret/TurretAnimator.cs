@@ -114,6 +114,7 @@ public abstract class TurretAnimator : MonoBehaviour
         {
             TurretController.Mode.Slow => visual.AddComponent<SlowTurretAnimator>(),
             TurretController.Mode.Aoe  => visual.AddComponent<AoeTurretAnimator>(),
+            TurretController.Mode.Debuff => visual.AddComponent<DebuffTurretAnimator>(),
             _                          => visual.AddComponent<BasicTurretAnimator>(),
         };
     }

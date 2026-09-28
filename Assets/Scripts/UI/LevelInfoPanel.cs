@@ -59,6 +59,8 @@ public class LevelInfoPanel : MonoBehaviour
     Image       _buildThumb;
     TMP_Text    _buildThumbLabel;
     Button      _enter;
+    Button      _restart;       // only for a level left part-way through — see SetResume
+    Action      _onRestart;
     // Read by LevelSelectTutorialGuide to anchor its "click here" arrow beside
     // the Enter button during the ls.enter tutorial gate.
     public RectTransform EnterButtonRect => _enter != null ? (RectTransform)_enter.transform : null;
@@ -129,7 +131,18 @@ public class LevelInfoPanel : MonoBehaviour
         ShowBuildThumb(level);
 
         _onEnter = onEnter;
+        SetResume(null);   // callers with an unfinished save turn it on after Show
         _target  = 1f;
+    }
+
+    // A level left part-way through (LevelRunSave): Enter becomes Continue, and a
+    // Restart button appears under it. Pass null to go back to the plain panel.
+    public void SetResume(Action onRestart)
+    {
+        _onRestart = onRestart;
+        bool on = onRestart != null;
+        if (_restart != null) _restart.gameObject.SetActive(on);
+        if (on && _enter.interactable) _enterLabel.text = "Continue";
     }
 
     // Same panel, non-level content (NPCs, minigames — see MapInteractable). The
@@ -143,6 +156,7 @@ public class LevelInfoPanel : MonoBehaviour
         SetOptional(_best, best);
         _enterLabel.text    = actionLabel;
         _enter.interactable = canAct;
+        SetResume(null);
 
         BuildRoster(null);
         ShowBuildThumb(null);
@@ -524,6 +538,21 @@ public class LevelInfoPanel : MonoBehaviour
         var lrt = _enterLabel.rectTransform;
         lrt.anchorMin = Vector2.zero; lrt.anchorMax = Vector2.one;
         lrt.offsetMin = lrt.offsetMax = Vector2.zero;
+
+        // Secondary: a paler button in the Enter button's colour, so Continue stays
+        // the obvious choice and Restart reads as the deliberate one.
+        var rrt  = NewRect("Restart", parent);
+        var rimg = rrt.gameObject.AddComponent<Image>();
+        rimg.color = Color.Lerp(buttonColor, Color.white, 0.6f);
+        _restart = rrt.gameObject.AddComponent<Button>();
+        _restart.targetGraphic = rimg;
+        rrt.gameObject.AddComponent<LayoutElement>().minHeight = buttonSize * 1.8f;
+        _restart.onClick.AddListener(() => _onRestart?.Invoke());
+        var rl = NewText("Label", rrt, buttonSize * 0.85f, buttonColor, FontStyles.Bold, TextAlignmentOptions.Center, false);
+        rl.text = "Restart";
+        rl.rectTransform.anchorMin = Vector2.zero; rl.rectTransform.anchorMax = Vector2.one;
+        rl.rectTransform.offsetMin = rl.rectTransform.offsetMax = Vector2.zero;
+        rrt.gameObject.SetActive(false);
     }
 
     void AddRule(RectTransform parent)

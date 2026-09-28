@@ -245,6 +245,32 @@
     ],
     "SwitchGroups": [
      {
+      "Id": "1521021787",
+      "Name": "turretType",
+      "ObjectPath": "\\Switches\\Default Work Unit\\turretType",
+      "GUID": "{1036FAF8-A42E-4140-A114-C22F3C753D5A}",
+      "Switches": [
+       {
+        "Id": "787604482",
+        "Name": "slow",
+        "ObjectPath": "\\Switches\\Default Work Unit\\turretType\\slow",
+        "GUID": "{5B76AF07-17EC-440B-AAA7-B9729762D059}"
+       },
+       {
+        "Id": "1083976202",
+        "Name": "aoe",
+        "ObjectPath": "\\Switches\\Default Work Unit\\turretType\\aoe",
+        "GUID": "{107B1A54-4357-43B4-AD4C-24CA54A49518}"
+       },
+       {
+        "Id": "1291433366",
+        "Name": "base",
+        "ObjectPath": "\\Switches\\Default Work Unit\\turretType\\base",
+        "GUID": "{DB4D86DD-456E-46CF-88A8-6F04217CB3CE}"
+       }
+      ]
+     },
+     {
       "Id": "3818020044",
       "Name": "NoteRange",
       "ObjectPath": "\\Switches\\Default Work Unit\\NoteRange",
@@ -777,6 +803,6 @@
     ]
    }
   ],
-  "FileHash": "{1A92AEC1-1361-EFF5-AD03-C91D3393B8DF}"
+  "FileHash": "{6349A0E7-8020-3FCC-A5C7-471C86C1F57C}"
  }
 }

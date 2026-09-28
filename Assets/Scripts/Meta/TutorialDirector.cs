@@ -267,6 +267,18 @@ public class TutorialDirector : MonoBehaviour
         if (_runtimeConvo != null) Destroy(_runtimeConvo);
     }
 
+    // ── Mid-level save ────────────────────────────────────────────────────────
+    // The step to resume from: the one waiting on a wave gate if there is one, else
+    // the current one. -1 when no tutorial is running.
+    public static int CurrentStepIndex =>
+        _active == null ? -1 : (_active._pendingStepIndex >= 0 ? _active._pendingStepIndex : _active._step);
+
+    // Set before the first step shows (GameFlowManager does it in its Start); the
+    // director picks it up on its first Update, so creation order doesn't matter.
+    // Operations unlocked by earlier steps come back with it — they are worked out
+    // from the step index (see the unlocksOps scan).
+    public static int ResumeFromStep = -1;
+
     TutorialStep Cur =>
         (_lv != null && _lv.tutorialSteps != null && _step < _lv.tutorialSteps.Count)
             ? _lv.tutorialSteps[_step] : null;
@@ -291,6 +303,13 @@ public class TutorialDirector : MonoBehaviour
         if (!_firstStepShown)
         {
             _firstStepShown = true;
+            if (ResumeFromStep >= 0)
+            {
+                int n = _lv != null && _lv.tutorialSteps != null ? _lv.tutorialSteps.Count : 0;
+                _step = Mathf.Clamp(ResumeFromStep, 0, n);
+                ResumeFromStep = -1;
+                if (_step >= n) { RetireTutorial(); return; }
+            }
             if (IsWaveGated(_step)) _pendingStepIndex = _step;
             else ShowStep();
         }
@@ -1090,7 +1109,7 @@ public class TutorialDirector : MonoBehaviour
         _hintCanvas.enabled = show;
         if (!show)
         {
-            AudioManager.Instance?.StopTextBlip();   // guard: hint hidden (pause/step change) mid-type
+            TextBlip.Stop(this);   // guard: hint hidden (pause/step change) mid-type
             return;
         }
 
@@ -1118,7 +1137,7 @@ public class TutorialDirector : MonoBehaviour
             _hintCharCount = _hintText.textInfo.characterCount;
             _hintShownPrev = 0;
             _hintTypeSkipped = false;                 // new line — it types again
-            AudioManager.Instance?.StartTextBlip();   // TextBlip is one continuous segment — start once per line
+            TextBlip.Start(this);   // TextBlip is one continuous segment — start once per line
         }
 
         // Keep the box ABOVE the shop's bottom letterbox bar so expanding the shop
@@ -1146,9 +1165,9 @@ public class TutorialDirector : MonoBehaviour
             && (Input.GetMouseButtonDown(0) || GamepadInput.ConfirmDown))
         {
             _hintTypeSkipped = true;
-            AudioManager.Instance?.StopTextBlip();
+            TextBlip.Stop(this);
         }
-        if (typingDone && _hintShownPrev < _hintCharCount) AudioManager.Instance?.StopTextBlip();
+        if (typingDone && _hintShownPrev < _hintCharCount) TextBlip.Stop(this);
         _hintShownPrev = shown;
 
         // Continue light: pulse once the text is done on a click-to-continue Wait step.

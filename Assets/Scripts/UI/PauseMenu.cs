@@ -86,7 +86,7 @@ public class PauseMenu : MonoBehaviour
         // pause menu both consume the same keypress in the same frame, so leaving
         // the minigame dumped you straight into a paused map.
         if ((Input.GetKeyDown(toggleKey) || GamepadInput.TogglePauseDown)
-            && !SettingsScreen.Open && !MinigameStage.AnyActive)
+            && !SettingsScreen.Open && !MinigameStage.AnyActive && !ConfirmDialog.BlockingInput)
         {
             if (_menuOpen) CloseMenu();          // Esc backs out of the menu first
             else           SetPaused(!_paused);  // otherwise toggles the planning pause
@@ -202,16 +202,24 @@ public class PauseMenu : MonoBehaviour
         EventSystem.current?.SetSelectedGameObject(open && _firstMenuButton != null ? _firstMenuButton.gameObject : null);
     }
 
-    void GoToTitle()
-    {
-        LeaveMenuHard();
-        LoadingScreen.Go(titleScene);
-    }
+    void GoToTitle()       => LeaveLevel(() => { LeaveMenuHard(); LoadingScreen.Go(titleScene); });
+    void GoToLevelSelect() => LeaveLevel(() => { LeaveMenuHard(); LoadingScreen.Go(levelSelectScene); });
 
-    void GoToLevelSelect()
+    // Leaving a level part-way: ask first, and save on the way out, so the level
+    // can be picked up again from LevelSelect (GameFlowManager.RunSave). Mid-fight
+    // there is nothing new to save — the save taken as the wave began stands, and
+    // the level resumes with that wave still to fight. Endless, multiplayer, or a
+    // level already won or lost just leave.
+    void LeaveLevel(System.Action leave)
     {
-        LeaveMenuHard();
-        LoadingScreen.Go(levelSelectScene);
+        var gfm = GameFlowManager.Instance;
+        if (gfm == null || !gfm.CanResumeLater) { leave(); return; }
+
+        ConfirmDialog.Ask("LEAVE THIS LEVEL?", "Your progress will be saved.", "Save & Quit", () =>
+        {
+            gfm.SaveRunNow();
+            leave();
+        });
     }
 
     // Leaving the menu for somewhere else entirely: restore time, clear the flags,
@@ -349,7 +357,7 @@ public class PauseMenu : MonoBehaviour
                            });
                            HexButton(panel, 3, "SELECT LEVEL", GeoPalette.Ink, GoToLevelSelect);
                            HexButton(panel, 4, "TITLE",        GeoPalette.Ink, GoToTitle);
-                           HexButton(panel, 5, "QUIT",         GeoPalette.Ink, QuitGame);
+                           HexButton(panel, 5, "QUIT",         GeoPalette.Ink, () => LeaveLevel(QuitGame));
 
         _panelGo.SetActive(false);
 

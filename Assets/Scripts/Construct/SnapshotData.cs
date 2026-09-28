@@ -29,6 +29,11 @@ public class BlockSnapshot
 
     // Turret upgrade levels, so an inherited turret is the turret you left.
     public int upBasicPower, upBasicBurst, upAoeFire, upAoeGravity;
+
+    // Per-piece flags a mid-level save must bring back as they were: an inherited
+    // block refunds nothing when removed, a sealed one can't be sold.
+    public bool inherited;
+    public bool sealedByEnemy;
 }
 
 [Serializable]

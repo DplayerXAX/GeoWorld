@@ -23,6 +23,7 @@ MonoBehaviour:
   endPointWaves: 
   synergyEnabled: 0
   allowedColors: 01000000
+  turretPool: 040000000600000007000000
   startingShop: []
   waves: []
   wavesToClear: 2

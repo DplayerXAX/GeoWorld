@@ -67,6 +67,8 @@ public partial class LevelMapController : MonoBehaviour
                     var rec = SaveSystem.Profile.GetRecord(n.level.levelId);
                     if (rec != null && rec.cleared) marker.SetCleared(true, rec.clearSynergyColor);
                 }
+                // A level left part-way through breathes, so it can be found.
+                marker.SetResumable(n.level != null && SaveSystem.Profile.HasRunSave(n.level.levelId));
             }
 
             if (n.level == null || n == _startNode || !n.connectedToStart) continue;

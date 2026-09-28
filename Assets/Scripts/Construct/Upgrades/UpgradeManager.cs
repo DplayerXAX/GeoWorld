@@ -52,6 +52,25 @@ public class UpgradeManager : MonoBehaviour
 
     public bool HasCardsToOffer => GetEligibleCards().Count > 0;
 
+    // ── Mid-level save ────────────────────────────────────────────────────────
+    public List<string> OwnedNames()
+    {
+        var names = new List<string>();
+        foreach (var c in _owned) if (c != null) names.Add(c.name);
+        return names;
+    }
+
+    // Re-acquires each card (effects included), resolved against the card pool.
+    public void RestoreOwned(List<string> names)
+    {
+        if (names == null) return;
+        foreach (var n in names)
+        {
+            var card = cardPool.Find(c => c != null && c.name == n);
+            if (card != null) OnCardChosen(card);
+        }
+    }
+
     // Top-level entry point. Called by GameFlowManager once a wave is done.
     public void OfferEndOfWave(Xoshiro256StarStar rng)
     {
