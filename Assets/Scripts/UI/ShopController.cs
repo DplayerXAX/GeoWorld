@@ -96,6 +96,27 @@ public class ShopController : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// Screen-pixel rect (y up) the open shop strip covers, refresh tab included.
+    /// False while it is closed.
+    /// </summary>
+    public bool TryGetScreenRect(out Rect r)
+    {
+        r = default;
+        if (view == null || view.panel == null || _openT < 0.1f) return false;
+        var c = new Vector3[4];
+        view.panel.GetWorldCorners(c);   // overlay canvas: world = screen pixels
+        float x0 = c[0].x, y0 = c[0].y, x1 = c[2].x, y1 = c[2].y;
+        if (view.refreshButton != null)
+        {
+            ((RectTransform)view.refreshButton.transform).GetWorldCorners(c);
+            x0 = Mathf.Min(x0, c[0].x); y0 = Mathf.Min(y0, c[0].y);
+            x1 = Mathf.Max(x1, c[2].x); y1 = Mathf.Max(y1, c[2].y);
+        }
+        r = Rect.MinMaxRect(x0, y0, x1, y1);
+        return true;
+    }
+
     // ── Lifecycle ─────────────────────────────────────────────────────────────
 
     void Awake() => Instance = this;
@@ -439,7 +460,8 @@ public class ShopController : MonoBehaviour
         if (_hovered == null) return true;   // over the strip: swallow (buttons handle themselves)
 
         // Something already in hand — don't swap it out from under the player.
-        if (PlacementController.Instance != null && PlacementController.Instance.currentBlock != null) return true;
+        var pc = PlacementController.Instance;
+        if (pc != null && pc.mode == PlacementMode.Edit && pc.currentBlock != null) return true;
 
         var rm = ResourceManager.Instance;
         if (rm != null && !rm.CanAfford(_hovered.sb.cachedPrice, _hovered.sb.data.blockType))
@@ -463,7 +485,7 @@ public class ShopController : MonoBehaviour
     /// <summary>Placement cancelled — the item goes back on the shelf and the shop reopens.</summary>
     public void RestoreItem(GameObject go)
     {
-        if (go == null) return;
+        if (go == null || !_items.Exists(i => i.root == go)) return;   // not one of ours
         go.SetActive(true);
         _expanded = true;
     }

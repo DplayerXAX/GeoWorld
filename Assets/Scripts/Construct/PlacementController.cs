@@ -319,6 +319,26 @@ public partial class PlacementController : MonoBehaviour
         _popupExpire   = Time.unscaledTime + duration;
     }
 
+    // Tutorial: the shop holds just this one block (TutorialStep.shopOnlyTarget).
+    public void StockShopWith(BlockData block, BlockColor color)
+    {
+        var shop = ShopController.Instance;
+        if (shop == null || block == null) return;
+        shop.SetShopItems(new[] { block }, new BlockData[0], new[] { color }, new BlockColor[0], cubePrefab, grid);
+    }
+
+    // A re-roll that costs nothing and doesn't raise the refresh price
+    // (TutorialStep.freeRefreshAfter). Not reported as ShopRefreshed — the player
+    // didn't refresh, so a tutorial "refresh the shop" step mustn't count it.
+    public void FreeRefreshShop()
+    {
+        var gfm  = GameFlowManager.Instance;
+        var shop = ShopController.Instance;
+        if (gfm == null || shop == null) return;
+        shop.ClearItems();
+        SpawnRoundBlocks(gfm.blocksPerTurn, gfm.turretsPerTurn);
+    }
+
     public bool TryRefreshShop()
     {
         // Validate every dependency BEFORE charging. If we charged first and
@@ -978,15 +998,20 @@ public partial class PlacementController : MonoBehaviour
         {
             CancelAndReturnObject();
         }
-        else if (activePhysicsObject != null && _pendingShopPrice > 0)
+        else if (activePhysicsObject != null)
         {
-            // Player grabbed a shop item but cancelled before placing give it back.
+            // Player grabbed a shop item but cancelled before placing — give it back.
+            // Any price: a free item (price 0, e.g. a tutorial's opening hand) used to
+            // skip this and stay hidden, still "in hand".
             ShopController.Instance?.RestoreItem(activePhysicsObject);
-            _pendingShopPrice   = 0;
-            currentBlock        = null;
-            activePhysicsObject = null;
         }
 
+        // Nothing is held once edit mode is left. A cancelled pick-up used to keep
+        // its block as currentBlock, and the shop then took every later click for
+        // "something already in hand" — the shop looked open but wouldn't sell.
+        _pendingShopPrice   = 0;
+        currentBlock        = null;
+        activePhysicsObject = null;
 
         mode = PlacementMode.Select;
         previewParent.gameObject.SetActive(false);

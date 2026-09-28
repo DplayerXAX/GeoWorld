@@ -132,6 +132,13 @@ public partial class LevelEnvironmentDriver
                 rate = 120f; noise = 0.4f; boxY = 3f;
                 _motesOffset = Vector3.up * 10f;
                 break;
+            case LevelEnvironment.Motes.Spores:
+                // Luminous specks drifting up through the air — the glowing-life
+                // accent of a dark, wet world.
+                col = new Color(0.45f, 1f, 0.82f, 0.9f); size = new(0.035f, 0.08f); life = new(6f, 11f);
+                vx = new(-0.12f, 0.12f); vy = new(0.04f, 0.22f); vz = new(-0.12f, 0.12f);
+                rate = 32f; noise = 0.35f; boxY = 12f; additive = true;
+                break;
             case LevelEnvironment.Motes.Embers:
                 col = new Color(1f, 0.55f, 0.2f, 1f); size = new(0.03f, 0.06f); life = new(3f, 6f);
                 vx = new(-0.15f, 0.15f); vy = new(0.4f, 1.2f); vz = new(-0.15f, 0.15f);

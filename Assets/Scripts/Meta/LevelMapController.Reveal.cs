@@ -265,9 +265,12 @@ public partial class LevelMapController : MonoBehaviour
         foreach (var cfg in AllDecorConfigs())
         {
             if (cfg == null || !cfg.enabled || string.IsNullOrEmpty(cfg.gateLevelId)) continue;
-            bool cleared = SaveSystem.Profile.GetRecord(cfg.gateLevelId)?.cleared ?? false;
-            if (cleared && cfg.gateLevelId != _growthLevelId) continue;   // already standing
-            foreach (var p in PlotFootprint(cfg)) Add(cfg.gateLevelId, p);
+            if (PlotOnShow(cfg)) continue;   // already standing
+            // Under the mist of whichever clear brings it out: a barren farm comes out
+            // with its barrenAfter level, everything else with its gate.
+            string key = cfg is AbundanceFarmConfig bf && bf.barrenBeforeGate && !string.IsNullOrEmpty(bf.barrenAfterLevelId)
+                         && !BarrenUnlockedBefore(bf) ? bf.barrenAfterLevelId : cfg.gateLevelId;
+            foreach (var p in PlotFootprint(cfg)) Add(key, p);
         }
 
         // Everything already on show — the level blocks standing from the start, the
@@ -281,9 +284,7 @@ public partial class LevelMapController : MonoBehaviour
         foreach (var cfg in AllDecorConfigs())
         {
             if (cfg == null || !cfg.enabled) continue;
-            bool standing = string.IsNullOrEmpty(cfg.gateLevelId)
-                || ((SaveSystem.Profile.GetRecord(cfg.gateLevelId)?.cleared ?? false) && cfg.gateLevelId != _growthLevelId);
-            if (standing) foreach (var p in PlotFootprint(cfg)) avoid.Add(p);
+            if (PlotOnShow(cfg)) foreach (var p in PlotFootprint(cfg)) avoid.Add(p);
         }
 
         MistBank.SetProtected(avoid, gridSystem.cellSize);
@@ -471,6 +472,21 @@ public partial class LevelMapController : MonoBehaviour
             if (kv.Value != null && _risingCols.Contains(kv.Key)) kv.Value.gameObject.SetActive(false);
     }
 
+    // A decor plot the player can already see: ungated, cleared on an earlier visit,
+    // or a farm that stands barren before its gate (and is revived, not raised).
+    bool PlotOnShow(MapDecorConfig cfg)
+    {
+        if (string.IsNullOrEmpty(cfg.gateLevelId)) return true;
+        if (cfg is AbundanceFarmConfig f && f.barrenBeforeGate && BarrenUnlockedBefore(f)) return true;
+        bool cleared = SaveSystem.Profile.GetRecord(cfg.gateLevelId)?.cleared ?? false;
+        return cleared && cfg.gateLevelId != _growthLevelId;
+    }
+
+    // The barren farm was already standing before this visit (its barrenAfter level
+    // was cleared on an earlier one) — not rising now.
+    bool BarrenUnlockedBefore(AbundanceFarmConfig f) =>
+        BarrenUnlocked(f) && (string.IsNullOrEmpty(f.barrenAfterLevelId) || f.barrenAfterLevelId != _growthLevelId);
+
     bool HasReveal(List<DecorPlot> plots) =>
         (plots != null && plots.Count > 0) || _rising.Count > 0 || HasMistFor(_growthLevelId);
 
@@ -518,7 +534,10 @@ public partial class LevelMapController : MonoBehaviour
 
         // Everything rises on one clock. Plots rise whole; region blocks rise one by
         // one on their stagger, outward from the land that was already there.
-        float plotDur  = plots.Count > 0 ? lead.growRiseDuration : 0f;
+        float plotDur  = 0f;
+        foreach (var p in plots)
+            plotDur = Mathf.Max(plotDur, p.reviveNow && p.cfg is AbundanceFarmConfig fc
+                                             ? fc.reviveDuration : p.cfg.growRiseDuration);
         float lastCube = 0f;
         foreach (var it in _riseItems) lastCube = Mathf.Max(lastCube, it.delay);
         float total = lead0 + Mathf.Max(plotDur, _riseItems.Count > 0 ? lastCube + revealCubeDuration : 0f);
@@ -536,6 +555,17 @@ public partial class LevelMapController : MonoBehaviour
             {
                 var p = plots[i];
                 if (p.root == null) continue;
+                // A barren farm doesn't rise — it comes back to life where it stands,
+                // on the same clock (after the mist lead).
+                if (p.reviveNow)
+                {
+                    if (!p.revived && p.revive != null && t >= lead0 && p.cfg is AbundanceFarmConfig fc)
+                    {
+                        p.revive.Play(fc.reviveDuration);
+                        p.revived = true;   // once
+                    }
+                    continue;
+                }
                 p.root.transform.position = Vector3.Lerp(plotFrom[i], p.restPos, EaseOut((t - lead0) / Mathf.Max(0.01f, plotDur)));
             }
 
@@ -551,6 +581,13 @@ public partial class LevelMapController : MonoBehaviour
         foreach (var p in plots)
         {
             if (p.root != null) p.root.transform.position = p.restPos;
+            if (p.residentsPending && p.revived)
+            {
+                // Revived ground: its people arrive now it's somewhere to live.
+                _building = p.cfg;
+                PlantResidents(p, p.cfg, p.colTop, p.ext, gridSystem.cellSize);
+                p.residentsPending = false;
+            }
             foreach (var r in p.residents) if (r != null) r.SetActive(true);   // the plot has arrived — its people with it
         }
         foreach (var it in _riseItems) if (it.t != null) it.t.position = it.rest;

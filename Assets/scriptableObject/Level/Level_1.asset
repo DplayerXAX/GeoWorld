@@ -24,6 +24,7 @@ MonoBehaviour:
   synergyEnabled: 1
   allowedColors: 0100000004000000
   turretPool: 040000000600000007000000
+  environment: {fileID: 11400000, guid: c5a182ade6c54dc99a59e9803cae9c2a, type: 2}
   startingShop: []
   waves:
   - {fileID: 11400000, guid: 080e4b2a67c19904bbbfdce56bfad1ae, type: 2}
@@ -138,6 +139,8 @@ MonoBehaviour:
     hideInCombat: 0
     requiredWave: 0
     unlocksOps: 06000000
+    shopOnlyTarget: 1
+    shopOnlyColor: 4
     cameraFocus: 0
     focusZoom: 0
     openPanel: 0
@@ -158,6 +161,7 @@ MonoBehaviour:
     speakerSlot: 1
     speakerPortrait: 
   - kind: 0
+    freeRefreshAfter: 1
     block: {fileID: 11400000, guid: a8fa6df35bf1b6c438e02427ec8409c0, type: 2}
     origin: {x: 1, y: 2, z: -1}
     rotation90: {x: 0, y: 0, z: 0}

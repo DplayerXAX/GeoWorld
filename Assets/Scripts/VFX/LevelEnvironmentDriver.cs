@@ -91,18 +91,63 @@ public partial class LevelEnvironmentDriver : MonoBehaviour
     // After GameFlowManager.Start has placed the board and pointed the camera at it.
     void Start()
     {
-        if (_env.backdrop != LevelEnvironment.Backdrop.None && _env.backdropCount > 0)
+        bool scenery = _env.backdrop != LevelEnvironment.Backdrop.None && _env.backdropCount > 0;
+        if (!scenery && !_env.sunGlow) return;
+
+        var grid = GridSystem.instance;
+        if (grid != null) BoardChanged(grid);
+        Vector3 centre = BoardCentre();
+        if (scenery) _backdrop = EnvironmentBackdrop.Build(transform, _env, centre, FloorY(grid), _cs);
+        if (_backdrop != null && _env.backdropBloomOn != BlockColor.None && SynergyEvaluator.Instance != null)
         {
-            var grid = GridSystem.instance;
-            if (grid != null) BoardChanged(grid);
-            Vector3 centre = BoardCentre();
-            EnvironmentBackdrop.Build(transform, _env, centre, FloorY(grid), _cs);
+            _synergy = SynergyEvaluator.Instance;
+            _synergy.OnTierChanged += OnSynergyTier;
         }
+
+        if (_env.sunGlow)
+        {
+            // Out toward where the light comes FROM, dropped onto the horizon a
+            // little so a high sun still blooms low behind the scenery.
+            Vector3 toward = _sun != null ? -_sun.transform.forward
+                           : Quaternion.Euler(_env.sunPitch, _env.sunYaw + 180f, 0f) * Vector3.back;
+            toward.y = Mathf.Min(toward.y, 0.25f);
+            EnvironmentBackdrop.BuildSunGlow(transform, _env, new Vector3(centre.x, FloorY(grid), centre.z), toward, _cs);
+        }
+    }
+
+    // ── Scenery answering the board ──────────────────────────────────────────
+    EnvironmentBackdrop _backdrop;
+    SynergyEvaluator    _synergy;
+    bool _bloomPending;
+
+    void OnSynergyTier(SynergyRule rule, int oldTier, int newTier)
+    {
+        if (rule != null && rule.color == _env.backdropBloomOn && oldTier == 0 && newTier > 0) _bloomPending = true;
+    }
+
+    void UpdateBloom()
+    {
+        // Held while the level's own board is still hidden for the intro — the land
+        // answers once the player can see what it's answering.
+        if (!_bloomPending || _backdrop == null || SynergyVisualFX.Held) return;
+        _bloomPending = false;
+        var c = BlockColorPalette.Get(_env.backdropBloomOn);
+        Color.RGBToHSV(c, out float h, out float s, out float v);
+        var petals = new[]
+        {
+            c,
+            Color.HSVToRGB(Mathf.Repeat(h + 0.06f, 1f), s * 0.85f, Mathf.Min(1f, v * 1.05f)),
+            Color.HSVToRGB(Mathf.Repeat(h - 0.06f, 1f), s, v * 0.92f),
+            Color.Lerp(c, Color.white, 0.45f),
+        };
+        _backdrop.Bloom(petals, _env.backdropLeafColor);
+        if (_synergy != null) { _synergy.OnTierChanged -= OnSynergyTier; _synergy = null; }
     }
 
     void Update()
     {
         _t += Time.deltaTime;
+        UpdateBloom();
         UpdateWet();
         UpdateSplashes();
     }
@@ -176,6 +221,8 @@ public partial class LevelEnvironmentDriver : MonoBehaviour
             sky.SetColor("_ZenithColor",  _env.skyZenith);
             sky.SetColor("_HorizonColor", _env.skyHorizon);
             sky.SetColor("_FogColor",     _env.skyHaze);
+            sky.SetColor("_GridColor",    _env.skyGrid);
+            sky.SetFloat("_HueRange",     _env.skyHueRange);
         }
         if (density) sky.SetFloat("_FogDensity", sky.GetFloat("_FogDensity") * _env.skyHazeDensity);
         DynamicGI.UpdateEnvironment();   // ambient light comes from the sky
@@ -291,6 +338,7 @@ public partial class LevelEnvironmentDriver : MonoBehaviour
 
     void OnDestroy()
     {
+        if (_synergy != null) _synergy.OnTierChanged -= OnSynergyTier;
         if (_sun != null)
         {
             _sun.intensity = _sunIntensity0;

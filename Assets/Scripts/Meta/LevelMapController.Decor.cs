@@ -131,6 +131,18 @@ public class AbundanceFarmConfig : MapDecorConfig
     public Color accentColor = new Color(0.98f, 0.80f, 0.30f);
     [Range(0, 10)] public int signCount = 4;
 
+    [Header("Before the gate: barren")]
+    [Tooltip("ON: before its gate level is cleared the farm already stands — as withered, worked-out ground: dry soil, dead stalks, a still windmill. Clearing the gate brings it back to life in place (colour spreads out from the middle, the wheat straightens, the flowers open, the sails start to turn). OFF: nothing stands there until the gate is cleared, then it rises out of the ground.")]
+    public bool  barrenBeforeGate = true;
+    [Tooltip("The barren farm itself only appears once THIS level is cleared (rising out of the ground that visit). Blank = there from the start.")]
+    public string barrenAfterLevelId = "Tutorial";
+    public Color barrenSoilColor  = new Color(0.47f, 0.41f, 0.34f);
+    public Color barrenCropColor  = new Color(0.58f, 0.53f, 0.43f);
+    [Tooltip("Seconds for the colour to spread across the whole farm when it comes back.")]
+    public float reviveDuration   = 2.6f;
+    [Tooltip("Seconds for the windmill to come up to speed.")]
+    public float windmillSpinUp   = 3f;
+
     public override string RootName => "AbundanceFarm";
 
     public AbundanceFarmConfig()
@@ -173,6 +185,18 @@ public partial class LevelMapController : MonoBehaviour
         public Vector3          center;
         public Vector3          restPos;    // where root sits when NOT mid grow-in
         public List<GameObject> residents = new();
+
+        // A farm built barren. Non-null only then — revived in place by the
+        // cutscene the visit its gate is first cleared (see FarmRevive).
+        public FarmRevive       revive;
+        // This visit's cutscene brings it back (vs. a barren farm first rising).
+        public bool             reviveNow;
+        public bool             revived;
+        // Barren ground has nobody living on it yet: the residents are planted
+        // when it comes back, from what the ground pass recorded.
+        public bool             residentsPending;
+        public Dictionary<Vector2Int, Vector3Int> colTop;
+        public Vector2Int       ext;
     }
 
     readonly List<DecorPlot> _plots = new();
@@ -185,6 +209,10 @@ public partial class LevelMapController : MonoBehaviour
     // Parent for that plot's props. Prop builders parent to this rather than
     // taking it as an argument, for the same reason as _building above.
     GameObject     _buildingRoot;
+    // The plot being built barren, if it is — props register what they look like
+    // alive with it (see ReviveTint). Null for every normal build.
+    FarmRevive     _revive;
+    Vector3        _reviveOrigin;
 
     bool _decorCutscenePlaying;
 
@@ -281,29 +309,46 @@ public partial class LevelMapController : MonoBehaviour
             if (cfg == null || !cfg.enabled) continue;
             if (_plots.Exists(p => p.cfg == cfg)) continue;   // already standing
 
-            if (!string.IsNullOrEmpty(cfg.gateLevelId))
-            {
-                var rec = SaveSystem.Profile.GetRecord(cfg.gateLevelId);
-                if (rec == null || !rec.cleared) continue;
-            }
+            bool gated   = !string.IsNullOrEmpty(cfg.gateLevelId);
+            bool cleared = !gated || (SaveSystem.Profile.GetRecord(cfg.gateLevelId)?.cleared ?? false);
+            // A farm set to barrenBeforeGate stands from the start, withered.
+            var  farmCfg     = cfg as AbundanceFarmConfig;
+            bool barrenFirst = gated && farmCfg != null && farmCfg.barrenBeforeGate && BarrenUnlocked(farmCfg);
+            if (!cleared && !barrenFirst) continue;
 
             // Only the visit right after first clear plays the cutscene; later
             // revisits just rebuild the plot instantly. Read from the copy
             // VeilUnrevealedRegions captured — clearing the flag per plot, as this
             // used to, let only the FIRST plot gated on a level ever rise.
-            bool grow = !string.IsNullOrEmpty(cfg.gateLevelId) && _growthLevelId == cfg.gateLevelId;
+            bool growNow = gated && cleared && _growthLevelId == cfg.gateLevelId;
+            // Barren until cleared — and on the visit it's cleared, built barren one
+            // last time so the cutscene can bring it back in front of the player.
+            bool barren = barrenFirst && (!cleared || growNow);
 
-            // The grove is placed relative to the farm's windmill, which only exists
-            // once the farm has been built — hence both "grove builds last" and this.
+            // The grove is placed relative to the farm, which is built first —
+            // hence both "grove builds last" and this.
             if (cfg is HarmonyGroveConfig grove_) AnchorGrove(grove_);
 
-            var plot = BuildDecor(cfg, grow);
-            if (plot != null && grow) pending.Add(plot);
+            // The barren farm's own first appearance — the visit its barrenAfter
+            // level was cleared — rises like any other plot (still barren).
+            bool barrenRises = barren && !cleared && !string.IsNullOrEmpty(farmCfg.barrenAfterLevelId)
+                            && _growthLevelId == farmCfg.barrenAfterLevelId;
+
+            var plot = BuildDecor(cfg, (growNow && !barren) || barrenRises, barren);
+            if (plot == null) continue;
+            plot.reviveNow = barren && growNow;
+            if (growNow || barrenRises) pending.Add(plot);
         }
         return pending;
     }
 
-    DecorPlot BuildDecor(MapDecorConfig cfg, bool grow)
+    // `grow`: sink it, to rise in the cutscene. `barren`: build the farm withered
+    // (see AbundanceFarmConfig.barrenBeforeGate) — it is revived in place instead.
+    bool BarrenUnlocked(AbundanceFarmConfig f) =>
+        string.IsNullOrEmpty(f.barrenAfterLevelId)
+        || (SaveSystem.Profile.GetRecord(f.barrenAfterLevelId)?.cleared ?? false);
+
+    DecorPlot BuildDecor(MapDecorConfig cfg, bool grow, bool barren = false)
     {
         _building = cfg;
         var cells       = new List<Vector3Int>();   // in BlockRenderer instantiation order
@@ -392,6 +437,10 @@ public partial class LevelMapController : MonoBehaviour
         plot.root.transform.SetParent(transform, false);
         _buildingRoot = plot.root;
 
+        _revive = barren && farm != null ? plot.root.AddComponent<FarmRevive>() : null;
+        _reviveOrigin = plot.center;
+        plot.revive = _revive;
+
         var br = plot.root.AddComponent<BlockRenderer>();
         br.cubePrefab = cubePrefab;
         var cellsArr = cells.ToArray();
@@ -406,7 +455,9 @@ public partial class LevelMapController : MonoBehaviour
             var c = cellsArr[i];
             float k = Mathf.Lerp(1f - cfg.soilJitter, 1f + cfg.soilJitter,
                                   Hash01(DecorHash(c.x, c.z) ^ (c.y * 92821)));
-            MpbColor.Set(soilRenderers[i], Tint(cfg.SoilAt(new Vector2Int(c.x, c.z)), k));
+            var alive = Tint(cfg.SoilAt(new Vector2Int(c.x, c.z)), k);
+            MpbColor.Set(soilRenderers[i], alive);
+            if (_revive != null) ReviveTint(soilRenderers[i], alive, Tint(farm.barrenSoilColor, k));
         }
 
         // ── Walkability ──────────────────────────────────────────────────────
@@ -430,7 +481,15 @@ public partial class LevelMapController : MonoBehaviour
 
         // ── Props, largest first ─────────────────────────────────────────────
         BuildThemeProps(cfg, coveredCols, colTop, occupied, colKind, ext, cs);
-        PlantResidents(plot, cfg, colTop, ext, cs);
+        if (_revive == null) PlantResidents(plot, cfg, colTop, ext, cs);
+        else
+        {
+            plot.residentsPending = true;
+            plot.colTop = colTop;
+            plot.ext    = ext;
+            _revive.SetBarren();
+        }
+        _revive = null;
 
         // Sink the WHOLE plot below ground — every prop is a child of plot.root, so
         // one offset on the root moves them all together. PlayRevealCutscene
@@ -565,33 +624,60 @@ public partial class LevelMapController : MonoBehaviour
                      ResidentAccent);
     }
 
-    // The minigame entrance: a short shaft with a few coloured blocks resting in
-    // it, so it reads as the stacking well it opens.
+    // The minigame entrance: a proper village well — a round wall of stones, a
+    // coping ring, water inside, two posts carrying a little gable roof over a
+    // windlass with a bucket on its rope. Two coloured blocks sit on the rim, a
+    // nod to the stacking game it opens.
     void BuildStackingWell(Transform root, float cs)
     {
-        MakeMeshProp(root, "Rim", RailMesh(), root.position + Vector3.up * (cs * 0.06f),
-                     Quaternion.identity, new Vector3(0.78f * cs, 0.12f * cs, 0.78f * cs),
-                     GeoPalette.Ink);
+        Vector3 at = root.position;
+        var stone  = new Color(0.72f, 0.68f, 0.60f);
+        var wood   = new Color(0.52f, 0.37f, 0.23f);
+        var roof   = new Color(0.72f, 0.30f, 0.22f);
 
-        // Four corner posts suggest a shaft you drop into.
-        for (int i = 0; i < 4; i++)
-        {
-            float sx = (i & 1) == 0 ? -1f : 1f;
-            float sz = (i & 2) == 0 ? -1f : 1f;
-            MakeMeshProp(root, $"Post{i}", RailMesh(),
-                         root.position + new Vector3(sx * 0.34f * cs, cs * 0.34f, sz * 0.34f * cs),
-                         Quaternion.identity, new Vector3(0.09f * cs, 0.58f * cs, 0.09f * cs),
-                         GeoPalette.Ink);
-        }
+        // Wall: two courses of stones round a circle, the upper course offset half a stone.
+        const int stones = 10;
+        float r = 0.31f * cs;
+        for (int course = 0; course < 2; course++)
+            for (int i = 0; i < stones; i++)
+            {
+                float a = (i + course * 0.5f) / stones * Mathf.PI * 2f;
+                var pos = at + new Vector3(Mathf.Cos(a) * r, (0.07f + course * 0.14f) * cs, Mathf.Sin(a) * r);
+                float jit = Mathf.Lerp(0.88f, 1.1f, Hash01(DecorHash(i * 7 + course, 991)));
+                MakeMeshProp(root, $"Stone{course}_{i}", RailMesh(), pos,
+                             Quaternion.Euler(0f, -a * Mathf.Rad2Deg, 0f),
+                             new Vector3(0.13f * cs, 0.13f * cs, 0.22f * cs), Tint(stone, jit));
+            }
 
-        Color[] stack = { GeoPalette.Signal, ResidentAccent, GeoPalette.Blue };
-        for (int i = 0; i < stack.Length; i++)
-            MakeMeshProp(root, $"Block{i}", RailMesh(),
-                         root.position + new Vector3(((i % 2) - 0.5f) * 0.24f * cs,
-                                                     cs * (0.20f + i * 0.19f),
-                                                     ((i / 2) - 0.5f) * 0.24f * cs),
-                         Quaternion.Euler(0f, i * 22f, 0f),
-                         Vector3.one * (0.30f * cs), stack[i]);
+        // Coping ring on top of the wall, and the water a little below it.
+        MakeMeshProp(root, "Coping", RingMesh(), at + Vector3.up * (0.29f * cs), Quaternion.identity,
+                     new Vector3(0.84f * cs, 1.4f * cs, 0.84f * cs), Tint(stone, 0.9f));
+        // A squashed dome — the drum mesh has no top, a flattened hemisphere does.
+        MakeMeshProp(root, "Water", DomeMesh(), at + Vector3.up * (0.22f * cs), Quaternion.identity,
+                     new Vector3(0.5f * cs, 0.02f * cs, 0.5f * cs), new Color(0.26f, 0.52f, 0.78f));
+
+        // Posts, crossbar (the windlass) with a crank, rope and bucket.
+        for (int side = -1; side <= 1; side += 2)
+            MakeMeshProp(root, $"Post{side}", RailMesh(), at + new Vector3(side * 0.36f * cs, 0.42f * cs, 0f),
+                         Quaternion.identity, new Vector3(0.07f * cs, 0.84f * cs, 0.07f * cs), wood);
+        MakeMeshProp(root, "Windlass", RailMesh(), at + Vector3.up * (0.62f * cs), Quaternion.identity,
+                     new Vector3(0.8f * cs, 0.06f * cs, 0.06f * cs), Tint(wood, 0.85f));
+        MakeMeshProp(root, "Crank", RailMesh(), at + new Vector3(0.43f * cs, 0.57f * cs, 0.04f * cs), Quaternion.identity,
+                     new Vector3(0.03f * cs, 0.12f * cs, 0.03f * cs), GeoPalette.Ink);
+        MakeMeshProp(root, "Rope", RailMesh(), at + Vector3.up * (0.5f * cs), Quaternion.identity,
+                     new Vector3(0.015f * cs, 0.22f * cs, 0.015f * cs), new Color(0.85f, 0.78f, 0.6f));
+        MakeMeshProp(root, "Bucket", TowerMesh(), at + Vector3.up * (0.3f * cs), Quaternion.identity,
+                     new Vector3(0.13f * cs, 0.1f * cs, 0.13f * cs), wood);
+
+        // Roof: a little gable on the posts, ridge across the well.
+        MakeMeshProp(root, "Roof", GableMesh(), at + Vector3.up * (0.84f * cs), Quaternion.identity,
+                     new Vector3(0.95f * cs, 0.26f * cs, 0.62f * cs), roof);
+
+        // Two blocks resting on the rim — the stacking game inside.
+        MakeMeshProp(root, "RimBlockA", RailMesh(), at + new Vector3(-0.2f * cs, 0.36f * cs, -0.22f * cs),
+                     Quaternion.Euler(0f, 18f, 0f), Vector3.one * (0.11f * cs), GeoPalette.Signal);
+        MakeMeshProp(root, "RimBlockB", RailMesh(), at + new Vector3(-0.08f * cs, 0.36f * cs, -0.28f * cs),
+                     Quaternion.Euler(0f, -12f, 0f), Vector3.one * (0.11f * cs), GeoPalette.Blue);
     }
 
     // Flowers, crops and signposts, driven by each cell's row role. One pass so a
@@ -631,18 +717,34 @@ public partial class LevelMapController : MonoBehaviour
 
         if (cropTops.Count > 0)   BuildCrops(cropTops, cs);
         for (int i = 0; i < signTops.Count; i++) BuildFarmSign(signTops[i], cs, i);
-        if (flowerTops.Count > 0) BuildBlooms(flowerTops, cs);
+        if (flowerTops.Count == 0) return;
+
+        if (_revive == null) { BuildBlooms(flowerTops, cs); return; }
+
+        // Barren: nothing blooms until the farm comes back — then the flowers open
+        // as the colour spreads (BloomPatch animates its own opening).
+        var root = _buildingRoot;
+        var cfg  = _building;
+        _revive.onRevive += () =>
+        {
+            var prevRoot = _buildingRoot; var prevCfg = _building;
+            _buildingRoot = root; _building = cfg;
+            BuildBlooms(flowerTops, cs, reviving: true);
+            _buildingRoot = prevRoot; _building = prevCfg;
+        };
     }
 
-    void BuildBlooms(List<Vector3> tops, float cs)
+    void BuildBlooms(List<Vector3> tops, float cs, bool reviving = false)
     {
         var patchGo = new GameObject("Blooms");
         patchGo.transform.SetParent(_buildingRoot.transform, false);
         var patch = patchGo.AddComponent<BloomPatch>();
         // Slower and softer than the gameplay version: ambient landscape the
-        // player pans across, not feedback for an action they just took.
+        // player pans across, not feedback for an action they just took. Coming
+        // back to life they open faster, so the whole bed has bloomed by the time
+        // the colour has crossed the farm.
         patch.bloomDuration  = 0.6f;
-        patch.bloomStagger   = 0.04f;
+        patch.bloomStagger   = reviving ? 0.012f : 0.04f;
         patch.spinSpeed      = 10f;
         patch.swaySpeed      = 1.1f;
         patch.swayAngleDeg   = 6f;
@@ -688,12 +790,18 @@ public partial class LevelMapController : MonoBehaviour
                             + across * ((Hash01(hs ^ 0x51ed) - 0.5f) * 0.24f * cs);
 
                 float sh = h * Mathf.Lerp(0.8f, 1.2f, Hash01(hs ^ 0x2f9d));
+                float jit = Mathf.Lerp(0.88f, 1.12f, Hash01(hs ^ 0x11b3));
+                var alive = Tint(decor.cropColor, jit);
                 var stalk = MakeMeshProp(root.transform, "Wheat", WheatMesh(), pos,
                                          Quaternion.Euler(0f, Hash01(hs ^ 0x77a1) * 360f, 0f),
-                                         new Vector3(sh, sh, sh),
-                                         Tint(decor.cropColor, Mathf.Lerp(0.88f, 1.12f, Hash01(hs ^ 0x11b3))));
+                                         new Vector3(sh, sh, sh), alive);
 
-                field.Add(stalk, pos, Hash01(hs ^ 0x1234) * Mathf.PI * 2f);
+                // Withered: bent over toward the ground, the colour gone to straw.
+                float tiltDir = Hash01(hs ^ 0x3c6e) * 360f;
+                var droop = Quaternion.AngleAxis(Mathf.Lerp(30f, 58f, Hash01(hs ^ 0x6b43)),
+                                                 Quaternion.Euler(0f, tiltDir, 0f) * Vector3.right);
+                field.Add(stalk, pos, Hash01(hs ^ 0x1234) * Mathf.PI * 2f,
+                          alive, Tint(decor.barrenCropColor, jit), droop);
             }
         }
     }
@@ -727,10 +835,10 @@ public partial class LevelMapController : MonoBehaviour
                              + Vector3.up * (cs * 0.5f);
 
                 float lean = (Hash01(gate ^ 0x6d2b) - 0.5f) * 7f;   // a touch of settle, so the line isn't machined
-                MakeMeshProp(root.transform, "Picket", PicketMesh(), edge,
+                ReviveTint(MakeMeshProp(root.transform, "Picket", PicketMesh(), edge,
                              Quaternion.Euler(lean, Hash01(gate) * 360f, lean * 0.5f),
                              new Vector3(0.16f * cs, postH, 0.16f * cs),
-                             Tint(decor.fenceColor, Mathf.Lerp(0.85f, 1.12f, Hash01(gate ^ 0x9f1a))));
+                             Tint(decor.fenceColor, Mathf.Lerp(0.85f, 1.12f, Hash01(gate ^ 0x9f1a)))));
 
                 // Rail toward the neighbouring boundary cell along this same
                 // edge. `along` is perpendicular to the outward normal, so it
@@ -748,23 +856,26 @@ public partial class LevelMapController : MonoBehaviour
                 Vector3 railScale = new Vector3(Mathf.Abs(along.x) * 1.02f + 0.06f, 0.05f,
                                                 Mathf.Abs(along.y) * 1.02f + 0.06f) * cs;
                 for (int r = 0; r < 2; r++)
-                    MakeMeshProp(root.transform, "Rail", RailMesh(), railMid + Vector3.up * (postH * (0.42f + r * 0.32f)),
+                    ReviveTint(MakeMeshProp(root.transform, "Rail", RailMesh(), railMid + Vector3.up * (postH * (0.42f + r * 0.32f)),
                                  Quaternion.identity, railScale,
-                                 Tint(decor.fenceColor, 0.92f));
+                                 Tint(decor.fenceColor, 0.92f)));
             }
         }
     }
 
     // ── Windmill ─────────────────────────────────────────────────────────────
-    // Placed on the covered column furthest from 1-1 (i.e. lowest x, then lowest
-    // z) so the landmark anchors the plot's far corner and never sits between the
-    // camera and the beds.
+    // Placed on the covered column at the plot's highest-x, highest-z corner —
+    // the far end of the diagonal from the (lowest-x, lowest-z) origin — and turned
+    // so its sails face out of that corner, away from the beds.
     void BuildWindmill(HashSet<Vector2Int> coveredCols, Dictionary<Vector2Int, Vector3Int> colTop, float cs)
     {
         bool found = false;
         Vector2Int best = default;
         foreach (var col in coveredCols)
-            if (!found || col.x < best.x || (col.x == best.x && col.y < best.y)) { best = col; found = true; }
+        {
+            int s = col.x + col.y, bs = best.x + best.y;
+            if (!found || s > bs || (s == bs && col.x > best.x)) { best = col; found = true; }
+        }
         if (!found || !colTop.TryGetValue(best, out var top)) return;
 
         Vector3 basePos = gridSystem.GridToWorld(top) + Vector3.up * (cs * 0.5f);
@@ -772,10 +883,14 @@ public partial class LevelMapController : MonoBehaviour
         var root = new GameObject("Windmill");
         root.transform.SetParent(_buildingRoot.transform, false);
         root.transform.position = basePos;
-        // Rotor faces the plot's rotated frame. Set before the parts below — they're
-        // placed in world space on the vertical axis, so a Y turn doesn't shift them,
-        // while the hub/sails (local space) DO ride it.
-        root.transform.rotation = Quaternion.Euler(0f, DecorRotationDegrees, 0f);
+        // Rotor (local -Z) points out of the corner, away from the plot's middle.
+        // Set before the parts below — they're placed in world space on the vertical
+        // axis, so a Y turn doesn't shift them, while the hub/sails (local space) DO
+        // ride it.
+        Vector3 outward = basePos - _reviveOrigin; outward.y = 0f;
+        root.transform.rotation = outward.sqrMagnitude > 1e-4f
+            ? Quaternion.LookRotation(-outward.normalized, Vector3.up)
+            : Quaternion.Euler(0f, DecorRotationDegrees, 0f);
 
         float h = decor.windmillHeight * cs;
 
@@ -785,15 +900,15 @@ public partial class LevelMapController : MonoBehaviour
         // constructivist ink/cream contrast the map's other markers use.
         MakeMeshProp(root.transform, "Plinth", RailMesh(), basePos + Vector3.up * (h * 0.02f),
                      Quaternion.identity, new Vector3(0.62f * cs, h * 0.05f, 0.62f * cs), GeoPalette.Ink);
-        MakeMeshProp(root.transform, "Tower", TowerMesh(), basePos + Vector3.up * (h * 0.04f),
-                     Quaternion.identity, new Vector3(0.5f * cs, h * 0.72f, 0.5f * cs), decor.towerColor);
+        ReviveTint(MakeMeshProp(root.transform, "Tower", TowerMesh(), basePos + Vector3.up * (h * 0.04f),
+                     Quaternion.identity, new Vector3(0.5f * cs, h * 0.72f, 0.5f * cs), decor.towerColor));
         MakeMeshProp(root.transform, "Cap", TowerCapMesh(), basePos + Vector3.up * (h * 0.76f),
                      Quaternion.identity, new Vector3(0.46f * cs, h * 0.2f, 0.46f * cs), GeoPalette.Ink);
         // A broad near-up-facing gold collar — the one element guaranteed to
         // print at full gold (≈0.98 shade) regardless of camera yaw, so the
         // landmark still reads gold when the sails happen to be edge-on.
-        MakeMeshProp(root.transform, "Collar", RailMesh(), basePos + Vector3.up * (h * 0.745f),
-                     Quaternion.identity, new Vector3(0.54f * cs, h * 0.035f, 0.54f * cs), decor.accentColor);
+        ReviveTint(MakeMeshProp(root.transform, "Collar", RailMesh(), basePos + Vector3.up * (h * 0.745f),
+                     Quaternion.identity, new Vector3(0.54f * cs, h * 0.035f, 0.54f * cs), decor.accentColor));
 
         // Rotor: four slatted sails on a hub, turning in the vertical plane.
         // Their normals sweep through the emulated light as they turn, so the
@@ -803,15 +918,25 @@ public partial class LevelMapController : MonoBehaviour
         hub.localPosition = new Vector3(0f, h * 0.82f, -0.34f * cs);
 
         for (int i = 0; i < 4; i++)
-            MakeMeshProp(hub, $"Sail_{i}", SailMesh(), Vector3.zero,
+            ReviveTint(MakeMeshProp(hub, $"Sail_{i}", SailMesh(), Vector3.zero,
                          Quaternion.Euler(0f, 0f, i * 90f),
                          new Vector3(0.9f * cs, 0.9f * cs, 0.9f * cs),
-                         decor.accentColor, localSpace: true);
+                         decor.accentColor, localSpace: true));
 
         MakeMeshProp(hub, "Hub", RailMesh(), Vector3.zero, Quaternion.identity,
                      new Vector3(0.16f * cs, 0.16f * cs, 0.1f * cs), GeoPalette.Ink, localSpace: true);
 
-        root.AddComponent<FarmWindmillSpin>().Init(hub, decor.windmillSpin);
+        var spin = root.AddComponent<FarmWindmillSpin>();
+        if (_revive == null) spin.Init(hub, decor.windmillSpin);
+        else
+        {
+            // Stopped — sails left at a slant, the way a mill that nobody tends stands.
+            hub.localRotation = Quaternion.Euler(0f, 0f, 21f);
+            spin.Init(hub, 0f);
+            _revive.mill = spin;
+            _revive.millSpeed = decor.windmillSpin;
+            _revive.millSpinUp = decor.windmillSpinUp;
+        }
     }
 
     // ── Signpost ─────────────────────────────────────────────────────────────
@@ -836,9 +961,43 @@ public partial class LevelMapController : MonoBehaviour
         MakeMeshProp(root.transform, "FlagShadow", RailMesh(), basePos + Vector3.up * (postH * 0.9f),
                      Quaternion.Euler(12f, yaw, 0f), new Vector3(0.52f * cs, 0.03f * cs, 0.36f * cs),
                      GeoPalette.Ink);
-        MakeMeshProp(root.transform, "Flag", RailMesh(), basePos + Vector3.up * (postH * 0.94f),
+        ReviveTint(MakeMeshProp(root.transform, "Flag", RailMesh(), basePos + Vector3.up * (postH * 0.94f),
                      Quaternion.Euler(12f, yaw, 0f), new Vector3(0.48f * cs, 0.05f * cs, 0.32f * cs),
-                     decor.accentColor);
+                     decor.accentColor));
+    }
+
+    // ── Barren ↔ alive ───────────────────────────────────────────────────────
+    // A prop on a farm being built barren: remember its living colour, show it
+    // withered. No-op on a normal build, so every prop builder can just call it.
+    // Same, taking the living colour from the one MakeMeshProp just gave the prop.
+    void ReviveTint(Transform prop)
+    {
+        if (_revive == null || prop == null) return;
+        var r = prop.GetComponent<Renderer>();
+        if (r != null) ReviveTint(r, MpbColor.Get(r), Withered(MpbColor.Get(r)));
+    }
+
+    void ReviveTint(Transform prop, Color alive)
+    {
+        if (_revive == null || prop == null) return;
+        var r = prop.GetComponent<Renderer>();
+        if (r != null) ReviveTint(r, alive, Withered(alive));
+    }
+
+    void ReviveTint(Renderer r, Color alive, Color dead)
+    {
+        if (_revive == null || r == null) return;
+        Vector3 d = r.transform.position - _reviveOrigin; d.y = 0f;
+        _revive.Add(r, alive, dead, d.magnitude);
+    }
+
+    // What a colour looks like gone dry and dusty: most of its saturation out, a
+    // step darker, pulled toward the barren soil.
+    Color Withered(Color c)
+    {
+        float g = c.grayscale;
+        var faded = Color.Lerp(c, new Color(g, g, g, c.a), 0.72f);
+        return Color.Lerp(faded, decor.barrenSoilColor, 0.3f) * 0.92f;
     }
 
     // Spawns one shared-mesh prop. Mirrors MakePlate's contract (collider-free,
@@ -911,6 +1070,10 @@ public partial class LevelMapController : MonoBehaviour
     // ═════════════════════════════════════════════════════════════════════════
 
     static Mesh _wheatMesh, _sailMesh, _picketMesh, _railMesh, _towerMesh, _towerCapMesh;
+
+    /// <summary>The farm's wheat stalk (unit height, pivot at the base) — shared with
+    /// the level backdrop's fields (EnvironmentBackdrop), so both grow the same crop.</summary>
+    public static Mesh SharedWheatMesh() => WheatMesh();
 
     // Where DecorMeshBaker writes the baked copies. Present = loaded, absent =
     // generated on the spot exactly as before, so the bake is an optimisation and
@@ -1231,17 +1394,39 @@ public partial class LevelMapController : MonoBehaviour
         struct Stalk
         {
             public Transform  t;
+            public Renderer   r;
             public Vector3    basePos;
             public Quaternion baseRot;
+            public Vector3    baseScale;
             public float      phase;
+            public Color      alive, dead;
+            public Quaternion droop;   // how it bends over when withered
         }
 
         readonly List<Stalk> _stalks = new();
 
-        public void Add(Transform t, Vector3 basePos, float phase)
+        // 0 = standing and golden, 1 = bent over and dead (a barren farm).
+        float _wither;
+
+        public void Add(Transform t, Vector3 basePos, float phase, Color alive, Color dead, Quaternion droop)
         {
             if (t == null) return;
-            _stalks.Add(new Stalk { t = t, basePos = basePos, baseRot = t.localRotation, phase = phase });
+            _stalks.Add(new Stalk
+            {
+                t = t, r = t.GetComponent<Renderer>(), basePos = basePos, baseRot = t.localRotation,
+                baseScale = t.localScale, phase = phase, alive = alive, dead = dead, droop = droop,
+            });
+        }
+
+        public void SetWither(float w)
+        {
+            _wither = Mathf.Clamp01(w);
+            for (int i = 0; i < _stalks.Count; i++)
+            {
+                var s = _stalks[i];
+                if (s.r != null) MpbColor.Set(s.r, Color.Lerp(s.alive, s.dead, _wither));
+                if (s.t != null) s.t.localScale = s.baseScale * Mathf.Lerp(1f, 0.72f, _wither);
+            }
         }
 
         void Update()
@@ -1256,23 +1441,104 @@ public partial class LevelMapController : MonoBehaviour
                 // ripples as a field instead of each stalk wobbling on its own.
                 // The mesh's pivot is already at its base, so a plain rotation
                 // hinges at the ground with no position correction needed.
-                float lean = Mathf.Sin(time * 1.3f + s.phase) * 6f;
-                s.t.localRotation = Quaternion.Euler(lean * 0.55f, 0f, lean) * s.baseRot;
+                // A dead stalk doesn't sway — it just lies bent.
+                float lean = Mathf.Sin(time * 1.3f + s.phase) * 6f * (1f - _wither);
+                var standing = Quaternion.Euler(lean * 0.55f, 0f, lean) * s.baseRot;
+                s.t.localRotation = _wither > 0f ? Quaternion.Slerp(standing, s.droop * s.baseRot, _wither) : standing;
             }
         }
     }
 
-    // Sails turn at a constant rate; the tower stays put.
+    // Sails turn at a constant rate; the tower stays put. SpinUp eases a still
+    // mill up to speed (a barren farm coming back).
     class FarmWindmillSpin : MonoBehaviour
     {
         Transform _hub;
-        float     _speed;
+        float     _speed, _target, _accel;
 
-        public void Init(Transform hub, float speed) { _hub = hub; _speed = speed; }
+        public void Init(Transform hub, float speed) { _hub = hub; _speed = _target = speed; _accel = 0f; }
+
+        public void SpinUp(float speed, float seconds)
+        {
+            _target = speed;
+            _accel  = seconds > 0f ? Mathf.Abs(speed - _speed) / seconds : float.MaxValue;
+        }
 
         void Update()
         {
-            if (_hub != null) _hub.Rotate(0f, 0f, _speed * Time.deltaTime, Space.Self);
+            if (_accel > 0f) _speed = Mathf.MoveTowards(_speed, _target, _accel * Time.deltaTime);
+            if (_hub != null && _speed != 0f) _hub.Rotate(0f, 0f, _speed * Time.deltaTime, Space.Self);
+        }
+    }
+
+    // A farm built barren, and bringing it back. Every withered prop registered its
+    // living colour here (ReviveTint); Play spreads the colour back out from the
+    // middle of the plot, straightens the wheat, opens the flowers (onRevive) and
+    // starts the mill.
+    class FarmRevive : MonoBehaviour
+    {
+        struct Tinted { public Renderer r; public Color alive, dead; public float dist; }
+        readonly List<Tinted> _tints = new();
+
+        public FarmWindmillSpin mill;
+        public float millSpeed, millSpinUp;
+        public event System.Action onRevive;
+
+        FarmCropField[] _crops;
+        float _t = -1f, _dur = 1f, _maxDist = 1f;
+
+        public void Add(Renderer r, Color alive, Color dead, float dist)
+            => _tints.Add(new Tinted { r = r, alive = alive, dead = dead, dist = dist });
+
+        public void SetBarren()
+        {
+            foreach (var x in _tints) if (x.r != null) MpbColor.Set(x.r, x.dead);
+            _crops = GetComponentsInChildren<FarmCropField>();
+            foreach (var c in _crops) c.SetWither(1f);
+        }
+
+        public bool Playing => _t >= 0f;
+
+        public void Play(float duration)
+        {
+            _dur = Mathf.Max(0.1f, duration);
+            _maxDist = 0.01f;
+            foreach (var x in _tints) _maxDist = Mathf.Max(_maxDist, x.dist);
+            _t = 0f;
+            mill?.SpinUp(millSpeed, millSpinUp);
+            onRevive?.Invoke();
+            onRevive = null;
+        }
+
+        public void Finish()
+        {
+            if (_t < 0f) return;
+            _t = _dur;
+            Step();
+            _t = -1f;
+        }
+
+        void Update()
+        {
+            if (_t < 0f) return;
+            _t += Time.deltaTime;
+            Step();
+            if (_t >= _dur) _t = -1f;
+        }
+
+        // Each prop turns over half the duration, starting later the further it is
+        // from the middle — a wave of colour crossing the farm.
+        void Step()
+        {
+            float half = _dur * 0.5f;
+            foreach (var x in _tints)
+            {
+                if (x.r == null) continue;
+                float local = (_t - (x.dist / _maxDist) * half) / half;
+                MpbColor.Set(x.r, Color.Lerp(x.dead, x.alive, Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(local))));
+            }
+            float w = 1f - Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(_t / _dur));
+            if (_crops != null) foreach (var c in _crops) if (c != null) c.SetWither(w);
         }
     }
 }

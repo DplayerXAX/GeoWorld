@@ -304,6 +304,13 @@ public class TutorialStep
     [Tooltip("Hide & disable this step during combat (Running phase): its dialogue/hint hides, gating lifts, and it won't advance until combat ends.")]
     public bool hideInCombat = false;
 
+    [Header("Shop")]
+    [Tooltip("Purchase-kind step: when it begins, the shop is restocked with ONLY this step's `block`, in shopOnlyColor — nothing else on the shelf to pick by mistake.")]
+    public bool shopOnlyTarget = false;
+    public BlockColor shopOnlyColor = BlockColor.None;
+    [Tooltip("When this step is completed, the shop re-rolls once for free (the refresh price doesn't go up).")]
+    public bool freeRefreshAfter = false;
+
     [Header("Wave gating")]
     [Tooltip("If > 0, this step won't begin (ghost/camera/dialogue/hint) until GameFlowManager.UpcomingWaveNumber reaches this value — i.e. the player has already cleared enough earlier waves. 0 = no gate, step begins as soon as the previous one completes.")]
     [Min(0)] public int requiredWave = 0;
