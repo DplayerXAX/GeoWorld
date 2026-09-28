@@ -62,34 +62,49 @@ public class RandomBlockDestructionController : MonoBehaviour
         if (_lastTriggeredAfterTurn == completed) return;   // defensive: StartTurn should fire once
         _lastTriggeredAfterTurn = completed;
 
-        var candidates = new List<PlacedBlockInstance>();
-        foreach (var instance in grid.GetAllInstances())
-        {
-            if (!CanDestroy(instance, grid)) continue;
-            if (!_config.canDestroyTurrets && TurretTypes.Is(instance.data.blockType))
-                continue;
-            candidates.Add(instance);
-        }
-        if (candidates.Count == 0) return;
-
-        // Dictionary iteration order is not a gameplay contract. Sort first so a
-        // fixed run seed produces the same victim on every machine and playthrough.
-        candidates.Sort(CompareByGridCell);
         EnsureRng(flow);
+        int lo = Mathf.Max(1, _config.minPerTrigger);
+        int hi = Mathf.Max(lo, _config.maxPerTrigger);
+        int want = _rng.NextIntInclusive(lo, hi);
 
-        var victim = candidates[_rng.NextIntInclusive(0, candidates.Count - 1)];
-        string blockName = victim.data != null ? victim.data.DisplayName : "block";
-
-        var removedCells = victim.occupiedCells.ToArray();
+        // One at a time, re-gathering the candidates after each: taking one block
+        // can change what the next may take (preserveTurretSupport).
+        var names = new List<string>();
         placement.ClearBoardSelection();
-        ResourceManager.Instance?.OnBlockRemoved(victim.data.blockType);
-        SynergyEvaluator.Instance?.OnPieceRemoved(victim.placedPiece);
-        PathFlowManager.Instance?.RemoveFlowsOverlapping(removedCells);
-        LoopManager.Instance?.RemoveLoopsOverlapping(removedCells);
-        grid.RemoveInstance(victim);
+        for (int k = 0; k < want; k++)
+        {
+            var candidates = new List<PlacedBlockInstance>();
+            foreach (var instance in grid.GetAllInstances())
+            {
+                if (!CanDestroy(instance, grid)) continue;
+                if (!_config.canDestroyTurrets && TurretTypes.Is(instance.data.blockType))
+                    continue;
+                candidates.Add(instance);
+            }
+            if (candidates.Count == 0) break;
+
+            // Dictionary iteration order is not a gameplay contract. Sort first so a
+            // fixed run seed produces the same victims on every machine and playthrough.
+            candidates.Sort(CompareByGridCell);
+            var victim = candidates[_rng.NextIntInclusive(0, candidates.Count - 1)];
+            names.Add(victim.data != null ? victim.data.DisplayName : "block");
+
+            // It leaves the board NOW; only its picture lingers, wearing away.
+            BlockDissolveFx.Play(victim.visualObject, _config.dissolveSeconds);
+
+            var removedCells = victim.occupiedCells.ToArray();
+            ResourceManager.Instance?.OnBlockRemoved(victim.data.blockType);
+            SynergyEvaluator.Instance?.OnPieceRemoved(victim.placedPiece);
+            PathFlowManager.Instance?.RemoveFlowsOverlapping(removedCells);
+            LoopManager.Instance?.RemoveLoopsOverlapping(removedCells);
+            grid.RemoveInstance(victim);
+        }
+        if (names.Count == 0) return;
         flow.EvaluateGrid();
 
-        placement.ShowPlacementPopup($"Instability destroyed {blockName}.", 2.5f);
+        placement.ShowPlacementPopup(names.Count == 1
+            ? $"Instability destroyed {names[0]}."
+            : $"Instability destroyed {string.Join(" and ", names)}.", 2.5f);
     }
 
     bool CanDestroy(PlacedBlockInstance instance, GridSystem grid)

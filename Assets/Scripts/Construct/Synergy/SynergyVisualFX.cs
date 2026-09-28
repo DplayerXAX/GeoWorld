@@ -37,8 +37,8 @@ public class SynergyVisualFX : MonoBehaviour
         => OnReplayGrowIn?.Invoke(delayForWorldPos);
 
     // ── Hold ─────────────────────────────────────────────────────────────
-    // A level that opens on a board — prebuilt blocks, an inherited build, a
-    // resumed save — forms its synergies the instant those blocks are placed,
+    // A level that opens on a board — prebuilt blocks, a resumed
+    // save — forms its synergies the instant those blocks are placed,
     // which is while they are still hidden for the intro. Without a hold, vines,
     // gears and flowers stood there on nothing and the blocks popped in under them.
     //

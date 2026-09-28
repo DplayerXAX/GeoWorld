@@ -42,6 +42,8 @@ public class HudSidePanels : MonoBehaviour
     public float   slideDistance = 360f;
     [Tooltip("Padding (x = left/right, y = top) for the text laid over the art.")]
     public Vector2 contentInset = new Vector2(40f, 90f);
+    [Tooltip("How far the key column (blue) of the controls list sits left of the other text. The action column stays put.")]
+    public float controlKeyShift = 30f;
 
     [Header("Handle (the click-to-expand tab)")]
     public Sprite handleSprite;
@@ -156,6 +158,8 @@ public class HudSidePanels : MonoBehaviour
         A("Alt + scroll", "Turn block");
         A("Tab", "Switch mode");
         A("F", "Open / Close shop");
+        A("X", "Synergies panel");
+        A("V", "Controls panel");
         A("LMB",     "Select / place");
         A("Space",   "Start wave");
         A("R",       "Refresh shop");
@@ -176,6 +180,13 @@ public class HudSidePanels : MonoBehaviour
 
         UpdateSynergies();
         if (_rightIsRoster) UpdatePlayers();
+
+        // Hotkeys: each toggles its own panel.
+        if (!PauseMenu.Paused && !GameFlowManager.SettlementUp)
+        {
+            if (Input.GetKeyDown(GameSettings.SynergyPanelKey))  { _synOpen  = !_synOpen;  _openedFrame = Time.frameCount; }
+            if (Input.GetKeyDown(GameSettings.ControlsPanelKey)) { _ctrlOpen = !_ctrlOpen; _openedFrame = Time.frameCount; }
+        }
 
         // Click anywhere while a panel is open → collapse it (and swallow that click
         // so it doesn't also place / select in the world).
@@ -265,7 +276,7 @@ public class HudSidePanels : MonoBehaviour
         _leftPanel   = NewFullScreenPanel("SynergyPanel", leftSprite);
         _leftContent = NewColumn(_leftPanel, right: false);
         AddTitle(_leftContent, "SYNERGIES");
-        _leftHandle  = BuildHandle("SYNERGIES", _leftPanel, right: false);
+        _leftHandle  = BuildHandle($"SYNERGIES  [{GameSettings.SynergyPanelKey}]", _leftPanel, right: false);
     }
 
     void BuildRight()
@@ -280,7 +291,7 @@ public class HudSidePanels : MonoBehaviour
         {
             AddTitle(_rightContent, "PLAYERS");
             BuildPlayerRows();
-            _rightHandle = BuildHandle("PLAYERS", _rightPanel, right: true);
+            _rightHandle = BuildHandle($"PLAYERS  [{GameSettings.ControlsPanelKey}]", _rightPanel, right: true);
             return;
         }
 
@@ -292,6 +303,7 @@ public class HudSidePanels : MonoBehaviour
             var row = NewRect("Row", _rightContent);
             var h = row.gameObject.AddComponent<HorizontalLayoutGroup>();
             h.childAlignment = TextAnchor.MiddleLeft; h.spacing = 8f;
+            h.padding = new RectOffset(-Mathf.RoundToInt(controlKeyShift), 0, 0, 0);   // key column pulled left
             h.childControlWidth = h.childControlHeight = true;
             h.childForceExpandWidth = false; h.childForceExpandHeight = false;
             row.gameObject.AddComponent<LayoutElement>().minHeight = rowSize * 1.6f;
@@ -299,14 +311,14 @@ public class HudSidePanels : MonoBehaviour
             var key = NewText("Key", row, rowSize, GeoPalette.Blue, FontStyles.Bold, TextAlignmentOptions.MidlineLeft);
             key.text = c.key;
             var kle = key.gameObject.AddComponent<LayoutElement>();
-            kle.minWidth = kle.preferredWidth = 110f;
+            kle.minWidth = kle.preferredWidth = 110f + controlKeyShift;   // …and widened, so the actions don't move
 
             var act = NewText("Action", row, rowSize, GeoPalette.Ink, FontStyles.Bold, TextAlignmentOptions.MidlineLeft);
             act.text = c.action;
             act.gameObject.AddComponent<LayoutElement>().flexibleWidth = 1f;
         }
 
-        _rightHandle = BuildHandle("CONTROLS", _rightPanel, right: true);
+        _rightHandle = BuildHandle($"CONTROLS  [{GameSettings.ControlsPanelKey}]", _rightPanel, right: true);
     }
 
     // ── Players (multiplayer only) ───────────────────────────────────────────

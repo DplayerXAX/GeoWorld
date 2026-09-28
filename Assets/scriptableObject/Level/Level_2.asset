@@ -17,7 +17,8 @@ MonoBehaviour:
   description: 
   runSeed: 0
   blocksPerTurn: 3
-  startingBlockCurrencyMult: 0.5
+  startingBlockCurrencyMult: 0.35
+  environment: {fileID: 11400000, guid: 71fe97475a0540a788498eba0c8f3a71, type: 2}
   turretsPerTurn: 3
   synergyEnabled: 1
   allowedColors: 0100000004000000
@@ -78,70 +79,7 @@ MonoBehaviour:
     cameraFocus: 0
     focusZoom: 0
     openPanel: 0
-    hint: 'Do you know this ground, My Lord? You should. Every block you set down in the last land has followed us here, standing just as you left it.'
-    conversation: {fileID: 0}
-    speaker: {fileID: 11400000, guid: 80993e3c86b4337429c2d6273c8eedc2, type: 2}
-    speakerSlot: 1
-    speakerPortrait: 
-  - kind: 5
-    block: {fileID: 0}
-    origin: {x: 0, y: 0, z: 0}
-    rotation90: {x: 0, y: 0, z: 0}
-    cellsOverride: []
-    waitSeconds: 0
-    count: 1
-    inputKey: 323
-    pathLength: 0
-    freeOperations: 1
-    hideInCombat: 0
-    requiredWave: 0
-    unlocksOps: 
-    cameraFocus: 2
-    focusZoom: 0
-    openPanel: 0
-    hint: 'And the core you guarded stands where it stood. The work you did before is what defends it now.'
-    conversation: {fileID: 0}
-    speaker: {fileID: 11400000, guid: 80993e3c86b4337429c2d6273c8eedc2, type: 2}
-    speakerSlot: 1
-    speakerPortrait: 
-  - kind: 5
-    block: {fileID: 0}
-    origin: {x: 0, y: 0, z: 0}
-    rotation90: {x: 0, y: 0, z: 0}
-    cellsOverride: []
-    waitSeconds: 0
-    count: 1
-    inputKey: 323
-    pathLength: 0
-    freeOperations: 1
-    hideInCombat: 0
-    requiredWave: 0
-    unlocksOps: 
-    cameraFocus: 1
-    focusZoom: 0
-    openPanel: 0
-    hint: 'But the enemy never returns by the same road. In each new land they break through somewhere else. Here, they come from this side.'
-    conversation: {fileID: 0}
-    speaker: {fileID: 11400000, guid: 80993e3c86b4337429c2d6273c8eedc2, type: 2}
-    speakerSlot: 1
-    speakerPortrait: 
-  - kind: 5
-    block: {fileID: 0}
-    origin: {x: 0, y: 0, z: 0}
-    rotation90: {x: 0, y: 0, z: 0}
-    cellsOverride: []
-    waitSeconds: 0
-    count: 1
-    inputKey: 323
-    pathLength: 0
-    freeOperations: 1
-    hideInCombat: 0
-    requiredWave: 0
-    unlocksOps: 
-    cameraFocus: 0
-    focusZoom: 0
-    openPanel: 0
-    hint: 'Reshape the old works as you please, though they were paid for long ago, so tearing them down returns nothing. Where this land already set its own stones, the land has the final word. And whatever you build here, you will carry into the next.'
+    hint: 'Mind the ground itself, My Lord. This land is unstable. After every wave, one or two of our blocks will crumble away, and no telling which. Build with room to spare, and be ready to mend the gaps.'
     conversation: {fileID: 0}
     speaker: {fileID: 11400000, guid: 80993e3c86b4337429c2d6273c8eedc2, type: 2}
     speakerSlot: 1
@@ -188,9 +126,6 @@ MonoBehaviour:
     speaker: {fileID: 11400000, guid: 80993e3c86b4337429c2d6273c8eedc2, type: 2}
     speakerSlot: 1
     speakerPortrait: 
-  inheritFrom: {fileID: 11400000, guid: 1b45f2b9e94ad084180100d47c626f51, type: 2}
-  inheritRing: 4
-  inheritUpgrades: 1
   revealAfter: {fileID: 11400000, guid: 1b45f2b9e94ad084180100d47c626f51, type: 2}
   startingLayout: {fileID: 11400000, guid: 38871691a215fd945ae711b604b680e6, type: 2}
   overrideEndpointDistance: 0

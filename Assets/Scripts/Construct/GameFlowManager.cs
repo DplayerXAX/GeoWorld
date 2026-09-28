@@ -99,7 +99,7 @@ public partial class GameFlowManager : MonoBehaviour
     void Start()
     {
         Instance = this;
-        // Setup builds a board (inherited, authored) before the player has done
+        // Setup builds a board (the authored layout) before the player has done
         // anything — flag islands, but do not pop up messages about them.
         BoardValidity.Quiet = true;
         graph = new SurfaceGraphBuilder();
@@ -165,6 +165,9 @@ public partial class GameFlowManager : MonoBehaviour
         StartCoroutine(ReleaseSynergyFxAfterIntro());
 
         var startLv = RunConfig.Mode == GameMode.Level ? RunConfig.Level : null;
+        // Weather, light and what block age looks like here — before anything is
+        // placed, since the prebuilt layout takes its age from it.
+        LevelEnvironmentDriver.Apply(startLv != null ? startLv.environment : null);
         if (startLv != null && !Mathf.Approximately(startLv.startingBlockCurrencyMult, 1f))
             ResourceManager.Instance?.ScaleBlockWallets(startLv.startingBlockCurrencyMult);
 
@@ -182,87 +185,17 @@ public partial class GameFlowManager : MonoBehaviour
             return;
         }
 
-        // BEFORE the first endpoints, not after: the new spawn and defence points are
-        // placed around the inherited build, so it has to be standing already.
-        SpawnInheritedLayout();
         CreateFirstStage();
-        if (_inheritCentre.HasValue) EvaluateGrid();   // pathing/synergy over the inherited board, now that endpoints exist
         SpawnStartingLayout();       // pre-built blocks authored via LevelMapAuthor, if any
         FocusCameraOnFirstStage();   // centre the camera between the first start & end
         // Once unconditionally: the placement ghost asks BoardValidity from the first
-        // frame, and a level with no authored or inherited layout would otherwise
+        // frame, and a level with no authored layout would otherwise
         // reach this point without ever having been reconciled.
         BoardValidity.Reconcile(gridSystem, allStarts, allEnds);
         BoardValidity.Quiet = false;
 
         phase = GamePhase.Build;
         StartTurn();
-    }
-
-    // ── Chapter inheritance ──────────────────────────────────────────────────
-    // Footprint of the board carried over from LevelDefinition.inheritFrom, in grid
-    // columns. Null when this level starts from nothing — CreateFirstStage reads it
-    // to decide where the new endpoints go.
-    Vector2? _inheritCentre;
-    Vector2  _inheritHalf;
-
-    // From the same keepsake: every core the last level ended with (kept, see
-    // LevelDefinition.inheritCores), and every spawn point it had (NOT kept — only
-    // read, so the new spawn can be placed away from them).
-    readonly List<Vector3Int> _inheritedCores  = new();
-    readonly List<Vector3Int> _inheritedSpawns = new();
-
-    // Lay down the board the player last cleared the previous level with: blocks
-    // only, editable, no refund on removal (see PlacedBlockInstance.inherited).
-    void SpawnInheritedLayout()
-    {
-        _inheritCentre = null;
-        _inheritedCores.Clear();
-        _inheritedSpawns.Clear();
-
-        var lv   = RunConfig.Mode == GameMode.Level ? RunConfig.Level : null;
-        var from = lv?.InheritSource;   // explicit inheritFrom, else the previous level of the chapter
-        if (from == null || from == lv || string.IsNullOrEmpty(from.levelId)) return;
-
-        var snap = SaveSystem.Profile.GetRecord(from.levelId)?.buildSnapshot;
-        if (snap?.blocks == null || snap.blocks.Count == 0) return;   // never cleared: start fresh
-
-        // A clear saved before endpoints were recorded has none — CreateFirstStage
-        // then falls back to a fresh pair around the build, as before.
-        if (snap.endpoints != null)
-            foreach (var ep in snap.endpoints)
-            {
-                if (ep == null) continue;
-                var list = ep.isStart ? _inheritedSpawns : _inheritedCores;
-                if (!list.Contains(ep.cell)) list.Add(ep.cell);
-            }
-        if (!lv.inheritCores) _inheritedCores.Clear();
-
-        var placed = SnapshotManager.PlaceBlocks(snap, inherited: true, withUpgrades: lv.inheritUpgrades,
-                                                 skipTurrets: !lv.inheritTurrets);
-        if (placed.Count == 0) return;
-
-        int x0 = int.MaxValue, x1 = int.MinValue, z0 = int.MaxValue, z1 = int.MinValue;
-        foreach (var ins in placed)
-        {
-            foreach (var c in ins.occupiedCells)
-            {
-                if (c.x < x0) x0 = c.x; if (c.x > x1) x1 = c.x;
-                if (c.z < z0) z0 = c.z; if (c.z > z1) z1 = c.z;
-            }
-
-            ResourceManager.Instance?.OnBlockPlaced(ins.data.blockType);
-
-            // Handed to IntroDirector with the authored layout, so the inherited base
-            // pops in with the endpoints instead of standing at full size through the
-            // whole intro.
-            if (ins.visualObject != null) startingLayoutVisuals.Add(ins.visualObject);
-        }
-
-        // Half-extents to the cells' EDGES, so "ring cells beyond the edge" is
-        // measured from where the blocks actually stop.
-        _inheritCentre = new Vector2((x0 + x1) * 0.5f, (z0 + z1) * 0.5f);
-        _inheritHalf   = new Vector2((x1 - x0 + 1) * 0.5f, (z1 - z0 + 1) * 0.5f);
     }
 
     // Lets the intro start (it sets Playing on its first frame), waits it out —
@@ -282,26 +215,6 @@ public partial class GameFlowManager : MonoBehaviour
 
     // True from level start until the intro has popped the board in (see above).
     bool _routeLinesHeld;
-
-    // Remove any INHERITED block covering one of these cells. Only inherited ones —
-    // a player's own block from this level, an endpoint or authored furniture is
-    // never touched by this.
-    void ClearInheritedAt(IEnumerable<Vector3Int> cells)
-    {
-        if (cells == null || gridSystem == null) return;
-
-        var seen = new HashSet<PlacedBlockInstance>();
-        foreach (var c in cells)
-        {
-            var ins = gridSystem.GetInstanceAt(c);
-            if (ins == null || !ins.inherited || !seen.Add(ins)) continue;
-
-            if (ins.visualObject != null) startingLayoutVisuals.Remove(ins.visualObject);
-            ResourceManager.Instance?.OnBlockRemoved(ins.data.blockType);
-            SynergyEvaluator.Instance?.OnPieceRemoved(ins.placedPiece);
-            gridSystem.RemoveInstance(ins);   // destroys visualObject
-        }
-    }
 
     // Populated by SpawnStartingLayout(); IntroDirector reads this to pop the pre-built
     // blocks in alongside the start/end endpoints once the intro finishes, instead of
@@ -324,11 +237,6 @@ public partial class GameFlowManager : MonoBehaviour
         {
             if (node.cells == null || node.cells.Length == 0) continue;
 
-            // Level furniture outranks the inherited base: where the two want the
-            // same cell, the inherited block gives way. Anything else in the way —
-            // an endpoint, other furniture — still makes this piece skip as before.
-            ClearInheritedAt(node.cells);
-
             bool clash = false;
             foreach (var c in node.cells) if (gridSystem.IsOccupied(c)) { clash = true; break; }
             if (clash) continue;
@@ -345,6 +253,7 @@ public partial class GameFlowManager : MonoBehaviour
             if (ins != null)
             {
                 ins.locked = true;   // level furniture — not pickup/sell/delete-able
+                ins.age = LevelEnvironmentDriver.Current != null ? LevelEnvironmentDriver.Current.prebuiltAge : 0;
                 ResourceManager.Instance?.OnBlockPlaced(bd.blockType);
                 if (ins.visualObject != null) startingLayoutVisuals.Add(ins.visualObject);
             }
@@ -604,49 +513,12 @@ public partial class GameFlowManager : MonoBehaviour
         // Tutorials / authored levels can pin the start & end instead of randomising.
         var lv = RunConfig.Mode == GameMode.Level ? RunConfig.Level : null;
         if (lv != null && lv.fixedEndpoints)
-        {
-            // An authored level's pinned endpoints win over an inherited block that
-            // happens to sit on one of them — the level was designed around those
-            // cells; the inherited base was not designed around anything.
-            ClearInheritedAt(new[] { lv.startCell, lv.endCell });
             endpoints.GenerateFixed(lv.startCell, lv.endCell);
-        }
-        else if (_inheritCentre.HasValue && _inheritedCores.Count > 0)
-        {
-            // Same base, same cores, new attack: every core the last level ended
-            // with stays where it was (an inherited block that happens to cover one
-            // gives way), and one new spawn opens beyond the build — measured around
-            // the cores too, so it comes up outside everything that is already there.
-            ClearInheritedAt(_inheritedCores);
-            var (c, h) = GrowExtent(_inheritCentre.Value, _inheritHalf, _inheritedCores);
-            endpoints.GenerateKeepingEnds(_inheritedCores, c, h, lv != null ? lv.inheritRing : 4f, _inheritedSpawns);
-
-            allStarts.Add(endpoints.startCell);
-            allEnds.AddRange(_inheritedCores);
-            return;
-        }
-        else if (_inheritCentre.HasValue)
-            endpoints.GenerateAround(_inheritCentre.Value, _inheritHalf, lv != null ? lv.inheritRing : 4f);
         else
             endpoints.Generate();
 
         allStarts.Add(endpoints.startCell);
         allEnds.Add(endpoints.endCell);
-    }
-
-    // A build's footprint (centre / half-extents to the cells' edges, grid columns)
-    // grown to take in extra cells as well.
-    static (Vector2 centre, Vector2 half) GrowExtent(Vector2 centre, Vector2 half, List<Vector3Int> cells)
-    {
-        float x0 = centre.x - half.x, x1 = centre.x + half.x;
-        float z0 = centre.y - half.y, z1 = centre.y + half.y;
-        foreach (var c in cells)
-        {
-            x0 = Mathf.Min(x0, c.x - 0.5f); x1 = Mathf.Max(x1, c.x + 0.5f);
-            z0 = Mathf.Min(z0, c.z - 0.5f); z1 = Mathf.Max(z1, c.z + 0.5f);
-        }
-        return (new Vector2((x0 + x1) * 0.5f, (z0 + z1) * 0.5f),
-                new Vector2((x1 - x0) * 0.5f, (z1 - z0) * 0.5f));
     }
 
     // Centre the orbit camera on the midpoint of the first start & end endpoints —
@@ -986,6 +858,8 @@ public partial class GameFlowManager : MonoBehaviour
         // still part of the build. Before the Running early-out below: a turret
         // losing its support mid-combat must stop firing mid-combat.
         BoardValidity.Reconcile(gridSystem, allStarts, allEnds);
+        // Contact shadows follow the neighbours; age follows the block (BlockSurface).
+        BlockSurface.Refresh(gridSystem);
 
         var path = FindCurrentPath();
         _currentPathLength = path != null ? path.Count : 0;

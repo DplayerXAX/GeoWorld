@@ -42,8 +42,8 @@ public static class SnapshotManager
                 upBasicBurst   = ins.basicBurstUpgradeLevel,
                 upAoeFire      = ins.aoeFireUpgradeLevel,
                 upAoeGravity   = ins.aoeGravityUpgradeLevel,
-                inherited      = ins.inherited,
                 sealedByEnemy  = ins.sealedByEnemy,
+                age            = ins.age,
             });
         }
 
@@ -84,7 +84,7 @@ public static class SnapshotManager
         foreach (var c in starts) gfm.endpoints.SpawnEndpointAt(c, true);
         foreach (var c in ends)   gfm.endpoints.SpawnEndpointAt(c, false);
 
-        PlaceBlocks(snap, inherited: false, withUpgrades: true);
+        PlaceBlocks(snap, withUpgrades: true);
 
         gfm.RestoreRoundState(snap.roundIndex, snap.runsSinceLastEndpoint, starts, ends);
 
@@ -97,18 +97,14 @@ public static class SnapshotManager
 
     // Place a snapshot's BLOCKS — not its endpoints — and return what was placed.
     //
-    // Shared by the dev restore above and by chapter inheritance, so there is one
-    // way to turn a snapshot back into a board. Two paths that each resolve blocks
-    // their own way is how a restore and an inheritance end up disagreeing about
-    // what the same snapshot contains.
+    // Shared by the dev restore above and the mid-level resume, so there is one
+    // way to turn a snapshot back into a board.
     //
     // Cells already taken are skipped rather than overwritten, so this can run onto
     // a board that already has something on it.
-    // keepFlags: take each block's inherited / sealed flags from the snapshot (a
-    // mid-level resume) instead of stamping `inherited` on every block (inheritance).
-    // skipTurrets: leave every turret out (chapter inheritance without turrets).
+    // keepFlags: take each block's sealed flag from the snapshot (a mid-level resume).
     public static System.Collections.Generic.List<PlacedBlockInstance> PlaceBlocks(
-        GridSnapshot snap, bool inherited, bool withUpgrades, bool keepFlags = false, bool skipTurrets = false)
+        GridSnapshot snap, bool withUpgrades, bool keepFlags = false)
     {
         var placed = new System.Collections.Generic.List<PlacedBlockInstance>();
         var pc   = PlacementController.Instance;
@@ -124,7 +120,6 @@ public static class SnapshotManager
             if (clash) continue;
 
             var data = Resolve(pc, b);
-            if (data != null && skipTurrets && TurretTypes.Is(data.blockType)) continue;
             if (data == null)
             {
                 Debug.LogWarning($"[Snapshot] can't resolve block '{b.blockAssetName}'/'{b.blockTypeName}', skipped.");
@@ -139,12 +134,8 @@ public static class SnapshotManager
                                           withUpgrades ? b.upAoeGravity : 0);
             if (ins == null) continue;
 
-            if (keepFlags)
-            {
-                ins.inherited     = b.inherited;
-                ins.sealedByEnemy = b.sealedByEnemy;
-            }
-            else ins.inherited = inherited;
+            if (keepFlags) ins.sealedByEnemy = b.sealedByEnemy;
+            ins.age = b.age;   // brought back as it was
             placed.Add(ins);
         }
         return placed;

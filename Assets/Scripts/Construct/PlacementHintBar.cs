@@ -3,11 +3,11 @@ using UnityEngine.UI;
 using UnityEngine.SceneManagement;
 using TMPro;
 
-// Dead-by-Daylight-style fixed prompt bar: while PlacementController is in Edit
-// mode (a block is held), shows WASDQE adjust / scroll distance / Alt rotate
-// docked to the bottom-center of the SCREEN (screen-space, not world-space —
-// this is a HUD reminder, not a spatial indicator; PlacementHintOverlay handles
-// the spatial arrows on the block itself). Auto-spawns, no scene wiring.
+// Fixed prompt bar docked to the bottom-centre of the screen while a block is held.
+// In a level it's one line — where to find the controls (the right HUD panel, see
+// HudSidePanels) — rather than the whole list every time. In the LevelSelect map
+// editor, which has no controls panel, it spells the keys out. PlacementHintOverlay
+// handles the spatial arrows on the block itself. Auto-spawns, no scene wiring.
 [DisallowMultipleComponent]
 public class PlacementHintBar : MonoBehaviour
 {
@@ -50,6 +50,7 @@ public class PlacementHintBar : MonoBehaviour
     const float DesignHeight = 1080f;
 
     RectTransform _canvasRt;
+    RectTransform _fullBar, _shortBar;
     bool _built;
 
     void Update()
@@ -69,6 +70,10 @@ public class PlacementHintBar : MonoBehaviour
         }
 
         _canvasRt.gameObject.SetActive(show);
+        if (!show) return;
+        bool inLevel = pc != null && pc.mode == PlacementMode.Edit && pc.currentBlock != null;
+        _shortBar.gameObject.SetActive(inLevel);
+        _fullBar.gameObject.SetActive(!inLevel);
     }
 
     void Build()
@@ -100,7 +105,21 @@ public class PlacementHintBar : MonoBehaviour
         cardLayout.childControlWidth = cardLayout.childControlHeight = true;
         cardLayout.childForceExpandWidth = false; cardLayout.childForceExpandHeight = false;
 
-        var bar = NewRect("Bar", card);
+        _fullBar = NewBar("FullBar", card);
+        AddPrompt(_fullBar, adjustIcon, "WASDQE Adjust");
+        AddPrompt(_fullBar, zoomIcon,   "Scroll Set Dis");
+        AddPrompt(_fullBar, rotateIcon, "Hold Alt + Mouse/Wheel Rotate");
+        AddPrompt(_fullBar, rotateIcon, "Tap Cancel");
+
+        _shortBar = NewBar("ShortBar", card);
+        var t = NewText("Label", _shortBar, fontSize * 0.85f, textColor);
+        t.text = $"Press <b>{GameSettings.ControlsPanelKey}</b> to view controls";
+        t.fontStyle = FontStyles.Normal;
+    }
+
+    RectTransform NewBar(string name, RectTransform parent)
+    {
+        var bar = NewRect(name, parent);
         var h = bar.gameObject.AddComponent<HorizontalLayoutGroup>();
         h.spacing = 16f;
         h.childAlignment = TextAnchor.MiddleCenter;
@@ -108,11 +127,7 @@ public class PlacementHintBar : MonoBehaviour
         h.childForceExpandWidth = false; h.childForceExpandHeight = false;
         var fit = bar.gameObject.AddComponent<ContentSizeFitter>();
         fit.horizontalFit = fit.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
-
-        AddPrompt(bar, adjustIcon, "WASDQE Adjust");
-        AddPrompt(bar, zoomIcon,   "Scroll Set Dis");
-        AddPrompt(bar, rotateIcon, "Hold Alt + Mouse/Wheel Rotate");
-        AddPrompt(bar, rotateIcon, "Tap Cancel");
+        return bar;
     }
 
     void AddPrompt(RectTransform parent, Sprite icon, string label)
