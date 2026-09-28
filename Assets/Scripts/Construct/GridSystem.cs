@@ -32,6 +32,25 @@ public class PlacedBlockInstance
     // delete paths, same shape as the existing combat-phase lock.
     public bool locked;
 
+    // Carried over from the previous level of the chapter. The player may move,
+    // pick up and remove it freely — it is their own build — but removing it pays
+    // nothing back. The sell refund is priced off the block's base cost, not off
+    // anything spent THIS level, so without this the first move of every chapter
+    // level would be to sell the entire inherited base for cash.
+    public bool inherited;
+
+    // Not connected back to an endpoint — see BoardValidity. Shown with hazard
+    // stripes; a turret in this state holds its fire.
+    public bool detached;
+
+    // The renderers this piece was BUILT with, recorded at placement before any
+    // synergy effect hangs its own geometry off the visual. BoardValidity restyles
+    // exactly these, so flagging a block never stripes the vines growing on it.
+    public Renderer[] ownRenderers;
+
+    // Materials to restore when a detached piece reconnects, one array per renderer.
+    public Material[][] savedMaterials;
+
     // Sealed by an EnemyBlockSealer that walked over it. Blocks pickup and delete
     // (delete is undoable, which would launder the seal away) but NOT selling —
     // the 50% sell refund is the punishment, and it keeps a badly-placed seal from
@@ -42,6 +61,13 @@ public class PlacedBlockInstance
 public class GridSystem : MonoBehaviour
 {
     public float cellSize = 1f;
+
+    [Tooltip("Where cell (0,0,0) sits, in WHOLE CELLS. Moves everything built on this grid — map blocks, decor, the pawn, mist — without changing any saved cell coordinates, and without taking the grid off its lattice (a whole-cell shift lands every cell exactly where another cell used to be).")]
+    public Vector3Int originCells = Vector3Int.zero;
+
+    // World position of cell (0,0,0)'s corner.
+    public Vector3 Origin => (Vector3)originCells * cellSize;
+
     // Unused at runtime — the grid is unbounded. Kept as an inspector hint.
     public Vector3Int size = new Vector3Int(10, 5, 10);
     public static GridSystem instance;
@@ -69,11 +95,12 @@ public class GridSystem : MonoBehaviour
 
     public Vector3 GridToWorld(Vector3Int gp)
     {
-        return new Vector3(gp.x * cellSize + cellSize * 0.5f, gp.y * cellSize + cellSize * 0.5f, gp.z * cellSize + cellSize * 0.5f);
+        return Origin + new Vector3(gp.x * cellSize + cellSize * 0.5f, gp.y * cellSize + cellSize * 0.5f, gp.z * cellSize + cellSize * 0.5f);
     }
 
     public Vector3Int WorldToGrid(Vector3 w)
     {
+        w -= Origin;
         return new Vector3Int(Mathf.FloorToInt(w.x / cellSize), Mathf.FloorToInt(w.y / cellSize), Mathf.FloorToInt(w.z / cellSize));
     }
 

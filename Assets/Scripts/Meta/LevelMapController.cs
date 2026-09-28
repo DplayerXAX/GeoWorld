@@ -31,6 +31,8 @@ public partial class LevelMapController : MonoBehaviour
     public AK.Wwise.Event timeLoopCleared;
     [Tooltip("Level whose clear swaps the map's ambient loop. Tutorial, not 1-1: it's the earliest win, and clearing 1-1 implies it anyway.")]
     public string musicSwapAfterLevelId = "Tutorial";
+    [Tooltip("Typewriter blip for dialogue on this map. LevelSelect has no AudioManager (which carries the blip in gameplay), so without this every conversation here types in silence. Same Wwise event as AudioManager.TextBlip.")]
+    public AK.Wwise.Event textBlip;
     [Tooltip("UGUI level-info panel (right side). Wire it and the old IMGUI box is skipped.")]
     public LevelInfoPanel infoPanel;
     [Tooltip("Played once, the very first time the player ever lands on this scene (SaveSystem.Profile.seenLevelSelectIntro). Author it like any other DialogueConversation asset. Leave null for no intro.")]
@@ -58,6 +60,12 @@ public partial class LevelMapController : MonoBehaviour
     public float mapPanSpeed = 8f;
     [Tooltip("World units the opening shot backs off by, so an entry dialogue doesn't sit on top of whatever the camera framed. Matches LevelSelectTutorialGuide.walkFocusPullBack.")]
     public float entryPullBack = 3.2f;
+    [Tooltip("World units the camera backs off (the way S pans) when a level's reward conversation opens — e.g. the one after clearing the tutorial — so the level it frames isn't sitting under the dialogue box.")]
+    public float rewardFocusPullBack = 2.5f;
+    [Tooltip("Lowest the view's focus may be panned (Q/E), in cells relative to the underside of the map's lowest block. 0 = level with the underside.")]
+    public float cameraFloorOffset = 0f;
+    [Tooltip("How far above that floor the camera body itself must stay, in cells.")]
+    public float cameraBodyAboveFloor = 1.5f;
     [Tooltip("Used by the fallback framer only (scenes with no OrbitCamera). Clicking a cell no longer moves the camera either way — the player pans it themselves.")]
     public bool  cameraFocus = true;
     public float cameraLerp  = 4f;
@@ -84,7 +92,7 @@ public partial class LevelMapController : MonoBehaviour
     [Tooltip("Key that opens/closes the build bar (place earned reward blocks). Matches gameplay's shop key.")]
     public KeyCode buildModeKey = KeyCode.F;
     [Tooltip("Ghost rotation ease speed — same formula/feel as PlacementController's HandleRotate.")]
-    public float rotateSpeed = 10f;
+    public float rotateSpeed = 30f;
     [Tooltip("How fast the held ghost GLIDES toward its snapped grid target. Purely visual — placement still lands on the exact snapped cell — but easing the render position (instead of hard-snapping cell to cell) is what makes moving a held block feel fluid instead of jumpy. Higher = snappier.")]
     public float ghostFollowSpeed = 16f;
     public Color ghostValidColor   = new Color(0.35f, 1f, 0.45f, 0.55f);
@@ -136,17 +144,15 @@ public partial class LevelMapController : MonoBehaviour
     BlockData    _ghostBlock;
     // Full 3-axis — some shapes (e.g. "corner") have a vertical arm a Y-only spin
     // could never reach. Two-value split mirrors PlacementController.HandleRotate
-    // exactly: _ghostTargetRotation snaps instantly on 1/2/3, _ghostCurrentRotation
+    // exactly: _ghostTargetRotation snaps in 90-degree steps, _ghostCurrentRotation
     // eases toward it every frame and is what actually drives the preview cells —
     // so the ghost visibly flips through intermediate orientations, not an instant
     // snap, same as gameplay.
     Quaternion   _ghostTargetRotation  = Quaternion.identity;
     Quaternion   _ghostCurrentRotation = Quaternion.identity;
+    readonly PlacementRotationInput _mouseRotation = new();
+    public bool IsMouseRotating => _mouseRotation.Active;
     Vector3Int   _ghostOrigin;
-    // WASDQE nudge on top of wherever the mouse is hovering — same convention as
-    // gameplay's manualOffset (HandleKeyboardOffset): additive, persists across
-    // mouse movement, reset to zero only when a fresh hold begins.
-    Vector3Int   _ghostManualOffset;
     bool         _ghostHoveringPawnColumn;   // cursor is over the column the pawn is standing on — never a valid target
     Vector3Int[] _ghostCells;
     bool         _placementValid;
@@ -159,6 +165,7 @@ public partial class LevelMapController : MonoBehaviour
     bool    _ghostAnchorSnap;
     // Last surface height the cursor crossed, for gliding past the built edge.
     int     _ghostPlaneY;
+    bool    _ghostPlanePinned;   // manual movement/rotation keeps the chosen height
 
     // True when the held ghost was SPENT from inventory at grab time (a fresh tray
     // pick). Cancelling refunds it; committing just keeps it spent. A re-picked
@@ -203,6 +210,7 @@ public partial class LevelMapController : MonoBehaviour
     {
         Instance = this;
         LevelRegistry.Register(database);   // so the multiplayer lobby can resolve level ids
+        TextBlip.SetFallback(textBlip, gameObject);   // this scene has no AudioManager to carry it
     }
 
     void Start()
@@ -243,6 +251,10 @@ public partial class LevelMapController : MonoBehaviour
         if (buildFromFile) BuildMap();
         else _nodes.AddRange(FindObjectsByType<LevelNode>(FindObjectsSortMode.None));
 
+        // Before anything links, surfaces or replays onto the map: a region that has
+        // not been revealed yet must not be walkable ground for any of that.
+        VeilUnrevealedRegions();
+
         RebuildPlacedMapBlocks();   // replay the player's own map-building from the save
         MaybeEditorAutoFill();      // editor/QA: restore the carved bridge blocks so everything's reachable
         LinkAllNodes();             // adjacency across BOTH the authored map and player-built nodes
@@ -260,6 +272,8 @@ public partial class LevelMapController : MonoBehaviour
         // cleared — in which case the grow-in cutscene below plays before any dialogue.
         var decorGrowthPending = TryBuildDecors();
         CollectInteractableSpots();   // after the surface — the spots snap onto it
+        SinkRisingRegions();          // after markers and spots are placed at full height — see there
+        BuildMist();                  // over everything still hidden, and what is about to rise
 
         // Resume on the cell the pawn last left from, if it still exists — a block
         // the player picked up since then leaves nothing to stand on, so fall back
@@ -297,6 +311,16 @@ public partial class LevelMapController : MonoBehaviour
             // is the one frame in the whole tutorial that ISN'T pulled back — and
             // it's the one with a dialogue box over it.
             _orbit.FocusOnPoint(PulledBack(_camFocus, entryPullBack));
+
+            // Floor: the view can't be panned down under the map into the fog sea.
+            // Focus stops at the underside of the lowest block; the camera body a
+            // little above it, so it can't dip below the ground it looks at either.
+            float lowest = MapLowestY();
+            if (lowest < float.MaxValue && gridSystem != null)
+            {
+                _orbit.minFocusY  = lowest + cameraFloorOffset * gridSystem.cellSize;
+                _orbit.minCameraY = _orbit.minFocusY + cameraBodyAboveFloor * gridSystem.cellSize;
+            }
         }
         else if (_cam != null)
         {
@@ -324,8 +348,28 @@ public partial class LevelMapController : MonoBehaviour
         // the new decoration while it rises into place), THEN fires whichever of the
         // two dialogue beats below applies — never the other way around, or the
         // player would be mid-conversation while the camera yanks away to the field.
-        if (decorGrowthPending != null) StartCoroutine(PlayDecorGrowthCutscene(decorGrowthPending));
-        else                            PlayEntryDialogueIfAny();
+        if (HasReveal(decorGrowthPending)) StartCoroutine(PlayRevealCutscene(decorGrowthPending));
+        else                               PlayEntryDialogueIfAny();
+
+        // A level was left part-way through — say so once the map has settled.
+        if (SaveSystem.Profile.runSaves != null && SaveSystem.Profile.runSaves.Count > 0)
+            StartCoroutine(RemindUnfinishedLevel());
+    }
+
+    [Header("Unfinished level reminder")]
+    [Tooltip("Aside shown on arriving at the map while a level has been left part-way through (its badge breathes).")]
+    public string unfinishedLevelText = "You have an unfinished level. Find it, and see it through.";
+    public float  unfinishedLevelSeconds = 4.5f;
+
+    // Waits out the reveal cutscene and any conversation, so the aside never talks
+    // over either.
+    IEnumerator RemindUnfinishedLevel()
+    {
+        yield return new WaitForSeconds(0.8f);
+        while (_decorCutscenePlaying || (DialogueRunner.Instance != null && DialogueRunner.Instance.IsPlaying))
+            yield return null;
+        if (!string.IsNullOrEmpty(unfinishedLevelText))
+            AsideBubble.Show(defaultCharacter, "default", unfinishedLevelText, unfinishedLevelSeconds);
     }
 
     void PlayEntryDialogueIfAny()
@@ -350,8 +394,10 @@ public partial class LevelMapController : MonoBehaviour
             LevelNode grantingNode = null;
             if (!string.IsNullOrEmpty(levelId))
                 grantingNode = _nodes.Find(n => n != null && n.level != null && n.level.levelId == levelId);
+            // Backed off along the camera's facing, as a tap of S would — the
+            // dialogue box otherwise sits right over the level it is talking about.
             if (_orbit != null && grantingNode != null)
-                _orbit.FocusOnPoint(grantingNode.transform.position, snap: false);
+                _orbit.FocusOnPoint(PulledBack(grantingNode.transform.position, rewardFocusPullBack), snap: false);
 
             // Remembered so the build-tutorial gate (below) knows whose
             // rewardSuggestCubeSide/rewardSuggestOrigin to show a hint box at.
@@ -575,7 +621,17 @@ public partial class LevelMapController : MonoBehaviour
 
     // The loop was Post()'d against this GameObject — Wwise doesn't stop it on its own
     // just because the scene unloads, so stop it explicitly or it bleeds into gameplay.
-    void OnDestroy() => _activeLoop?.Stop(this.gameObject);
+    void OnDestroy()
+    {
+        _activeLoop?.Stop(this.gameObject);
+        TextBlip.SetFallback(null, null);   // stops a blip still ringing, and forgets this scene's emitter
+    }
+
+    void OnDisable()
+    {
+        if (_mouseRotation.Active) VirtualCursor.EndRotation();
+        _mouseRotation.Reset();
+    }
 
     void LateUpdate()
     {
@@ -886,7 +942,7 @@ public partial class LevelMapController : MonoBehaviour
     // off, tips onto its point, and spins — no legend needed to tell them apart.
     class MapLevelMarker : MonoBehaviour
     {
-        Vector3    _base;          // resting spot ON the block, captured on first frame
+        Vector3    _base;          // resting spot ON the block, in the block's local space — captured on first frame
         bool       _captured;
         Renderer   _rend;
         Transform  _badge;         // the tilted cube child — tips upright/flat with power
@@ -936,6 +992,11 @@ public partial class LevelMapController : MonoBehaviour
         }
 
         public void SetPowered(bool on) => _powered = on;
+
+        // A level left part-way through (LevelRunSave): the badge breathes — swells
+        // and brightens toward white and back — so it can be picked out on the map.
+        bool _resumable;
+        public void SetResumable(bool on) => _resumable = on;
 
         // `color` is the synergy theme active at the moment this level was last
         // cleared (LevelRecord.clearSynergyColor). Resolved once, the first time
@@ -1104,13 +1165,23 @@ public partial class LevelMapController : MonoBehaviour
 
         void Update()
         {
-            if (!_captured) { _base = transform.position; _captured = true; }
+            // Resting spot held RELATIVE TO THE BLOCK, not in the world: a block on
+            // newly revealed ground is already sunk for its rise when this first
+            // runs, and a world-space rest would pin the badge down there while the
+            // block rose away without it.
+            var parent = transform.parent;
+            if (!_captured)
+            {
+                _base = parent != null ? parent.InverseTransformPoint(transform.position) : transform.position;
+                _captured = true;
+            }
+            Vector3 rest = parent != null ? parent.TransformPoint(_base) : _base;
 
             _t = Mathf.Lerp(_t, _powered ? 1f : 0f, 1f - Mathf.Exp(-4f * Time.deltaTime));
 
             // Height: grounded when dead, risen + bobbing when alive.
             float h = Mathf.Lerp(_grounded, _rise, _t) + Mathf.Sin(Time.time * 2f) * 0.12f * _t;
-            transform.position = _base + Vector3.up * h;
+            transform.position = rest + Vector3.up * h;
 
             // Spin: driven from an accumulator scaled by _t, so a dying badge eases to
             // a stop instead of freezing mid-turn (and a waking one spins up smoothly).
@@ -1124,8 +1195,17 @@ public partial class LevelMapController : MonoBehaviour
                                                         Quaternion.Euler(45f, 0f, 45f), _t);
 
             transform.localScale = Vector3.one * Mathf.Lerp(0.8f, 1f, _t);
+            Color col = Color.Lerp(_dark, _lit, _t);
 
-            if (_rend != null) MpbColor.Set(_rend, Color.Lerp(_dark, _lit, _t));
+            if (_resumable)
+            {
+                float breath = 0.5f + 0.5f * Mathf.Sin(Time.time * 3f);
+                transform.localScale *= 1f + 0.28f * breath;
+                col = Color.Lerp(col, Color.white, 0.6f * breath) * (1f + 0.8f * breath);   // over 1 = a flare where bloom is on
+                col.a = 1f;
+            }
+
+            if (_rend != null) MpbColor.Set(_rend, col);
 
             UpdateRing();
         }
@@ -1180,7 +1260,12 @@ public partial class LevelMapController : MonoBehaviour
         HandleFocusViewportDrag();   // middle-mouse drag — no conflict with build mode, so it runs unconditionally
         // No clicking/walking/building while the grow-in reveal owns the camera, or
         // while a minigame is running on top of this scene.
-        if (SettingsScreen.Open || _decorCutscenePlaying || MinigameStage.AnyActive) return;
+        if (SettingsScreen.Open || _decorCutscenePlaying || MinigameStage.AnyActive || ConfirmDialog.BlockingInput)
+        {
+            VirtualCursor.EndRotation();
+            _mouseRotation.Reset();
+            return;
+        }
 
         if (_buildMode) { UpdateBuildMode(); return; }   // scroll is reserved for HandleGhostScroll in there
 
@@ -1674,8 +1759,11 @@ public partial class LevelMapController : MonoBehaviour
         // "No route" is its own message: the player hasn't failed a requirement,
         // they just haven't built the road there yet — pointing them at the F panel
         // is far more useful than a flat "Locked".
+        var    unfinished = SaveSystem.Profile.GetRunSave(lv.levelId);
         string status = _selected.Unreachable
             ? "No route — build a path from the start"
+            : unfinished != null
+            ? $"Unfinished — resumes at wave {unfinished.wavesCompleted + 1}"
             : _selected.NodeState switch
               {
                   LevelNode.State.Locked  => "Locked",
@@ -1685,6 +1773,22 @@ public partial class LevelMapController : MonoBehaviour
         string best   = (rec != null && rec.bestWave > 0) ? $"Best wave: {rec.bestWave}" : null;
         bool   canEnter = _selected.NodeState != LevelNode.State.Locked;
         infoPanel.Show(title, lv.description, status, best, canEnter, () => EnterLevel(lv), lv);
+        if (unfinished != null && canEnter && !_selected.Unreachable)
+            infoPanel.SetResume(() => AskRestartLevel(lv));
+    }
+
+    // Throw the unfinished save away and start the level over — after asking, since
+    // what goes is a whole attempt's progress.
+    void AskRestartLevel(LevelDefinition lv)
+    {
+        ConfirmDialog.Ask("RESTART THIS LEVEL?",
+            "Your unfinished progress in this level will be lost, and it starts again from the beginning.",
+            "Restart",
+            () =>
+            {
+                if (SaveSystem.Profile.ClearRunSave(lv.levelId)) SaveSystem.Save();
+                EnterLevel(lv);
+            });
     }
 
     // ── Build mode ────────────────────────────────────────────────────────────
@@ -1771,6 +1875,8 @@ public partial class LevelMapController : MonoBehaviour
 
         if (_ghostBlock == null)
         {
+            VirtualCursor.EndRotation();
+            _mouseRotation.Reset();
             // Nothing held — a click tries to pick an EXISTING player-built piece
             // back up for re-editing (gameplay's PickUpSelected). Picking a NEW
             // block is the tray buttons' job (SpawnTrayEntry), not this click.
@@ -1778,26 +1884,28 @@ public partial class LevelMapController : MonoBehaviour
             return;
         }
 
-        // 1/2/3 = world X/Y/Z, same keys as gameplay's HandleRotate — full 3-axis,
-        // since a shape like "corner" has a vertical arm a Y-only spin could never
-        // reach. Only the TARGET snaps on keypress; the actual preview/placement
-        // rotation eases toward it every frame below, so the ghost visibly flips
-        // through intermediate orientations exactly like gameplay's block editing.
-        if (Input.GetKeyDown(KeyCode.Alpha1)) _ghostTargetRotation = Quaternion.Euler(90, 0, 0) * _ghostTargetRotation;
-        if (Input.GetKeyDown(KeyCode.Alpha2)) _ghostTargetRotation = Quaternion.Euler(0, 90, 0) * _ghostTargetRotation;
-        if (Input.GetKeyDown(KeyCode.Alpha3)) _ghostTargetRotation = Quaternion.Euler(0, 0, 90) * _ghostTargetRotation;
-
         _ghostCurrentRotation = Quaternion.Slerp(_ghostCurrentRotation, _ghostTargetRotation,
                                                  1f - Mathf.Exp(-rotateSpeed * Time.deltaTime));
+        bool canRotate = Quaternion.Angle(_ghostCurrentRotation, _ghostTargetRotation) < 1f;
+        if (canRotate) _ghostCurrentRotation = _ghostTargetRotation;
 
-        HandleGhostKeyboardOffset();   // WASDQE nudge, same convention as gameplay's HandleKeyboardOffset
-        HandleGhostScroll();           // wheel = push the held block forward / back, like gameplay's edit-mode scroll
+        bool rotating = Application.isFocused && Input.GetKey(KeyCode.LeftAlt);
+        if (rotating && !_mouseRotation.Active) PinGhostPlane();
+        VirtualCursor.SetRotationAnchor(rotating, _cam, gridSystem.GridToWorld(_ghostOrigin));
+        var turn = _mouseRotation.Read(rotating,
+            VirtualCursor.MouseDelta, Input.mouseScrollDelta.y, _cam.transform.right, canRotate);
+        _ghostTargetRotation = turn * _ghostTargetRotation;
 
-        TrackGhostOrigin();
+        if (!_mouseRotation.Active)
+        {
+            TrackGhostOrigin();
+            HandleGhostKeyboardOffset();
+            HandleGhostScroll();
+        }
 
         UpdateGhostPreview();   // every frame (not just on change) so the rotation ease actually animates
 
-        if (Input.GetMouseButtonDown(0))
+        if (!_mouseRotation.Active && Input.GetMouseButtonDown(0))
         {
             if (_placementValid) CommitPlacement();
             // Explain the ONE refusal the player can't reason about from the ghost
@@ -1818,48 +1926,75 @@ public partial class LevelMapController : MonoBehaviour
         Ray ray = _cam.ScreenPointToRay(VirtualCursor.Position);
 
         Vector3Int hoverColumn;
-        if (Physics.Raycast(ray, out var hit))
+        if (!_ghostPlanePinned && Physics.Raycast(ray, out var hit))
         {
             // Nudge slightly INTO the surface so a hit right on a face boundary
             // resolves to the block, not the empty cell beyond it.
-            hoverColumn = TopOfColumn(gridSystem.WorldToGrid(hit.point - ray.direction * (cs * 0.05f)));
-            _ghostPlaneY = hoverColumn.y + 1;   // remember this layer for empty-space gliding
+            _ghostHover  = TopOfColumn(gridSystem.WorldToGrid(hit.point - ray.direction * (cs * 0.05f)));
+            _ghostPlaneY = _ghostHover.y + 1;   // remember this layer for empty-space gliding
         }
         else
         {
             // Empty space: intersect the ray with the build plane at the remembered
             // layer's centre. Its own cell IS the placement layer (no +up).
-            float planeY = _ghostPlaneY * cs + cs * 0.5f;
-            if (Mathf.Abs(ray.direction.y) < 1e-4f) return;   // ray parallel to plane — keep last origin
-            float t = (planeY - ray.origin.y) / ray.direction.y;
-            if (t <= 0f) return;                              // plane is behind the camera — keep last origin
-            var cell = gridSystem.WorldToGrid(ray.origin + ray.direction * t);
-            hoverColumn = new Vector3Int(cell.x, _ghostPlaneY - 1, cell.z);   // -1 so the +up below lands on _ghostPlaneY
+            // Through the grid, not `y * cs`: the map's grid can be shifted
+            // (GridSystem.originCells), and a hand-rolled height put this plane 190
+            // units above the map — the ghost flew off whenever the cursor left a block.
+            float planeY = gridSystem.GridToWorld(new Vector3Int(0, _ghostPlaneY, 0)).y;
+            if (Mathf.Abs(ray.direction.y) >= 1e-4f)
+            {
+                float t = (planeY - ray.origin.y) / ray.direction.y;
+                if (t > 0f)
+                {
+                    var cell = gridSystem.WorldToGrid(ray.origin + ray.direction * t);
+                    _ghostHover = new Vector3Int(cell.x, _ghostPlaneY - 1, cell.z);   // -1 so the +up below lands on _ghostPlaneY
+                }
+            }
+            // else: parallel / behind the camera — keep the last hover column.
         }
 
-        _ghostOrigin = hoverColumn + Vector3Int.up + _ghostManualOffset;
+        // ALWAYS rebuilt, even when the hover column could not be updated this frame.
+        // Returning early here used to skip it, so WASDQE nudges piled up in
+        // _ghostManualOffset without the ghost ever moving — "the keys don't work".
+        _ghostOrigin = _ghostHover + Vector3Int.up;
         // Never let a placement stack directly on the column the pawn is standing
         // on right now — it would bury/trap the pawn under the new piece.
-        _ghostHoveringPawnColumn = hoverColumn.x == _currentCell.x && hoverColumn.z == _currentCell.z;
+        _ghostHoveringPawnColumn = _ghostHover.x == _currentCell.x && _ghostHover.z == _currentCell.z;
     }
+    Vector3Int _ghostHover;   // last column the cursor resolved to — see TrackGhostOrigin
 
     // Same WASDQE convention as gameplay's HandleKeyboardOffset: A/D shift relative
-    // to camera-right, W/S shift relative to camera-forward, Q/E shift world up/down.
-    // Nudges accumulate into _ghostManualOffset, layered on top of wherever the
-    // mouse is hovering (see UpdateBuildMode) — persists across mouse movement,
-    // reset to zero only when a fresh hold begins (tray pick or re-pickup).
+    // to camera-right, W/S shift relative to camera-forward, E/Q shift world up/down.
+    // Cursor and build plane follow the anchor, so the nudge needs no offset.
     void HandleGhostKeyboardOffset()
     {
         if (_cam == null) return;
         Vector3Int right   = SnapToHorizontalAxis(_cam.transform.right);
         Vector3Int forward = SnapToHorizontalAxis(_cam.transform.forward);
 
-        if (Input.GetKeyDown(KeyCode.A)) _ghostManualOffset -= right;
-        if (Input.GetKeyDown(KeyCode.D)) _ghostManualOffset += right;
-        if (Input.GetKeyDown(KeyCode.W)) _ghostManualOffset += forward;
-        if (Input.GetKeyDown(KeyCode.S)) _ghostManualOffset -= forward;
-        if (Input.GetKeyDown(KeyCode.Q)) _ghostManualOffset += Vector3Int.up;
-        if (Input.GetKeyDown(KeyCode.E)) _ghostManualOffset += Vector3Int.down;
+        Vector3Int delta = Vector3Int.zero;
+        if (Input.GetKeyDown(KeyCode.A)) delta -= right;
+        if (Input.GetKeyDown(KeyCode.D)) delta += right;
+        if (Input.GetKeyDown(KeyCode.W)) delta += forward;
+        if (Input.GetKeyDown(KeyCode.S)) delta -= forward;
+        if (Input.GetKeyDown(KeyCode.E)) delta += Vector3Int.up;
+        if (Input.GetKeyDown(KeyCode.Q)) delta += Vector3Int.down;
+        if (delta != Vector3Int.zero) MoveGhost(delta);
+    }
+
+    void PinGhostPlane()
+    {
+        _ghostPlaneY = _ghostOrigin.y;
+        _ghostPlanePinned = true;
+        _ghostAnchorSnap = true;
+        _ghostHoveringPawnColumn = _ghostOrigin.x == _currentCell.x && _ghostOrigin.z == _currentCell.z;
+    }
+
+    void MoveGhost(Vector3Int delta)
+    {
+        _ghostOrigin += delta;
+        PinGhostPlane();
+        VirtualCursor.Warp(_cam.WorldToScreenPoint(gridSystem.GridToWorld(_ghostOrigin)));
     }
 
     // Mouse wheel pushes the held block away from / toward the camera, one cell per
@@ -1873,7 +2008,7 @@ public partial class LevelMapController : MonoBehaviour
         if (Mathf.Abs(s) < 0.001f) return;
 
         Vector3Int forward = SnapToHorizontalAxis(_cam.transform.forward);
-        _ghostManualOffset += s > 0f ? forward : -forward;
+        MoveGhost(s > 0f ? forward : -forward);
     }
 
     static Vector3Int SnapToHorizontalAxis(Vector3 dir)
@@ -1921,7 +2056,7 @@ public partial class LevelMapController : MonoBehaviour
         _ghostBlock            = block;
         _ghostTargetRotation   = rotation;
         _ghostCurrentRotation  = rotation;   // snap — no need to animate INTO its own current orientation
-        _ghostManualOffset     = Vector3Int.zero;
+        _ghostPlanePinned      = false;
         _pickedOrigCells       = origCells;
         _pickedOrigRotation    = rotation;
         _ghostFromInventory    = false;      // already paid for on its first placement
@@ -1935,6 +2070,8 @@ public partial class LevelMapController : MonoBehaviour
     // clean round-trip — never a silent loss of an already-placed bridge.
     void CancelGhostHold()
     {
+        VirtualCursor.EndRotation();
+        _mouseRotation.Reset();
         if (_pickedOrigCells != null && _ghostBlock != null)
         {
             SpawnMapBlockNode(_pickedOrigCells, _ghostBlock, _pickedOrigRotation);
@@ -2175,7 +2312,7 @@ public partial class LevelMapController : MonoBehaviour
         }
 
         _trayHint.text = _ghostBlock != null
-            ? $"Placing {_ghostBlock.ShapeName} — click the map to place, 1/2/3 to rotate, Esc to cancel."
+            ? $"Placing {_ghostBlock.ShapeName} — click to place, hold Alt + mouse / wheel to rotate, Esc to cancel."
             : (any ? "Pick a reward block, or click a piece you've already placed to move it." : "No blocks earned yet — clear levels to earn map blocks.");
     }
 
@@ -2204,7 +2341,7 @@ public partial class LevelMapController : MonoBehaviour
 
             _ghostBlock = bd;
             _ghostTargetRotation = _ghostCurrentRotation = Quaternion.identity;
-            _ghostManualOffset = Vector3Int.zero;
+            _ghostPlanePinned = false;
             _ghostAnchorSnap = true;   // appear at the cursor, don't glide in from wherever the last hold sat
             RefreshTray();
             _trayTargetScale = 0f;   // tuck the bars away so the map is fully visible while placing

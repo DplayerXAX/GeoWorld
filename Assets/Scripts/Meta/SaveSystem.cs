@@ -55,17 +55,42 @@ public static class SaveSystem
         _cachedSlot    = -1;
     }
 
+    // One-time migration of the pre-slot profile.json, done ONCE and for real: it is
+    // copied into slot 0 (only if slot 0 has no file of its own) and then moved out
+    // of the way as a backup.
+    //
+    // It used to be read in place instead — "slot 0 has no file, so use profile.json"
+    // — and never retired. So deleting slot 0 to start over just brought that old
+    // progress straight back: a "new" game started with every level it had cleared
+    // (1-1 included, so the farm and the wood were already standing).
+    static bool _legacyChecked;
+    static void MigrateLegacyOnce()
+    {
+        if (_legacyChecked) return;
+        _legacyChecked = true;
+        try
+        {
+            if (!File.Exists(LegacyPath)) return;
+            var slot0 = RealSlotPath(0);
+            if (!File.Exists(slot0)) File.Copy(LegacyPath, slot0);
+
+            var backup = Path.Combine(Application.persistentDataPath, "profile_legacy_backup.json");
+            if (File.Exists(backup))
+                backup = Path.Combine(Application.persistentDataPath,
+                                      $"profile_legacy_backup_{System.DateTime.Now:yyyyMMdd_HHmmss}.json");
+            File.Move(LegacyPath, backup);
+        }
+        catch (System.Exception e) { Debug.LogWarning($"[SaveSystem] legacy migration failed: {e.Message}"); }
+    }
+
     public static ProfileData Load()
     {
+        MigrateLegacyOnce();
         int slot = ActiveSlot;
         _cachedSlot = slot;
         try
         {
             var path = SlotPath(slot);
-            // One-time migration: an old single-file profile.json becomes slot 0.
-            // Never applies in dev-temp mode — that file isn't a real slot 0.
-            if (!DevTempActive && !File.Exists(path) && slot == 0 && File.Exists(LegacyPath))
-                path = LegacyPath;
 
             if (File.Exists(path))
             {
@@ -106,10 +131,10 @@ public static class SaveSystem
     // Always reads the REAL file (RealSlotPath), never the dev-temp redirect.
     public static ProfileData PeekSlot(int slot)
     {
+        MigrateLegacyOnce();
         try
         {
             var path = RealSlotPath(slot);
-            if (!File.Exists(path) && slot == 0 && File.Exists(LegacyPath)) path = LegacyPath;
             if (File.Exists(path))
                 return JsonUtility.FromJson<ProfileData>(File.ReadAllText(path));
         }
@@ -117,8 +142,28 @@ public static class SaveSystem
         return null;
     }
 
-    public static bool SlotHasData(int slot) =>
-        File.Exists(RealSlotPath(slot)) || (slot == 0 && File.Exists(LegacyPath));
+    public static bool SlotHasData(int slot)
+    {
+        MigrateLegacyOnce();
+        return File.Exists(RealSlotPath(slot));
+    }
+
+    // Permanently deletes a slot (the Title's save-select Delete button). If it is
+    // the active slot, the in-memory profile goes too, so nothing writes the old
+    // progress back the next time anything calls Save().
+    public static void DeleteSlot(int slot)
+    {
+        MigrateLegacyOnce();
+        slot = Mathf.Clamp(slot, 0, SlotCount - 1);
+        try { if (File.Exists(RealSlotPath(slot))) File.Delete(RealSlotPath(slot)); }
+        catch (System.Exception e) { Debug.LogWarning($"[SaveSystem] delete slot {slot} failed: {e.Message}"); }
+
+        if (slot == ActiveSlot && !DevTempActive)
+        {
+            _cached     = null;
+            _cachedSlot = -1;
+        }
+    }
 
 #if UNITY_EDITOR
     // Deletes the dev-temp file the instant Play mode exits.

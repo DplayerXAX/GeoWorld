@@ -43,7 +43,14 @@ public class SettingsCube : MonoBehaviour, IPointerClickHandler, IDragHandler, I
     const float SnapSpeed   = 9f;
     const float DragSpeed   = 0.42f;   // degrees per pixel
     const float PlateInset  = 0.501f;  // the tintable face, just clear of the cube
-    const float FaceInset   = 0.508f;  // the label, just clear of the face
+
+    // The label, clear of the OUTER SURFACE of that plate — not of its centre.
+    //
+    // This was 0.508, which was right while the plates were zero-thickness quads. Once
+    // they became 0.06-thick slabs their outer face moved to 0.531 and every category
+    // name ended up sealed inside its own plate: the settings cube came up blank, with
+    // nothing in the scene to suggest why.
+    const float FaceInset   = 0.548f;
 
     // The game's own block, so the thing the screen folds into is literally the shape
     // the whole game is built out of rather than a stand-in that resembles it.
@@ -55,12 +62,88 @@ public class SettingsCube : MonoBehaviour, IPointerClickHandler, IDragHandler, I
     // The plate has to stay inside the FLAT part of a face. cube_be is bevelled, so
     // its flat square is about 0.89 across, not 1 — a plate sized for a sharp-cornered
     // cube would ride up over the bevel and break the silhouette of the frame.
-    const float PlateSize = 0.84f;
+    const float PlateSize  = 0.84f;
+    const float PlateThick = 0.06f;   // a slab, not a decal: you can see its edge
 
-    // Looked at from a CORNER, tipped down. These two numbers decide which three
-    // faces are visible, and everything below is ordered to match them.
-    const float ViewPitch = 17f;
-    const float ViewYaw   = -25f;
+    // ── Coming apart ────────────────────────────────────────────────────────
+    //
+    // In the pause menu the cube opens: the six faces travel out along their own
+    // normals and the menu's six options ride on them. That is what stops the menu
+    // being a ring of words with an ornament in the middle — the options ARE the
+    // solid, taken to pieces.
+    //
+    // The face plates are what move, not the body. The body is one mesh and cannot be
+    // separated; the plates were already there to mark the selected category, and a
+    // plate travelling out along its face's normal is exactly the exploded view an
+    // assembly drawing uses.
+    // Reach. Worked back from where the WORDS land, not from where the plates do: at
+    // the widest, the top plate sits ~307px above the middle and CLOSE stands another
+    // ~160px past it, which is 467 of the 540 a 16:9 canvas has. Any further and the
+    // biggest option starts leaving the screen.
+    // Isometric foreshortens every axis to 0.816, so the same 3D travel buys less
+    // screen radius than the old off-axis view did; this makes it back up.
+    const float ExplodeSpread = 2.20f;   // travel at full open, in cube units
+    const float ExplodeZoom   = 3.6f;    // how much wider the view goes to fit it
+    const float ExplodeSpeed  = 3.4f;
+    const float PulledExtra   = 0.30f;   // the focused plate comes a little further
+    // Small on purpose, and this is the reason: the words are pinned to the
+    // backdrop's sector centres, while the plates are carried round by the lean. Every
+    // degree of lean is a degree the plates sit off the wedge they belong to. Seven
+    // was enough to see; two and a half still answers the pointer and keeps the
+    // assembly inside its own sectors.
+    const float ParallaxTilt  = 2.5f;    // degrees of lean toward the pointer
+    const float ParallaxSpeed = 5f;
+    const float BaseOrtho     = 1.12f;
+
+    // The line holding each plate to the middle. It starts ON the cube's face rather
+    // than clear of it, so the line reads as coming OUT of the solid rather than
+    // floating near it.
+    const float LinkStart = 0.5f;
+    const float LinkWidth = 0.022f;
+
+    // The burst's own stage, parked clear of the cube's so neither camera can see the
+    // other's contents. Layers would do the same job and cost the project a layer for
+    // a menu; two origins cost nothing.
+    static readonly Vector3 BurstOrigin = new(0f, -7600f, 0f);
+    const int BurstRtPx = 1800;   // already supersampled — the field is ~1260px on screen
+
+    // UNIFORM, and it can be, because the view is isometric: all three axes project
+    // at the same rate, so equal travel in the cube is equal travel on the screen. The
+    // hand-tuned per-face compensation this replaces was correcting for a view that no
+    // longer exists.
+    //
+    // The unevenness worth keeping lives in the DELAYS: the six still leave at their
+    // own moments, so the burst reads as a sequence rather than a switch, and they
+    // still arrive as a set, on one ring.
+    static readonly float[] FaceDrift = { 1f, 1f, 1f, 1f, 1f, 1f };
+    static readonly float[] FaceDelay = { 0.00f, 0.22f, 0.10f, 0.34f, 0.16f, 0.28f };
+
+    const float BurstFadeSpeed = 11f;
+
+    bool  _wantExplode;
+    float _explode;          // 0 whole, 1 apart
+    float _burstFade;        // the plates' own opacity, on a much shorter clock
+    int   _pulled = -1;      // the face under the pointer, or -1
+
+    // ISOMETRIC. Not "roughly corner-on" — the exact pose, and the exactness is the
+    // whole point.
+    //
+    // Equal foreshortening on all three axes happens at yaw ±45° and pitch
+    // asin(1/√3) = 35.264°, and nowhere else. Everything downstream falls out of it:
+    //
+    //  · the six face normals project 60° apart, at 90 / ±30 / ±150 / −90 — which are
+    //    exactly the centres of the backdrop's six sectors, so every plate sits in the
+    //    middle of its own wedge instead of straddling a boundary;
+    //  · the silhouette is a REGULAR hexagon, so it agrees with the hexagonal distance
+    //    the field is drawn from;
+    //  · all six project at the same rate, so one drift puts all six plates on one
+    //    ring with no per-face compensation to keep in step.
+    //
+    // At 17°/−25° none of that was true: the bearings came out 40°, 58° and 82° apart
+    // and two plates landed on sector boundaries, which is what read as the sectors
+    // being slightly out.
+    const float ViewPitch = 35.264f;
+    const float ViewYaw   = -45f;
 
     // Face order is VIEWER ORDER, not axis order: index 0 is the face the camera sees
     // on top, 1 the one square on to it, 2 the one to its right. The settings screen
@@ -99,6 +182,86 @@ public class SettingsCube : MonoBehaviour, IPointerClickHandler, IDragHandler, I
 
     readonly List<TMP_Text>  _labels = new();
     readonly List<Renderer>  _plates = new();
+    readonly List<Transform> _plateT = new();
+
+    // One material for every plate and rim, with a MaterialPropertyBlock giving each
+    // its own colour, mark and density. Shared rather than per-plate because twelve
+    // material instances for twelve quads is twelve things to leak.
+    static Material _plateMat;
+
+    static Material PlateMaterial()
+    {
+        if (_plateMat != null) return _plateMat;
+        var sh = Shader.Find("GeoWorld/PlatePaper");
+        if (sh == null)
+        {
+            Debug.LogWarning("[SettingsCube] GeoWorld/PlatePaper missing — plates will be plain.");
+            return null;
+        }
+        _plateMat = new Material(sh) { name = "PlatePaper" };
+        return _plateMat;
+    }
+
+    // A very short ramp between the paper and one warm deep tone.
+    //
+    // Six plates, six steps. They are told apart by VALUE — the way this game's
+    // backdrops tell anything apart — rather than by six different patterns or six
+    // outlines. The whole ramp spans about a tenth of the paper's brightness, which
+    // is all it takes: on a flat sheet a 3% step is a visible edge.
+    static readonly Color[] PlateTone =
+    {
+        new(0.949f, 0.937f, 0.902f),
+        new(0.928f, 0.913f, 0.874f),
+        new(0.906f, 0.888f, 0.844f),
+        new(0.884f, 0.864f, 0.818f),
+        new(0.864f, 0.842f, 0.792f),
+        new(0.845f, 0.820f, 0.767f),
+    };
+
+    // The band at the plate's own edge, and the slab behind it. Both are further
+    // steps of the same ramp, not ink: the rim still reads as a border, but as the
+    // shadowed side of a piece of card rather than as a drawn line.
+    static readonly Color PlateEdge = new(0.800f, 0.770f, 0.710f);
+    static readonly Color PlateRim  = new(0.762f, 0.728f, 0.662f);
+    static readonly Color LinkTone  = new(0.660f, 0.625f, 0.556f);
+
+    void DressPlate(Renderer r, int i, bool rim)
+    {
+        if (r == null) return;
+
+        var mat = PlateMaterial();
+        if (mat != null) r.sharedMaterial = mat;
+
+        var block = new MaterialPropertyBlock();
+        r.GetPropertyBlock(block);
+        block.SetColor(_EdgeToneId, PlateEdge);
+        // The rim gets no edge band of its own. It IS the edge; shading it again at
+        // its own border would be a second boundary a few pixels from the first.
+        block.SetFloat(_EdgeDepthId, rim ? 0f : 0.55f);
+        r.SetPropertyBlock(block);
+
+        MpbColor.Set(r, rim ? PlateRim : PlateTone[Mathf.Clamp(i, 0, PlateTone.Length - 1)]);
+    }
+
+    static readonly int _EdgeToneId  = Shader.PropertyToID("_EdgeTone");
+    static readonly int _EdgeDepthId = Shader.PropertyToID("_EdgeDepth");
+
+    // ── the burst ───────────────────────────────────────────────────────────
+    Transform     _burstStage, _burstCube;
+    Camera        _burstCam;
+    RenderTexture _burstRt;
+    readonly List<Transform> _burstPlates = new();
+    readonly List<Transform> _burstLines  = new();
+
+    // Where each face WOULD be with nothing hovered.
+    //
+    // The menu hangs its words off these rather than off the plates themselves, and
+    // that is not a detail — it is the fix for a real bug. The focused plate travels
+    // an extra PulledExtra; if the word followed it, the word slid out from under the
+    // pointer, the hover dropped, the plate came back, the pointer was over it again,
+    // and the option shivered back and forth for as long as you held still near its
+    // edge. A hover response must never move the thing you are hovering.
+    readonly float[] _faceRest = new float[6];
     string[] _names = Array.Empty<string>();
 
     /// <summary>Raised when the player picks a face.</summary>
@@ -177,7 +340,7 @@ public class SettingsCube : MonoBehaviour, IPointerClickHandler, IDragHandler, I
         _cam.orthographic     = true;
         // Seen corner-first the cube's silhouette is its diagonal, so the same box
         // needs more room than a face-on view — but not so much that it swims.
-        _cam.orthographicSize = 1.12f;
+        _cam.orthographicSize = BaseOrtho;
         _cam.nearClipPlane    = 0.1f;
         _cam.farClipPlane     = 20f;
         _cam.depth            = -50f;    // renders before the main camera, into its RT
@@ -188,6 +351,155 @@ public class SettingsCube : MonoBehaviour, IPointerClickHandler, IDragHandler, I
         var view = Quaternion.Euler(ViewPitch, ViewYaw, 0f);
         _cam.transform.localRotation = view;
         _cam.transform.localPosition = view * new Vector3(0f, 0f, -6f);
+
+        BuildBurstStage();
+    }
+
+    // The burst: six plates and the lines that hold them to the middle.
+    //
+    // A SECOND stage with its own camera, rather than more objects on the one we
+    // already have. The core and the plates are drawn in completely different ways —
+    // the core is a HOLE in the paper with the frozen game showing through it, the
+    // plates are solid ink-and-paper laid ON the paper — and one photograph cannot be
+    // both. Two stages at two origins is the cheapest way to get two photographs;
+    // splitting by culling layer would spend one of the project's layers on a menu.
+    //
+    // The two register exactly because they share a pose, and because the field's
+    // camera widens by exactly the factor the field's rect grows by. A plate one cube
+    // unit from the middle lands the same distance from the core in pixels at every
+    // stage of the burst.
+    void BuildBurstStage()
+    {
+        var root = new GameObject("SettingsCubeBurstStage").transform;
+        root.position   = BurstOrigin;
+        root.rotation   = Quaternion.identity;
+        root.localScale = Vector3.one;
+        DontDestroyOnLoad(root.gameObject);
+        _burstStage = root;
+
+        _burstCube = new GameObject("Assembly").transform;
+        _burstCube.SetParent(root, false);
+
+        for (int i = 0; i < FaceNormal.Length; i++)
+        {
+            _burstLines.Add(BuildBurstLink(i));
+            _burstPlates.Add(BuildBurstPlate(i));
+        }
+
+        BuildDepthProxy();
+
+        var camGo = new GameObject("BurstCam");
+        camGo.transform.SetParent(root, false);
+        _burstCam = camGo.AddComponent<Camera>();
+        _burstCam.clearFlags       = CameraClearFlags.SolidColor;
+        _burstCam.backgroundColor  = new Color(0f, 0f, 0f, 0f);
+        _burstCam.orthographic     = true;
+        _burstCam.orthographicSize = BaseOrtho;
+        _burstCam.nearClipPlane    = 0.1f;
+        _burstCam.farClipPlane     = 60f;
+        _burstCam.depth            = -49f;
+
+        var bview = Quaternion.Euler(ViewPitch, ViewYaw, 0f);
+        _burstCam.transform.localRotation = bview;
+        _burstCam.transform.localPosition = bview * new Vector3(0f, 0f, -20f);
+
+        _burstRt = new RenderTexture(BurstRtPx, BurstRtPx, 16,
+                                     RenderTextureFormat.ARGB32, RenderTextureReadWrite.sRGB)
+        {
+            antiAliasing = 1,               // see the class note — never raise this
+            filterMode   = FilterMode.Bilinear,
+            wrapMode     = TextureWrapMode.Clamp,
+        };
+        _burstCam.targetTexture = _burstRt;
+
+        if (_burstImage != null)
+        {
+            _burstImage.texture = _burstRt;
+            _burstImage.color   = Color.white;
+        }
+    }
+
+    // A copy of the cube standing in the plates' stage, writing depth and no colour.
+    //
+    // Without it the two stages know nothing about each other and every line is drawn
+    // over the cube, including the ones running to the far side of it — the assembly
+    // reads as flat. With it, the far lines and plates are depth-rejected and the
+    // thing has a front and a back.
+    //
+    // It paints nothing, so the picture stays empty where the cube is and the real
+    // cube — photographed by the other camera, showing the frozen game — comes
+    // through from underneath.
+    void BuildDepthProxy()
+    {
+        var sh = Shader.Find("GeoWorld/DepthMask");
+        if (sh == null)
+        {
+            Debug.LogWarning("[SettingsCube] GeoWorld/DepthMask missing — the burst's lines will not be occluded.");
+            return;
+        }
+
+        BuildBody(_burstCube);
+        var proxy = _burstCube.Find("Body");
+        if (proxy == null) return;
+        proxy.name = "DepthProxy";
+
+        var mat = new Material(sh) { name = "DepthMask" };
+        foreach (var r in proxy.GetComponentsInChildren<Renderer>())
+        {
+            r.sharedMaterial = mat;
+            r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            r.receiveShadows = false;
+        }
+    }
+
+    Transform BuildBurstPlate(int i)
+    {
+        var q = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        q.name = $"BurstPlate{i}";
+        q.transform.SetParent(_burstCube, false);
+        Destroy(q.GetComponent<Collider>());
+
+        q.transform.localPosition = FaceNormal[i] * PlateInset;
+        q.transform.localRotation = Quaternion.LookRotation(-FaceNormal[i], FaceUp[i]);
+        q.transform.localScale    = new Vector3(PlateSize, PlateSize, PlateThick);
+        DressPlate(q.GetComponent<Renderer>(), i, rim: false);
+
+        var rim = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        rim.name = "Rim";
+        rim.transform.SetParent(q.transform, false);
+        Destroy(rim.GetComponent<Collider>());
+        rim.transform.localScale = new Vector3(1.10f, 1.10f, 0.94f);
+        DressPlate(rim.GetComponent<Renderer>(), i, rim: true);
+
+        return q.transform;
+    }
+
+    // The line from the middle out to a plate. Sized and placed each frame — it is the
+    // gap between the two, so it cannot be authored once.
+    Transform BuildBurstLink(int i)
+    {
+        var bar = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        bar.name = $"Link{i}";
+        bar.transform.SetParent(_burstCube, false);
+        Destroy(bar.GetComponent<Collider>());
+        // A cube's local +Z is its length, so aim +Z along the face's normal.
+        bar.transform.localRotation = Quaternion.LookRotation(FaceNormal[i], FaceUp[i]);
+
+        // A deep step of the plates' own ramp rather than ink. It still reads as the
+        // thing holding the plate to the middle, but at the weight of a shadow instead
+        // of the weight of a drawn rule. Same unlit material as the plates, so it does
+        // not change brightness with whatever scene is underneath.
+        var lr = bar.GetComponent<Renderer>();
+        var lmat = PlateMaterial();
+        if (lmat != null) lr.sharedMaterial = lmat;
+        var lblock = new MaterialPropertyBlock();
+        lr.GetPropertyBlock(lblock);
+        lblock.SetFloat(_EdgeDepthId, 0f);
+        lr.SetPropertyBlock(lblock);
+        MpbColor.Set(lr, LinkTone);
+
+        bar.SetActive(false);
+        return bar.transform;
     }
 
     // The solid itself: the game's own block if it is there, a primitive if it is not.
@@ -256,18 +568,35 @@ public class SettingsCube : MonoBehaviour, IPointerClickHandler, IDragHandler, I
     // something to say.
     Renderer BuildFacePlate(int i)
     {
-        var q = GameObject.CreatePrimitive(PrimitiveType.Quad);
+        // A SLAB, not a decal. A zero-thickness quad flying away from a cube reads as
+        // clip art; a plate with an edge you can see reads as a part that was prised
+        // off something.
+        var q = GameObject.CreatePrimitive(PrimitiveType.Cube);
         q.name = $"Plate{i}";
         q.transform.SetParent(_cube, false);
         Destroy(q.GetComponent<Collider>());
 
         q.transform.localPosition = FaceNormal[i] * PlateInset;
-        // A Unity quad faces its own -Z, so pointing -Z outward means aiming +Z in.
+        // Local -Z points outward, so the thin axis is Z and FaceUp orients the word.
         q.transform.localRotation = Quaternion.LookRotation(-FaceNormal[i], FaceUp[i]);
-        q.transform.localScale    = Vector3.one * PlateSize;
+        q.transform.localScale    = new Vector3(PlateSize, PlateSize, PlateThick);
 
         var r = q.GetComponent<Renderer>();
-        MpbColor.Set(r, GeoPalette.Paper);
+        DressPlate(r, i, rim: false);
+
+        // An ink backing a shade larger, so the paper face carries a rule round it and
+        // its edge is inked too — the house style, and the only way a pale plate on
+        // pale paper has an outline at all.
+        var rim = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        rim.name = "Rim";
+        rim.transform.SetParent(q.transform, false);
+        Destroy(rim.GetComponent<Collider>());
+        rim.transform.localPosition = Vector3.zero;
+        rim.transform.localRotation = Quaternion.identity;
+        rim.transform.localScale    = new Vector3(1.10f, 1.10f, 0.94f);
+        DressPlate(rim.GetComponent<Renderer>(), i, rim: true);
+
+        _plateT.Add(q.transform);
         return r;
     }
 
@@ -345,7 +674,14 @@ public class SettingsCube : MonoBehaviour, IPointerClickHandler, IDragHandler, I
         for (int i = 0; i < _plates.Count; i++)
         {
             bool on = i == Current && !_idle && i < _names.Length && !string.IsNullOrEmpty(_names[i]);
-            if (_plates[i] != null) MpbColor.Set(_plates[i], on ? GeoPalette.Ink : GeoPalette.Paper);
+            // Unselected goes back to its OWN step of the ramp, not to flat paper —
+            // otherwise picking a category quietly wipes the tone that told the six
+            // plates apart in the first place. Selected stays ink: a filled face is a
+            // flat field, which is in keeping, and it is the one place on this screen
+            // that has to be unmissable.
+            if (_plates[i] != null)
+                MpbColor.Set(_plates[i], on ? GeoPalette.Ink
+                                            : PlateTone[Mathf.Clamp(i, 0, PlateTone.Length - 1)]);
             if (_labels[i] != null) _labels[i].color = on ? GeoPalette.Paper : GeoPalette.Ink;
         }
     }
@@ -419,10 +755,15 @@ public class SettingsCube : MonoBehaviour, IPointerClickHandler, IDragHandler, I
     public static SettingsCube Shared { get; private set; }
 
     const float SlideSpeed   = 9f;     // house easing rate, same family as SnapSpeed
-    const float ShellBuildPx = 420f;   // the RT is cut from this, once
+    // The CORE's texture is cut from this once. The core never grows — only the field
+    // around it does — so this only has to cover the largest slot the cube itself is
+    // ever drawn in, which is the pause menu's 300px.
+    const float ShellBuildPx = 420f;
 
     static Canvas        _shellCanvas;
-    static RectTransform _shellRect;
+    static RectTransform _shellRect;   // the field
+    static RectTransform _coreRect;    // the cube inside it
+    static RawImage      _burstImage;
     static Vector2       _slotPos;
     static float         _slotSize = 240f;
     static bool          _slotInteractive;
@@ -450,17 +791,37 @@ public class SettingsCube : MonoBehaviour, IPointerClickHandler, IDragHandler, I
         sc.referenceResolution = new Vector2(RefW, RefH);
         sc.matchWidthOrHeight  = 0.5f;
 
-        var rt = new GameObject("Cube", typeof(RectTransform)).GetComponent<RectTransform>();
-        rt.SetParent(go.transform, false);
-        rt.anchorMin = rt.anchorMax = rt.pivot = new Vector2(0.5f, 0.5f);
-        // Sized to the LARGEST slot it will ever occupy before Attach runs, because
-        // Attach cuts the RenderTexture from this rect once and never again. Shrinking
+        // THE FIELD — the whole area the opened cube spreads across. It carries the
+        // burst, and it is what grows when the cube comes apart.
+        var field = new GameObject("Field", typeof(RectTransform)).GetComponent<RectTransform>();
+        field.SetParent(go.transform, false);
+        field.anchorMin = field.anchorMax = field.pivot = new Vector2(0.5f, 0.5f);
+        field.sizeDelta = new Vector2(ShellBuildPx * ExplodeZoom, ShellBuildPx * ExplodeZoom);
+        _shellRect = field;
+
+        var burst = new GameObject("Burst", typeof(RectTransform)).GetComponent<RectTransform>();
+        burst.SetParent(field, false);
+        burst.anchorMin = Vector2.zero; burst.anchorMax = Vector2.one;
+        burst.offsetMin = burst.offsetMax = Vector2.zero;
+        _burstImage = burst.gameObject.AddComponent<RawImage>();
+        _burstImage.raycastTarget = false;
+        _burstImage.enabled = false;
+
+        // THE CORE — the cube itself, at a size that never changes however far the
+        // field spreads. This is the one the screen folds into and the one the
+        // settings page turns.
+        //
+        // Sized to the largest slot it will ever occupy BEFORE Attach runs, because
+        // Attach cuts its RenderTexture from this rect once and never again. Shrinking
         // the rect afterwards just filters the same texture down, which is sharp;
         // growing past it would not be.
-        rt.sizeDelta = new Vector2(ShellBuildPx, ShellBuildPx);
-        _shellRect = rt;
+        var core = new GameObject("Core", typeof(RectTransform)).GetComponent<RectTransform>();
+        core.SetParent(field, false);
+        core.anchorMin = core.anchorMax = core.pivot = new Vector2(0.5f, 0.5f);
+        core.sizeDelta = new Vector2(ShellBuildPx, ShellBuildPx);
+        _coreRect = core;
 
-        var img = rt.gameObject.AddComponent<RawImage>();
+        var img = core.gameObject.AddComponent<RawImage>();
         Shared = Attach(img, Array.Empty<string>());
         Shared?.SetCategories(Array.Empty<string>(), false);
         return Shared;
@@ -475,7 +836,8 @@ public class SettingsCube : MonoBehaviour, IPointerClickHandler, IDragHandler, I
     /// tell it otherwise; asking continuously means it disappears the moment nobody is
     /// asking, which is what every caller actually wants.
     /// </summary>
-    public static void ShowAt(Vector2 anchoredPos, float size, string[] categories)
+    public static void ShowAt(Vector2 anchoredPos, float size, string[] categories,
+                             bool explode = false)
     {
         var c = EnsureShared();
         if (c == null) return;
@@ -485,6 +847,12 @@ public class SettingsCube : MonoBehaviour, IPointerClickHandler, IDragHandler, I
         _slotSize = size;
 
         bool interactive = categories != null && categories.Length > 0;
+
+        // Never both at once: apart, the faces are pictures with the menu's words
+        // beside them; together, they are the settings page's category picker. A cube
+        // that is a control AND in pieces is neither.
+        c._wantExplode = explode && !interactive;
+        if (!c._wantExplode) c._pulled = -1;
         if (interactive != _slotInteractive || !ReferenceEquals(categories, _slotNames))
         {
             _slotInteractive = interactive;
@@ -532,15 +900,71 @@ public class SettingsCube : MonoBehaviour, IPointerClickHandler, IDragHandler, I
         centrePx = default; sizePx = 0f;
         if (Shared == null || _shellRect == null) return false;
 
-        bool live = _shellCanvas != null && _shellCanvas.enabled;
+        // The CORE's rect, not the field's. The cube is what the screen folds into and
+        // what the frozen frame is cut to; the field is just the room the plates fly
+        // about in, and masking the frame to that would open a window three times too
+        // big with the plates painted over most of it.
+        bool live = _shellCanvas != null && _shellCanvas.enabled && _coreRect != null;
         Vector2 pos  = live ? _shellRect.anchoredPosition : _slotPos;
-        float   side = live ? _shellRect.sizeDelta.x      : _slotSize;
+        float   side = live ? _coreRect.sizeDelta.x       : _slotSize;
 
         float s = ShellScale();
         centrePx = new Vector2(Screen.width, Screen.height) * 0.5f + pos * s;
         sizePx   = side * s;
         return true;
     }
+
+    /// <summary>
+    /// Where face `face` is on the canvas, in the same coordinates the pause menu
+    /// places its own children in.
+    ///
+    /// This is what lets the menu's words RIDE the faces instead of being laid out in
+    /// a ring beside them. The words stay flat 2D type — crisp, in the game's own
+    /// face, at full UI resolution — while their POSITIONS come from a solid turning
+    /// in 3D. Drawing them into the cube's render texture instead would make them
+    /// small, soft and unreadable, and would put them behind the frozen frame the
+    /// wipe cuts to this same silhouette.
+    /// </summary>
+    public static bool TryProjectFace(int face, out Vector2 anchoredPos)
+    {
+        anchoredPos = default;
+        var c = Shared;
+        if (c == null || c._burstCam == null || c._burstCube == null || _shellRect == null) return false;
+        if (face < 0 || face >= c._faceRest.Length) return false;
+        // The RESTING position, not the plate's. See _faceRest.
+        return c.Project(c._burstCube.TransformPoint(FaceNormal[face] * c._faceRest[face]), out anchoredPos);
+    }
+
+    /// <summary>Where the middle of the assembly is, for measuring outward from.</summary>
+    public static bool TryProjectCentre(out Vector2 anchoredPos)
+    {
+        anchoredPos = _shellRect != null ? _shellRect.anchoredPosition : default;
+        return Shared != null && _shellRect != null;
+    }
+
+    bool Project(Vector3 world, out Vector2 anchoredPos)
+    {
+        Vector3 vp = _burstCam.WorldToViewportPoint(world);
+        Vector2 size = _shellRect.sizeDelta;
+        anchoredPos = _shellRect.anchoredPosition
+                    + new Vector2((vp.x - 0.5f) * size.x, (vp.y - 0.5f) * size.y);
+        return true;
+    }
+
+    // Pixels per cube unit. Constant through the whole burst by construction: the
+    // field's rect and the field's camera widen by exactly the same factor.
+    static float PxPerUnit => _slotSize / (2f * BaseOrtho);
+
+    /// <summary>
+    /// Half a plate's reach on screen, in canvas pixels — what a label has to clear to
+    /// stand beside one rather than on it.
+    ///
+    /// Measured to the RIM's CORNER, which is the furthest any part of a plate gets
+    /// from its middle. Taking the plate's centre distance alone, as the menu did, put
+    /// the words forty pixels past the middle of a plate that is a hundred and seventy
+    /// across — which is to say, on top of it.
+    /// </summary>
+    public static float PlateHalfPx => PlateSize * 0.5f * 1.10f * 1.4142f * PxPerUnit;
 
     const float RefW = 1920f, RefH = 1080f;
 
@@ -569,7 +993,15 @@ public class SettingsCube : MonoBehaviour, IPointerClickHandler, IDragHandler, I
         bool visible = Time.frameCount - _requestFrame <= 1;
 
         if (_shellCanvas.enabled != visible) _shellCanvas.enabled = visible;
-        if (!visible) { _wasVisible = false; return; }
+        if (!visible)
+        {
+            // Off screen, it closes back up. Otherwise the next open would find it
+            // already in pieces and the burst — the whole point of the gesture — would
+            // simply not happen.
+            _wasVisible  = false;
+            _wantExplode = false;
+            return;
+        }
 
         if (!_wasVisible)
         {
@@ -578,15 +1010,136 @@ public class SettingsCube : MonoBehaviour, IPointerClickHandler, IDragHandler, I
             // and here it would also break the handoff from the wipe, which has just
             // spent half a second shrinking the silhouette onto this exact rect.
             _wasVisible = true;
+            // CLOSED, whatever was asked for. The cube arrives whole from the fold and
+            // opens from there — snapping to the asked-for state instead meant the
+            // menu was simply already in pieces on its first frame, and the burst, the
+            // stagger and the whole gesture never happened.
+            _explode   = 0f;
+            _burstFade = 0f;
             _shellRect.anchoredPosition = _slotPos;
-            _shellRect.sizeDelta        = Vector2.one * _slotSize;
+            _shellRect.sizeDelta        = Vector2.one * WantSize();
+            if (_coreRect != null) _coreRect.sizeDelta = Vector2.one * _slotSize;
             return;
         }
 
         float k = 1f - Mathf.Exp(-SlideSpeed * Time.unscaledDeltaTime);
         _shellRect.anchoredPosition = Vector2.Lerp(_shellRect.anchoredPosition, _slotPos, k);
-        _shellRect.sizeDelta        = Vector2.Lerp(_shellRect.sizeDelta, Vector2.one * _slotSize, k);
+        _shellRect.sizeDelta        = Vector2.Lerp(_shellRect.sizeDelta, Vector2.one * WantSize(), k);
+        // The core does NOT take the explosion's factor. That is the whole point: the
+        // cube stays the size it was and the field opens out around it.
+        if (_coreRect != null)
+            _coreRect.sizeDelta = Vector2.Lerp(_coreRect.sizeDelta, Vector2.one * _slotSize, k);
     }
+
+    // Smoothstep. Used everywhere the explosion is read, so the faces ease out of
+    // rest and into their stops rather than starting and stopping dead.
+    static float Smooth(float t) { t = Mathf.Clamp01(t); return t * t * (3f - 2f * t); }
+
+    /// <summary>How far open the whole assembly is, 0..1.</summary>
+    public static float Opening => Shared != null ? Shared._explode : 0f;
+
+    /// <summary>How far face `face` has travelled, 0..1 — its own share of the burst.</summary>
+    public static float FaceOpen(int face)
+    {
+        var c = Shared;
+        if (c == null || face < 0 || face >= FaceDelay.Length) return 0f;
+        return c.FaceProgress(face);
+    }
+
+    float FaceProgress(int i)
+    {
+        float d = FaceDelay[i];
+        return Smooth((_explode - d) / Mathf.Max(0.05f, 1f - d));
+    }
+
+    /// <summary>The face the pointer is on, so it can come a little further out.</summary>
+    public static void SetPulled(int face)
+    {
+        if (Shared != null) Shared._pulled = face;
+    }
+
+    void DriveExplode()
+    {
+        float target = _wantExplode ? 1f : 0f;
+        _explode = Mathf.Lerp(_explode, target, 1f - Mathf.Exp(-ExplodeSpeed * Time.unscaledDeltaTime));
+        if (Mathf.Abs(_explode - target) < 0.002f) _explode = target;
+
+        // THE CUBE ITSELF NEVER COMES APART. It stays whole in the middle, and stays
+        // the hole the frozen game shows through. What flies out is a separate set of
+        // plates on the other stage — which is also why the plates can be solid paper
+        // while the middle is a window: they are two different photographs.
+        if (_burstCube != null && _cube != null) _burstCube.localRotation = _cube.localRotation;
+
+        for (int i = 0; i < _burstPlates.Count && i < FaceNormal.Length; i++)
+        {
+            float t     = FaceProgress(i);
+            float pull  = i == _pulled ? PulledExtra : 0f;
+            float rest  = PlateInset + ExplodeSpread * FaceDrift[i] * t;
+            float reach = PlateInset + ExplodeSpread * (FaceDrift[i] + pull) * t;
+
+            if (i < _faceRest.Length) _faceRest[i] = rest;
+            if (_burstPlates[i] != null) _burstPlates[i].localPosition = FaceNormal[i] * reach;
+
+            var line = _burstLines[i];
+            if (line == null) continue;
+
+            float len  = reach - PlateThick * 0.5f - LinkStart;
+            bool  show = len > 0.02f;
+            if (line.gameObject.activeSelf != show) line.gameObject.SetActive(show);
+            if (show)
+            {
+                line.localScale    = new Vector3(LinkWidth, LinkWidth, len);
+                line.localPosition = FaceNormal[i] * (LinkStart + len * 0.5f);
+            }
+        }
+
+        // The field's camera widens exactly as fast as the field's rect does, so a
+        // plate a given distance from the middle lands on the same pixel at every
+        // stage of the burst — and stays registered with the core, which the other
+        // camera photographs at a size that never changes.
+        if (_burstCam != null)
+            _burstCam.orthographicSize = BaseOrtho * Mathf.Lerp(1f, ExplodeZoom, Smooth(_explode));
+
+        // The burst fades on its OWN clock, much faster than it travels.
+        //
+        // Tied to _explode it outstayed its welcome: opening the settings page left
+        // six plates coasting across the page for the better part of two seconds,
+        // sliding under the cube one at a time — which reads exactly like a layer
+        // stuck behind something. The plates belong to the menu, so they leave with
+        // it, and what is left to watch is the cube going where it is going.
+        _burstFade = Mathf.Lerp(_burstFade, _wantExplode ? 1f : 0f,
+                                1f - Mathf.Exp(-BurstFadeSpeed * Time.unscaledDeltaTime));
+
+        if (_burstImage != null)
+        {
+            bool draw = _burstFade > 0.004f && _explode > 0.004f;
+            if (_burstImage.enabled != draw) _burstImage.enabled = draw;
+            if (draw) _burstImage.color = new Color(1f, 1f, 1f, _burstFade);
+        }
+    }
+
+    // Leaning toward the pointer, with a slow breath under it.
+    //
+    // This is what stops an exploded assembly reading as a slide: a static arrangement
+    // of labelled parts IS a diagram, and the only difference between that and an
+    // object is that an object answers when you move.
+    Quaternion ParallaxPose()
+    {
+        float nx = 0f, ny = 0f;
+        if (Screen.width > 0 && Screen.height > 0)
+        {
+            var m = Input.mousePosition;
+            nx = Mathf.Clamp((m.x / Screen.width  - 0.5f) * 2f, -1f, 1f);
+            ny = Mathf.Clamp((m.y / Screen.height - 0.5f) * 2f, -1f, 1f);
+        }
+        float breath = Mathf.Sin(Time.unscaledTime * 0.55f);
+        return Quaternion.Euler(-ny * ParallaxTilt + breath * 0.30f,
+                                 nx * ParallaxTilt + breath * 0.55f, 0f);
+    }
+
+    // The rect the shell wants: the caller's slot, widened by exactly the factor the
+    // camera widens by. The two must move together — see DriveExplode.
+    float WantSize() => _slotSize * Mathf.Lerp(1f, ExplodeZoom, Smooth(_explode));
 
     void Update()
     {
@@ -594,8 +1147,20 @@ public class SettingsCube : MonoBehaviour, IPointerClickHandler, IDragHandler, I
 
         if (_cube == null) return;
 
+        DriveExplode();
+
         if (_idle)
         {
+            if (_explode > 0.02f)
+            {
+                // Apart, it is HELD rather than spun. A spinning exploded assembly is
+                // noise — and the menu's six words are pinned to these faces, so a
+                // spin would drag the whole menu round the screen.
+                _cube.localRotation = Quaternion.Slerp(_cube.localRotation, ParallaxPose(),
+                                                       1f - Mathf.Exp(-ParallaxSpeed * Time.unscaledDeltaTime));
+                return;
+            }
+
             // Two axes at unrelated rates, so it never settles into a loop the eye can
             // predict — a decorative spin that repeats reads as a screensaver.
             _cube.localRotation *= Quaternion.Euler(11f * Time.unscaledDeltaTime,
@@ -693,9 +1258,16 @@ public class SettingsCube : MonoBehaviour, IPointerClickHandler, IDragHandler, I
 
     void OnDestroy()
     {
-        if (this == Shared) { Shared = null; _shellCanvas = null; _shellRect = null; _wasVisible = false; }
-        if (_cam != null) _cam.targetTexture = null;
-        if (_rt  != null) { _rt.Release(); Destroy(_rt); }
+        if (this == Shared)
+        {
+            Shared = null; _shellCanvas = null; _shellRect = null;
+            _coreRect = null; _burstImage = null; _wasVisible = false;
+        }
+        if (_cam      != null) _cam.targetTexture = null;
+        if (_burstCam != null) _burstCam.targetTexture = null;
+        if (_rt      != null) { _rt.Release(); Destroy(_rt); }
+        if (_burstRt != null) { _burstRt.Release(); Destroy(_burstRt); }
+        if (_burstStage != null) Destroy(_burstStage.gameObject);
         // The stage is not our child, so it has to be cleaned up by hand.
         if (_stage != null) Destroy(_stage.gameObject);
     }

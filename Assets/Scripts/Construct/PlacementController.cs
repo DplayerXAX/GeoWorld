@@ -45,7 +45,7 @@ public partial class PlacementController : MonoBehaviour
     public Vector3Int HeldGridPos => currentGridPos;
     public Vector3Int CurrentGridPos => currentGridPos;
     [Range(0.5f, 4f)] public float snapGridRadius = 1.5f;
-    public float minDepth = 2f, maxDepth = 40f, scrollSpeed = 3f, rotateSpeed = 10f;
+    public float minDepth = 2f, maxDepth = 40f, scrollSpeed = 3f, rotateSpeed = 30f;
     public float panSpeed = 8f;
 
     [Header("Cube Palette (Constructivism)")]
@@ -103,6 +103,9 @@ public partial class PlacementController : MonoBehaviour
     [Tooltip("Clamp range for the ortho build-plane Y.")]
     public Vector2Int buildYRange = new Vector2Int(0, 20);
     private Quaternion _currentRotation = Quaternion.identity, _targetRotation = Quaternion.identity;
+    readonly PlacementRotationInput _mouseRotation = new();
+    Quaternion _mouseRotationDelta;
+    public bool IsMouseRotating => _mouseRotation.Active;
 
 
     [Header("Shop Refresh")]
@@ -185,6 +188,9 @@ public partial class PlacementController : MonoBehaviour
     [Tooltip("Fraction of a block's recomputed base price returned when sold.")]
     [Range(0f, 1f)] public float sellRefundFraction = 0.5f;
 
+    [Tooltip("Keep the black outline on pieces flagged as not connected (hazard stripes). Off = the flagged piece is stripes only. Applies to pieces flagged after the change — pick one up and put it down to compare.")]
+    public bool hazardKeepsOutline = false;
+
     // The shared turret model (BlockData.turretPrefab → tryprism) is authored
     // tiny, so every spawn site has to scale it up by the same amount. It used to
     // be a bare 50 in PlaceBlock and a bare 1 in the two PlaceBlockDirect paths —
@@ -261,15 +267,46 @@ public partial class PlacementController : MonoBehaviour
     bool  _rRestarting;
     bool  _rArmed;   // a fresh key-press is required — see UpdateRestartHold
 
+    void OnDisable()
+    {
+        if (_mouseRotation.Active) VirtualCursor.EndRotation();
+        _mouseRotation.Reset();
+    }
+
     void Awake()
     {
         Instance        = this;
         editFocusAnchor = new GameObject("EditFocusAnchor").transform;
+        BoardValidity.BecameDetached += OnPiecesDetached;
 
         // Every block this scene can hand the player gets a wire id. Without this the
         // catalog was empty unless someone had hand-populated a Resources folder, and
         // an empty catalog silently disables every networked block preview.
         BlockCatalog.RegisterAll(blocks);
+    }
+
+    void OnDestroy() => BoardValidity.BecameDetached -= OnPiecesDetached;
+
+    // Tell the player what just went dead, and why it matters.
+    //
+    // Only about THEIR pieces: in a shared game, another player's edit is theirs to
+    // be told about. The turret message wins when both apply — a block off the
+    // path is a missed opportunity, a turret that will not fire is a hole in the
+    // defence.
+    void OnPiecesDetached(IReadOnlyList<PlacedBlockInstance> pieces)
+    {
+        int turrets = 0, blocks = 0;
+        foreach (var p in pieces)
+        {
+            if (p == null || p.ownerId != MultiplayerSession.LocalId) continue;
+            if (p.data != null && TurretTypes.Is(p.data.blockType)) turrets++; else blocks++;
+        }
+
+        if (turrets > 0)
+            ShowPlacementPopup(turrets == 1 ? "This turret has no support — it can't attack"
+                                            : $"{turrets} turrets have no support — they can't attack", 2.6f);
+        else if (blocks > 0)
+            ShowPlacementPopup("Not connected to other blocks — can't hold turrets or join the enemy path", 2.6f);
     }
 
     public void ShowPlacementPopup(string msg, float duration = 1.5f)
@@ -359,6 +396,13 @@ public partial class PlacementController : MonoBehaviour
     {
         currentRefreshCost = refreshBaseCost;
     }
+
+    // Mid-level resume: the refresh cost the player had climbed to this turn.
+    public void SetRefreshCost(int cost) => currentRefreshCost = Mathf.Max(0, cost);
+
+    // Mid-level resume: the opening shop was used up long ago — a refresh on the
+    // resumed turn must not stamp it into the shop a second time.
+    public void MarkStartingShopApplied() => _startingShopApplied = true;
     // Clears all shop items for the new round.
     public void ClearTray()
     {
@@ -376,11 +420,17 @@ public partial class PlacementController : MonoBehaviour
 
         var turretTypes = new List<BlockData>();
         var normalTypes = new List<BlockData>();
+        // A level can hold a turret type back until the level that introduces it
+        // (LevelDefinition.turretPool). Endless and levels without a list roll them all.
+        var level = RunConfig.Mode == GameMode.Level ? RunConfig.Level : null;
         foreach (var b in blocks)
         {
             if (b == null) continue;
-            if (TurretTypes.Is(b.blockType)) turretTypes.Add(b);
-            else                                 normalTypes.Add(b);
+            if (TurretTypes.Is(b.blockType))
+            {
+                if (level == null || level.AllowsTurret(b.blockType)) turretTypes.Add(b);
+            }
+            else normalTypes.Add(b);
         }
 
         // Use the run-scoped seeded RNG so a fixed runSeed gives a deterministic
@@ -481,13 +531,31 @@ public partial class PlacementController : MonoBehaviour
 
     void Update()
     {
-        if (SettingsScreen.Open || IntroDirector.Playing || GameFlowManager.SettlementUp) return;   // modal / intro / clear settlement — block placement input
+        if (SettingsScreen.Open || IntroDirector.Playing || GameFlowManager.SettlementUp)
+        {
+            VirtualCursor.EndRotation();
+            _mouseRotation.Reset();
+            return;
+        }
 
         _currentRotation = Quaternion.Slerp(
             _currentRotation,
             _targetRotation,
             1f - Mathf.Exp(-rotateSpeed * Time.unscaledDeltaTime)
         );
+        if (Quaternion.Angle(_currentRotation, _targetRotation) < 1f)
+            _currentRotation = _targetRotation;
+
+        bool holding = (mode == PlacementMode.Edit && currentBlock != null) || _batchMoving;
+        if (!holding) _mouseRotation.Reset();
+        bool canRotate = _batchMoving
+            ? Quaternion.Angle(_batchDisplayRot, _batchTargetRot) < 1f
+            : _currentRotation == _targetRotation;
+        bool rotating = holding && Application.isFocused && Input.GetKey(KeyCode.LeftAlt);
+        if (rotating && !_mouseRotation.Active) AlignPlacementCursor();
+        VirtualCursor.SetRotationAnchor(rotating, cam.myCam, grid.GridToWorld(currentGridPos));
+        _mouseRotationDelta = _mouseRotation.Read(rotating,
+            VirtualCursor.MouseDelta, Input.mouseScrollDelta.y, cam.transform.right, canRotate);
 
         HandleScroll();
         HandleMouseMove();
@@ -508,7 +576,7 @@ public partial class PlacementController : MonoBehaviour
 
         if (mode == PlacementMode.Edit)
         {
-            HandleKeyboardOffset();
+            if (!_mouseRotation.Active) HandleKeyboardOffset();
             HandleRotate();
         }
         else
@@ -531,7 +599,7 @@ public partial class PlacementController : MonoBehaviour
 
         UpdateRestartHold();
 
-        if (Input.GetMouseButtonDown(0) || VirtualCursor.ConfirmPressedThisFrame)
+        if (!_mouseRotation.Active && (Input.GetMouseButtonDown(0) || VirtualCursor.ConfirmPressedThisFrame))
         {
             if (IsPointerOverSelectionPanel() || HudSidePanels.PointerOver || PointerOverInfoPanel()
                 || MultiSelectPanel.IsPointerOver(VirtualCursor.Position))
@@ -597,6 +665,7 @@ public partial class PlacementController : MonoBehaviour
 
     void HandleScroll()
     {
+        if (_mouseRotation.Active) return;
         float s = Input.GetAxis("Mouse ScrollWheel");
         if (Mathf.Abs(s) < 0.001f) return;
 
@@ -626,6 +695,7 @@ public partial class PlacementController : MonoBehaviour
 
     void HandleMouseMove()
     {
+        if (_mouseRotation.Active) return;
         Ray r = cam.myCam.ScreenPointToRay(VirtualCursor.Position);
         Vector3 world;
 
@@ -634,7 +704,8 @@ public partial class PlacementController : MonoBehaviour
             // Ortho: intersect the mouse ray with the build-plane (world Y).
             // Plane sits at the centre of cell row _buildY (= cellSize * y + cs/2).
             float cs       = grid != null ? grid.cellSize : 1f;
-            float planeY   = _buildY * cs + cs * 0.5f;
+            float planeY   = grid != null ? grid.GridToWorld(new Vector3Int(0, _buildY, 0)).y   // honours GridSystem.originCells
+                                          : _buildY * cs + cs * 0.5f;
             float t        = (planeY - r.origin.y) / r.direction.y;
             world          = t > 0f ? r.origin + r.direction * t
                                     : r.origin + r.direction * _depth; // fallback
@@ -715,7 +786,7 @@ public partial class PlacementController : MonoBehaviour
     // Edit mode only.
     // A / D move block left/right relative to camera's horizontal facing
     // W / S move block forward / back relative to camera's horizontal facing
-    // Q / E move block UP / DOWN in world Y
+    // E / Q move block UP / DOWN in world Y
     void HandleKeyboardOffset()
     {
         Vector3Int right   = SnapToHorizontalAxis(cam.transform.right);
@@ -725,8 +796,8 @@ public partial class PlacementController : MonoBehaviour
         if (Input.GetKeyDown(KeyCode.D)) Nudge(right);
         if (Input.GetKeyDown(KeyCode.W)) Nudge(forward);
         if (Input.GetKeyDown(KeyCode.S)) Nudge(-forward);
-        if (Input.GetKeyDown(KeyCode.Q)) Nudge(Vector3Int.up);
-        if (Input.GetKeyDown(KeyCode.E)) Nudge(Vector3Int.down);
+        if (Input.GetKeyDown(KeyCode.E)) Nudge(Vector3Int.up);
+        if (Input.GetKeyDown(KeyCode.Q)) Nudge(Vector3Int.down);
 
         // Gamepad d-pad mirrors A/D/W/S (Q/E depth stays mouse/keyboard-only, low value on a pad).
         if (GamepadInput.CycleBlockPrevDown) Nudge(-right);
@@ -735,25 +806,34 @@ public partial class PlacementController : MonoBehaviour
         if (GamepadInput.DPadDownDown)       Nudge(Vector3Int.down);
     }
 
-    // One step of keyboard/d-pad nudge.
-    //
-    // In snapping mode the nudge can't just add to manualOffset and hope. The snap
-    // solver runs again next frame, re-derives baseGridPos from the (unmoved) mouse
-    // ray, and tests `raw + manualOffset` — so when the nudged cell isn't placeable
-    // it goes hunting for a base that makes some OTHER nearby cell valid, and the
-    // one it finds is usually the cell we just left. The block visibly refuses to
-    // move, and pressing again does nothing. Rejecting the step here is honest
-    // about what happened instead of letting the solver quietly undo it.
+    // Move the anchor, then put the cursor and build plane at that same position.
     void Nudge(Vector3Int delta)
     {
         if (delta == Vector3Int.zero) return;
-
-        // Free move has no support constraint at all — the offset IS the position.
-        if (GameSettings.FreeMove) { manualOffset += delta; return; }
-
-        var cells = GetRotatedCells();
-        if (cells.Length > 0 && !CanPlace(currentGridPos + delta, cells)) return;
+        if (!GameSettings.FreeMove)
+        {
+            var cells = GetRotatedCells();
+            if (cells.Length > 0 && !CanPlace(baseGridPos + manualOffset + delta, cells)) return;
+        }
         manualOffset += delta;
+        AlignPlacementCursor();
+    }
+
+    void AlignPlacementCursor()
+    {
+        currentGridPos = baseGridPos + manualOffset;
+        baseGridPos = currentGridPos;
+        manualOffset = Vector3Int.zero;
+        _buildY = currentGridPos.y;
+        _ghostAnchorSnap = true;   // cursor and ghost arrive at the manual anchor together
+        _lastSnappedBaseGridPos = baseGridPos;
+        _hasLastRawCell = false;
+
+        Vector3 world = grid.GridToWorld(currentGridPos);
+        Vector2 screen = cam.myCam.WorldToScreenPoint(world);
+        Ray ray = cam.myCam.ScreenPointToRay(screen);
+        _depth = Vector3.Dot(world - ray.origin, ray.direction);
+        VirtualCursor.Warp(screen);
     }
 
     // Select mode: WASD pans the camera continuously along its horizontal facing,
@@ -793,44 +873,22 @@ public partial class PlacementController : MonoBehaviour
 
     void HandleRotate()
     {
-        bool shift = Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift);
+        if (_currentRotation != _targetRotation) return;
+        bool rotated = _mouseRotationDelta != Quaternion.identity;
+        if (rotated) _targetRotation = _mouseRotationDelta * _targetRotation;
 
-        // World-space rotation (pre-multiply). delta * old applies delta in
-        // world frame, so 1/2/3 always rotate around world X/Y/Z regardless
-        // of how the block has been turned before. Keeps the visual ring
-        // overlay axis-aligned and predictable.
-        bool rotated = false;
-        if (Input.GetKeyDown(KeyCode.Alpha1))
+        // Keep the gamepad's existing yaw action.
+        else if (GamepadInput.RotateDown)
         {
-            AudioManager.Instance.PlayRotate();
-            _targetRotation = Quaternion.Euler(90, 0, 0) * _targetRotation;
-            rotated = true;
-        }
-
-        if (Input.GetKeyDown(KeyCode.Alpha2))
-        {
-            AudioManager.Instance.PlayRotate();
             _targetRotation = Quaternion.Euler(0, 90, 0) * _targetRotation;
             rotated = true;
         }
 
-        if (Input.GetKeyDown(KeyCode.Alpha3))
+        if (rotated)
         {
-            AudioManager.Instance.PlayRotate();
-            _targetRotation = Quaternion.Euler(0, 0, 90) * _targetRotation;
-            rotated = true;
+            AudioManager.Instance?.PlayRotate();
+            BlockRotated?.Invoke();
         }
-
-        // Right shoulder — a single gamepad button can't cover all 3 axes, so it
-        // mirrors the most common one (yaw, same as Alpha2).
-        if (GamepadInput.RotateDown)
-        {
-            AudioManager.Instance.PlayRotate();
-            _targetRotation = Quaternion.Euler(0, 90, 0) * _targetRotation;
-            rotated = true;
-        }
-
-        if (rotated) BlockRotated?.Invoke();
     }
 
     void HandleModeSwitch()
@@ -875,11 +933,8 @@ public partial class PlacementController : MonoBehaviour
             ShowPlacementPopup("Sealed by the enemy — this block can't be moved. You can still sell it.");
             return false;
         }
-        if (FindOrphanedTurret(selectedInstance) != null)
-        {
-            ShowPlacementPopup("There's still turret on this block, try move it first");
-            return false;
-        }
+        // No "a turret would be left unsupported" guard: that turret is now flagged
+        // (and stops firing) instead, and comes back the moment it is supported again.
 
         isPickingUpObject = true;
         lastObjectPos   = selectedInstance.visualObject.transform.position;
@@ -912,6 +967,8 @@ public partial class PlacementController : MonoBehaviour
 
     void CancelEditMode()
     {
+        VirtualCursor.EndRotation();
+        _mouseRotation.Reset();
         if (isPickingUpObject)
         {
             CancelAndReturnObject();
@@ -1058,8 +1115,7 @@ public partial class PlacementController : MonoBehaviour
         // --- Placed blocks: single-click selects, double-click picks up for re-edit ---
         // Step slightly inward along the surface normal before snapping to grid so
         // a hit exactly on a face boundary doesn't round into the adjacent empty cell.
-        Vector3Int gPos    = grid.WorldToGrid(hit.point - hit.normal * (grid.cellSize * 0.1f));
-        var        instance = grid.GetInstanceAt(gPos);
+        var instance = InstanceFromHit(hit);
 
         if (instance != null)
         {
@@ -1089,6 +1145,26 @@ public partial class PlacementController : MonoBehaviour
             if (isDouble)
                 PickUpSelected();
         }
+    }
+
+    // The placed block a raycast hit belongs to: the one whose visual the hit
+    // collider sits under. Only if the collider isn't part of any block does it
+    // fall back to "which cell is just inside the hit point".
+    //
+    // Cell-only lookup is what made turrets hard to click: a turret's model tumbles
+    // and bobs, so much of what you see sticks out of its own cell, and a click on
+    // a corner stepped "inward" into the empty neighbouring cell and found nothing.
+    PlacedBlockInstance InstanceFromHit(RaycastHit hit)
+    {
+        var t = hit.collider != null ? hit.collider.transform : hit.transform;
+        if (t != null)
+            foreach (var ins in grid.GetAllInstances())
+            {
+                if (ins?.visualObject == null) continue;
+                var root = ins.visualObject.transform;
+                if (t == root || t.IsChildOf(root)) return ins;
+            }
+        return grid.GetInstanceAt(grid.WorldToGrid(hit.point - hit.normal * (grid.cellSize * 0.1f)));
     }
 
     void UpdateHighlight(GameObject target)
@@ -1156,8 +1232,10 @@ public partial class PlacementController : MonoBehaviour
     int ComputeSellRefund(PlacedBlockInstance ins)
     {
         if (ins?.data == null || ResourceManager.Instance == null) return 0;
+        if (ins.inherited) return 0;   // paid for in an earlier level — see PlacedBlockInstance.inherited
         int basePrice = ResourceManager.Instance.ComputePrice(ins.data, 1f);
-        return Mathf.Max(1, Mathf.RoundToInt(basePrice * sellRefundFraction));
+        float fraction = Mathf.Max(0f, Modifiers.Eval(Stat.SellRefund, 1f) * sellRefundFraction);
+        return Mathf.Max(1, Mathf.RoundToInt(basePrice * fraction));
     }
 
     // Upgrading a turret costs turret currency equal to the turret's own price
@@ -1310,11 +1388,6 @@ public partial class PlacementController : MonoBehaviour
             Debug.Log("[Placement] This block is part of the level's fixed layout and can't be sold.");
             return;
         }
-        if (FindOrphanedTurret(ins) != null)
-        {
-            ShowPlacementPopup("There's still turret on this block, try move it first");
-            return;
-        }
         if (!TutorialDirector.CanSell()) { ShowPlacementPopup("Sell banned during tutorial!"); return; }   // tutorial gate
 
         int refund = ComputeSellRefund(ins);
@@ -1329,12 +1402,15 @@ public partial class PlacementController : MonoBehaviour
         UpdateHighlight(null);
         HideRangeIndicator();
 
-        if (isTurret) ResourceManager.Instance?.AddTurretCurrency(refund);
-        else          ResourceManager.Instance?.RefundBlock(refund);
-        CurrencyFlyFx.Fly(soldPos, isTurret, refund);
+        if (refund > 0)
+        {
+            if (isTurret) ResourceManager.Instance?.AddTurretCurrency(refund);
+            else          ResourceManager.Instance?.RefundBlock(refund);
+            CurrencyFlyFx.Fly(soldPos, isTurret, refund);
+        }
 
         GameFlowManager.Instance?.EvaluateGrid();
-        ShowPlacementPopup($"Sold for +{refund}");
+        ShowPlacementPopup(refund > 0 ? $"Sold for +{refund}" : "Cleared (inherited — no refund)");
         BlockSold?.Invoke(ins.data);
     }
 
@@ -1356,6 +1432,8 @@ public partial class PlacementController : MonoBehaviour
     // focusPos: if provided, camera pivots there once. Pass null to leave camera in place.
     void EnterEditMode(Vector3? focusPos)
     {
+        VirtualCursor.EndRotation();
+        _mouseRotation.Reset();
         ClearMultiSelection();   // single choke point — edit mode and a box-selection can never coexist
         mode = PlacementMode.Edit;
         _selectedEndpoint = null;   // leaving Select hides the spawn-intel panel
@@ -1574,11 +1652,18 @@ public partial class PlacementController : MonoBehaviour
         for (int i = 0; i < previewCubes.Count; i++)
             previewCubes[i].SetActive(i < cells.Length);
 
-        // Valid green, invalid red. Preview always reads as a placement hint;
-        // the random per-block color is applied only on successful placement.
-        Color tint = valid
-            ? new Color(0.25f, 1.00f, 0.35f, 0.55f)
-            : new Color(1.00f, 0.20f, 0.20f, 0.45f);
+        // Three states, not two. Green: goes down and is part of the build. Orange:
+        // CAN go down, but will not connect back to an endpoint, so it will be
+        // flagged the moment it lands (and a turret there will not fire). Red:
+        // cannot go down at all — overlap, a reserved or claimed cell.
+        //
+        // Orange exists because placement stopped refusing unconnected pieces. With
+        // only green and red, "legal but dead" would have to show as green, and the
+        // player would learn it was a mistake only after paying for it.
+        bool attached = valid && BoardValidity.WouldAttach(WorldCells(currentGridPos, cells));
+        Color tint = !valid   ? new Color(1.00f, 0.20f, 0.20f, 0.45f)
+                   : attached ? new Color(0.25f, 1.00f, 0.35f, 0.55f)
+                              : new Color(1.00f, 0.58f, 0.12f, 0.55f);
 
         // Cells stay snapped (for validity + TryPlace); cubes draw offset from an
         // eased anchor so a one-cell move slides instead of popping — same technique
@@ -1601,6 +1686,13 @@ public partial class PlacementController : MonoBehaviour
                 _ghostVisualAnchor + (grid.GridToWorld(currentGridPos + cells[i]) - targetAnchor);
             previewCubes[i].GetComponent<Renderer>().material.color = tint;
         }
+    }
+
+    static Vector3Int[] WorldCells(Vector3Int basePos, Vector3Int[] rel)
+    {
+        var w = new Vector3Int[rel.Length];
+        for (int i = 0; i < rel.Length; i++) w[i] = basePos + rel[i];
+        return w;
     }
 
     Vector3Int[] GetRotatedCells()
@@ -1753,7 +1845,7 @@ public partial class PlacementController : MonoBehaviour
         // turret actually does, not what its type does in general.
         float reach = grid.cellSize * 2.2f;
         var placedTurret = ins.visualObject.GetComponentInChildren<TurretController>();
-        if (placedTurret != null) reach = placedTurret.attackRange;
+        if (placedTurret != null) reach = placedTurret.EffectiveRange;
 
         ImpactFx.Land(impact, reach, ins.visualObject);
         ImpactFx.Ripple(impact - Vector3.up * (grid.cellSize * 0.45f),
@@ -1843,58 +1935,15 @@ public partial class PlacementController : MonoBehaviour
             worldCells[i] = p;
         }
 
-        // Underground (y < 0) is allowed — you can build down into the earth — but
-        // a block must still touch an existing block or endpoint. The Chaos Block
-        // doesn't count as support (HasSupportingNeighbor18 skips it), so you can't
-        // stack a turret straight onto it to attack it. Corner-only contact doesn't
-        // count either — see GridSystem.IsCornerOffset.
-        if (!grid.HasSupportingNeighbor18(worldCells))
-            return PlaceFailureReason.NotAdjacent;
-
+        // No adjacency rule any more — for blocks OR turrets. A piece may go down
+        // anywhere free; one that does not connect back to an endpoint is flagged
+        // afterwards instead of refused (hazard stripes, and a turret there holds
+        // its fire). See BoardValidity. The old Chaos Block rule survives there:
+        // its cells conduct nothing, so a turret anchored only to it cannot fire.
+        //
+        // This also frees the ghost: SnapToNearestSupported pulls the held block to
+        // the nearest cell CanPlace accepts, and that is now simply any free cell.
         return PlaceFailureReason.None;
-    }
-
-    // ── Turret-support check (pickup / sell guard) ────────────────────────────
-    // Mirrors Validate()'s NotAdjacent rule but in reverse: placing a block
-    // requires it to touch something existing; removing one must not leave a
-    // TURRET with nothing left to attach to. Only turrets are checked — regular
-    // blocks are allowed to end up disconnected (no such rule exists for them).
-
-    // First turret that would have zero occupied 26-neighbor cells if
-    // `toRemove` were taken off the grid — null if none. Skips `toRemove`
-    // itself (picking a turret up doesn't need to "support" itself).
-    PlacedBlockInstance FindOrphanedTurret(PlacedBlockInstance toRemove)
-    {
-        if (toRemove == null || grid == null) return null;
-
-        foreach (var other in grid.GetAllInstances())
-        {
-            if (other == null || other == toRemove || other.data == null) continue;
-            if (!TurretTypes.Is(other.data.blockType)) continue;
-            if (!HasExternalSupport(other, toRemove.occupiedCells)) return other;
-        }
-        return null;
-    }
-
-    // True if ANY cell of `instance` has a 26-neighbor occupied by something
-    // OTHER than `instance` itself or a cell in `excludeCells` (the block about
-    // to be removed) — i.e. it would still have something to attach to.
-    bool HasExternalSupport(PlacedBlockInstance instance, IList<Vector3Int> excludeCells)
-    {
-        foreach (var cell in instance.occupiedCells)
-            for (int dx = -1; dx <= 1; dx++)
-            for (int dy = -1; dy <= 1; dy++)
-            for (int dz = -1; dz <= 1; dz++)
-            {
-                if (dx == 0 && dy == 0 && dz == 0) continue;
-                if (GridSystem.IsCornerOffset(dx, dy, dz)) continue;   // same 18-neighbourhood placement uses
-                var n = new Vector3Int(cell.x + dx, cell.y + dy, cell.z + dz);
-                if (!grid.IsOccupied(n)) continue;
-                if (excludeCells.Contains(n)) continue;
-                if (instance.occupiedCells.Contains(n)) continue;   // own cell — not external
-                return true;
-            }
-        return false;
     }
 
     static string ReasonToMessage(PlaceFailureReason r) => r switch
@@ -2333,7 +2382,10 @@ public partial class PlacementController : MonoBehaviour
         float target = (grid != null ? grid.cellSize : 1f) * TurretVisualCellFraction;
         FitTurretToCell(visual, target);
 
-        visual.AddComponent<TurretBeacon>();    // idle spin + bob (rotation/pos only, doesn't touch scale)
+        // Type-specific motion (rotation/position only — never scale, which
+        // CombatRipple owns): Basic tumbles, Slow turns its pieces in sequence, AOE
+        // moves its three parts together. See TurretAnimator.
+        TurretAnimator.Attach(visual, TurretTypes.Mode(data.blockType));
 
         // Type colour, NOT the block's synergy colour — turret BlockDatas share (or
         // reuse) a prefab, so this tint is the only thing telling Basic / Slow / AOE
@@ -2349,25 +2401,29 @@ public partial class PlacementController : MonoBehaviour
     // identity rotation (SpawnTurretVisual sets that up).
     void FitTurretToCell(GameObject visual, float targetSize)
     {
-        if (TurretVisualFit.Fit(visual, targetSize, out var localCenter, out var maxDim))
-        {
-            // Collider lives on `visual`, so it inherits the fitted scale: local size
-            // maxDim × that scale == targetSize in world. center scales with the mesh,
-            // so the box stays on the gun rather than drifting to origin.
-            var col = visual.AddComponent<BoxCollider>();
-            col.center = localCenter;
-            col.size   = Vector3.one * maxDim;
-            return;
-        }
+        if (!TurretVisualFit.Fit(visual, targetSize, out _, out _))
+            // No renderers / degenerate bounds — fall back to the legacy fixed scale
+            // so the turret is at least present.
+            visual.transform.localScale = Vector3.one * TurretVisualScale;
 
-        // No renderers / degenerate bounds — fall back to the legacy fixed scale so
-        // the turret is at least present and clickable.
-        visual.transform.localScale = Vector3.one * TurretVisualScale;
-        visual.AddComponent<BoxCollider>().size = Vector3.one / TurretVisualScale;
+        // The click box goes on the BLOCK root, not on the model: the model tumbles,
+        // bobs and squashes (TurretAnimator) and CombatRipple scales it to nothing,
+        // and a box riding along with all that was a moving, sometimes vanishing
+        // target. The root never moves — an axis-aligned box of exactly the cell.
+        var host = visual.transform.parent != null ? visual.transform.parent.gameObject : visual;
+        var col  = host.AddComponent<BoxCollider>();
+        col.center = Vector3.zero;
+        col.size   = Vector3.one * targetSize;
     }
 
     void RegisterPlacedBlock(PlacedBlockInstance ins, int ownerId = -1)
     {
+        // Now, before the turret controller, a device or any synergy effect adds
+        // renderers of its own under this visual. BoardValidity restyles exactly
+        // these — see PlacedBlockInstance.ownRenderers.
+        if (ins.visualObject != null)
+            ins.ownRenderers = ins.visualObject.GetComponentsInChildren<Renderer>(true);
+
         // -1 means "mine". A block arriving from the wire belongs to whoever issued
         // the command, not to whoever is applying it — stamping the local id here is
         // what would make every player think they owned the whole board.
@@ -2416,6 +2472,8 @@ public partial class PlacementController : MonoBehaviour
         if (turret == null)
             turret = target.gameObject.AddComponent<TurretController>();
         turret.Configure(ins.data.blockType, ins.data.bulletPrefab, ins.data.bulletScale);
+        turret.Visual = ins.visualObject.GetComponentInChildren<TurretAnimator>();
+        if (turret.Visual != null) turret.Visual.Turret = turret;
         turret.SetBasicUpgradeLevels(ins.basicPowerUpgradeLevel, ins.basicBurstUpgradeLevel);
         turret.SetAoeUpgradeLevels(ins.aoeFireUpgradeLevel, ins.aoeGravityUpgradeLevel);
     }

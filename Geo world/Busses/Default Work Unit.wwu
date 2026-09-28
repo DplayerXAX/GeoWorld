@@ -162,6 +162,63 @@
 								</Bus>
 							</ChildrenList>
 							<ObjectLists>
+								<ObjectList Name="Effects">
+									<EffectSlot Name="" ID="{21A17921-F576-49EE-B1C8-CFAF49CCFF4B}" ShortID="202043031">
+										<PropertyList>
+											<Property Name="Bypass" Type="bool" Value="True"/>
+										</PropertyList>
+										<ReferenceList>
+											<Reference Name="Effect" PluginName="Wwise RoomVerb" CompanyID="0" PluginID="118" PluginType="3">
+												<ObjectRef Name="Inside_My_Head" ID="{94B53301-9AA1-468F-8419-92AEDAAE39DF}" WorkUnitID="{E8613F7D-BAD3-45CD-A3ED-505576F31277}"/>
+											</Reference>
+										</ReferenceList>
+										<ObjectLists>
+											<ObjectList Name="RTPC">
+												<RTPC Name="" ID="{279D996C-4269-40A3-8EDF-903BC5FA4AB2}" ShortID="121303757">
+													<PropertyList>
+														<Property Name="PropertyName" Type="string" Value="Bypass"/>
+													</PropertyList>
+													<ReferenceList>
+														<Reference Name="ControlInput">
+															<ObjectRef Name="HurtPulse" ID="{E31FB1D4-20EB-4A45-8235-5224AC604859}" WorkUnitID="{746EDB62-9747-4C09-85D1-493CF0163B26}"/>
+														</Reference>
+														<Reference Name="Curve">
+															<Custom>
+																<Curve Name="" ID="{C7D970F0-C7CF-4CA4-AD53-1BBB74DAA23C}">
+																	<PropertyList>
+																		<Property Name="Flags" Type="int32" Value="65537"/>
+																	</PropertyList>
+																	<PointList>
+																		<Point>
+																			<XPos>0</XPos>
+																			<YPos>1</YPos>
+																			<Flags>5</Flags>
+																		</Point>
+																		<Point>
+																			<XPos>0.4315</XPos>
+																			<YPos>0</YPos>
+																			<Flags>0</Flags>
+																		</Point>
+																		<Point>
+																			<XPos>0.4325</XPos>
+																			<YPos>0</YPos>
+																			<Flags>0</Flags>
+																		</Point>
+																		<Point>
+																			<XPos>1</XPos>
+																			<YPos>0</YPos>
+																			<Flags>37</Flags>
+																		</Point>
+																	</PointList>
+																</Curve>
+															</Custom>
+														</Reference>
+													</ReferenceList>
+												</RTPC>
+											</ObjectList>
+										</ObjectLists>
+									</EffectSlot>
+								</ObjectList>
 								<ObjectList Name="RTPC">
 									<RTPC Name="" ID="{E725792C-84D2-4BD0-BE11-BFABE03C2A59}" ShortID="225373494">
 										<PropertyList>
@@ -185,6 +242,37 @@
 															</Point>
 															<Point>
 																<XPos>100</XPos>
+																<YPos>0</YPos>
+																<Flags>37</Flags>
+															</Point>
+														</PointList>
+													</Curve>
+												</Custom>
+											</Reference>
+										</ReferenceList>
+									</RTPC>
+									<RTPC Name="" ID="{71CCA4F9-CBE9-406B-8F90-38C9D1653D4F}" ShortID="793310303">
+										<PropertyList>
+											<Property Name="PropertyName" Type="string" Value="CenterPercentage"/>
+										</PropertyList>
+										<ReferenceList>
+											<Reference Name="ControlInput">
+												<ObjectRef Name="HurtPulse" ID="{E31FB1D4-20EB-4A45-8235-5224AC604859}" WorkUnitID="{746EDB62-9747-4C09-85D1-493CF0163B26}"/>
+											</Reference>
+											<Reference Name="Curve">
+												<Custom>
+													<Curve Name="" ID="{BADB03E4-AB89-4242-B36C-AC9095F56E5A}">
+														<PropertyList>
+															<Property Name="Flags" Type="int32" Value="65537"/>
+														</PropertyList>
+														<PointList>
+															<Point>
+																<XPos>0</XPos>
+																<YPos>50</YPos>
+																<Flags>5</Flags>
+															</Point>
+															<Point>
+																<XPos>1</XPos>
 																<YPos>0</YPos>
 																<Flags>37</Flags>
 															</Point>

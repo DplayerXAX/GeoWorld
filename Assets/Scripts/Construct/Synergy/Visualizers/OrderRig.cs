@@ -23,10 +23,10 @@ public class OrderRig : MonoBehaviour
     public bool  showGears       = true;
     public int   gearTeeth       = 12;
     public float gearSizeMinFrac = 0.20f;   // smallest cog radius / cellSize
-    public float gearSizeMaxFrac = 0.50f;   // largest  cog radius / cellSize
+    public float gearSizeMaxFrac = 0.40f;   // largest  cog radius / cellSize (fits the flat, not the bevel)
     [Range(0f, 1f)] public float faceCoverChance = 0.5f;   // chance each outer face gets a cog
     public int   maxGears        = 12;      // cap per piece
-    public float faceOffsetFrac  = 0.05f;   // lift off the face / cellSize
+    public float faceOffsetFrac  = 0.015f;  // gap behind the cog / cellSize (anti z-fight only)
     public Color outlineColor    = new Color(0.04f, 0.04f, 0.06f, 1f);  // bold cartoon rim (matches blocks)
     public float outlineWidth    = 0.06f;
     [Range(0f, 1f)] public float beatFlash = 0.45f;       // cog ink-stamp flash on each tick
@@ -35,7 +35,7 @@ public class OrderRig : MonoBehaviour
     // ── Hologram (translucent, floating, flickering cogs) ────────────────────
     public bool  holographic     = true;    // translucent additive cogs instead of solid ink
     [Range(0.05f, 1f)] public float holoAlpha = 0.4f;   // base opacity of the holo cogs
-    public float floatDistanceFrac = 0.35f;  // how far cogs float OFF the faces / cellSize (don't hug the block)
+    public float floatDistanceFrac = 0f;     // extra stand-off / cellSize (0 = bolted on)
     public float hoverAmplitudeFrac = 0f;     // vertical/normal hover amplitude / cellSize (0 = no bob)
     public float hoverSpeed        = 1.1f;    // hover oscillations per second-ish
     [Range(0f, 0.6f)] public float flickerAmount = 0.18f;   // holo opacity jitter
@@ -402,8 +402,11 @@ public class OrderRig : MonoBehaviour
                 if (Hash01(gi * 131 + 5) > faceCoverChance) continue;   // random coverage
 
                 float radius = cellSize * Mathf.Lerp(gearSizeMinFrac, gearSizeMaxFrac, Hash01(gi * 977 + 3));
-                // Float OFF the face (holo projections hover, they don't hug the
-                // block) — extra floatDistanceFrac on top of the flush offset.
+                // The cog's centre, measured out from the cell centre along the face
+                // normal: to the face (half), plus the gap, plus HALF THE COG'S OWN
+                // THICKNESS — GearMeshFactory builds a unit cog 0.24 thick, and it is
+                // scaled uniformly by radius, so 0.12 * radius puts its back face on
+                // the gap rather than half-buried in the block.
                 float off    = half + cellSize * (faceOffsetFrac + floatDistanceFrac) + 0.12f * radius;
                 Vector3 pos  = cl + n * off;
 

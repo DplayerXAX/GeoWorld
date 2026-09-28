@@ -34,6 +34,14 @@ public class PlayerHealth : MonoBehaviour
     /// absolutely cannot have four answers, so on a client this is the ONLY thing
     /// that moves the number — local damage is ignored entirely.
     /// </summary>
+    // Mid-level resume: set the count with none of the damage feedback a drop in
+    // ApplyRemoteLives would play — nobody was just hit.
+    public void RestoreLives(int lives)
+    {
+        _lives = Mathf.Clamp(lives, 1, maxLives);
+        OnLivesChanged?.Invoke(_lives);
+    }
+
     public void ApplyRemoteLives(int lives)
     {
         if (lives == _lives) return;
@@ -46,6 +54,7 @@ public class PlayerHealth : MonoBehaviour
         if (dropped)
         {
             AudioManager.Instance?.PlayDamage();
+            AudioManager.Instance?.PulseHurt();
             CameraShake.Damage();
         }
         if (_lives == 0) OnGameOver?.Invoke();
@@ -60,6 +69,7 @@ public class PlayerHealth : MonoBehaviour
         _lives = Mathf.Max(0, _lives - amount);
         OnLivesChanged?.Invoke(_lives);
         AudioManager.Instance?.PlayDamage();
+        AudioManager.Instance?.PulseHurt();
         CameraShake.Damage();
 
         // Not shaken here on the killing blow — HandleGameOver's own, much harder

@@ -23,7 +23,7 @@ public partial class PlacementController
             && TurretTypes.Is(selectedInstance.data.blockType))
         {
             var turret = selectedInstance.visualObject.GetComponentInChildren<TurretController>();
-            if (turret != null && turret.attackRange > 0f)
+            if (turret != null && turret.EffectiveRange > 0f)
             {
                 Vector3 muzzle = turret.MuzzleWorldPosition;
 
@@ -33,7 +33,7 @@ public partial class PlacementController
                 float rt  = selectionPopDuration > 1e-4f ? (Time.time - _rangeAnimStart) / selectionPopDuration : 1f;
                 float pop = EaseOutCubic(Mathf.Clamp01(rt));
 
-                ShowRangeSphere(muzzle, turret.attackRange, pop);
+                ShowRangeSphere(muzzle, turret.EffectiveRange, pop);
                 UpdateShadowVolume(turret, muzzle, pop);
                 return;
             }
@@ -54,11 +54,11 @@ public partial class PlacementController
     // cube geometry, no raycasts).
     void UpdateShadowVolume(TurretController turret, Vector3 muzzle, float pop)
     {
-        if (selectedInstance != _shadowFor || !Mathf.Approximately(turret.attackRange, _shadowRange))
+        if (selectedInstance != _shadowFor || !Mathf.Approximately(turret.EffectiveRange, _shadowRange))
         {
             BuildShadowVolume(turret, muzzle);
             _shadowFor = selectedInstance;
-            _shadowRange = turret.attackRange;
+            _shadowRange = turret.EffectiveRange;
         }
         if (_rangeShadow != null)
         {
@@ -80,7 +80,7 @@ public partial class PlacementController
     void BuildShadowVolume(TurretController turret, Vector3 muzzle)
     {
         EnsureRangeShadow();
-        float range = turret.attackRange;
+        float range = turret.EffectiveRange;
 
         var verts = new List<Vector3>();
         var cols  = new List<Color>();

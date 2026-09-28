@@ -10,7 +10,7 @@
     "Type": "User",
     "GUID": "{FBAC0406-FA36-4CC0-8121-80F7B6376C7E}",
     "Language": "SFX",
-    "Hash": "{79B83BF7-04EA-B089-45E2-5D4665EFE170}",
+    "Hash": "{5D9766FD-A1DA-3B94-AD17-319CAECCF28D}",
     "ObjectPath": "\\SoundBanks\\Default Work Unit\\GeoWorld_bank",
     "ShortName": "GeoWorld_bank",
     "Path": "GeoWorld_bank.bnk",
@@ -54,6 +54,14 @@
       "Location": "Memory",
       "ShortName": "3.wav",
       "CachePath": "4E/{4EB90DB4-0F73-5D35-95A7-8286A0C58173}.wem"
+     },
+     {
+      "Id": "153929351",
+      "Language": "SFX",
+      "Streaming": "false",
+      "Location": "Memory",
+      "ShortName": "Geo world\\Originals\\SFX\\hammer bass.wav",
+      "CachePath": "43/{43EA5212-DF27-F303-7FC2-4AAF4E43AD15}.wem"
      },
      {
       "Id": "176072702",
@@ -112,6 +120,14 @@
       "CachePath": "E4/{E4A48526-DE10-26C9-DD32-53D849D0FAF3}.wem"
      },
      {
+      "Id": "315589151",
+      "Language": "SFX",
+      "Streaming": "false",
+      "Location": "Memory",
+      "ShortName": "Geo world\\Originals\\SFX\\toy xylopho.wav",
+      "CachePath": "05/{05D85BF7-37AF-F104-3014-7F8DCCF7D196}.wem"
+     },
+     {
       "Id": "318210178",
       "Language": "SFX",
       "Streaming": "false",
@@ -150,6 +166,14 @@
       "Location": "Memory",
       "ShortName": "The Moment Before the End.wav",
       "CachePath": "E2/{E2DE449C-0EEB-898D-16AF-0B755598F832}.wem"
+     },
+     {
+      "Id": "441044606",
+      "Language": "SFX",
+      "Streaming": "false",
+      "Location": "Memory",
+      "ShortName": "混沌的戏弄Mock The Obedience.wav",
+      "CachePath": "26/{269F6129-E60E-56E0-2E9F-0C78C0EAF762}.wem"
      },
      {
       "Id": "442785962",
@@ -232,6 +256,14 @@
       "CachePath": "7D/{7D33FDDD-17CE-8BDA-C0FB-75D5FB7BA202}.wem"
      },
      {
+      "Id": "688574386",
+      "Language": "SFX",
+      "Streaming": "false",
+      "Location": "Memory",
+      "ShortName": "Geo world\\Originals\\SFX\\lab ambient.wav",
+      "CachePath": "06/{064DD66E-A11C-1F65-51F6-1008DF0CE4FA}.wem"
+     },
+     {
       "Id": "733391151",
       "Language": "SFX",
       "Streaming": "false",
@@ -277,15 +309,7 @@
       "Streaming": "false",
       "Location": "Memory",
       "ShortName": "Piecing together.wav",
-      "CachePath": "07/{07380261-5851-21B4-FB73-0AA3725DE03D}.wem"
-     },
-     {
-      "Id": "1057243432",
-      "Language": "SFX",
-      "Streaming": "false",
-      "Location": "Memory",
-      "ShortName": "Mock The Obedience.wav",
-      "CachePath": "D9/{D9CB22BD-D355-3E7C-48F9-59B84978D8FD}.wem"
+      "CachePath": "14/{143438C0-996E-325E-54D8-B368E312A0F1}.wem"
      },
      {
       "Id": "1062488858",
@@ -400,7 +424,7 @@
       "DurationType": "Infinite",
       "MediaRefs": [
        {
-        "Id": "1057243432"
+        "Id": "441044606"
        }
       ]
      },
@@ -817,6 +841,56 @@
       ]
      },
      {
+      "Id": "1817945039",
+      "Name": "TurretFire",
+      "ObjectPath": "\\Events\\Default Work Unit\\TurretFire",
+      "GUID": "{ED2A493B-31B1-48F0-8787-CDA501A3990A}",
+      "DurationType": "OneShot",
+      "DurationMin": "0.5",
+      "DurationMax": "2",
+      "SwitchContainers": [
+       {
+        "SwitchValue": {
+         "GroupType": "Switch",
+         "GroupId": "1521021787",
+         "Id": "787604482",
+         "GUID": "{5B76AF07-17EC-440B-AAA7-B9729762D059}"
+        },
+        "MediaRefs": [
+         {
+          "Id": "688574386"
+         }
+        ]
+       },
+       {
+        "SwitchValue": {
+         "GroupType": "Switch",
+         "GroupId": "1521021787",
+         "Id": "1083976202",
+         "GUID": "{107B1A54-4357-43B4-AD4C-24CA54A49518}"
+        },
+        "MediaRefs": [
+         {
+          "Id": "153929351"
+         }
+        ]
+       },
+       {
+        "SwitchValue": {
+         "GroupType": "Switch",
+         "GroupId": "1521021787",
+         "Id": "1291433366",
+         "GUID": "{DB4D86DD-456E-46CF-88A8-6F04217CB3CE}"
+        },
+        "MediaRefs": [
+         {
+          "Id": "315589151"
+         }
+        ]
+       }
+      ]
+     },
+     {
       "Id": "301972542",
       "Name": "victory_Loop",
       "ObjectPath": "\\Events\\Default Work Unit\\victory_Loop",
@@ -873,6 +947,32 @@
     ],
     "SwitchGroups": [
      {
+      "Id": "1521021787",
+      "Name": "turretType",
+      "ObjectPath": "\\Switches\\Default Work Unit\\turretType",
+      "GUID": "{1036FAF8-A42E-4140-A114-C22F3C753D5A}",
+      "Switches": [
+       {
+        "Id": "787604482",
+        "Name": "slow",
+        "ObjectPath": "\\Switches\\Default Work Unit\\turretType\\slow",
+        "GUID": "{5B76AF07-17EC-440B-AAA7-B9729762D059}"
+       },
+       {
+        "Id": "1083976202",
+        "Name": "aoe",
+        "ObjectPath": "\\Switches\\Default Work Unit\\turretType\\aoe",
+        "GUID": "{107B1A54-4357-43B4-AD4C-24CA54A49518}"
+       },
+       {
+        "Id": "1291433366",
+        "Name": "base",
+        "ObjectPath": "\\Switches\\Default Work Unit\\turretType\\base",
+        "GUID": "{DB4D86DD-456E-46CF-88A8-6F04217CB3CE}"
+       }
+      ]
+     },
+     {
       "Id": "3818020044",
       "Name": "NoteRange",
       "ObjectPath": "\\Switches\\Default Work Unit\\NoteRange",
@@ -928,6 +1028,6 @@
     ]
    }
   ],
-  "FileHash": "{1311BA06-C0D0-9D00-83E1-CB8079DDB071}"
+  "FileHash": "{231C0404-5B85-183C-C793-0174753E59FE}"
  }
 }

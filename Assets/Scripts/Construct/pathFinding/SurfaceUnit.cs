@@ -188,6 +188,7 @@ public class SurfaceUnit : MonoBehaviour
             case BlockType.Turret:
             case BlockType.SlowTurret:
             case BlockType.AoeTurret:
+            case BlockType.DebuffTurret:
                 block.onStepEvent.Post(this.gameObject);
                 break;
         }

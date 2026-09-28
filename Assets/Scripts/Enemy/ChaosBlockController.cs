@@ -123,8 +123,31 @@ public class ChaosBlockController : MonoBehaviour
     {
         var grid = GridSystem.instance;
         if (grid == null) return;
+        SpawnAt(PickSpawnCell(grid), Mathf.Max(1, _cfg.health));
+    }
 
-        Vector3Int cell = PickSpawnCell(grid);
+    // ── Mid-level save ────────────────────────────────────────────────────────
+    public List<CellHealth> Capture()
+    {
+        var list = new List<CellHealth>();
+        foreach (var kv in _cellOf)
+            if (kv.Key != null && kv.Key.CurrentHealth > 0)
+                list.Add(new CellHealth { cell = kv.Value, health = kv.Key.CurrentHealth });
+        return list;
+    }
+
+    public void Restore(List<CellHealth> saved)
+    {
+        if (saved == null) return;
+        foreach (var c in saved)
+            if (c != null && GridSystem.instance != null && !GridSystem.instance.IsOccupied(c.cell))
+                SpawnAt(c.cell, c.health);
+    }
+
+    void SpawnAt(Vector3Int cell, int health)
+    {
+        var grid = GridSystem.instance;
+        if (grid == null) return;
         Vector3    pos  = grid.GridToWorld(cell);
 
         GameObject go = visualPrefab != null
@@ -135,6 +158,7 @@ public class ChaosBlockController : MonoBehaviour
 
         if (!go.TryGetComponent(out EnemySurfaceUnit unit)) unit = go.AddComponent<EnemySurfaceUnit>();
         unit.SetMaxHealth(Mathf.Max(1, _cfg.health));
+        unit.SetCurrentHealth(health);   // wounded, as it was left (full on a normal spawn)
         unit.rewardOnKill = 0;   // the reward for killing it is NOT losing currency — no bonus on top
 
         if (!go.TryGetComponent<ChaosBlockUnit>(out _)) go.AddComponent<ChaosBlockUnit>();

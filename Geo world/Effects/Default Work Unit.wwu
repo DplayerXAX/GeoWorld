@@ -40,6 +40,43 @@
 						</ObjectList>
 					</ObjectLists>
 				</Effect>
+				<Effect Name="New_Pitch_Shifter_01" ID="{6888FCB9-3800-4B8F-B4BA-B114EDE5AB9B}" PluginName="Wwise Pitch Shifter" CompanyID="0" PluginID="136" PluginType="3">
+					<ObjectLists>
+						<ObjectList Name="RTPC">
+							<RTPC Name="" ID="{3A9CE0F9-4D0E-4A49-B8F1-4B92C1FAB4FC}" ShortID="867468446">
+								<PropertyList>
+									<Property Name="PropertyName" Type="string" Value="Pitch"/>
+								</PropertyList>
+								<ReferenceList>
+									<Reference Name="ControlInput">
+										<ObjectRef Name="HurtPulse" ID="{E31FB1D4-20EB-4A45-8235-5224AC604859}" WorkUnitID="{746EDB62-9747-4C09-85D1-493CF0163B26}"/>
+									</Reference>
+									<Reference Name="Curve">
+										<Custom>
+											<Curve Name="" ID="{DAEDBC36-2523-4DB4-B3CC-11BF275F8244}">
+												<PropertyList>
+													<Property Name="Flags" Type="int32" Value="1"/>
+												</PropertyList>
+												<PointList>
+													<Point>
+														<XPos>0</XPos>
+														<YPos>0</YPos>
+														<Flags>5</Flags>
+													</Point>
+													<Point>
+														<XPos>1</XPos>
+														<YPos>-500</YPos>
+														<Flags>37</Flags>
+													</Point>
+												</PointList>
+											</Curve>
+										</Custom>
+									</Reference>
+								</ReferenceList>
+							</RTPC>
+						</ObjectList>
+					</ObjectLists>
+				</Effect>
 			</ChildrenList>
 		</WorkUnit>
 	</Effects>

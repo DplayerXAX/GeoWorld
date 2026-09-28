@@ -25,6 +25,9 @@ MonoBehaviour:
   gearSpeed: 28
   gearSizeFrac: 0.3
   maxGearsPerPiece: 6
+  gearSizeMaxFrac: 0.4
+  faceOffsetFrac: 0.015
+  floatDistanceFrac: 0
   fadeInDuration: 0.5
   witherDuration: 0.3
   pulseSpeed: 2

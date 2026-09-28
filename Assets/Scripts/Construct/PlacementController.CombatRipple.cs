@@ -37,17 +37,17 @@ public partial class PlacementController
             for (int i = 0; i < count; i++)
             {
                 var t = ins.visualObject.transform.GetChild(i);
-                // Turret prefab visuals (TurretBeacon, scaled to fit a cell) are NOT
+                // Turret prefab visuals (TurretAnimator, scaled to fit a cell) are NOT
                 // cell cubes — skip them so the cube ripple doesn't reset their scale
                 // to 1. They pop back via BeaconPop at their own captured scale.
-                if (t.GetComponent<TurretBeacon>() != null) continue;
+                if (t.GetComponent<TurretAnimator>() != null) continue;
                 cubes.Add((t, ins.occupiedCells[i], t.position, t.localPosition));
                 t.localScale = Vector3.zero;
             }
 
             // Turret beacons aren't cube children (the ripple skips them) — collect
             // + hide them so they can pop back in with the wavefront too.
-            var beacon = ins.visualObject.GetComponentInChildren<TurretBeacon>();
+            var beacon = ins.visualObject.GetComponentInChildren<TurretAnimator>();
             if (beacon != null)
             {
                 beacons.Add((beacon.transform, beacon.transform.localScale, beacon.transform.position));

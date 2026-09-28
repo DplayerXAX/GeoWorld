@@ -22,6 +22,7 @@
 						<ObjectRef Name="Ending_Loop" ID="{DFE390B2-FB1A-47F1-98F5-5F86CB97A85F}" WorkUnitID="{FD1D3805-1493-4712-94C6-0E6DB7322D3D}" Origin="Manual" Filter="7"/>
 						<ObjectRef Name="lose_Loop" ID="{C218A859-F296-483C-9F65-B62545114636}" WorkUnitID="{FD1D3805-1493-4712-94C6-0E6DB7322D3D}" Origin="Manual" Filter="7"/>
 						<ObjectRef Name="Shop_open" ID="{D8D4E37E-6751-48CA-9E5B-ADE35555A299}" WorkUnitID="{FD1D3805-1493-4712-94C6-0E6DB7322D3D}" Origin="Manual" Filter="7"/>
+						<ObjectRef Name="TurretFire" ID="{ED2A493B-31B1-48F0-8787-CDA501A3990A}" WorkUnitID="{FD1D3805-1493-4712-94C6-0E6DB7322D3D}" Origin="Manual" Filter="7"/>
 						<ObjectRef Name="Shop_close" ID="{A67B7153-8708-4B2D-8F3D-CB7944250760}" WorkUnitID="{FD1D3805-1493-4712-94C6-0E6DB7322D3D}" Origin="Manual" Filter="7"/>
 						<ObjectRef Name="TimeDrain" ID="{E43C13E8-CAF7-4BCA-BA8F-99755EFA551A}" WorkUnitID="{FD1D3805-1493-4712-94C6-0E6DB7322D3D}" Origin="Manual" Filter="7"/>
 						<ObjectRef Name="fight_start" ID="{ECE38540-761C-4C47-94DE-38127713B664}" WorkUnitID="{FD1D3805-1493-4712-94C6-0E6DB7322D3D}" Origin="Manual" Filter="7"/>

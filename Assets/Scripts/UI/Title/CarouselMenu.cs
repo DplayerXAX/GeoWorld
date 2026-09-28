@@ -30,6 +30,10 @@ public class CarouselMenu : MonoBehaviour
     public float wheelThreshold = 0.1f;
     int         _selected;
     float       _scroll;
+
+    // The item sitting (or scrolling into) the centre — the one Enter would press.
+    public RectTransform SelectedItem =>
+        items != null && items.Count > 0 ? items[Mathf.Clamp(_selected, 0, items.Count - 1)] : null;
     float       _wheelTimer;
     CanvasGroup _panelCg;
 
@@ -63,7 +67,8 @@ public class CarouselMenu : MonoBehaviour
     {
         if (items.Count == 0) return;
 
-        bool active = _panelCg == null || _panelCg.interactable;   // only when the panel is shown
+        bool active = (_panelCg == null || _panelCg.interactable)   // only when the panel is shown
+                   && !ConfirmDialog.BlockingInput;                 // and not under a prompt (Enter here would load the slot behind it)
         if (active)
         {
             HandleHover();

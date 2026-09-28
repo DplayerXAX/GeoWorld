@@ -46,7 +46,7 @@ public partial class PlacementController
     readonly List<BatchMoveRecord> _batchRecords = new();
     readonly List<GameObject>      _batchPreviewCubes = new();
 
-    // Group-rotation animation. _batchTargetRot snaps 90° per keypress (drives the
+    // Group-rotation animation. _batchTargetRot snaps 90° per turn (drives the
     // committed layout); _batchDisplayRot slerps toward it and drives ONLY the
     // preview cube positions — the exact same "slerp the rotation, round the cells"
     // trick single-block editing uses (GetRotatedCells rounds the slerped
@@ -108,8 +108,7 @@ public partial class PlacementController
         if (hit.transform.GetComponentInParent<SelectableBlock>()  != null) return true;
         if (hit.transform.GetComponentInParent<GridEndpoint>()     != null) return true;
 
-        Vector3Int gPos = grid.WorldToGrid(hit.point - hit.normal * (grid.cellSize * 0.1f));
-        return grid.GetInstanceAt(gPos) != null;
+        return InstanceFromHit(hit) != null;
     }
 
     // ── Finalize the drag into a selection ───────────────────────────────────
@@ -171,45 +170,6 @@ public partial class PlacementController
         MultiSelectPanel.Hide();
     }
 
-    // ── Batch guard: turret-support check generalized to a WHOLE removal set ──
-    // Same rule as FindOrphanedTurret (a turret must keep at least one 26-neighbour
-    // outside whatever's being removed), just checked against every cell in the
-    // batch at once instead of one instance's cells.
-    PlacedBlockInstance FindOrphanedTurretForBatch(HashSet<PlacedBlockInstance> toRemove)
-    {
-        if (toRemove == null || toRemove.Count == 0 || grid == null) return null;
-
-        var excludeCells = new HashSet<Vector3Int>();
-        foreach (var r in toRemove)
-            if (r?.occupiedCells != null)
-                foreach (var c in r.occupiedCells) excludeCells.Add(c);
-
-        foreach (var other in grid.GetAllInstances())
-        {
-            if (other == null || toRemove.Contains(other) || other.data == null) continue;
-            if (!TurretTypes.Is(other.data.blockType)) continue;
-            if (!HasExternalSupportExcluding(other, excludeCells)) return other;
-        }
-        return null;
-    }
-
-    bool HasExternalSupportExcluding(PlacedBlockInstance instance, HashSet<Vector3Int> excludeCells)
-    {
-        foreach (var cell in instance.occupiedCells)
-            for (int dx = -1; dx <= 1; dx++)
-            for (int dy = -1; dy <= 1; dy++)
-            for (int dz = -1; dz <= 1; dz++)
-            {
-                if (dx == 0 && dy == 0 && dz == 0) continue;
-                var n = new Vector3Int(cell.x + dx, cell.y + dy, cell.z + dz);
-                if (!grid.IsOccupied(n)) continue;
-                if (excludeCells.Contains(n)) continue;
-                if (instance.occupiedCells.Contains(n)) continue;   // own cell — not external
-                return true;
-            }
-        return false;
-    }
-
     // ── Sell all ──────────────────────────────────────────────────────────────
     void SellAllSelected()
     {
@@ -242,16 +202,8 @@ public partial class PlacementController
             return;
         }
 
-        // Orphan check is all-or-nothing: figuring out which SUBSET could be sold
-        // without stranding the turret is a much harder problem than this needs
-        // to solve — reject the whole action and tell the player to move the
-        // turret first, exactly like the single-sell guard already does.
-        var orphan = FindOrphanedTurretForBatch(new HashSet<PlacedBlockInstance>(sellable));
-        if (orphan != null)
-        {
-            ShowPlacementPopup("Selling this would strand a turret with nothing to attach to — move it first.");
-            return;
-        }
+        // No "would strand a turret" veto: a turret left without support is flagged
+        // and holds its fire instead (BoardValidity), same as for a single sale.
 
         int totalRefund = 0;
         foreach (var ins in sellable)
@@ -309,13 +261,8 @@ public partial class PlacementController
             }
         }
 
-        var moveSet = new HashSet<PlacedBlockInstance>(_multiSelection);
-        var orphan  = FindOrphanedTurretForBatch(moveSet);
-        if (orphan != null)
-        {
-            ShowPlacementPopup("Moving this would strand a turret with nothing to attach to.");
-            return;
-        }
+        // Same as a single pickup: lifting a group is never vetoed for the turrets it
+        // leaves behind — they are flagged until something holds them up again.
 
         // Snapshot + clear the selection UI now, BEFORE anything is destroyed —
         // every member is about to be removed unconditionally (the guards above
@@ -384,6 +331,7 @@ public partial class PlacementController
         foreach (var c in previewCubes) if (c != null) c.SetActive(false);
 
         _batchTargetRot = _batchDisplayRot = Quaternion.identity;
+        _mouseRotation.Reset();
         previewParent.gameObject.SetActive(true);
         _batchMoving = true;
     }
@@ -393,12 +341,9 @@ public partial class PlacementController
     // gate in Update().
     void UpdateBatchMove()
     {
-        // 1/2/3 rotate the WHOLE group 90° about world X/Y/Z — same keys and world
-        // frame as single-block editing (HandleRotate), so the two feel identical.
-        if (Input.GetKeyDown(KeyCode.Alpha1)) RotateBatch(Quaternion.Euler(90, 0, 0));
-        if (Input.GetKeyDown(KeyCode.Alpha2)) RotateBatch(Quaternion.Euler(0, 90, 0));
-        if (Input.GetKeyDown(KeyCode.Alpha3)) RotateBatch(Quaternion.Euler(0, 0, 90));
-        if (GamepadInput.RotateDown)          RotateBatch(Quaternion.Euler(0, 90, 0));   // shoulder mirrors yaw, same as single-block
+        if (_mouseRotationDelta != Quaternion.identity) RotateBatch(_mouseRotationDelta);
+        else if (GamepadInput.RotateDown && Quaternion.Angle(_batchDisplayRot, _batchTargetRot) < 1f)
+            RotateBatch(Quaternion.Euler(0, 90, 0));   // shoulder mirrors yaw, same as single-block
 
         // Ease the preview toward the snapped target — identical curve to the
         // single-block _currentRotation slerp (same rotateSpeed), so the group spin
@@ -406,6 +351,8 @@ public partial class PlacementController
         // (relCells) is already the fully-rotated target set in RotateBatch.
         _batchDisplayRot = Quaternion.Slerp(_batchDisplayRot, _batchTargetRot,
                                             1f - Mathf.Exp(-rotateSpeed * Time.deltaTime));
+        if (Quaternion.Angle(_batchDisplayRot, _batchTargetRot) < 1f)
+            _batchDisplayRot = _batchTargetRot;
 
         Vector3Int anchor = baseGridPos;   // cursor-tracked, same field HandleMouseMove already updates
 
@@ -424,7 +371,7 @@ public partial class PlacementController
 
         RenderBatchPreview(anchor, allValid);
 
-        if (Input.GetMouseButtonDown(0))
+        if (!_mouseRotation.Active && Input.GetMouseButtonDown(0))
         {
             if (IsPointerOverSelectionPanel() || HudSidePanels.PointerOver || PointerOverInfoPanel())
             {
@@ -551,6 +498,8 @@ public partial class PlacementController
 
     void CancelBatchMove()
     {
+        VirtualCursor.EndRotation();
+        _mouseRotation.Reset();
         HideBatchPreview();
 
         foreach (var rec in _batchRecords)

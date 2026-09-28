@@ -103,6 +103,29 @@ public class ShrineController : MonoBehaviour
         var grid = GridSystem.instance;
         if (grid == null) return;
         if (!TryPickSpawnCell(grid, out var cell)) return;
+        SpawnAt(cell);
+    }
+
+    // ── Mid-level save ────────────────────────────────────────────────────────
+    public List<Vector3Int> Capture()
+    {
+        PruneDead();
+        var list = new List<Vector3Int>();
+        foreach (var s in _shrines) if (s?.go != null) list.Add(s.cell);
+        return list;
+    }
+
+    public void Restore(List<Vector3Int> saved)
+    {
+        if (saved == null) return;
+        foreach (var c in saved)
+            if (GridSystem.instance != null && !GridSystem.instance.IsOccupied(c)) SpawnAt(c);
+    }
+
+    void SpawnAt(Vector3Int cell)
+    {
+        var grid = GridSystem.instance;
+        if (grid == null) return;
 
         Vector3 pos = grid.GridToWorld(cell);
         GameObject go = visualPrefab != null

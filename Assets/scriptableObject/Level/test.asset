@@ -13,17 +13,18 @@ MonoBehaviour:
   m_Name: test
   m_EditorClassIdentifier: Assembly-CSharp::LevelDefinition
   levelId: Test
-  displayName: Test
-  description: Room for playtesting. Change all the config as you wish to test a
-    specific mechanic
+  displayName: Creative Space
+  description: Unlimited resources provided! Play with blocks and turrets to be creative.
   runSeed: 0
   blocksPerTurn: 3
   turretsPerTurn: 3
+  startingBlockCurrencyMult: 3
   infiniteResources: 1
   startPointWaves: 
   endPointWaves: 
   synergyEnabled: 1
   allowedColors: 04000000020000000500000006000000070000000100000003000000
+  turretPool: 
   startingShop: []
   waves: []
   wavesToClear: 5
@@ -51,6 +52,13 @@ MonoBehaviour:
   startCell: {x: 0, y: 0, z: 0}
   endCell: {x: 0, y: 0, z: 0}
   tutorialSteps: []
+  revealAfter: {fileID: 11400000, guid: 1b45f2b9e94ad084180100d47c626f51, type: 2}
+  inheritFrom: {fileID: 0}
+  autoInherit: 1
+  inheritRing: 4
+  inheritTurrets: 0
+  inheritUpgrades: 1
+  inheritCores: 1
   startingLayout: {fileID: 0}
   overrideEndpointDistance: 0
   endpointMinDistance: 5

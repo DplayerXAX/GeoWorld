@@ -352,6 +352,7 @@ MonoBehaviour:
   - {fileID: 11400000, guid: 3bcfeb02226d44d49a6df82d6c36a1a7, type: 2}
   - {fileID: 11400000, guid: a7f28c36612c9dcda3e860f226e14c3b, type: 2}
   - {fileID: 11400000, guid: fb46f09fe6cabf35093865bc2d050931, type: 2}
+  - {fileID: 11400000, guid: 5ff950918e984f5cb64c122b9cf0efda, type: 2}
   grid: {fileID: 164805054}
   currentBlock: {fileID: 11400000, guid: c8bcfd2efd3263845ad3ea61c80c0fe7, type: 2}
   currentSynergyColor: 0
@@ -362,7 +363,7 @@ MonoBehaviour:
   minDepth: 2
   maxDepth: 40
   scrollSpeed: 3
-  rotateSpeed: 10
+  rotateSpeed: 30
   panSpeed: 8
   blockPalette:
   - {r: 0.85, g: 0.18, b: 0.12, a: 1}

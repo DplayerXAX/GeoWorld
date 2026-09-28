@@ -113,6 +113,8 @@ public class BalanceTable : ScriptableObject
     public float slowTurretTypeMult = 0.9f;
     [Tooltip("AOE turret price multiplier. 1.2 ≈ 12 for a 1-cell turret — the priciest of the three, matching its splash.")]
     public float aoeTurretTypeMult = 1.2f;
+    [Tooltip("Debuff turret price multiplier. 0.8 ≈ 8 for a 1-cell turret — it does no damage, so it sits below the Slow turret.")]
+    public float debuffTurretTypeMult = 0.8f;
     // Every non-turret block type uses 1.0 implicitly.
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -197,8 +199,9 @@ public class BalanceTable : ScriptableObject
     public TurretRecord basicTurret = new()
     {
         // damage stays 1: it rounds to an int, so a "slight" bump isn't expressible.
-        // The intended small buff is carried by fireRate instead (1.5 → 1.85).
-        cost = 3, damage = 1.0f, range = 4.0f, fireRate = 1.85f,
+        // Rate tuning goes through fireRate instead (1.5 → 1.85, then back to 1.6).
+        // The LIVE value is in gameplay/BalanceTable.asset — this is only the default.
+        cost = 3, damage = 1.0f, range = 4.0f, fireRate = 1.6f,
     };
 
     [Header("Turret — Slow (low DMG, applies slow debuff)")]
@@ -214,6 +217,17 @@ public class BalanceTable : ScriptableObject
         cost = 8, damage = 1.8f, range = 3.5f, fireRate = 0.6f,
         aoeRadius = 1.5f,
     };
+
+    [Header("Turret — Debuff (no attack; a field that curses what walks through it)")]
+    [Tooltip("Only `range` matters — it never fires, so damage / fireRate are unused.")]
+    public TurretRecord debuffTurret = new()
+    {
+        cost = 4, damage = 0f, range = 3.0f, fireRate = 0f,
+    };
+    [Tooltip("How much LESS enemies inside the field heal. 0.4 = heals land at 60%.")]
+    [Range(0f, 1f)] public float debuffHealReduction = 0.4f;
+    [Tooltip("Extra TURRET currency for every enemy that dies inside a Debuff field (once per enemy, however many fields overlap).")]
+    [Min(0)] public int debuffKillBonus = 1;
 
     // ═══════════════════════════════════════════════════════════════════════
     // Records (inner types)
@@ -331,6 +345,7 @@ public class BalanceTable : ScriptableObject
     {
         TurretController.Mode.Slow => slowTurret,
         TurretController.Mode.Aoe  => aoeTurret,
+        TurretController.Mode.Debuff => debuffTurret,
         _                          => basicTurret,
     };
 
@@ -371,6 +386,7 @@ public class BalanceTable : ScriptableObject
         BlockType.Turret     => turretTypeMult,
         BlockType.SlowTurret => slowTurretTypeMult,
         BlockType.AoeTurret  => aoeTurretTypeMult,
+        BlockType.DebuffTurret => debuffTurretTypeMult,
         _                    => 1f,
     };
 

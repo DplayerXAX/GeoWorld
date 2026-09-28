@@ -13,15 +13,24 @@ MonoBehaviour:
   m_Name: Vine_efx
   m_EditorClassIdentifier: Assembly-CSharp::HarmonyVineVisualizer
   vinePrefab: {fileID: 5386003392207672047, guid: 835a92ac1a661154b973e5d4184d2def, type: 3}
-  maxVines: 8
+  vinesPerPiece: 0.4
+  minVines: 2
+  vineCap: 28
+  lushAtPieces: 16
+  lushGain: 1.35
+  weaveChance: 0.45
+  bridgeChance: 0
+  bridgeReach: 4.5
+  creeperChance: 1
+  creeperBranches: 1
   useThemeColor: 0
-  branchColor: {r: 0.45, g: 0.3, b: 0.18, a: 1}
+  branchColor: {r: 0.74, g: 0.67, b: 0.57, a: 1}
   tipColor: {r: 0.45, g: 0.78, b: 0.32, a: 1}
   highlightClaimedOutline: 0
   outlineColor: {r: 0.35, g: 0.62, b: 0.3, a: 1}
   extraSegments: 1
   lengthScale: 1.15
-  coilChance: 0.4
+  coilChance: 0
   coilTurns: 1.6
   coilRadiusMul: 1
   coilSurfaceGap: 0.03

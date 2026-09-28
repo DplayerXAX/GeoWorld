@@ -167,12 +167,42 @@ public class EnemySurfaceUnit : MonoBehaviour
 
     // Restores health, capped at maxHealth. Never revives a dead enemy. Returns
     // how much was actually restored so callers can skip FX on a full-HP target.
+    // Sets health outright — no hit, no heal, no events. For restoring a saved unit.
+    public void SetCurrentHealth(int health) => _health = Mathf.Clamp(health, 1, Mathf.Max(1, maxHealth));
+
     public int Heal(int amount)
     {
         if (amount <= 0 || _health <= 0 || _health >= maxHealth) return 0;
+
+        // Heal-received debuff (a Debuff Turret's field): heals land at a fraction.
+        // Heals are small ints (1 a pulse), so the fraction is carried between heals
+        // rather than rounded away — at 60%, three pulses of 1 heal 2, not 0 or 3.
+        if (InHealDebuff && _healDebuffMult < 0.9999f)
+        {
+            float due = amount * _healDebuffMult + _healCarry;
+            amount     = Mathf.FloorToInt(due);
+            _healCarry = due - amount;
+            if (amount <= 0) return 0;
+        }
         int before = _health;
         _health = Mathf.Min(maxHealth, _health + amount);
         return _health - before;
+    }
+
+    // ── Heal-received debuff ────────────────────────────────────────────────────
+    // Re-applied every frame by each Debuff Turret field the enemy stands in, and
+    // lapses on its own a moment after it walks out — no field has to remember whom
+    // it touched. Overlapping fields don't stack: the strongest one applies.
+    float _healDebuffMult = 1f, _healDebuffUntil = -1f, _healCarry;
+
+    public bool  InHealDebuff    => Time.time < _healDebuffUntil;
+    public float HealDebuffMult  => InHealDebuff ? _healDebuffMult : 1f;
+
+    public void ApplyHealDebuff(float mult, float duration)
+    {
+        mult = Mathf.Clamp01(mult);
+        _healDebuffMult  = InHealDebuff ? Mathf.Min(_healDebuffMult, mult) : mult;
+        _healDebuffUntil = Mathf.Max(_healDebuffUntil, Time.time + duration);
     }
 
     public void SetSpeedMultiplier(float multiplier)

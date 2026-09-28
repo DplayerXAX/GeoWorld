@@ -69,14 +69,30 @@ public class SynergyActivationPulse : MonoBehaviour
 
     private bool _hooked;
 
-    private void OnEnable() => TryHook();
+    private void OnEnable()
+    {
+        TryHook();
+        SynergyVisualFX.OnReleased -= PulseAllOnRelease;
+        SynergyVisualFX.OnReleased += PulseAllOnRelease;
+    }
     private void Start()    => TryHook();
 
     private void OnDisable()
     {
         if (SynergyEvaluator.Instance != null)
             SynergyEvaluator.Instance.OnTierChanged -= HandleTierChanged;
+        SynergyVisualFX.OnReleased -= PulseAllOnRelease;
         _hooked = false;
+    }
+
+    // Synergies that formed while the board was hidden (SynergyVisualFX.Hold) get
+    // their pulse as they appear instead — the moment the player can see them.
+    void PulseAllOnRelease()
+    {
+        var ev = SynergyEvaluator.Instance;
+        if (ev == null) return;
+        for (int i = 0; i < ev.Actives.Count; i++)
+            if (ev.Actives[i] != null) SpawnPulse(ev.Actives[i]);
     }
 
     private void TryHook()
@@ -90,6 +106,7 @@ public class SynergyActivationPulse : MonoBehaviour
     private void HandleTierChanged(SynergyRule rule, int oldTier, int newTier)
     {
         if (rule == null) return;
+        if (SynergyVisualFX.Held) return;   // PulseAllOnRelease covers what forms during the hold
 
         // Activation (0 → >0) always; tier-ups optionally. Never on revoke.
         bool activated = oldTier == 0 && newTier > 0;

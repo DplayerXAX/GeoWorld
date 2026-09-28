@@ -67,6 +67,13 @@
 						</Curve>
 					</SwitchOnRTPC>
 				</SwitchGroup>
+				<SwitchGroup Name="turretType" ID="{1036FAF8-A42E-4140-A114-C22F3C753D5A}">
+					<ChildrenList>
+						<Switch Name="base" ID="{DB4D86DD-456E-46CF-88A8-6F04217CB3CE}"/>
+						<Switch Name="slow" ID="{5B76AF07-17EC-440B-AAA7-B9729762D059}"/>
+						<Switch Name="aoe" ID="{107B1A54-4357-43B4-AD4C-24CA54A49518}"/>
+					</ChildrenList>
+				</SwitchGroup>
 			</ChildrenList>
 		</WorkUnit>
 	</Switches>

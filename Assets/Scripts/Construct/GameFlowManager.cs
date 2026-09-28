@@ -11,7 +11,7 @@ public enum GamePhase
     GameOver
 }
 
-public class GameFlowManager : MonoBehaviour
+public partial class GameFlowManager : MonoBehaviour
 {
     public SurfaceGraphBuilder graph;
     public LevelEndpointGenerator endpoints;
@@ -99,6 +99,9 @@ public class GameFlowManager : MonoBehaviour
     void Start()
     {
         Instance = this;
+        // Setup builds a board (inherited, authored) before the player has done
+        // anything — flag islands, but do not pop up messages about them.
+        BoardValidity.Quiet = true;
         graph = new SurfaceGraphBuilder();
         endpoints.gridSystem = gridSystem;
         enemyBaseManager = enemyBaseManager != null
@@ -124,6 +127,9 @@ public class GameFlowManager : MonoBehaviour
         // Also static, also survives a scene load: without this a restarted run
         // inherits the last one's reserved cells and phantom portal pairs.
         DeviceRegistry.Clear();
+        // Static, so it survives the scene load — a leftover +50% damage from the
+        // last run would carry straight into this one.
+        Modifiers.Global.Clear();
         CommandBus.Reset();
         CellClaims.Clear();
         PlayerSpend.Clear();
@@ -151,12 +157,150 @@ public class GameFlowManager : MonoBehaviour
 
         RunStats.BeginRun();   // reset kill/blocks/time counters for score-keeping
         ApplyRunConfig();   // Level vs Endless setup (seed, pacing, authored waves)
+
+        // Everything placed from here on is placed while hidden for the intro —
+        // synergy visuals wait until the board has popped in (SynergyVisualFX.Hold).
+        SynergyVisualFX.Hold();
+        _routeLinesHeld = true;   // likewise the route preview a prebuilt board already forms
+        StartCoroutine(ReleaseSynergyFxAfterIntro());
+
+        var startLv = RunConfig.Mode == GameMode.Level ? RunConfig.Level : null;
+        if (startLv != null && !Mathf.Approximately(startLv.startingBlockCurrencyMult, 1f))
+            ResourceManager.Instance?.ScaleBlockWallets(startLv.startingBlockCurrencyMult);
+
+        // A level left part-way through picks up where it was, instead of opening
+        // fresh — see GameFlowManager.RunSave.
+        var resume = PendingResume();
+        if (resume != null)
+        {
+            ResumeRun(resume);
+            BoardValidity.Reconcile(gridSystem, allStarts, allEnds);
+            BoardValidity.Quiet = false;
+            phase = GamePhase.Build;
+            EvaluateGrid();   // live routes + ReadyToRun, as the end of StartTurn would
+            StartCoroutine(ResumeLate(resume));
+            return;
+        }
+
+        // BEFORE the first endpoints, not after: the new spawn and defence points are
+        // placed around the inherited build, so it has to be standing already.
+        SpawnInheritedLayout();
         CreateFirstStage();
+        if (_inheritCentre.HasValue) EvaluateGrid();   // pathing/synergy over the inherited board, now that endpoints exist
         SpawnStartingLayout();       // pre-built blocks authored via LevelMapAuthor, if any
         FocusCameraOnFirstStage();   // centre the camera between the first start & end
+        // Once unconditionally: the placement ghost asks BoardValidity from the first
+        // frame, and a level with no authored or inherited layout would otherwise
+        // reach this point without ever having been reconciled.
+        BoardValidity.Reconcile(gridSystem, allStarts, allEnds);
+        BoardValidity.Quiet = false;
 
         phase = GamePhase.Build;
         StartTurn();
+    }
+
+    // ── Chapter inheritance ──────────────────────────────────────────────────
+    // Footprint of the board carried over from LevelDefinition.inheritFrom, in grid
+    // columns. Null when this level starts from nothing — CreateFirstStage reads it
+    // to decide where the new endpoints go.
+    Vector2? _inheritCentre;
+    Vector2  _inheritHalf;
+
+    // From the same keepsake: every core the last level ended with (kept, see
+    // LevelDefinition.inheritCores), and every spawn point it had (NOT kept — only
+    // read, so the new spawn can be placed away from them).
+    readonly List<Vector3Int> _inheritedCores  = new();
+    readonly List<Vector3Int> _inheritedSpawns = new();
+
+    // Lay down the board the player last cleared the previous level with: blocks
+    // only, editable, no refund on removal (see PlacedBlockInstance.inherited).
+    void SpawnInheritedLayout()
+    {
+        _inheritCentre = null;
+        _inheritedCores.Clear();
+        _inheritedSpawns.Clear();
+
+        var lv   = RunConfig.Mode == GameMode.Level ? RunConfig.Level : null;
+        var from = lv?.InheritSource;   // explicit inheritFrom, else the previous level of the chapter
+        if (from == null || from == lv || string.IsNullOrEmpty(from.levelId)) return;
+
+        var snap = SaveSystem.Profile.GetRecord(from.levelId)?.buildSnapshot;
+        if (snap?.blocks == null || snap.blocks.Count == 0) return;   // never cleared: start fresh
+
+        // A clear saved before endpoints were recorded has none — CreateFirstStage
+        // then falls back to a fresh pair around the build, as before.
+        if (snap.endpoints != null)
+            foreach (var ep in snap.endpoints)
+            {
+                if (ep == null) continue;
+                var list = ep.isStart ? _inheritedSpawns : _inheritedCores;
+                if (!list.Contains(ep.cell)) list.Add(ep.cell);
+            }
+        if (!lv.inheritCores) _inheritedCores.Clear();
+
+        var placed = SnapshotManager.PlaceBlocks(snap, inherited: true, withUpgrades: lv.inheritUpgrades,
+                                                 skipTurrets: !lv.inheritTurrets);
+        if (placed.Count == 0) return;
+
+        int x0 = int.MaxValue, x1 = int.MinValue, z0 = int.MaxValue, z1 = int.MinValue;
+        foreach (var ins in placed)
+        {
+            foreach (var c in ins.occupiedCells)
+            {
+                if (c.x < x0) x0 = c.x; if (c.x > x1) x1 = c.x;
+                if (c.z < z0) z0 = c.z; if (c.z > z1) z1 = c.z;
+            }
+
+            ResourceManager.Instance?.OnBlockPlaced(ins.data.blockType);
+
+            // Handed to IntroDirector with the authored layout, so the inherited base
+            // pops in with the endpoints instead of standing at full size through the
+            // whole intro.
+            if (ins.visualObject != null) startingLayoutVisuals.Add(ins.visualObject);
+        }
+
+        // Half-extents to the cells' EDGES, so "ring cells beyond the edge" is
+        // measured from where the blocks actually stop.
+        _inheritCentre = new Vector2((x0 + x1) * 0.5f, (z0 + z1) * 0.5f);
+        _inheritHalf   = new Vector2((x1 - x0 + 1) * 0.5f, (z1 - z0 + 1) * 0.5f);
+    }
+
+    // Lets the intro start (it sets Playing on its first frame), waits it out —
+    // it ends by popping the board in — then lets the synergies grow onto it.
+    System.Collections.IEnumerator ReleaseSynergyFxAfterIntro()
+    {
+        yield return null;
+        yield return null;
+        while (IntroDirector.Playing) yield return null;
+        yield return new WaitForSecondsRealtime(0.1f);
+        SynergyVisualFX.Release();
+
+        // The route the board forms, drawn now that the board is there.
+        _routeLinesHeld = false;
+        if (phase != GamePhase.Running) EvaluateGrid();
+    }
+
+    // True from level start until the intro has popped the board in (see above).
+    bool _routeLinesHeld;
+
+    // Remove any INHERITED block covering one of these cells. Only inherited ones —
+    // a player's own block from this level, an endpoint or authored furniture is
+    // never touched by this.
+    void ClearInheritedAt(IEnumerable<Vector3Int> cells)
+    {
+        if (cells == null || gridSystem == null) return;
+
+        var seen = new HashSet<PlacedBlockInstance>();
+        foreach (var c in cells)
+        {
+            var ins = gridSystem.GetInstanceAt(c);
+            if (ins == null || !ins.inherited || !seen.Add(ins)) continue;
+
+            if (ins.visualObject != null) startingLayoutVisuals.Remove(ins.visualObject);
+            ResourceManager.Instance?.OnBlockRemoved(ins.data.blockType);
+            SynergyEvaluator.Instance?.OnPieceRemoved(ins.placedPiece);
+            gridSystem.RemoveInstance(ins);   // destroys visualObject
+        }
     }
 
     // Populated by SpawnStartingLayout(); IntroDirector reads this to pop the pre-built
@@ -179,6 +323,11 @@ public class GameFlowManager : MonoBehaviour
         foreach (var node in layout.data.nodes)
         {
             if (node.cells == null || node.cells.Length == 0) continue;
+
+            // Level furniture outranks the inherited base: where the two want the
+            // same cell, the inherited block gives way. Anything else in the way —
+            // an endpoint, other furniture — still makes this piece skip as before.
+            ClearInheritedAt(node.cells);
 
             bool clash = false;
             foreach (var c in node.cells) if (gridSystem.IsOccupied(c)) { clash = true; break; }
@@ -292,6 +441,7 @@ public class GameFlowManager : MonoBehaviour
     {
         if (_levelDone) return;
         _levelDone = true;
+        DiscardRunSave();   // cleared: there is nothing left to come back to
 
         if (phase == GamePhase.Running)
         {
@@ -390,6 +540,7 @@ public class GameFlowManager : MonoBehaviour
     void HandleGameOver()
     {
         if (phase == GamePhase.GameOver) return;
+        DiscardRunSave();   // lost: a save would just resume a dead run
         Debug.Log("[GameFlow] Game Over — last life lost.");
         AbortRun(quiet: true);   // no fight_end stinger — this is a loss, not a survived wave
         enemyBaseManager?.CancelWave();
@@ -411,6 +562,7 @@ public class GameFlowManager : MonoBehaviour
     // restart UI; safest way to wipe all combat / music / scene state.
     public void RestartGame()
     {
+        DiscardRunSave();   // a restart is a fresh attempt, not a resume
         Time.timeScale = 1f;
         LoadingScreen.Go(UnityEngine.SceneManagement.SceneManager.GetActiveScene().name);
     }
@@ -452,12 +604,49 @@ public class GameFlowManager : MonoBehaviour
         // Tutorials / authored levels can pin the start & end instead of randomising.
         var lv = RunConfig.Mode == GameMode.Level ? RunConfig.Level : null;
         if (lv != null && lv.fixedEndpoints)
+        {
+            // An authored level's pinned endpoints win over an inherited block that
+            // happens to sit on one of them — the level was designed around those
+            // cells; the inherited base was not designed around anything.
+            ClearInheritedAt(new[] { lv.startCell, lv.endCell });
             endpoints.GenerateFixed(lv.startCell, lv.endCell);
+        }
+        else if (_inheritCentre.HasValue && _inheritedCores.Count > 0)
+        {
+            // Same base, same cores, new attack: every core the last level ended
+            // with stays where it was (an inherited block that happens to cover one
+            // gives way), and one new spawn opens beyond the build — measured around
+            // the cores too, so it comes up outside everything that is already there.
+            ClearInheritedAt(_inheritedCores);
+            var (c, h) = GrowExtent(_inheritCentre.Value, _inheritHalf, _inheritedCores);
+            endpoints.GenerateKeepingEnds(_inheritedCores, c, h, lv != null ? lv.inheritRing : 4f, _inheritedSpawns);
+
+            allStarts.Add(endpoints.startCell);
+            allEnds.AddRange(_inheritedCores);
+            return;
+        }
+        else if (_inheritCentre.HasValue)
+            endpoints.GenerateAround(_inheritCentre.Value, _inheritHalf, lv != null ? lv.inheritRing : 4f);
         else
             endpoints.Generate();
 
         allStarts.Add(endpoints.startCell);
         allEnds.Add(endpoints.endCell);
+    }
+
+    // A build's footprint (centre / half-extents to the cells' edges, grid columns)
+    // grown to take in extra cells as well.
+    static (Vector2 centre, Vector2 half) GrowExtent(Vector2 centre, Vector2 half, List<Vector3Int> cells)
+    {
+        float x0 = centre.x - half.x, x1 = centre.x + half.x;
+        float z0 = centre.y - half.y, z1 = centre.y + half.y;
+        foreach (var c in cells)
+        {
+            x0 = Mathf.Min(x0, c.x - 0.5f); x1 = Mathf.Max(x1, c.x + 0.5f);
+            z0 = Mathf.Min(z0, c.z - 0.5f); z1 = Mathf.Max(z1, c.z + 0.5f);
+        }
+        return (new Vector2((x0 + x1) * 0.5f, (z0 + z1) * 0.5f),
+                new Vector2((x1 - x0) * 0.5f, (z1 - z0) * 0.5f));
     }
 
     // Centre the orbit camera on the midpoint of the first start & end endpoints —
@@ -792,6 +981,12 @@ public class GameFlowManager : MonoBehaviour
         graph.SetData(gridSystem);
         graph.Build();
 
+        // Every board edit lands here — place, lift, sell, delete, undo, a network
+        // command — so this is where the board's pieces find out whether they are
+        // still part of the build. Before the Running early-out below: a turret
+        // losing its support mid-combat must stop firing mid-combat.
+        BoardValidity.Reconcile(gridSystem, allStarts, allEnds);
+
         var path = FindCurrentPath();
         _currentPathLength = path != null ? path.Count : 0;
 
@@ -815,7 +1010,9 @@ public class GameFlowManager : MonoBehaviour
 
         // Build / ReadyToRun: show a live preview line for EVERY connected spawn
         // point, not just the challenge path (multi-spawn rounds redraw all routes).
-        PathFlowManager.Instance?.UpdateLiveLines(FindAllSpawnPaths());
+        // Not while the board is still hidden for the intro — a route drawn over
+        // blocks that haven't appeared yet; the release redraws it.
+        if (!_routeLinesHeld) PathFlowManager.Instance?.UpdateLiveLines(FindAllSpawnPaths());
         phase = path != null ? GamePhase.ReadyToRun : GamePhase.Build;
     }
 
@@ -835,6 +1032,10 @@ public class GameFlowManager : MonoBehaviour
                 "No path — connect start to end before running.", 2f);
             return;
         }
+
+        // The build that goes into this wave: leaving mid-fight resumes here, with
+        // the wave still to fight. See GameFlowManager.RunSave.
+        SaveRunNow();
 
         // Enemies spawn from EVERY connected start, not just the one the
         // challenge path traced back to. `path` above still gates the run (the
@@ -932,11 +1133,19 @@ public class GameFlowManager : MonoBehaviour
         public List<WaveGenerator.WaveForecastGroup> groups;
     }
 
-    // 1-based ordinal of the upcoming run. Each Run() is one wave from the
-    // player's POV, but roundIndex only ticks every runsPerEndpoint runs — so
-    // this derived counter is the monotonic "which wave is this" number for UI.
-    public int UpcomingWaveNumber =>
-        roundIndex * Mathf.Max(1, runsPerEndpoint) + _runsSinceLastEndpoint + 1;
+    // 1-based "which wave is this": the wave being fought during combat, the next
+    // one in the build phase. Read straight off the waves actually completed.
+    //
+    // It used to be rebuilt from roundIndex × runsPerEndpoint + runs since the last
+    // endpoint, which went wrong twice:
+    //   * at the moment a wave ENDS, HandleWaveProgress counts the wave (and may
+    //     clear the level) before those counters move on — so a level cleared
+    //     straight after wave 2 still read "wave 2", and a "Reach wave 3" objective
+    //     scored no star although the player had plainly reached it;
+    //   * with an authored endpoint schedule the run counter resets whenever the
+    //     schedule adds an endpoint, not every runsPerEndpoint runs, so the number
+    //     drifted from the real wave (HUD, tutorial/mechanic wave gates).
+    public int UpcomingWaveNumber => _wavesCompleted + 1;
 
     public WaveForecast GetNextWaveForecast()
     {
@@ -1194,6 +1403,7 @@ public class GameFlowManager : MonoBehaviour
         UpgradeManager.Instance?.OfferEndOfWave(EnsureRng());
         Time.timeScale = 1f;
         StartTurn();
+        SaveRunNow();   // the new turn, as dealt — see GameFlowManager.RunSave
     }
 
     // Removes the oldest looping unit: stops its audio loop, removes its laser

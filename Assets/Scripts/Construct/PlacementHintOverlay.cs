@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using UnityEngine;
 
 // Edit-mode placement helper overlay. Visible only while PlacementController
@@ -8,16 +7,13 @@ using UnityEngine;
 //
 //   1. XYZ axis dashed lines through cursor cell (world axes, R/G/B)
 //   2. 6 movement arrows hugging the block's outer faces
-//   3. 3 rotation rings encircling the block, colored per-axis
 //
 // Block-shape aware:
 //   • Arrow positions adapt to the rotated block bbox each frame, so they
 //     sit just outside whichever face you're pushing the block toward.
-//   • Rotation rings rebuild radius per frame to encompass the block.
 //
 // "Natural" touches:
 //   • Subtle bob animation per arrow (different phase) so they feel alive
-//   • Slow rotation on rings
 //   • Soft fade-in when entering Edit mode
 //
 // Drop onto any persistent GameObject. No inspector wiring needed.
@@ -57,16 +53,6 @@ public class PlacementHintOverlay : MonoBehaviour
     [Tooltip("Bob speed in Hz.")]
     [Range(0f, 4f)] public float bobSpeedHz = 0.7f;
 
-    [Header("Rotation rings (1/2/3)")]
-    public bool showRotationRings = true;
-    [Tooltip("Extra padding outside the block bbox, in cells.")]
-    [Min(0f)] public float ringPadding = 0.3f;
-    [Range(8, 32)] public int ringSegments = 18;
-    [Min(0.005f)] public float ringLineWidth = 0.045f;
-    [Range(0f, 1f)] public float ringAlpha = 0.55f;
-    [Tooltip("Slow spin of each ring in degrees / sec. Adds 'alive' feel.")]
-    public float ringSpinSpeed = 8f;
-
     [Header("Fade-in")]
     [Tooltip("Seconds for the whole overlay to fade in when entering Edit mode.")]
     [Min(0f)] public float fadeInDuration = 0.25f;
@@ -86,34 +72,11 @@ public class PlacementHintOverlay : MonoBehaviour
         public float      bobPhase;          // 0..2π for desync
     }
 
-    sealed class Ring
-    {
-        public GameObject obj;
-        public List<LineRenderer> segments = new();
-        // `axis` is the WORLD-space rotation axis this frame, recomputed
-        // each Update as pc.CurrentRotation * localAxis so the ring tracks
-        // the block's local axes (matching `_targetRotation *= ...` which
-        // is Self-space rotation).
-        public Vector3   axis;
-        public Vector3   localAxis;     // fixed: (1,0,0), (0,1,0), or (0,0,1)
-        public Color     baseColor;
-        public string    label;
-        public KeyCode   key;
-        public float     lastPressTime;
-    }
-
     bool _visible;
     bool _userToggleOff;        // persistent off via toggleKey
 
-    // Layout cache — used by the dirty gate. Ring segment rebuilds (the
-    // priciest per-frame work) skip when cursor cell + block rotation
-    // haven't changed.
-    Vector3Int _lastLayoutCell  = new(int.MinValue, int.MinValue, int.MinValue);
-    Quaternion _lastLayoutRot   = Quaternion.identity;
-    bool       _forceLayoutNext = true;
     GameObject _root;
     Arrow[] _arrows;
-    Ring[]  _rings;
     Mesh    _coneMesh;
     Material _lineMat;
     float   _buildTime;
@@ -164,7 +127,6 @@ public class PlacementHintOverlay : MonoBehaviour
 
         // 3) Update arrow base positions (outside the bbox face) + bob.
         for (int i = 0; i < _arrows.Length; i++) RecordKey(_arrows[i].key, ref _arrows[i].lastPressTime);
-        if (_rings != null) for (int i = 0; i < _rings.Length; i++) RecordKey(_rings[i].key, ref _rings[i].lastPressTime);
 
         float fadeAlpha = Mathf.Clamp01((Time.time - _buildTime) / Mathf.Max(0.001f, fadeInDuration));
 
@@ -173,7 +135,7 @@ public class PlacementHintOverlay : MonoBehaviour
         {
             var a = _arrows[i];
 
-            // Hide Q/E (camera-forward/back depth arrows) when configured.
+            // Hide W/S (camera-forward/back depth arrows) when configured.
             // Those project as "into/out of screen" and read poorly in iso.
             bool isDepth = a.key == KeyCode.W || a.key == KeyCode.S;
             bool show    = !(hideForwardBackArrows && isDepth);
@@ -201,54 +163,6 @@ public class PlacementHintOverlay : MonoBehaviour
             var c   = Color.Lerp(arrowFlashColor, arrowColor, t);
             c.a    *= fadeAlpha;
             if (a.renderer != null) MpbColor.Set(a.renderer, c);
-        }
-
-        // 4) Update ring center, axis, radius + slow spin.
-        // Dirty gate: ring segment rebuilds (sin/cos per segment × 3 rings)
-        // are the heaviest per-frame work. Skip when cursor cell + block
-        // rotation haven't moved.
-        bool layoutDirty = _forceLayoutNext
-                        || pc.CurrentGridPos != _lastLayoutCell
-                        || Quaternion.Angle(pc.CurrentRotation, _lastLayoutRot) > 0.1f;
-
-        if (_rings != null)
-        {
-            Vector3 bcenterLocal = (_bboxMin + _bboxMax) * 0.5f * cell;
-            for (int i = 0; i < _rings.Length; i++)
-            {
-                var r = _rings[i];
-
-                if (layoutDirty)
-                {
-                    // Anchor ring on bbox centroid (matters for asymmetric pieces).
-                    r.obj.transform.localPosition = bcenterLocal;
-                    // World-space rotation → ring axis is fixed at build time.
-                    r.axis = r.localAxis;
-                    float radius = RingRadiusFor(r.axis, _bboxMin, _bboxMax) * cell + ringPadding * cell;
-                    RebuildRingPositions(r, radius);
-                }
-
-                if (ringSpinSpeed != 0f)
-                    r.obj.transform.localRotation *= Quaternion.AngleAxis(ringSpinSpeed * Time.deltaTime, r.axis);
-
-                float t = Mathf.Clamp01((Time.time - r.lastPressTime) / arrowFlashDuration);
-                var c   = Color.Lerp(arrowFlashColor, r.baseColor, t);
-                c.a     = ringAlpha * fadeAlpha;
-                for (int s = 0; s < r.segments.Count; s++)
-                {
-                    var lr = r.segments[s];
-                    if (lr == null) continue;
-                    lr.startColor = c;
-                    lr.endColor   = c;
-                }
-            }
-        }
-
-        if (layoutDirty)
-        {
-            _lastLayoutCell  = pc.CurrentGridPos;
-            _lastLayoutRot   = pc.CurrentRotation;
-            _forceLayoutNext = false;
         }
     }
 
@@ -301,17 +215,6 @@ public class PlacementHintOverlay : MonoBehaviour
         return o;
     }
 
-    // Ring radius needs to clear the bbox in the ring's plane (perpendicular
-    // to its rotation axis). Ring is anchored at bbox CENTER, so use the
-    // bbox's half-extent in each in-plane axis, take the larger.
-    static float RingRadiusFor(Vector3 axis, Vector3 bmin, Vector3 bmax)
-    {
-        Vector3 half = (bmax - bmin) * 0.5f;
-        if (Mathf.Abs(axis.x) > 0.5f) return Mathf.Max(half.y, half.z);
-        if (Mathf.Abs(axis.y) > 0.5f) return Mathf.Max(half.x, half.z);
-        return Mathf.Max(half.x, half.y);
-    }
-
     // ── Build ────────────────────────────────────────────────────────────
 
     void Build()
@@ -323,12 +226,10 @@ public class PlacementHintOverlay : MonoBehaviour
         _lineMat  = GetDefaultLineMaterial();
         _coneMesh = BuildConeMesh();
         _buildTime = Time.time;
-        _forceLayoutNext = true;   // ensure first post-build frame rebuilds rings
 
         if (showAxisLines)         BuildAxisDashes();
         if (showMovementArrows)    BuildMovementArrows();
         else                       _arrows = System.Array.Empty<Arrow>();
-        if (showRotationRings)     BuildRotationRings();
 
         _visible = true;
     }
@@ -338,7 +239,6 @@ public class PlacementHintOverlay : MonoBehaviour
         if (_root != null) Destroy(_root);
         _root = null;
         _arrows = null;
-        _rings  = null;
         _visible = false;
     }
 
@@ -391,15 +291,15 @@ public class PlacementHintOverlay : MonoBehaviour
         // WASDQE mapping (matches PlacementController.HandleKeyboardOffset):
         //   W / S = camera forward / back  (camera-relative, snapped to world axis)
         //   A / D = camera left / right    (camera-relative, snapped to world axis)
-        //   Q / E = world UP / DOWN        (fixed)
+        //   E / Q = world UP / DOWN        (fixed)
         var defs = new (string lbl, KeyCode k, bool cam, Vector3 worldDir)[]
         {
             ("W", KeyCode.W, true,  Vector3.forward),
             ("S", KeyCode.S, true,  Vector3.back),
             ("A", KeyCode.A, true,  Vector3.left),
             ("D", KeyCode.D, true,  Vector3.right),
-            ("Q", KeyCode.Q, false, Vector3.up),
-            ("E", KeyCode.E, false, Vector3.down),
+            ("E", KeyCode.E, false, Vector3.up),
+            ("Q", KeyCode.Q, false, Vector3.down),
         };
 
         _arrows = new Arrow[defs.Length];
@@ -457,72 +357,6 @@ public class PlacementHintOverlay : MonoBehaviour
             return new Vector3(Mathf.Sign(v.x), 0, 0);
         else
             return new Vector3(0, 0, Mathf.Sign(v.z));
-    }
-
-    void BuildRotationRings()
-    {
-        var defs = new (string lbl, KeyCode k, Vector3 axis, Color col)[]
-        {
-            ("1", KeyCode.Alpha1, Vector3.right,   axisColorX),
-            ("2", KeyCode.Alpha2, Vector3.up,      axisColorY),
-            ("3", KeyCode.Alpha3, Vector3.forward, axisColorZ),
-        };
-
-        _rings = new Ring[defs.Length];
-        for (int i = 0; i < defs.Length; i++) _rings[i] = BuildOneRing(defs[i].lbl, defs[i].k, defs[i].axis, defs[i].col);
-    }
-
-    Ring BuildOneRing(string label, KeyCode key, Vector3 axis, Color color)
-    {
-        var ring = new Ring
-        {
-            obj           = new GameObject($"RotRing_{label}"),
-            label         = label,
-            key           = key,
-            axis          = axis,        // initial value; Update overwrites
-            localAxis     = axis,        // fixed reference axis
-            baseColor     = color,
-            lastPressTime = -999f,
-        };
-        ring.obj.transform.SetParent(_root.transform, false);
-
-        int n = Mathf.Max(8, ringSegments);
-        for (int s = 0; s < n; s++)
-        {
-            var go = new GameObject("Seg");
-            go.transform.SetParent(ring.obj.transform, false);
-            var lr = go.AddComponent<LineRenderer>();
-            lr.useWorldSpace   = false;
-            lr.positionCount   = 2;
-            lr.widthMultiplier = ringLineWidth;
-            lr.material        = _lineMat;
-            ring.segments.Add(lr);
-        }
-
-        return ring;
-    }
-
-    // Rebuild ring vertex positions for a given radius (called each frame as
-    // bbox / rotation change).
-    void RebuildRingPositions(Ring r, float radius)
-    {
-        // Two basis vectors in the plane perpendicular to the rotation axis.
-        Vector3 u = Mathf.Abs(r.axis.y) < 0.9f
-            ? Vector3.Cross(r.axis, Vector3.up).normalized
-            : Vector3.Cross(r.axis, Vector3.right).normalized;
-        Vector3 v = Vector3.Cross(r.axis, u).normalized;
-
-        int n = r.segments.Count;
-        float tau = Mathf.PI * 2f;
-        for (int s = 0; s < n; s++)
-        {
-            float a0 = (s     / (float)n) * tau;
-            float a1 = ((s+1) / (float)n) * tau;
-            var p0 = radius * (u * Mathf.Cos(a0) + v * Mathf.Sin(a0));
-            var p1 = radius * (u * Mathf.Cos(a1) + v * Mathf.Sin(a1));
-            r.segments[s].SetPosition(0, p0);
-            r.segments[s].SetPosition(1, p1);
-        }
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────

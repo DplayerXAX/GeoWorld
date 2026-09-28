@@ -7,11 +7,16 @@ using TMPro;
 // Attached at runtime (TitleFlow.WireSaveSlots) to each save-slot button. HOVER
 // ONLY: shows that slot's stats over the right-side TitleCube via
 // SaveSlotInfoDisplay. Slot SELECTION lives in each button's onClick() calling
-// TitleFlow.SelectSlotAndPlay(slot) directly (Inspector-baked), not here —
-// deliberately not inferred from sibling order.
+// TitleFlow.SelectSlotAndPlay(slot) directly (Inspector-baked), not here.
+//
+// Which slot a button IS comes from that same onClick argument (SlotOf) — never
+// from sibling order: the buttons sit in the panel as slot 1, 3, 2, and the panel
+// itself carries a Button too.
 public class SaveSlotButton : MonoBehaviour, IPointerEnterHandler, IPointerExitHandler
 {
     int _slot;
+
+    public int Slot => _slot;
 
     public void Init(int slot) => _slot = slot;
 
@@ -25,6 +30,31 @@ public class SaveSlotButton : MonoBehaviour, IPointerEnterHandler, IPointerExitH
     }
 
     public void OnPointerExit(PointerEventData e) => SaveSlotInfoDisplay.Hide();
+
+    // The int argument of the button's persistent SelectSlotAndPlay call — the slot
+    // number the Inspector wiring already states. UnityEvent keeps persistent calls
+    // private, so this reads them by reflection; -1 if there isn't one.
+    public static int SlotOf(Button b)
+    {
+        if (b == null) return -1;
+        try
+        {
+            const System.Reflection.BindingFlags F =
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance;
+            var group = typeof(UnityEngine.Events.UnityEventBase).GetField("m_PersistentCalls", F)?.GetValue(b.onClick);
+            var calls = group?.GetType().GetField("m_Calls", F)?.GetValue(group) as System.Collections.IList;
+            if (calls == null) return -1;
+            foreach (var call in calls)
+            {
+                var t = call.GetType();
+                if (t.GetField("m_MethodName", F)?.GetValue(call) as string != nameof(TitleFlow.SelectSlotAndPlay)) continue;
+                var args = t.GetField("m_Arguments", F)?.GetValue(call);
+                if (args?.GetType().GetField("m_IntArgument", F)?.GetValue(args) is int slot) return slot;
+            }
+        }
+        catch (System.Exception e) { Debug.LogWarning($"[SaveSlot] couldn't read slot from {b.name}: {e.Message}"); }
+        return -1;
+    }
 }
 
 // One shared floating info card that hovers over the right-side TitleCube. Built

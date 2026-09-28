@@ -44,6 +44,22 @@ public class AudioManager : MonoBehaviour
     public AK.Wwise.Event Defeat;
     [Tooltip("Posted every time a life is lost (PlayerHealth.TakeDamage) — including the killing hit, which plays alongside Defeat.")]
     public AK.Wwise.Event Damage;
+
+    [Header("Turret fire (one event over a Switch Container)")]
+    [Tooltip("Posted each time a turret fires (TurretController.Fire). Point it at the Switch Container that holds one sound per turret type ('turret sound').")]
+    public AK.Wwise.Event TurretFire;
+    [Tooltip("Switch value the container plays for a Basic turret ('base').")]
+    public AK.Wwise.Switch TurretSwitchBasic;
+    [Tooltip("Switch value for a Slow turret ('slow').")]
+    public AK.Wwise.Switch TurretSwitchSlow;
+    [Tooltip("Switch value for an AOE turret ('aoe').")]
+    public AK.Wwise.Switch TurretSwitchAoe;
+    [Tooltip("Post from the turret itself instead of from this manager — only useful if the events are authored as 3D (positioned) in Wwise.")]
+    public bool turretFireSpatial = false;
+    [Tooltip("Shortest gap between two posts of the SAME turret type, in seconds. A full board has many turrets firing in the same frame; without a gap they stack into one loud clipped burst.")]
+    [Min(0f)] public float turretFireMinGap = 0.04f;
+
+    readonly float[] _lastTurretFire = { -1f, -1f, -1f, -1f };   // per TurretController.Mode
     [Header("Volume RTPCs (Wwise global, 0..100)")]
     [Tooltip("Global Wwise RTPC names bound to your bus volumes. SettingsScreen drives these 0..1 → 0..100. Set them up on the Master / Music / SFX buses in Wwise.")]
     public string masterVolumeRtpc = "MasterVolume";
@@ -54,6 +70,32 @@ public class AudioManager : MonoBehaviour
     // The Switch Group name in your Wwise project. Switch values must
     // match BlockType enum names (Home / Lift / Pull / Shadow).
     public string chordSwitchGroup = "BlockChord";
+
+    [Header("Hurt pulse (RTPC for the music)")]
+    // Jumps to 1 the moment the player loses a life, holds, then falls back to 0.
+    // Bind it to anything in Wwise — a low-pass on the BGM bus, a pitch dip, a
+    // dropout of the melodic layer, a swell on a tension track — so the MUSIC
+    // flinches when you are hit, not just a one-shot SFX over the top of it.
+    [Tooltip("Global Wwise RTPC name. Set its range to 0..1 in Wwise (or change hurtRtpcMax).")]
+    public string hurtRtpc = "HurtPulse";
+    [Tooltip("Value sent at the peak. 1 for a 0..1 RTPC, 100 for a 0..100 one.")]
+    public float hurtRtpcMax = 1f;
+    [Tooltip("Seconds held at the peak before it starts to fall.")]
+    [Min(0f)] public float hurtHold = 0.12f;
+    [Tooltip("Seconds to fall from the peak back to 0.")]
+    [Min(0.01f)] public float hurtDecay = 2.2f;
+    [Tooltip("Shape of the fall: x = time through the decay (0..1), y = value (1..0). Default eases out — a sharp drop just after the hit, a long tail after it.")]
+    public AnimationCurve hurtShape = new AnimationCurve(
+        new Keyframe(0f, 1f, 0f, -2.2f),
+        new Keyframe(1f, 0f, 0f, 0f));
+
+    // Live value, 0..1, for anything else that wants to react with the music
+    // (screen tint, vignette) instead of keeping its own timer.
+    public float HurtPulse => _hurt;
+
+    float _hurt;
+    float _hurtAge = -1f;       // seconds since the last hit; < 0 = idle
+    float _hurtSent = -1f;      // last value actually sent to Wwise
 
     // Tracked so we can stop the right playing instance when swapping BGMs
     // (event-swap path). 0 = nothing playing.
@@ -75,8 +117,55 @@ public class AudioManager : MonoBehaviour
         Instance = this;
     }
 
+    // Real time, not game time. The music does not slow down for a hit-stop or a
+    // slowed timescale, so neither may the thing driving it — a decay tied to
+    // Time.deltaTime would stretch out and hang at its peak for as long as the game
+    // is slowed.
+    void Update()
+    {
+        if (_hurtAge < 0f) return;
+
+        _hurtAge += Time.unscaledDeltaTime;
+
+        float v;
+        if (_hurtAge <= hurtHold) v = 1f;
+        else
+        {
+            float t = (_hurtAge - hurtHold) / Mathf.Max(0.01f, hurtDecay);
+            v = t >= 1f ? 0f : Mathf.Clamp01(hurtShape.Evaluate(t));
+            if (t >= 1f) _hurtAge = -1f;   // done — stop updating until the next hit
+        }
+
+        SendHurt(v);
+    }
+
+    // Retriggers on every hit: a second leak mid-decay jumps straight back to the
+    // peak rather than adding to it, so a burst of leaks reads as one sustained
+    // flinch instead of clipping past the RTPC's range.
+    public void PulseHurt()
+    {
+        _hurtAge = 0f;
+        SendHurt(1f);
+    }
+
+    void SendHurt(float v01)
+    {
+        _hurt = v01;
+        // Only when it moves — at rest this would otherwise post the same 0 to the
+        // sound engine every frame for the entire game.
+        if (Mathf.Abs(v01 - _hurtSent) < 0.001f) return;
+        _hurtSent = v01;
+        if (!string.IsNullOrEmpty(hurtRtpc))
+            AkUnitySoundEngine.SetRTPCValue(hurtRtpc, v01 * hurtRtpcMax);   // global scope: every emitter, BGM included
+    }
+
     void OnDestroy()
     {
+        // The RTPC is GLOBAL and outlives this object. Leave it anywhere but 0 on a
+        // scene change and the next scene's music starts out already flinching.
+        _hurtAge = -1f;
+        SendHurt(0f);
+
         // Stop our BGM when this AudioManager goes away (e.g. scene reload on Restart),
         // so the reloaded scene's AudioManager doesn't stack a second BGM on top.
         // StopBGM covers the paused instances too — a paused event survives the
@@ -148,22 +237,58 @@ public class AudioManager : MonoBehaviour
         if (Damage != null && Damage.IsValid()) Damage.Post(this.gameObject);
     }
 
-    // Call once when a typewriter starts revealing a new line/hint.
-    public void StartTextBlip()
+    // One event over a Switch Container: set the turret type's switch on the
+    // emitter, then post. Switches are per game object and Wwise applies calls in
+    // the order they were made, so turrets of different types firing in the same
+    // frame from the same emitter each still get their own sound. Rate-limited per
+    // type (see turretFireMinGap).
+    public void PlayTurretFire(TurretController.Mode mode, GameObject turret)
+    {
+        if (TurretFire == null || !TurretFire.IsValid()) return;
+
+        int i = Mathf.Clamp((int)mode, 0, _lastTurretFire.Length - 1);
+        float now = Time.unscaledTime;
+        if (_lastTurretFire[i] >= 0f && now - _lastTurretFire[i] < turretFireMinGap) return;
+        _lastTurretFire[i] = now;
+
+        var emitter = turretFireSpatial && turret != null ? turret : this.gameObject;
+        var sw = mode switch
+        {
+            TurretController.Mode.Slow => TurretSwitchSlow,
+            TurretController.Mode.Aoe  => TurretSwitchAoe,
+            _                          => TurretSwitchBasic,
+        };
+        if (sw != null && sw.IsValid()) sw.SetValue(emitter);   // unset = the container's default switch plays
+        TurretFire.Post(emitter);
+    }
+
+    // Call once when a typewriter starts revealing a new line/hint. Typewriters go
+    // through the TextBlip facade (which also covers scenes with no AudioManager);
+    // `owner` is who is typing — see StopTextBlip.
+    public void StartTextBlip(Object owner = null)
     {
         StopTextBlip();   // guard: don't stack a second instance if a prior one is still ringing
         if (TextBlip != null && TextBlip.IsValid())
+        {
             _currentBlipPlayingId = TextBlip.Post(this.gameObject);
+            _blipOwner = owner;
+        }
     }
 
-    // Call once when the typewriter finishes (naturally or skipped).
-    public void StopTextBlip()
+    // Call once when the typewriter finishes (naturally or skipped). With an owner,
+    // only stops a blip that owner started — the hidden tutorial hint box used to
+    // stop the DIALOGUE box's blip every frame, so a line with a speaker never made
+    // a sound. No owner = stop whatever is playing (cleanup).
+    public void StopTextBlip(Object owner = null)
     {
         if (_currentBlipPlayingId == 0) return;
+        if (owner != null && _blipOwner != null && owner != _blipOwner) return;
         AkUnitySoundEngine.StopPlayingID(_currentBlipPlayingId, 150,
             AkCurveInterpolation.AkCurveInterpolation_Linear);
         _currentBlipPlayingId = 0;
+        _blipOwner = null;
     }
+    Object _blipOwner;
     private void Start()
     {
         SetChordOnObject(BlockType.Home, this.gameObject);

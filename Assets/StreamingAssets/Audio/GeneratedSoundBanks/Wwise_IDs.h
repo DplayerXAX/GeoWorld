@@ -41,6 +41,7 @@ namespace AK
         static const AkUniqueID TEXTBLIP = 1387752797U;
         static const AkUniqueID TIMEDRAIN = 3258153068U;
         static const AkUniqueID TITLE_LOOP = 966390882U;
+        static const AkUniqueID TURRETFIRE = 1817945039U;
         static const AkUniqueID VICTORY_LOOP = 301972542U;
     } // namespace EVENTS
 
@@ -78,10 +79,23 @@ namespace AK
             } // namespace SWITCH
         } // namespace NOTERANGE
 
+        namespace TURRETTYPE
+        {
+            static const AkUniqueID GROUP = 1521021787U;
+
+            namespace SWITCH
+            {
+                static const AkUniqueID AOE = 1083976202U;
+                static const AkUniqueID BASE = 1291433366U;
+                static const AkUniqueID SLOW = 787604482U;
+            } // namespace SWITCH
+        } // namespace TURRETTYPE
+
     } // namespace SWITCHES
 
     namespace GAME_PARAMETERS
     {
+        static const AkUniqueID HURTPULSE = 2515456893U;
         static const AkUniqueID MASTERVOLUME = 2918011349U;
         static const AkUniqueID MUSICVOLUME = 2346531308U;
         static const AkUniqueID NOTEVALUE = 2992552588U;

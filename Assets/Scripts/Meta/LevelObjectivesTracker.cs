@@ -98,6 +98,21 @@ public class LevelObjectivesTracker : MonoBehaviour
         if (_inst == this) _inst = null;
     }
 
+    // ── Mid-level save ────────────────────────────────────────────────────────
+    public static void Capture(LevelRunSave save)
+    {
+        if (_inst == null || save == null) return;
+        save.objKills = _inst._kills;   save.objLeaks = _inst._leaks;   save.objPlaced = _inst._placed;
+        save.objMaxSynergies = _inst._maxSynergies;  save.objMaxTurretLevel = _inst._maxTurretUpgradeLevel;
+    }
+
+    public static void Restore(LevelRunSave save)
+    {
+        if (_inst == null || save == null) return;
+        _inst._kills = save.objKills;   _inst._leaks = save.objLeaks;   _inst._placed = save.objPlaced;
+        _inst._maxSynergies = save.objMaxSynergies;  _inst._maxTurretUpgradeLevel = save.objMaxTurretLevel;
+    }
+
     void OnKill(EnemySurfaceUnit _)            => _kills++;
     void OnLeak(EnemySurfaceUnit _)            => _leaks++;
     void OnPlaced(BlockData _, Vector3Int[] __) => _placed++;

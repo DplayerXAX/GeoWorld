@@ -19,6 +19,9 @@ public class LevelDefinition : ScriptableObject
     [Min(1)] public int blocksPerTurn  = 8;
     [Min(0)] public int turretsPerTurn = 3;
 
+    [Tooltip("Scales the starting BLOCK currency for this level (the balance table's blockStartingCurrency × this). 1 = unchanged, 0.5 = half.")]
+    [Range(0f, 3f)] public float startingBlockCurrencyMult = 1f;
+
     [Tooltip("Sandbox: every purchase succeeds and nothing is deducted from either pool. For test / layout-authoring levels. Deliberately a LEVEL flag rather than a global toggle — it can't be left switched on and leak into a real run.")]
     public bool infiniteResources = false;
 
@@ -58,6 +61,12 @@ public class LevelDefinition : ScriptableObject
     // if Enlightenment can never roll this level).
     public bool AllowsColor(BlockColor c) =>
         allowedColors == null || allowedColors.Length == 0 || System.Array.IndexOf(allowedColors, c) >= 0;
+
+    [Tooltip("Turret types that can roll in THIS level's shop. Empty = every turret type in the pool. Lets a turret be introduced at a chosen level — list the older types on the earlier levels, and leave the list empty (or add the new type) from the level that introduces it. startingShop entries are placed regardless.")]
+    public BlockType[] turretPool;
+
+    public bool AllowsTurret(BlockType t) =>
+        turretPool == null || turretPool.Length == 0 || System.Array.IndexOf(turretPool, t) >= 0;
 
     [Tooltip("Blocks GUARANTEED in the very first build phase's shop — the rest of the slots still roll randomly, and every later round is fully random. Turret entries fill the turret row, everything else the block row; extras beyond a row's size are dropped. Use it to hand-set an opening hand (a tutorial's ORANGE block, a level that must open with an AOE turret, ...) instead of leaning on runSeed to luck into it. Empty = fully random opening shop.")]
     public ShopEntry[] startingShop;
@@ -109,6 +118,72 @@ public class LevelDefinition : ScriptableObject
     public Vector3Int endCell;
     [Tooltip("Ordered guided placements. Each shows a ghost the player must match exactly before they can place.")]
     public List<TutorialStep> tutorialSteps = new();
+
+    [Header("Map reveal")]
+    // This level's region of the level-select map stays hidden until THIS level
+    // has been cleared, then rises out of the ground on the next visit — see
+    // LevelMapController.Reveal. Every level is unlocked by default and the regions
+    // are joined by blocks the player builds, so the unlock flags cannot say what
+    // should be visible; this does.
+    [Tooltip("Hide this level's region of the map until that level is cleared. Empty = visible from the start.")]
+    public LevelDefinition revealAfter;
+
+    [Header("Chapter inheritance")]
+    // A chapter is one growing base. This level starts from the board the player
+    // most recently CLEARED `inheritFrom` with — the keepsake DoLevelClear already
+    // writes into LevelRecord.buildSnapshot on every clear. Replaying that earlier
+    // level therefore changes where this one starts.
+    //
+    // The blocks carry over, and (inheritCores) so do the CORES the player was
+    // defending: the base is the same place, defended from the same spots. The spawn
+    // points do not — this level opens a new one out beyond the edge of the build,
+    // away from the cores and from where the last level's monsters came from, so
+    // every level attacks the same base from a new direction.
+    //
+    // Within a chapter this is automatic: level "C-N" inherits from "C-(N-1)" (see
+    // InheritSource). A chapter opener ("C-1") and any id not in that form — the
+    // Tutorial, Test — have no previous level and start fresh. `inheritFrom` still
+    // overrides the automatic choice, and `autoInherit` turns it off for one level.
+    [Tooltip("Start from the board the player last cleared THIS level with, instead of the automatic previous level of the chapter. Empty = automatic (see autoInherit).")]
+    public LevelDefinition inheritFrom;
+
+    [Tooltip("When inheritFrom is empty, inherit from the previous level of the same chapter by id — \"1-3\" from \"1-2\". Off = this level starts fresh unless inheritFrom is set.")]
+    public bool autoInherit = true;
+
+    /// <summary>The level this one inherits its board from, or null to start fresh.</summary>
+    public LevelDefinition InheritSource
+    {
+        get
+        {
+            if (inheritFrom != null) return inheritFrom;
+            if (!autoInherit) return null;
+            var prev = PreviousInChapter(levelId);
+            return prev != null ? LevelRegistry.Find(prev) : null;
+        }
+    }
+
+    // "1-3" → "1-2". Null for a chapter opener ("1-1") or an id not shaped C-N.
+    public static string PreviousInChapter(string id)
+    {
+        if (string.IsNullOrEmpty(id)) return null;
+        int dash = id.LastIndexOf('-');
+        if (dash <= 0 || dash >= id.Length - 1) return null;
+        if (!int.TryParse(id.Substring(0, dash), out int chapter)) return null;
+        if (!int.TryParse(id.Substring(dash + 1), out int n) || n <= 1) return null;
+        return $"{chapter}-{n - 1}";
+    }
+
+    [Tooltip("How far beyond the edge of the inherited build the new spawn and defence points appear, in cells. This is how much the board grows per level.")]
+    [Min(1f)] public float inheritRing = 4f;
+
+    [Tooltip("Carry TURRETS over with the rest of the build. Off = only the blocks come across; the player arms the new level afresh.")]
+    public bool inheritTurrets = false;
+
+    [Tooltip("Carry turret upgrade levels over with the turrets (only matters with inheritTurrets on).")]
+    public bool inheritUpgrades = true;
+
+    [Tooltip("Keep the cores (the points you defend) where the last level had them — all of them, including any that appeared mid-level. Only a new spawn point is generated. Off = both a new spawn and a new core are generated around the inherited build.")]
+    public bool inheritCores = true;
 
     [Header("Starting layout")]
     [Tooltip("Optional pre-built blocks placed on the grid at level start, authored with LevelMapAuthor "
@@ -264,7 +339,7 @@ public class TutorialStep
     public BlockData block;
     [Tooltip("Grid cell the block's origin (its 0,0,0 cell) lands on. Ghost = (rotated) block.cells + this.")]
     public Vector3Int origin;
-    [Tooltip("Required rotation in 90° turns around X / Y / Z. (0,0,0) = default. The ghost shows this orientation; the player must rotate (1/2/3) to match.")]
+    [Tooltip("Required rotation in 90° turns around X / Y / Z. (0,0,0) = default. The ghost shows this orientation; the player must hold Alt and move the mouse or scroll to match.")]
     public Vector3Int rotation90;
     [Tooltip("Advanced: explicit absolute cells; overrides block+origin+rotation when set.")]
     public Vector3Int[] cellsOverride;

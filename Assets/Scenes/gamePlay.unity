@@ -260,6 +260,96 @@ Transform:
   - {fileID: 1521005798}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &61548752
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 61548754}
+  - component: {fileID: 61548753}
+  m_Layer: 0
+  m_Name: sceneDressing
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 0
+--- !u!114 &61548753
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 61548752}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8d07f6d76d9d70d43aefc7e3c13992ab, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::SceneDressing
+  grid: {fileID: 0}
+  manualSize: {x: 14, y: 14}
+  clearance: 2.5
+  groundY: 0
+  frameForeground: 1
+  frameScale: 2.2
+  frameOut: 5
+  bands:
+  - name: far wood
+    enabled: 1
+    kind: 0
+    count: 26
+    distance: {x: 16, y: 34}
+    scale: {x: 1.3, y: 2.4}
+    haze: 0.62
+    variants: 4
+    castShadows: 0
+  - name: mid trees
+    enabled: 1
+    kind: 0
+    count: 14
+    distance: {x: 5, y: 15}
+    scale: {x: 0.9, y: 1.6}
+    haze: 0.22
+    variants: 4
+    castShadows: 1
+  - name: thicket
+    enabled: 1
+    kind: 1
+    count: 30
+    distance: {x: 0.5, y: 7}
+    scale: {x: 0.8, y: 1.5}
+    haze: 0.05
+    variants: 4
+    castShadows: 1
+  - name: scrub
+    enabled: 1
+    kind: 2
+    count: 46
+    distance: {x: 0, y: 4}
+    scale: {x: 0.7, y: 1.4}
+    haze: 0
+    variants: 4
+    castShadows: 1
+  buildOnStart: 1
+  seed: 12345
+--- !u!4 &61548754
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 61548752}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: -0, y: -0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &85239780
 GameObject:
   m_ObjectHideFlags: 0
@@ -386,6 +476,7 @@ MonoBehaviour:
   - {fileID: 11400000, guid: 3bcfeb02226d44d49a6df82d6c36a1a7, type: 2}
   - {fileID: 11400000, guid: a7f28c36612c9dcda3e860f226e14c3b, type: 2}
   - {fileID: 11400000, guid: fb46f09fe6cabf35093865bc2d050931, type: 2}
+  - {fileID: 11400000, guid: 5ff950918e984f5cb64c122b9cf0efda, type: 2}
   grid: {fileID: 164805054}
   currentBlock: {fileID: 11400000, guid: c8bcfd2efd3263845ad3ea61c80c0fe7, type: 2}
   currentSynergyColor: 0
@@ -396,7 +487,7 @@ MonoBehaviour:
   minDepth: 2
   maxDepth: 40
   scrollSpeed: 3
-  rotateSpeed: 10
+  rotateSpeed: 30
   panSpeed: 8
   blockPalette:
   - {r: 0.85, g: 0.18, b: 0.12, a: 1}
@@ -423,6 +514,7 @@ MonoBehaviour:
   rangeSphereColor: {r: 0.07861614, g: 0.5672784, b: 1, a: 0.12}
   rangeBlockedColor: {r: 1, g: 0.18, b: 0.12, a: 0.6}
   sellRefundFraction: 0.5
+  hazardKeepsOutline: 0
   selectionPopDuration: 0.16
   restartTapMaxSeconds: 0.25
   restartHoldSeconds: 1.2
@@ -456,6 +548,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::GridSystem
   cellSize: 1
+  originCells: {x: 0, y: 0, z: 0}
   size: {x: 10, y: 5, z: 10}
 --- !u!1 &200253447
 GameObject:
@@ -509,7 +602,9 @@ MonoBehaviour:
   hintCharsPerSecond: 38
   font: {fileID: 11400000, guid: 656fc90eefbca1448b0b452bc9a3178c, type: 2}
   suggestColor: {r: 0.25, g: 0.55, b: 1, a: 0.35}
+  suggestRouteColor: {r: 1, g: 1, b: 1, a: 0.5}
   suggestColor2: {r: 0.95, g: 0.75, b: 0.25, a: 0.3}
+  hintEditDim: 0.25
   focusViewportY: 0.65
 --- !u!1 &270661876
 GameObject:
@@ -987,6 +1082,8 @@ MonoBehaviour:
   projectionToggleKey: 289
   perspectiveFov: 50
   transitionSpeed: 15
+  minFocusY: -Infinity
+  minCameraY: -Infinity
   myCam: {fileID: 330585545}
 --- !u!114 &330585549
 MonoBehaviour:
@@ -1476,12 +1573,6 @@ MonoBehaviour:
   shiftHoldInverts: 1
   bobAmplitude: 0.05
   bobSpeedHz: 0.7
-  showRotationRings: 1
-  ringPadding: 0.3
-  ringSegments: 16
-  ringLineWidth: 0.05
-  ringAlpha: 0.6
-  ringSpinSpeed: 8
   fadeInDuration: 0.25
 --- !u!1 &621363996
 GameObject:
@@ -3234,10 +3325,12 @@ MonoBehaviour:
   controls:
   - key: W A S D
     action: Move / Adjust
-  - key: Q / E
+  - key: E / Q
     action: Raise / lower
-  - key: 1 / 2 / 3
+  - key: Alt + mouse
     action: Rotate block
+  - key: Alt + scroll
+    action: Turn block
   - key: F
     action: Shop
   - key: LMB
@@ -3409,10 +3502,62 @@ MonoBehaviour:
     idInternal: 0
     valueGuidInternal: 
     WwiseObjectReference: {fileID: 11400000, guid: 6a1a8662fcc34c14e9f58af4a58459d9, type: 2}
+  TurretFire:
+    idInternal: 0
+    valueGuidInternal: 
+    WwiseObjectReference: {fileID: 11400000, guid: df1a0491f82d4904c8723086ac8d5eb9, type: 2}
+  TurretSwitchBasic:
+    idInternal: 0
+    valueGuidInternal: 
+    groupIdInternal: 0
+    groupGuidInternal: 
+    WwiseObjectReference: {fileID: 11400000, guid: a60539a1f8b721f4e951c6df6403133b, type: 2}
+  TurretSwitchSlow:
+    idInternal: 0
+    valueGuidInternal: 
+    groupIdInternal: 0
+    groupGuidInternal: 
+    WwiseObjectReference: {fileID: 11400000, guid: d2e8a4572f31e5342bd8c3200a3a599e, type: 2}
+  TurretSwitchAoe:
+    idInternal: 0
+    valueGuidInternal: 
+    groupIdInternal: 0
+    groupGuidInternal: 
+    WwiseObjectReference: {fileID: 11400000, guid: a0f6806295d34844889e000e79cf6b19, type: 2}
+  turretFireSpatial: 0
+  turretFireMinGap: 0.04
   masterVolumeRtpc: MasterVolume
   musicVolumeRtpc: MusicVolume
   sfxVolumeRtpc: SFXVolume
   chordSwitchGroup: BlockChord
+  hurtRtpc: HurtPulse
+  hurtRtpcMax: 1
+  hurtHold: 0.12
+  hurtDecay: 2.2
+  hurtShape:
+    serializedVersion: 2
+    m_Curve:
+    - serializedVersion: 3
+      time: 0
+      value: 1
+      inSlope: 0
+      outSlope: -2.2
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    - serializedVersion: 3
+      time: 1
+      value: 0
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
 --- !u!114 &1746692275
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -3881,3 +4026,4 @@ SceneRoots:
   - {fileID: 1307567336}
   - {fileID: 1964110098}
   - {fileID: 1079170805139325090}
+  - {fileID: 61548754}

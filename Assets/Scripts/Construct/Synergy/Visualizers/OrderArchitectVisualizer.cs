@@ -63,8 +63,12 @@ public class OrderArchitectVisualizer : SynergyVisualizer
     [Tooltip("Smallest cog radius, in cell-size units.")]
     [Range(0.1f, 0.6f)] public float gearSizeMinFrac = 0.20f;
 
-    [Tooltip("Largest cog radius, in cell-size units (sizes vary between min and max).")]
-    [Range(0.1f, 0.8f)] public float gearSizeMaxFrac = 0.50f;
+    // 0.40, not 0.50. The block mesh is bevelled: its FLAT face is only about
+    // 0.89 of a cell across, so a cog of radius 0.5 reaches past the flat onto the
+    // bevel and its teeth stand proud of the silhouette — which reads as floating
+    // even when the cog is perfectly flush.
+    [Tooltip("Largest cog radius, in cell-size units (sizes vary between min and max). Keep under ~0.44 or the teeth overhang the block's bevelled edge.")]
+    [Range(0.1f, 0.8f)] public float gearSizeMaxFrac = 0.40f;
 
     [Tooltip("Chance each OUTER block face gets a cog bolted on (random coverage). Cogs spin around the face normal, so different faces spin in different planes.")]
     [Range(0f, 1f)] public float faceCoverChance = 0.5f;
@@ -72,8 +76,8 @@ public class OrderArchitectVisualizer : SynergyVisualizer
     [Tooltip("Max cogs per claimed piece.")]
     public int maxGears = 12;
 
-    [Tooltip("How far the cog sits off the block face, in cell-size units.")]
-    [Range(0f, 0.3f)] public float faceOffsetFrac = 0.05f;
+    [Tooltip("Gap between the cog's BACK and the block face, in cell-size units. Just enough to stop the two surfaces z-fighting.")]
+    [Range(0f, 0.3f)] public float faceOffsetFrac = 0.015f;
 
     [Header("Gear rotation (musical, stepped)")]
     [Tooltip("Beats per minute the cogs tick to. 30 = stately clockwork.")]
@@ -122,8 +126,11 @@ public class OrderArchitectVisualizer : SynergyVisualizer
     [Tooltip("Base opacity of the holo cogs.")]
     [Range(0.05f, 1f)] public float holoAlpha = 0.4f;
 
-    [Tooltip("How far cogs float OFF the block faces (cell-size units) — they ring the block, they don't hug it.")]
-    [Range(0f, 1f)] public float floatDistanceFrac = 0.35f;
+    // 0: cogs are bolted ON. They used to hover 0.35 of a cell off every face as
+    // "holo projections", and with nothing between the cog and the block a gap
+    // that size just reads as a cog that has come loose.
+    [Tooltip("Extra distance cogs stand off the faces, in cell-size units. 0 = bolted flat onto the block.")]
+    [Range(0f, 1f)] public float floatDistanceFrac = 0f;
 
     [Tooltip("Ring the block on its SIDE faces only — keeps the top/bottom (the walkable road) clear of cogs.")]
     public bool sideFacesOnly = true;

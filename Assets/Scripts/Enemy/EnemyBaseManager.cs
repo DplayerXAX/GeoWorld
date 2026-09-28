@@ -433,7 +433,10 @@ public class EnemyBaseManager : MonoBehaviour
         BackgroundReactor.Instance?.TriggerDamageFlash();
         if (PlayerHealth.Instance != null)
         {
-            PlayerHealth.Instance.TakeDamage(1);
+            // Rounded: lives are whole. A stat of 0 (an item that zeroes it) means
+            // the leak costs nothing — TakeDamage ignores amounts <= 0.
+            int loss = Mathf.Max(0, Mathf.RoundToInt(Modifiers.Eval(Stat.LeakDamage, 1f)));
+            PlayerHealth.Instance.TakeDamage(loss);
             Debug.Log($"[EnemyBaseManager] Enemy escaped. Lives → {PlayerHealth.Instance.CurrentLives}");
         }
         else

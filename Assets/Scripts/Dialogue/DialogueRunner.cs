@@ -217,7 +217,7 @@ public class DialogueRunner : MonoBehaviour
             if (_bodyText.maxVisibleCharacters >= total)
             {
                 _typing = false;
-                AudioManager.Instance?.StopTextBlip();
+                TextBlip.Stop(this);
             }
         }
 
@@ -279,7 +279,7 @@ public class DialogueRunner : MonoBehaviour
                 // rest of the sentence while they act on it is pure friction.
                 _typing = false;
                 _bodyText.maxVisibleCharacters = _bodyText.textInfo.characterCount;
-                AudioManager.Instance?.StopTextBlip();
+                TextBlip.Stop(this);
             }
             else if (!Gated) Advance();
         }
@@ -395,7 +395,7 @@ public class DialogueRunner : MonoBehaviour
         _bodyText.maxVisibleCharacters = 0;
         _typed  = 0f;
         _typing = true;
-        AudioManager.Instance?.StartTextBlip();
+        TextBlip.Start(this);
         _lineFrame = Time.frameCount;   // ignore the click that opened this line
 
         // This one line waits for CompleteGate(actionGateId) instead of a click —
@@ -424,7 +424,7 @@ public class DialogueRunner : MonoBehaviour
         {
             _typing = false;
             _bodyText.maxVisibleCharacters = _bodyText.textInfo.characterCount;
-            AudioManager.Instance?.StopTextBlip();
+            TextBlip.Stop(this);
         }
         Advance();
     }
@@ -464,7 +464,7 @@ public class DialogueRunner : MonoBehaviour
         _choiceMode  = false;
         _alphaTarget = 0f;
         _typing      = false;
-        AudioManager.Instance?.StopTextBlip();   // guard: convo can end mid-line (e.g. externally Stop()ped)
+        TextBlip.Stop(this);   // guard: convo can end mid-line (e.g. externally Stop()ped)
         ClearChoices();
         OnFinished?.Invoke(convo);
     }

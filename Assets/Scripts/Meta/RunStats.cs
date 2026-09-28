@@ -26,6 +26,14 @@ public static class RunStats
         PlacementController.BlockPlaced += OnBlockPlaced;
     }
 
+    // Mid-level resume: carry the counters and the clock on from where they were.
+    public static void Restore(int kills, int blocksPlaced, float elapsed)
+    {
+        Kills        = Mathf.Max(0, kills);
+        BlocksPlaced = Mathf.Max(0, blocksPlaced);
+        _startTime   = Time.time - Mathf.Max(0f, elapsed);
+    }
+
     static void OnKill(EnemySurfaceUnit _) => Kills++;
     static void OnBlockPlaced(BlockData _, Vector3Int[] __) => BlocksPlaced++;
 
