@@ -1,209 +1,53 @@
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
-public enum RiftShapePreset { Rectangle, Triangle, Lens, Oval, Slash, Crack, Diamond, Custom }
 
+// The shop: what is on offer this round, and buying it.
+//
+// The LOOK lives in the scene — a ShopPanelView (the ShopUI prefab, placed with
+// GeoWorld ▸ UI ▸ Place Gameplay HUD): a strip at the bottom-right with a block row
+// and a turret row, slot templates, refresh / open buttons and a tooltip card. Lay
+// it out in the editor; this only fills it in and opens / closes it.
+//
+// Items are shown as photographs of the real piece (ShopThumbnail) — taken once
+// from a fixed angle, so nothing turns, drifts or stretches. Hover and click are
+// tested against the slots' rects with the virtual cursor, so they work the same
+// with a mouse, a gamepad, and with the game paused (no physics involved — the old
+// 3D shop's colliders weren't synced while paused, so a refresh during a pause left
+// new items unclickable until the game resumed).
 public class ShopController : MonoBehaviour
 {
     public static ShopController Instance;
 
-    // ── Inspector ─────────────────────────────────────────────────────────────
+    [Header("Layout (scene)")]
+    [Tooltip("The authored shop layout. Found in the scene if left empty.")]
+    public ShopPanelView view;
 
-    [Header("Camera")]
-    public Camera  shopCam;
-    public Vector3 cameraOffsetSmall = new Vector3(0f, 3f, -10f);
-    public Vector3 cameraOffsetLarge = new Vector3(0f, 3f, -14f);
-
-    [Header("Rift Shape & Position")]
-    [Tooltip("Rift centre in normalised screen space (0=left/top, 1=right/bottom). Clamped at runtime so the rift never overflows.")]
-    public Vector2 riftScreenPos  = new Vector2(0.5f, 0.85f);
-    [Tooltip("Extra Y offset added to the rift center ONLY when collapsed (small / hint state). Positive = lower on screen, can go past 0.5 to hug the bottom edge. The expanded position stays at riftScreenPos.y.")]
-    public float riftCollapsedYOffset = 0.05f;
-    [Tooltip("Strip width as a fraction of screen width when fully open.")]
-    [Range(0.1f, 1.0f)] public float riftWidth  = 0.45f;
-    [Tooltip("Strip height as a fraction of screen height when fully open.")]
-    [Range(0.05f, 1.0f)] public float riftHeight = 0.12f;
-    [Tooltip("Minimum gap between the rift and the screen edges (pixels).")]
-    public float screenEdgeMargin = 12f;
-    [Tooltip("Scale while collapsed. 0 = completely hidden when closed (recommended for rectangle preset).")]
-    public float   riftHintScale  = 0f;
-    [Tooltip("Open/close speed.")]
-    public float   expandSpeed    = 7f;
-
-    [Header("Toggle Key")]
+    [Header("Toggle")]
     public KeyCode shopToggleKey = KeyCode.F;
+    [Tooltip("Open/close speed.")]
+    public float expandSpeed = 9f;
 
-    [Header("Letterbox (cinematic bars)")]
-    [Tooltip("ON: shop is shown as a bottom black bar with a matching top bar (movie letterbox). Collapsed = bars fully hidden. F expands.")]
-    public bool  letterbox = true;
-    [Tooltip("Height of EACH bar as a fraction of screen height when fully open.")]
-    [Range(0.05f, 0.35f)] public float barHeight = 0.16f;
-    public Color barColor = new Color(0f, 0f, 0f, 1f);
+    [Header("Icons")]
+    [Tooltip("Camera turn round the piece for the icon photograph (degrees). 45 = from the front-right corner, -45 = front-left.")]
+    public float iconYaw = 45f;
+    [Tooltip("Camera height angle for the icon photograph (degrees down).")]
+    [Range(0f, 90f)] public float iconPitch = 35f;
+    [Tooltip("Frame padding round a block (1 = touching the edges).")]
+    public float blockIconPadding  = 1.12f;
+    [Tooltip("Frame padding round a turret — smaller = the turret fills more of its slot.")]
+    public float turretIconPadding = 1.02f;
+    [Tooltip("Shapes photographed from the other side (turned 180° round Y) — the ones whose telling side faces away at the usual angle.")]
+    public BlockShape[] flipIconShapes = { BlockShape.Corner3D };
 
-    [Header("Shop World Area")]
-    public Vector3 shopCenter   = new Vector3(-25f, 4f, 5f);
-    [Tooltip("Dedicated layer the shop blocks/lights live on so ONLY shopCam renders them and the main camera culls it (stops the shop showing in 3D when you orbit). Must exist in Project Settings ▸ Tags and Layers.")]
-    public string shopLayerName = "ShopItem";
-    int _shopLayer = -1;
-    public float   blockSpacing = 1.6f;
-    [Tooltip("Lighting anchor for the block half (LEFT side of the strip).")]
-    public Vector3 blockRowOffset  = new Vector3(-4f, 2.5f, 0f);
-    [Tooltip("Lighting anchor for the turret half (RIGHT side of the strip).")]
-    public Vector3 turretRowOffset = new Vector3( 4f, 2.5f, 0f);
-
-    [Header("Float Animation set to 0 for a static clickable shop")]
-    [Tooltip("Per-axis drift range in world units. 0 = items sit completely still.")]
-    public Vector3 driftAmplitude = Vector3.zero;
-    public Vector3 driftSpeed     = new Vector3(0.50f, 0.70f, 0.60f);
-    [Tooltip("Peak wobble angle in degrees on each axis. 0 = no rotation animation.")]
-    public float   tumbleAmplitude = 0f;
-    public float   tumbleSpeed     = 0.45f;
-
-    [Header("Rift Atmosphere")]
-    [Tooltip("Inner colour of the rift. Deep cosmic by default.")]
-    public Color shopBackground     = new Color(0.04f, 0.05f, 0.14f, 1f);
-    [Tooltip("Light over the block row. Kept near-neutral so synergy colours read the same in shop preview as on the placed board.")]
-    public Color blockLightColor    = new Color(1.00f, 0.96f, 0.88f, 1f);
-    [Tooltip("Light over the turret row. Slightly cool to separate from blocks, but close to neutral so turret previews stay readable.")]
-    public Color turretLightColor   = new Color(0.85f, 0.94f, 1.00f, 1f);
-    public float shopLightIntensity = 1.8f;
-    public float shopLightRange     = 18f;
-
-    [Header("Rift Shape")]
-    public RiftShapePreset shapePreset = RiftShapePreset.Crack;
-    [Tooltip("Extra polygon rotation when collapsed. 0 = no spin (recommended for clean rectangle panel).")]
-    [Range(0f, 360f)] public float openSpinDegrees = 0f;
-    [Tooltip("Sprite physics outline only used when shapePreset = Custom.")]
-    public Sprite riftSprite;
-    [Tooltip("Rotate the rift opening on-screen. 0 = naturally horizontal for the wide rectangle preset.")]
-    [Range(-180f, 180f)] public float riftRotationDeg = 0f;
-    [Tooltip("RenderTexture width. Aspect should match the on-screen strip (riftWidth × Screen.width : riftHeight × Screen.height) to avoid item stretch.")]
-    public int rtWidth  = 1280;
-    [Tooltip("RenderTexture height.")]
-    public int rtHeight = 288;
-
-    [Header("Item Hover")]
-    [Range(1f, 1.5f)] public float hoverScale     = 1.08f;
+    [Header("Item hover")]
+    [Tooltip("How much a hovered item grows. The icon's size in the layout is its LARGEST — at rest it sits this much smaller — so a hovered or tutorial-highlighted item never spills out of its slot.")]
+    [Range(1f, 1.5f)] public float hoverScale     = 1.2f;
     [Range(1f, 20f)]  public float hoverLerpSpeed = 12f;
 
-    [Header("Tooltip")]
-    public Color tooltipBg = new Color(0.949f, 0.937f, 0.902f, 0.94f);   // paper
-    [Tooltip("Overall hover-tooltip size multiplier.")]
-    public float tooltipScale = 2f;
-    [Tooltip("Refresh button icon. If set, replaces the 'Refresh' text (cost still shown).")]
+    [Header("Button icons (used by GeoWorld ▸ UI ▸ Place Gameplay HUD)")]
     public Sprite refreshIcon;
-    [Tooltip("Shop-open icon. When the shop is collapsed, this button (same spot as Refresh) opens the shop.")]
     public Sprite shopButtonIcon;
-    [Tooltip("Refresh button diameter (px).")]
-    public float refreshButtonSize = 54f;
-    [Tooltip("Refresh / shop button offset from the rift's bottom-right corner (x = left, y = up). The Y clears the wave progress bar, which shares this corner — at 6 the button sat straight on top of the bar and its WAVE label.")]
-    public Vector2 refreshButtonOffset = new Vector2(0f, 100f);
-
-    [Header("Block style")]
-    [Tooltip("Render shop blocks flat / unlit (2D look — no scene light or shadow).")]
-    public bool flatBlocks = true;
-    [Tooltip("Optional unlit material (needs a _BaseColor property). Null = auto URP Unlit.")]
-    public Material flatMaterial;
-
-    [Header("Hover correction")]
-    public bool flipHoverX;
-    public bool flipHoverY;
-
-    // Built-in shape presets. Y axis is the long axis; rotation handled separately
-    // by riftRotationDeg. All shapes are normalised so the largest |coord| = 1.
-
-    // Normalised square on-screen aspect comes from riftWidth × riftHeight.
-    // Rounded rectangle (normalized). Corner radii differ on x/y so they read roughly
-    // round once the wide/short rift footprint stretches them. seg = arc smoothness.
-    static readonly Vector2[] RiftShape_Rectangle = MakeRoundedRect(0.06f, 0.5f, 6);
-
-    static Vector2[] MakeRoundedRect(float rx, float ry, int seg)
-    {
-        var pts = new Vector2[(seg + 1) * 4];
-        int idx = 0;
-        idx = RoundedArc(pts, idx, -1f + rx,  1f - ry, rx, ry,  180f,   90f, seg);   // top-left
-        idx = RoundedArc(pts, idx,  1f - rx,  1f - ry, rx, ry,   90f,    0f, seg);   // top-right
-        idx = RoundedArc(pts, idx,  1f - rx, -1f + ry, rx, ry,    0f,  -90f, seg);   // bottom-right
-        idx = RoundedArc(pts, idx, -1f + rx, -1f + ry, rx, ry,  -90f, -180f, seg);   // bottom-left
-        return pts;
-    }
-
-    static int RoundedArc(Vector2[] a, int idx, float cx, float cy, float rx, float ry,
-                          float a0, float a1, int seg)
-    {
-        for (int i = 0; i <= seg; i++)
-        {
-            float ang = Mathf.Deg2Rad * Mathf.Lerp(a0, a1, (float)i / seg);
-            a[idx++] = new Vector2(cx + Mathf.Cos(ang) * rx, cy + Mathf.Sin(ang) * ry);
-        }
-        return idx;
-    }
-
-    // Equilateral triangle, pointing up. 3-fold symmetric.
-    static readonly Vector2[] RiftShape_Triangle =
-    {
-        new( 0.000f,  1.000f),
-        new( 0.866f, -0.500f),
-        new(-0.866f, -0.500f),
-    };
-
-    static readonly Vector2[] RiftShape_Lens =
-    {
-        new( 0.00f,  1.00f), new( 0.15f,  0.70f), new( 0.30f,  0.35f),
-        new( 0.38f,  0.00f), new( 0.30f, -0.35f), new( 0.15f, -0.70f),
-        new( 0.00f, -1.00f), new(-0.15f, -0.70f), new(-0.30f, -0.35f),
-        new(-0.38f,  0.00f), new(-0.30f,  0.35f), new(-0.15f,  0.70f),
-    };
-
-    // Rounded oval no sharp tips, friendly silhouette.
-    static readonly Vector2[] RiftShape_Oval =
-    {
-        new( 0.20f,  1.00f), new( 0.45f,  0.85f), new( 0.62f,  0.60f),
-        new( 0.70f,  0.30f), new( 0.72f,  0.00f), new( 0.70f, -0.30f),
-        new( 0.62f, -0.60f), new( 0.45f, -0.85f), new( 0.20f, -1.00f),
-        new(-0.20f, -1.00f), new(-0.45f, -0.85f), new(-0.62f, -0.60f),
-        new(-0.70f, -0.30f), new(-0.72f,  0.00f), new(-0.70f,  0.30f),
-        new(-0.62f,  0.60f), new(-0.45f,  0.85f), new(-0.20f,  1.00f),
-    };
-
-    static readonly Vector2[] RiftShape_Slash =
-    {
-        new( 0.00f,  1.00f), new( 0.10f,  0.65f), new( 0.18f,  0.30f),
-        new( 0.22f,  0.00f), new( 0.18f, -0.30f), new( 0.10f, -0.65f),
-        new( 0.00f, -1.00f), new(-0.10f, -0.65f), new(-0.18f, -0.30f),
-        new(-0.22f,  0.00f), new(-0.18f,  0.30f), new(-0.10f,  0.65f),
-    };
-
-    // No jagged noise. Reads as a "crack opening" laid horizontally.
-    static readonly Vector2[] RiftShape_Crack =
-    {
-        new(-1.00f,  0.00f),  // left tip
-        new(-0.70f,  1.00f),  // top-left transition
-        new( 0.70f,  1.00f),  // top-right transition
-        new( 1.00f,  0.00f),  // right tip
-        new( 0.70f, -1.00f),  // bottom-right transition
-        new(-0.70f, -1.00f),  // bottom-left transition
-    };
-
-    static readonly Vector2[] RiftShape_Diamond =
-    {
-        new( 0.00f,  1.00f), new( 0.55f,  0.30f), new( 0.80f,  0.00f),
-        new( 0.55f, -0.30f), new( 0.00f, -1.00f), new(-0.55f, -0.30f),
-        new(-0.80f,  0.00f), new(-0.55f,  0.30f),
-    };
-
-    // ── State ─────────────────────────────────────────────────────────────────
-
-    class ShopItem
-    {
-        public GameObject      root;
-        public SelectableBlock sb;
-        public Vector3         basePos;       // anchor drift oscillates around this
-        public Vector3         driftPhase;    // independent X/Y/Z phase offsets
-        public Vector3         tumblePhase;
-        public Color           baseColor;     // tint at spawn — restored when not tutorial-highlighted
-        public Renderer[]      renderers;     // cached at spawn so the highlight pass doesn't re-walk children
-    }
 
     [Header("Tutorial purchase highlight")]
     public Color tutorialHighlightColor = new Color(1f, 0.85f, 0.3f);
@@ -212,197 +56,93 @@ public class ShopController : MonoBehaviour
     public float tutorialHighlightScale = 1.15f;
     public float tutorialDimScale = 0.85f;
 
+    // ── State ─────────────────────────────────────────────────────────────────
+
+    class ShopItem
+    {
+        public GameObject      root;    // data holder (SelectableBlock) — inactive while held in hand
+        public SelectableBlock sb;
+        public ShopItemView    view;
+        public bool            isTurret;
+    }
+
     readonly List<ShopItem> _items = new();
     ShopItem _hovered;
 
     bool    _expanded;
-    bool    _prevExpanded;      // last frame's _expanded, for edge-detecting the open/close SFX
-    float   _riftScale;         // current animated scale
-    float   _riftTarget;        // target scale
-    float   _expandT;           // 0=fully collapsed, 1=fully expanded (lerp'd alongside scale)
-    Vector3 _currentOffset;     // animated camera offset
+    bool    _prevExpanded;
+    float   _openT;               // 0 closed … 1 open (animated)
+    Vector2 _panelHome;           // the panel's authored (open) position
+    bool    _homeKnown;
+    float   _cantAffordFlash;
+    Color   _flashBase;
+    bool    _warned;
 
-    // Computed each Update used by hover/click and GL draw
-    Vector2   _riftScreenCenter;
-    float     _riftScreenSize;   // legacy: max(_riftSizeX, _riftSizeY)
-    float     _riftSizeX;        // half-extent in screen X
-    float     _riftSizeY;        // half-extent in screen Y (multiplied by _riftScale at use site)
-    Vector2[] _screenVerts;
+    public bool  ShopVisible  => _openT > 0.1f;
+    public bool  IsExpanded   => _expanded;
+    /// <summary>Kept for callers laid out round the old letterbox bars — there are none now.</summary>
+    public float TopBarHeight => 0f;
 
-    // ── Shop screen anchors (GUI coords) for HUD elements that dock to the rift ──
-    public bool    ShopVisible   => _riftScale > 0.1f;
-    public bool    IsExpanded    => _expanded;
-    // Current top letterbox-bar height in pixels (0 when not in letterbox / collapsed).
-    public float   TopBarHeight  => letterbox ? Screen.height * barHeight * _riftScale : 0f;
-    public Vector2 ShopTopCenter => new Vector2(_riftScreenCenter.x,
-                                                _riftScreenCenter.y - _riftSizeY * _riftScale);
-    public Vector2 ShopTopRight  => new Vector2(_riftScreenCenter.x + _riftSizeX,
-                                                _riftScreenCenter.y - _riftSizeY * _riftScale);
-    public Vector2 ShopTopLeft    => new Vector2(_riftScreenCenter.x - _riftSizeX,
-                                                 _riftScreenCenter.y - _riftSizeY * _riftScale);
-    public Vector2 ShopBottomRight => new Vector2(_riftScreenCenter.x + _riftSizeX,
-                                                  _riftScreenCenter.y + _riftSizeY * _riftScale);
-
-    // Counts down after a failed purchase attempt drives red rift edge flash.
-    float _cantAffordFlash;
-
-    // GL rendering
-    RenderTexture _shopRT;
-
-    Light _blockLight;
-    Light _turretLight;
-
-    // Active rift polygon in normalised coords (Y-up, centred at origin).
-    // Built from the active preset (or riftSprite if shapePreset = Custom).
-    // riftRotationDeg is applied on-the-fly in UpdateScreenVerts.
-    Vector2[] _runtimeRiftShape;
-
-    GUIStyle _ttTitle, _ttPrice, _ttSub, _hintStyle;
-    bool     _stylesBuilt;
+    /// <summary>Top-centre of the shop panel in GUI coordinates (y down).</summary>
+    public Vector2 ShopTopCenter
+    {
+        get
+        {
+            if (view == null || view.panel == null) return new Vector2(Screen.width * 0.5f, Screen.height);
+            var c = new Vector3[4];
+            view.panel.GetWorldCorners(c);   // overlay canvas: world = screen pixels
+            var top = (c[1] + c[2]) * 0.5f;
+            return new Vector2(top.x, Screen.height - top.y);
+        }
+    }
 
     // ── Lifecycle ─────────────────────────────────────────────────────────────
 
-    void Awake()
-    {
-        Instance       = this;
-        _currentOffset = cameraOffsetSmall;
-        _shopLayer     = LayerMask.NameToLayer(shopLayerName);
-
-        if (shopCam != null)
-        {
-            shopCam.enabled         = true;
-            shopCam.clearFlags      = CameraClearFlags.SolidColor;
-            shopCam.backgroundColor = shopBackground;
-        }
-
-        _blockLight  = CreateRowLight("BlockShopLight",  shopCenter + blockRowOffset  + Vector3.up * 2f, blockLightColor);
-        _turretLight = CreateRowLight("TurretShopLight", shopCenter + turretRowOffset + Vector3.up * 2f, turretLightColor);
-
-        ApplyCameraTransform();
-    }
-
-    Light CreateRowLight(string name, Vector3 pos, Color col)
-    {
-        var go = new GameObject(name);
-        go.transform.position = pos;
-        var l = go.AddComponent<Light>();
-        l.type      = LightType.Point;
-        l.color     = col;
-        l.intensity = shopLightIntensity;
-        l.range     = shopLightRange;
-        if (_shopLayer >= 0) { l.cullingMask = 1 << _shopLayer; go.layer = _shopLayer; }
-        return l;
-    }
-
-    // Ensure shopCam renders the shop layer and every other camera culls it — so
-    // the shop blocks never appear in the main 3D view when the player orbits.
-    void IsolateShopLayer()
-    {
-        if (_shopLayer < 0)
-        {
-            Debug.LogWarning($"[Shop] layer '{shopLayerName}' not found — shop blocks will show in the main view. Add it in Project Settings ▸ Tags and Layers.");
-            return;
-        }
-        int mask = 1 << _shopLayer;
-        if (shopCam != null) shopCam.cullingMask |= mask;          // shopCam keeps rendering the shop
-        foreach (var cam in Camera.allCameras)
-            if (cam != shopCam) cam.cullingMask &= ~mask;          // everyone else culls it
-    }
-
-    static void SetLayerRecursive(GameObject go, int layer)
-    {
-        go.layer = layer;
-        foreach (Transform t in go.transform) SetLayerRecursive(t.gameObject, layer);
-    }
+    void Awake() => Instance = this;
 
     void Start()
     {
-        BuildShapeFromSprite();
-        RebuildRT();
-        IsolateShopLayer();
+        BindView();
     }
 
-    void RebuildRT()
+    bool BindView()
     {
-        if (shopCam != null) shopCam.targetTexture = null;
-        if (_shopRT != null) { _shopRT.Release(); Destroy(_shopRT); }
-
-        // sRGB read/write so the snapshot matches the main camera's colours. A default
-        // (linear) RT in a Linear-colour-space project makes the shop read darker.
-        //
-        // SUPERSAMPLED, not MSAA. This used to set antiAliasing = 2, which under URP's
-        // render graph (Unity 6) produces a multisampled target with no resolve
-        // surface — "Missing resolve surface for attachment 0", once per draw, every
-        // frame — and the camera's output never lands, so the shop renders empty.
-        // Rendering at SS× and letting the RawImage's bilinear filter downscale gives
-        // equivalent edge quality here with a plain single-sample target that the
-        // pipeline has no opinion about.
-        //
-        // Resolution only: the aspect is set explicitly from the strip's own size, and
-        // every hit test goes through viewport coordinates, so nothing downstream can
-        // tell the difference.
-        const int SS = 2;
-        _shopRT              = new RenderTexture(Mathf.Max(32, rtWidth)  * SS,
-                                                 Mathf.Max(32, rtHeight) * SS,
-                                                 16, RenderTextureFormat.ARGB32,
-                                                 RenderTextureReadWrite.sRGB);
-        _shopRT.antiAliasing = 1;
-        _shopRT.filterMode   = FilterMode.Bilinear;
-
-        if (shopCam != null)
+        if (view == null) view = FindFirstObjectByType<ShopPanelView>(FindObjectsInactive.Include);
+        if (view == null)
         {
-            shopCam.targetTexture = _shopRT;
-            shopCam.rect          = new Rect(0, 0, 1, 1);
-            // aspect auto-derived from RT dimensions do not set manually
+            if (!_warned)
+            {
+                _warned = true;
+                Debug.LogWarning("[Shop] No ShopPanelView in the scene — run GeoWorld ▸ UI ▸ Place Gameplay HUD and save the scene.");
+            }
+            return false;
         }
-    }
-
-    void OnValidate()
-    {
-        if (shopCam != null)
+        if (!_homeKnown && view.panel != null)
         {
-            shopCam.clearFlags      = CameraClearFlags.SolidColor;
-            shopCam.backgroundColor = shopBackground;
-            ApplyCameraTransform();
+            _panelHome = view.panel.anchoredPosition;
+            _homeKnown = true;
+            if (view.blockTemplate  != null) view.blockTemplate.gameObject.SetActive(false);
+            if (view.turretTemplate != null) view.turretTemplate.gameObject.SetActive(false);
+            if (view.tooltip != null) view.tooltip.gameObject.SetActive(false);
+            if (view.flashTarget != null) _flashBase = view.flashTarget.color;
+            if (view.refreshButton != null)
+                view.refreshButton.onClick.AddListener(() => PlacementController.Instance?.TryRefreshShop());
+            if (view.openButton != null)
+                view.openButton.onClick.AddListener(() => { if (!GameFlowManager.SettlementUp) _expanded = true; });
         }
-        if (_blockLight != null)
-        {
-            _blockLight.color     = blockLightColor;
-            _blockLight.intensity = shopLightIntensity;
-            _blockLight.range     = shopLightRange;
-            _blockLight.transform.position = shopCenter + blockRowOffset + Vector3.up * 2f;
-        }
-        if (_turretLight != null)
-        {
-            _turretLight.color     = turretLightColor;
-            _turretLight.intensity = shopLightIntensity;
-            _turretLight.range     = shopLightRange;
-            _turretLight.transform.position = shopCenter + turretRowOffset + Vector3.up * 2f;
-        }
-        // Rebuild shape when sprite or RT dims change in the Inspector.
-        if (Application.isPlaying)
-        {
-            BuildShapeFromSprite();
-            RebuildRT();
-        }
-    }
-
-    void OnDestroy()
-    {
-        if (shopCam != null) shopCam.targetTexture = null;
-        if (_shopRT   != null) { _shopRT.Release(); Destroy(_shopRT); }
-        if (_flatMat  != null) Destroy(_flatMat);
+        return true;
     }
 
     void Update()
     {
+        if (view == null && !BindView()) return;
+
         HandleToggleKey();
-        AnimateRift();
-        ApplyCameraTransform();
-        UpdateScreenVerts();   // must run before UpdateHover / IsMouseInShopView
-        AnimateItems();
+        Animate();
         UpdateHover();
-        UpdateLetterboxBars();
+        UpdateItems();
+        UpdateTooltip();
+        UpdateChrome();
         if (_cantAffordFlash > 0f) _cantAffordFlash -= Time.unscaledDeltaTime;
     }
 
@@ -412,379 +152,346 @@ public class ShopController : MonoBehaviour
     {
         if (GameFlowManager.SettlementUp) { _expanded = false; return; }   // locked during clear settlement
         if (!Input.GetKeyDown(shopToggleKey) && !GamepadInput.ToggleShopDown) return;
-        // Read the VISIBLE state only once the rift has settled.
-        //
-        // The visible test is here because _expanded can go stale — grab, Collapse,
-        // RestoreItem and the combat hooks all write it — so a press could otherwise
-        // do nothing. But applied mid-animation it does the opposite: opening runs
-        // _riftScale up toward 0.6, and a second press before it crosses 0.5 reads
-        // "not open yet" and sets _expanded = true again. Press twice quickly and the
-        // shop refuses to close.
-        //
-        // Settled means the animation has arrived, and only then is what is on screen
-        // a better witness than the flag.
-        bool settled     = Mathf.Abs(_riftScale - _riftTarget) < 0.05f;
-        bool visiblyOpen = settled ? _riftScale > 0.5f : _expanded;
+        // Read the VISIBLE state once the animation has settled (the flag can go
+        // stale — grab, Collapse, RestoreItem and the combat hooks all write it);
+        // mid-animation trust the flag, or a quick double press refuses to close.
+        bool settled     = Mathf.Abs(_openT - (_expanded ? 1f : 0f)) < 0.05f;
+        bool visiblyOpen = settled ? _openT > 0.5f : _expanded;
         _expanded = !visiblyOpen;   // openable during combat too (buy / place new pieces)
     }
 
     public void Collapse()      => _expanded = false;
     public void OnCombatStart() => _expanded = false;
 
-    // ── Letterbox bars + content (UGUI, behind the HUD so currency draws over them) ──
-    Canvas        _lbCanvas;
-    RectTransform _lbTop, _lbBottom, _lbContent;
-    RawImage      _lbContentImg;
-
-    void UpdateLetterboxBars()
+    void Animate()
     {
-        if (!letterbox || GameFlowManager.SettlementUp)
-        {
-            if (_lbCanvas != null) _lbCanvas.enabled = false;
-            return;
-        }
-        if (_lbCanvas == null) BuildLetterboxBars();
-
-        // Transparent shop-camera clear so only the blocks show on the black bar.
-        if (shopCam != null) shopCam.backgroundColor = new Color(0f, 0f, 0f, 0f);
-
-        float H    = Screen.height * barHeight * _riftScale;
-        bool  show = H > 0.5f;
-        _lbCanvas.enabled = show;
-        if (!show) return;
-
-        _lbTop.GetComponent<Image>().color    = barColor;
-        _lbBottom.GetComponent<Image>().color = barColor;
-        _lbTop.sizeDelta    = new Vector2(0f, H);
-        _lbBottom.sizeDelta = new Vector2(0f, H);
-
-        _lbContent.sizeDelta = new Vector2(0f, H);     // bottom bar, full width
-        if (_lbContentImg.texture != _shopRT) _lbContentImg.texture = _shopRT;
-    }
-
-    void BuildLetterboxBars()
-    {
-        var go = new GameObject("ShopLetterbox", typeof(Canvas), typeof(GraphicRaycaster));
-        go.transform.SetParent(transform, false);
-        _lbCanvas = go.GetComponent<Canvas>();
-        _lbCanvas.renderMode  = RenderMode.ScreenSpaceOverlay;
-        _lbCanvas.sortingOrder = 55;   // below the HUD (currency 90, objectives 92, …)
-
-        _lbTop    = MakeBar("TopBar",    new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0.5f, 1f));
-        _lbBottom = MakeBar("BottomBar", new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(0.5f, 0f));
-
-        // Shop content (RT) — above the bars, still under the HUD canvases.
-        _lbContent = new GameObject("Content", typeof(RectTransform), typeof(RawImage)).GetComponent<RectTransform>();
-        _lbContent.SetParent(_lbCanvas.transform, false);
-        _lbContent.anchorMin = new Vector2(0f, 0f); _lbContent.anchorMax = new Vector2(1f, 0f);
-        _lbContent.pivot = new Vector2(0.5f, 0f); _lbContent.anchoredPosition = Vector2.zero;
-        _lbContentImg = _lbContent.GetComponent<RawImage>();
-        _lbContentImg.raycastTarget = false;
-        _lbContentImg.texture = _shopRT;
-    }
-
-    RectTransform MakeBar(string name, Vector2 aMin, Vector2 aMax, Vector2 pivot)
-    {
-        var rt = new GameObject(name, typeof(RectTransform), typeof(Image)).GetComponent<RectTransform>();
-        rt.SetParent(_lbCanvas.transform, false);
-        rt.anchorMin = aMin; rt.anchorMax = aMax; rt.pivot = pivot;
-        rt.anchoredPosition = Vector2.zero;
-        rt.sizeDelta = new Vector2(0f, 0f);
-        var img = rt.GetComponent<Image>();
-        img.color = barColor; img.raycastTarget = false;
-        return rt;
-    }
-
-    // ── Rift animation ────────────────────────────────────────────────────────
-
-    void AnimateRift()
-    {
-        // _expanded can flip from several call sites (toggle key, Collapse(), grab-purchase,
-        // RestoreItem, combat start/end) — edge-detect here once per frame rather than
-        // hooking every setter, so the SFX always matches what actually changed.
         if (_expanded != _prevExpanded)
         {
             AudioManager.Instance?.PlayShopToggle(_expanded);
             _prevExpanded = _expanded;
         }
+        float k = 1f - Mathf.Exp(-expandSpeed * Time.unscaledDeltaTime);
+        _openT = Mathf.Lerp(_openT, _expanded ? 1f : 0f, k);
+        if (Mathf.Abs(_openT - (_expanded ? 1f : 0f)) < 0.002f) _openT = _expanded ? 1f : 0f;
 
-        // Shop can open during combat too (buy / place new pieces), so no combat gate.
-        _riftTarget = letterbox ? (_expanded ? 1f : 0f)        // bars: fully out / fully hidden
-                                : (_expanded ? 0.6f : riftHintScale);
-
-        float t    = 1f - Mathf.Exp(-expandSpeed * Time.unscaledDeltaTime);
-        _riftScale     = Mathf.Lerp(_riftScale, _riftTarget, t);
-        _currentOffset = Vector3.Lerp(_currentOffset,
-                             _expanded ? cameraOffsetLarge : cameraOffsetSmall, t);
-
-        // Track expanded-ness for screen-position offset interpolation.
-        float expandTarget = _expanded ? 1f : 0f;
-        _expandT = Mathf.Lerp(_expandT, expandTarget, t);
-    }
-
-    void ApplyCameraTransform()
-    {
-        if (shopCam == null) return;
-
-        // Match the camera's projection aspect to the ON-SCREEN strip the RT is
-        // stretched onto (GUI.DrawTexture / the rift polygon UV-map 0..1 across it).
-        // The RT's own rtWidth:rtHeight is just its pixel resolution; if the camera
-        // keeps that aspect while the strip has a different one — which it does at
-        // almost every resolution, since the strip is full-width × a fraction of the
-        // height — blocks come out squashed/stretched. Deriving aspect from the strip
-        // (full-open dims, so it's stable through the open animation) keeps their real
-        // proportions. Uses the full bar height, not the animated one, so the framing
-        // doesn't warp while opening.
-        float stripW = letterbox ? Screen.width               : Screen.width  * riftWidth;
-        float stripH = letterbox ? Screen.height * barHeight   : Screen.height * riftHeight;
-        shopCam.aspect = Mathf.Clamp(stripW / Mathf.Max(1f, stripH), 0.05f, 20f);
-
-        shopCam.transform.position = shopCenter + _currentOffset;
-        shopCam.transform.LookAt(shopCenter);
-        // Roll the camera by the rift's current total rotation (base + open
-        // animation) so items stay upright while the polygon spins.
-        float rot = CurrentRotationDeg();
-        if (Mathf.Abs(rot) > 0.01f)
-            shopCam.transform.Rotate(Vector3.forward, rot, Space.Self);
-    }
-
-    // Recomputes _riftScreenCenter, _riftScreenSize, _screenVerts every frame.
-    void UpdateScreenVerts()
-    {
-        // ── Letterbox: the shop is the bottom bar (full width, animated height). ──
-        if (letterbox)
+        if (view.panel != null)
         {
-            _riftSizeX      = Screen.width * 0.5f;
-            _riftSizeY      = Screen.height * barHeight * 0.5f;   // half a full bar
-            _riftScreenSize = Mathf.Max(_riftSizeX, _riftSizeY);
-
-            float H   = _riftSizeY * 2f * _riftScale;             // current animated bar height
-            float top = Screen.height - H;
-            _riftScreenCenter = new Vector2(Screen.width * 0.5f, Screen.height - H * 0.5f);
-
-            if (_screenVerts == null || _screenVerts.Length != 4) _screenVerts = new Vector2[4];
-            _screenVerts[0] = new Vector2(0f,            top);    // bottom-bar rect (GUI coords)
-            _screenVerts[1] = new Vector2(Screen.width,  top);
-            _screenVerts[2] = new Vector2(Screen.width,  Screen.height);
-            _screenVerts[3] = new Vector2(0f,            Screen.height);
-            return;
+            float drop = view.panel.rect.height + view.closedDrop;
+            view.panel.anchoredPosition = _panelHome + Vector2.down * (drop * (1f - _openT));
         }
-
-        _riftSizeX        = Screen.width  * riftWidth  * 0.5f;
-        _riftSizeY        = Screen.height * riftHeight * 0.5f;
-        _riftScreenSize   = Mathf.Max(_riftSizeX, _riftSizeY);   // legacy fields rely on this
-
-        // Y offset: collapsed state drops further toward the bottom of the
-        // screen, expanded snaps back to riftScreenPos.y. Lerp via _expandT
-        // (0 collapsed 1 expanded) so the motion mirrors the scale anim.
-        float yOff = riftCollapsedYOffset * (1f - _expandT);
-
-        // Clamp center keeping the rift on screen but use the EFFECTIVE
-        // half-extent (scaled by _riftScale on Y, since collapse-anim shrinks
-        // it). This lets the collapsed hint slide much closer to the bottom
-        // edge than the fully-expanded footprint would allow.
-        float effectiveSizeY = _riftSizeY * Mathf.Max(0.05f, _riftScale);
-
-        float cx = Mathf.Clamp(riftScreenPos.x * Screen.width,
-                               _riftSizeX + screenEdgeMargin,
-                               Screen.width - _riftSizeX - screenEdgeMargin);
-        float cy = Mathf.Clamp((riftScreenPos.y + yOff) * Screen.height,
-                               effectiveSizeY + screenEdgeMargin,
-                               Screen.height - effectiveSizeY - screenEdgeMargin);
-        _riftScreenCenter = new Vector2(cx, cy);
-
-        var shape = _runtimeRiftShape ?? BuiltinShape();
-        int n     = shape.Length;
-        if (_screenVerts == null || _screenVerts.Length != n)
-            _screenVerts = new Vector2[n];
-
-        for (int i = 0; i < n; i++)
+        if (view.panelGroup != null)
         {
-            Vector2 rv = Rotate2D(shape[i], CurrentRotationDeg());
-            _screenVerts[i] = new Vector2(_riftScreenCenter.x + rv.x * _riftSizeX,
-                                          _riftScreenCenter.y - rv.y * _riftSizeY * _riftScale);
+            view.panelGroup.alpha          = Mathf.Clamp01(_openT * 1.4f);
+            view.panelGroup.blocksRaycasts = _openT > 0.5f;
+            view.panelGroup.interactable   = _openT > 0.5f;
         }
     }
 
-   
-    // All shop items on a single horizontal row: blocks first, small gap,
-    // then turrets. Designed for the bottom-strip rift layout.
+    void UpdateChrome()
+    {
+        bool hidden = SettingsScreen.Open || IntroDirector.Playing || GameFlowManager.SettlementUp;
+        if (view.canvas != null) view.canvas.enabled = !hidden;
+        if (hidden) return;
+
+        if (view.openButton != null)
+            view.openButton.gameObject.SetActive(_openT < 0.5f);
+
+        if (view.refreshCost != null && PlacementController.Instance != null)
+            view.refreshCost.text = PlacementController.Instance.RefreshCost.ToString();
+
+        if (view.hintLabel != null)
+        {
+            bool running = GameFlowManager.Instance?.phase == GamePhase.Running;
+            view.hintLabel.gameObject.SetActive(!running);
+            view.hintLabel.text = _expanded ? $"SHOP  [{shopToggleKey}]" : $"[{shopToggleKey}]";
+        }
+
+        if (view.flashTarget != null)
+        {
+            float f = Mathf.Clamp01(_cantAffordFlash / 0.55f);
+            view.flashTarget.color = Color.Lerp(_flashBase, view.flashColor, f);
+        }
+    }
+
+    // ── Items ─────────────────────────────────────────────────────────────────
+
+    // Blocks in the block row, turrets in the turret row, in roll order.
     public void SetShopItems(BlockData[] blockDatas, BlockData[] turretDatas,
                              BlockColor[] blockColors, BlockColor[] turretColors,
                              GameObject cubePrefab, GridSystem grid)
     {
         ClearItems();
+        if (view == null) BindView();
 
         int blockN  = blockDatas  != null ? blockDatas.Length  : 0;
         int turretN = turretDatas != null ? turretDatas.Length : 0;
-        int totalN  = blockN + turretN;
-        if (totalN == 0) return;
-
-        // Small visual gap separating blocks from turrets when both present.
-        float gap        = (blockN > 0 && turretN > 0) ? blockSpacing * 0.3f : 0f;
-        float totalWidth = (totalN - 1) * blockSpacing + gap;
-        float xCursor    = shopCenter.x - totalWidth * 0.5f;
-        int   idx        = 0;
-
+        int idx = 0;
         for (int i = 0; i < blockN; i++)
         {
             var sCol = (blockColors != null && i < blockColors.Length) ? blockColors[i] : BlockColor.None;
-            SpawnOne(blockDatas[i], sCol, new Vector3(xCursor, shopCenter.y, shopCenter.z),
-                     cubePrefab, grid, isTurret: false, idx++);
-            xCursor += blockSpacing;
+            SpawnOne(blockDatas[i], sCol, cubePrefab, grid, isTurret: false, idx++);
         }
-        xCursor += gap;
         for (int i = 0; i < turretN; i++)
         {
             var sCol = (turretColors != null && i < turretColors.Length) ? turretColors[i] : BlockColor.None;
-            SpawnOne(turretDatas[i], sCol, new Vector3(xCursor, shopCenter.y, shopCenter.z),
-                     cubePrefab, grid, isTurret: true, idx++);
-            xCursor += blockSpacing;
+            SpawnOne(turretDatas[i], sCol, cubePrefab, grid, isTurret: true, idx++);
         }
     }
 
-    Material _flatMat;
-    // Shared unlit material for the 2D/flat block style (color comes per-cube via MpbColor's _BaseColor).
-    Material FlatMat()
+    void SpawnOne(BlockData data, BlockColor synergyColor, GameObject cubePrefab, GridSystem grid,
+                  bool isTurret, int globalIndex)
     {
-        if (flatMaterial != null) return flatMaterial;
-        if (_flatMat == null)
-        {
-            var sh = Shader.Find("Universal Render Pipeline/Unlit") ?? Shader.Find("Sprites/Default");
-            _flatMat = new Material(sh) { hideFlags = HideFlags.HideAndDontSave };
-        }
-        return _flatMat;
-    }
+        if (data == null) return;
 
-    void SpawnOne(BlockData data, BlockColor synergyColor, Vector3 pos,
-                  GameObject cubePrefab, GridSystem grid, bool isTurret, int globalIndex)
-    {
-        if (data == null || data.cells == null) return;
-
-        var root = new GameObject($"Shop_{data.blockType}_{globalIndex}");
-        root.transform.position = pos;
-
-        // Tint: synergy color drives the visual when set; turrets / None
-        // fall back to PlacementController's BlockType palette so they still
-        // read as distinct objects.
+        // Tint: the synergy colour when it has one; otherwise the type palette.
         Color col;
-        if (synergyColor != BlockColor.None)
-        {
-            col = BlockColorPalette.Get(synergyColor);
-        }
-        else
-        {
-            BlockType bt = data.blockType;
-            col = PlacementController.Instance != null
-                ? PlacementController.Instance.PickPaletteColor(bt)
-                : (isTurret
-                    ? new Color(0.25f, 0.85f, 0.95f)
-                    : new Color(0.85f, 0.18f, 0.12f));
-        }
+        if (isTurret)                              col = TurretTypes.DisplayColor(data.blockType);
+        else if (synergyColor != BlockColor.None)  col = BlockColorPalette.Get(synergyColor);
+        else col = PlacementController.Instance != null
+                 ? PlacementController.Instance.PickPaletteColor(data.blockType)
+                 : new Color(0.85f, 0.18f, 0.12f);
 
-
-        foreach (var cell in data.cells)
-        {
-            var c = Instantiate(cubePrefab, root.transform);
-            c.transform.localPosition = (Vector3)cell * grid.cellSize;
-            var rend = c.GetComponent<Renderer>();
-            if (flatBlocks && rend != null)
-            {
-                rend.sharedMaterial   = FlatMat();
-                rend.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-                if (isTurret) rend.enabled = false;
-            }
-            MpbColor.Set(rend, col);
-        }
-
+        // Data holder — what PlacementController takes in hand.
+        var root = new GameObject($"Shop_{data.blockType}_{globalIndex}");
+        root.transform.SetParent(transform, false);
         var sb = root.AddComponent<SelectableBlock>();
-        sb.data  = data;
-        sb.color = synergyColor;
+        sb.data         = data;
+        sb.color        = synergyColor;
+        sb.displayColor = col;
+        float fluc      = Random.Range(0.82f, 1.22f);
+        sb.cachedPrice  = ResourceManager.Instance != null ? ResourceManager.Instance.ComputePrice(data, fluc) : 0;
 
-        float fluc     = Random.Range(0.82f, 1.22f);
-        sb.cachedPrice = ResourceManager.Instance != null
-                         ? ResourceManager.Instance.ComputePrice(data, fluc) : 0;
-
-        //if (isTurret) AttachTurretBeacon(root, grid.cellSize, cubePrefab, data.blockType,
-        //                                 flatBlocks ? FlatMat() : null);
-
-        if (isTurret)
+        // Slot.
+        ShopItemView v = null;
+        var template = isTurret ? view?.turretTemplate : view?.blockTemplate;
+        var parent   = isTurret ? view?.turretRow      : view?.blockRow;
+        if (template != null && parent != null)
         {
-            if (data.turretPrefab != null)
+            v = Instantiate(template, parent);
+            v.name = root.name;
+            v.gameObject.SetActive(true);
+            float cs = grid != null ? grid.cellSize : 1f;
+            var sprite = isTurret
+                ? ShopThumbnail.Turret(data, cs, iconYaw, iconPitch, turretIconPadding)
+                : ShopThumbnail.Block(data, cubePrefab, col, cs,
+                                      iconYaw + (System.Array.IndexOf(flipIconShapes, data.blockShape) >= 0 ? 180f : 0f),
+                                      iconPitch, blockIconPadding);
+            if (v.icon != null)
             {
-                GameObject visual = Instantiate(
-                    data.turretPrefab,
-                    root.transform);
-
-                visual.transform.localPosition = Vector3.zero;
-                visual.transform.localRotation = Quaternion.identity;
-                visual.transform.localScale = Vector3.one;
-                // Fit each turret to one cell by its own bounds (same helper the board
-                // uses), so the AOE turret doesn't tower over the others here either.
-                // No collider needed — the root's SelectableBlock handles shop clicks.
-                if (!TurretVisualFit.Fit(visual, grid.cellSize, out _, out _))
-                    visual.transform.localScale = Vector3.one * 50f;
-
-                // Tint the preview by turret TYPE — turret BlockDatas share (or reuse)
-                // a prefab, so without this they're indistinguishable in the shop.
-                foreach (var r in visual.GetComponentsInChildren<Renderer>())
-                    MpbColor.Set(r, TurretTypes.DisplayColor(data.blockType));
+                v.icon.sprite = sprite;
+                v.icon.preserveAspect = true;
+                v.icon.color = Color.white;
+                v.icon.enabled = sprite != null;
             }
+            if (v.scaleRoot != null)   // start at rest size (see UpdateItems)
+                v.scaleRoot.localScale = Vector3.one / Mathf.Max(1f, Mathf.Max(hoverScale, tutorialHighlightScale));
         }
 
-        if (_shopLayer >= 0) SetLayerRecursive(root, _shopLayer);   // keep off the main camera
+        _items.Add(new ShopItem { root = root, sb = sb, view = v, isTurret = isTurret });
+    }
 
-        const float TAU = Mathf.PI * 2f;
-        _items.Add(new ShopItem
+    void UpdateItems()
+    {
+        var rm = ResourceManager.Instance;
+        float t = Time.unscaledTime;
+        float lerpK = 1f - Mathf.Exp(-hoverLerpSpeed * Time.unscaledDeltaTime);
+        bool gate = TutorialDirector.IsPurchaseStepActive;
+
+        foreach (var item in _items)
         {
-            root        = root,
-            sb          = sb,
-            basePos     = pos,
-            driftPhase  = new Vector3(Random.Range(0f, TAU), Random.Range(0f, TAU), Random.Range(0f, TAU)),
-            tumblePhase = new Vector3(Random.Range(0f, TAU), Random.Range(0f, TAU), Random.Range(0f, TAU)),
-            baseColor   = isTurret ? TurretTypes.DisplayColor(data.blockType) : col,
-            renderers   = root.GetComponentsInChildren<Renderer>(),
-        });
+            var v = item.view;
+            if (v == null) continue;
+
+            // Held in hand: the slot stays (so the row doesn't jump) but shows empty.
+            bool held = item.root == null || !item.root.activeSelf;
+            if (v.group != null) v.group.alpha = held ? 0.15f : 1f;
+
+            bool isTarget = gate && TutorialDirector.IsPurchaseTarget(item.sb.data);
+            if (v.icon != null)
+            {
+                Color tint = Color.white;
+                if (gate)
+                    tint = isTarget
+                        ? Color.Lerp(Color.white, tutorialHighlightColor, 0.5f + 0.5f * Mathf.Sin(t * tutorialHighlightPulseSpeed))
+                        : Color.Lerp(Color.white, Color.black, tutorialDimAmount);
+                v.icon.color = tint;
+            }
+
+            if (v.price != null && item.sb != null)
+            {
+                int  price  = item.sb.cachedPrice;
+                bool afford = rm == null || rm.CanAfford(price, item.sb.data.blockType);
+                string sfx  = item.isTurret ? "T" : "B";
+                v.price.text  = $"{price}¤{sfx}";
+                v.price.color = afford ? v.affordableColor : v.unaffordableColor;
+            }
+
+            if (v.background != null)
+                v.background.color = item == _hovered ? v.backgroundHoverColor : v.backgroundColor;
+
+            if (v.scaleRoot != null)
+            {
+                // Relative to the largest the icon ever gets, which is its laid-out size.
+                float peak   = Mathf.Max(1f, Mathf.Max(hoverScale, tutorialHighlightScale));
+                float target = item == _hovered ? hoverScale : 1f;
+                if (gate) target *= isTarget ? tutorialHighlightScale : tutorialDimScale;
+                target = Mathf.Min(target, peak) / peak;
+                float next = Mathf.Lerp(v.scaleRoot.localScale.x, target, lerpK);
+                v.scaleRoot.localScale = Vector3.one * next;
+            }
+        }
+    }
+
+    void UpdateHover()
+    {
+        _hovered = null;
+        if (!IsMouseInShopView()) return;
+        Vector2 p = VirtualCursor.Position;
+        foreach (var item in _items)
+        {
+            if (item.view == null || item.view.rect == null) continue;
+            if (item.root == null || !item.root.activeSelf) continue;
+            if (RectTransformUtility.RectangleContainsScreenPoint(item.view.rect, p, UICamera()))
+            {
+                _hovered = item;
+                return;
+            }
+        }
+    }
+
+    Camera UICamera() =>
+        view != null && view.canvas != null && view.canvas.renderMode != RenderMode.ScreenSpaceOverlay
+            ? view.canvas.worldCamera : null;
+
+    // ── Tooltip ───────────────────────────────────────────────────────────────
+
+    void UpdateTooltip()
+    {
+        if (view.tooltip == null) return;
+        bool show = _hovered != null && _openT > 0.5f && _hovered.view != null;
+        if (view.tooltip.gameObject.activeSelf != show) view.tooltip.gameObject.SetActive(show);
+        if (!show) return;
+
+        var rm = ResourceManager.Instance;
+        var data = _hovered.sb.data;
+        BlockType type = data.blockType;
+        int  price  = _hovered.sb.cachedPrice;
+        bool afford = rm == null || rm.CanAfford(price, type);
+        int  pool   = rm == null ? 0 : (TurretTypes.Is(type) ? rm.TurretCurrency : rm.BlockCurrency);
+
+        string shape = TurretTypes.Is(type) ? TurretTypes.DisplayName(type) : data.ShapeName;
+        if (string.IsNullOrEmpty(shape)) shape = "Block";
+        bool hasTheme = _hovered.sb.color != BlockColor.None;
+        if (view.tooltipTitle != null)
+        {
+            view.tooltipTitle.richText = true;
+            view.tooltipTitle.text = hasTheme
+                ? $"{shape}  ·  <color=#{ColorUtility.ToHtmlStringRGB(BlockColorPalette.Get(_hovered.sb.color))}>{_hovered.sb.color}</color>"
+                : shape;
+        }
+        if (view.tooltipPrice != null)
+        {
+            string sfx = TurretTypes.Is(type) ? " T" : " B";
+            view.tooltipPrice.text  = afford ? $"{price}{sfx}" : $"{price}{sfx}  (-{price - pool})";
+            view.tooltipPrice.color = afford ? GeoPalette.Blue : GeoPalette.Signal;
+        }
+        if (view.tooltipAccent != null) view.tooltipAccent.color = afford ? GeoPalette.Blue : GeoPalette.Signal;
+        if (view.tooltipDesc != null)
+        {
+            string desc = hasTheme ? BlockColorPalette.Description(_hovered.sb.color) : null;
+            view.tooltipDesc.gameObject.SetActive(!string.IsNullOrEmpty(desc));
+            if (!string.IsNullOrEmpty(desc)) view.tooltipDesc.text = desc;
+        }
+
+        // Above the hovered slot, kept on screen.
+        var c = new Vector3[4];
+        _hovered.view.rect.GetWorldCorners(c);
+        view.tooltip.position = (c[1] + c[2]) * 0.5f;
+        view.tooltip.GetWorldCorners(c);
+        float dx = 0f, dy = 0f;
+        if (c[0].x < 4f)                 dx = 4f - c[0].x;
+        if (c[2].x > Screen.width - 4f)  dx = Screen.width - 4f - c[2].x;
+        if (c[2].y > Screen.height - 4f) dy = Screen.height - 4f - c[2].y;
+        view.tooltip.position += new Vector3(dx, dy, 0f);
+    }
+
+    // ── Buying ────────────────────────────────────────────────────────────────
+
+    /// <summary>Pointer is over the open shop strip (or the open button while closed).</summary>
+    public bool IsMouseInShopView()
+    {
+        if (view == null) return false;
+        if (SettingsScreen.Open || IntroDirector.Playing || GameFlowManager.SettlementUp) return false;
+        Vector2 p = VirtualCursor.Position;
+        if (_openT > 0.5f && view.panel != null &&
+            RectTransformUtility.RectangleContainsScreenPoint(view.panel, p, UICamera())) return true;
+        // The refresh tab sticks up out of the strip, past its rect.
+        if (_openT > 0.5f && view.refreshButton != null &&
+            RectTransformUtility.RectangleContainsScreenPoint((RectTransform)view.refreshButton.transform, p, UICamera())) return true;
+        if (_openT < 0.5f && view.openButton != null && view.openButton.gameObject.activeInHierarchy &&
+            RectTransformUtility.RectangleContainsScreenPoint((RectTransform)view.openButton.transform, p, UICamera())) return true;
+        return false;
+    }
+
+    public bool TryHandleClick()
+    {
+        if (!IsMouseInShopView()) return false;
+        if (_hovered == null) return true;   // over the strip: swallow (buttons handle themselves)
+
+        // Something already in hand — don't swap it out from under the player.
+        if (PlacementController.Instance != null && PlacementController.Instance.currentBlock != null) return true;
+
+        var rm = ResourceManager.Instance;
+        if (rm != null && !rm.CanAfford(_hovered.sb.cachedPrice, _hovered.sb.data.blockType))
+        {
+            _cantAffordFlash = 0.55f;
+            return true;
+        }
+        if (!TutorialDirector.CanPurchase(_hovered.sb.data))
+        {
+            _cantAffordFlash = 0.55f;
+            return true;
+        }
+
+        // Hidden while held — RestoreItem shows it again on cancel.
+        _hovered.root.SetActive(false);
+        PlacementController.Instance?.GrabFromShop(_hovered.sb);
+        Collapse();
+        return true;
+    }
+
+    /// <summary>Placement cancelled — the item goes back on the shelf and the shop reopens.</summary>
+    public void RestoreItem(GameObject go)
+    {
+        if (go == null) return;
+        go.SetActive(true);
+        _expanded = true;
     }
 
     /// <summary>
-    /// A random item the player can currently afford, or null when none is.
-    /// Drawn from the AFFORDABLE subset rather than from everything and then
-    /// rejected: picking blind and failing would make the key do nothing on a press
-    /// that looked identical to a working one, and the player has no way to see why.
-    ///
-    /// Uses UnityEngine.Random deliberately, not the run's seeded stream — this is a
-    /// convenience input, not part of the run, and drawing from the seeded stream
-    /// would shift every later shop roll and wave for anyone who pressed it.
+    /// A random item the player can currently afford, or null when none is. Uses
+    /// UnityEngine.Random deliberately, not the run's seeded stream — this is a
+    /// convenience input, not part of the run.
     /// </summary>
     public SelectableBlock RandomAffordable()
     {
         var rm = ResourceManager.Instance;
         var pool = new List<SelectableBlock>();
-
         foreach (var it in _items)
         {
             if (it?.sb == null || it.sb.data == null) continue;
             if (it.root == null || !it.root.activeInHierarchy) continue;
             if (rm != null && !rm.CanAfford(it.sb.cachedPrice, it.sb.data.blockType)) continue;
-            // The tutorial can restrict which block may be bought; a quick-buy that
-            // ignored that would hand the player a piece the current step refuses.
             if (!TutorialDirector.CanPurchase(it.sb.data)) continue;
             pool.Add(it.sb);
         }
-
         if (pool.Count == 0) return null;
         return pool[Random.Range(0, pool.Count)];
     }
 
-    /// <summary>True when the shop is holding anything at all — for telling
-    /// "can't afford it" apart from "there is nothing there".</summary>
     public bool HasItems => _items.Count > 0;
 
     // ── Mid-level save (GameFlowManager.RunSave) ─────────────────────────────
-    // What is on offer right now, in display order (blocks, then turrets), with
-    // each item's ROLLED price — the price carries a per-item fluctuation drawn at
-    // spawn, so re-rolling on load would quietly re-price the shop.
     public List<ShopItemSave> CaptureItems()
     {
         var list = new List<ShopItemSave>();
@@ -802,7 +509,6 @@ public class ShopController : MonoBehaviour
         return list;
     }
 
-    // Puts a captured shop back: same items, same colours, same prices.
     public void RestoreItems(List<ShopItemSave> saved, System.Func<string, BlockData> resolve,
                              GameObject cubePrefab, GridSystem grid)
     {
@@ -820,7 +526,6 @@ public class ShopController : MonoBehaviour
 
         SetShopItems(blocks.ToArray(), turrets.ToArray(), blockCols.ToArray(), turretCols.ToArray(), cubePrefab, grid);
 
-        // SetShopItems spawns blocks first, then turrets — the same order as here.
         var prices = new List<int>(bPrices); prices.AddRange(tPrices);
         for (int i = 0; i < _items.Count && i < prices.Count; i++)
             if (_items[i]?.sb != null) _items[i].sb.cachedPrice = prices[i];
@@ -828,259 +533,55 @@ public class ShopController : MonoBehaviour
 
     public void ClearItems()
     {
-        foreach (var item in _items) if (item.root != null) Destroy(item.root);
+        foreach (var item in _items)
+        {
+            if (item.root != null) Destroy(item.root);
+            if (item.view != null) Destroy(item.view.gameObject);
+        }
         _items.Clear();
         _hovered = null;
     }
 
-    // Same visual rule as placed turrets: hide the cube body, show a single
-    // floating diamond. Keeps shop preview consistent with what gets placed.
-    static void AttachTurretBeacon(GameObject root, float cs, GameObject cubePrefab, BlockType turretType,
-                                   Material flatOverride = null)
+    /// <summary>Immediate removal — for programmatic cleanup.</summary>
+    public void RemoveItem(GameObject go)
     {
-        if (root == null) return;
-
-        Vector3 centroid = Vector3.zero;
-        int     n        = 0;
-        foreach (Transform child in root.transform)
-        {
-            centroid += child.position;
-            n++;
-        }
-        if (n == 0) return;
-        centroid /= n;
-
-        foreach (var r in root.GetComponentsInChildren<Renderer>())
-            r.enabled = false;
-
-
-        var marker  = GameObject.CreatePrimitive(PrimitiveType.Cube);
-        marker.name = "TurretBeacon";
-        marker.transform.SetParent(root.transform, worldPositionStays: false);
-        marker.transform.position      = centroid;
-        marker.transform.localScale    = Vector3.one * (0.62f * cs);
-        marker.transform.localRotation = Quaternion.Euler(45f, 45f, 0f);
-
-        var col = marker.GetComponent<Collider>();
-        if (col != null) Destroy(col);
-
-        var rend = marker.GetComponent<Renderer>();
-        if (rend != null)
-        {
-            // Flat/unlit override (2D style) when requested, else match cubePrefab's material.
-            if (flatOverride != null)
-            {
-                rend.sharedMaterial = flatOverride;
-            }
-            else
-            {
-                var prefabRend = cubePrefab != null ? cubePrefab.GetComponentInChildren<Renderer>() : null;
-                if (prefabRend != null && prefabRend.sharedMaterial != null)
-                    rend.sharedMaterial = prefabRend.sharedMaterial;
-            }
-
-            // Per-subtype color: Basic = cyan, Slow = blue-violet, AOE = orange.
-            // Same palette as placed beacons via TurretTypes.DisplayColor.
-            MpbColor.Set(rend, TurretTypes.DisplayColor(turretType));
-            rend.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-        }
-
-        TurretBeacon tb=marker.AddComponent<TurretBeacon>();
+        foreach (var it in _items)
+            if (it.root == go && it.view != null) Destroy(it.view.gameObject);
+        _items.RemoveAll(item => item.root == go);
     }
 
-    /// <summary>Immediate removal use for programmatic cleanup (ClearItems, etc.).</summary>
-    public void RemoveItem(GameObject go) =>
-        _items.RemoveAll(item => item.root == go);
-
     /// <summary>
-    /// Removes the item from the shop list and plays a pop-shrink animation
-    /// before destroying the GameObject.  Returns true if the object was found
-    /// in the shop (and will be destroyed by the coroutine); false if it wasn't
-    /// a shop item (caller is responsible for destroying it).
+    /// Takes the item off the shelf with a pop-shrink. True if it was a shop item
+    /// (and will be destroyed here); false if it wasn't (caller destroys it).
     /// </summary>
     public bool RemoveItemAnimated(GameObject go)
     {
-        bool found = _items.RemoveAll(item => item.root == go) > 0;
-        if (found && go != null) StartCoroutine(ShrinkOut(go));
-        return found;
-    }
-
-    // Short pop-then-shrink sequence: scales up 25 % briefly then collapses.
-    System.Collections.IEnumerator ShrinkOut(GameObject go)
-    {
-        const float dur = 0.28f;
-        float       t   = 0f;
-        Vector3     s0  = go.transform.localScale;
-        Vector3     p0  = go.transform.position;
-
-        while (t < dur && go != null)
-        {
-            t += Time.unscaledDeltaTime;
-            float frac = Mathf.Clamp01(t / dur);
-
-            // 0.2: pop up to 1.25×   |   0.2: shrink to 0
-            float scale = frac < 0.20f
-                ? Mathf.Lerp(1f,    1.25f, frac / 0.20f)
-                : Mathf.Lerp(1.25f, 0f,   (frac - 0.20f) / 0.80f);
-
-            go.transform.localScale = s0 * scale;
-            go.transform.position   = p0 + Vector3.up * (frac * frac * 0.6f);
-            yield return null;
-        }
+        ShopItem found = null;
+        foreach (var it in _items) if (it.root == go) { found = it; break; }
+        if (found == null) return false;
+        _items.Remove(found);
+        if (_hovered == found) _hovered = null;
+        if (found.view != null) StartCoroutine(ShrinkOut(found.view));
         if (go != null) Destroy(go);
-    }
-
-    public bool TryHandleClick()
-    {
-        if (!IsMouseInShopView()) return false;
-        if (_hovered == null) return true;
-
-        var rm = ResourceManager.Instance;
-        if (rm != null && !rm.CanAfford(_hovered.sb.cachedPrice, _hovered.sb.data.blockType))
-        {
-            _cantAffordFlash = 0.55f;   // trigger red rift-edge flash
-            return true;                // consume click, stay in shop
-        }
-
-        // Tutorial: block buying the wrong item (flash, stay in shop, item kept).
-        if (!TutorialDirector.CanPurchase(_hovered.sb.data))
-        {
-            _cantAffordFlash = 0.55f;
-            return true;
-        }
-
-        // Hide the item while held RestoreItem re-shows it on cancel.
-        _hovered.root.SetActive(false);
-        PlacementController.Instance?.GrabFromShop(_hovered.sb);
-        Collapse();
         return true;
     }
 
-    /// <summary>
-    /// Called by PlacementController when the player cancels placement of a
-    /// shop item without placing it.  Makes the item visible again and reopens
-    /// the rift so the player can see it returned.
-    /// </summary>
-    public void RestoreItem(GameObject go)
+    System.Collections.IEnumerator ShrinkOut(ShopItemView v)
     {
-        if (go == null) return;
-        go.SetActive(true);
-        _expanded = true;   // reopen rift
-    }
-
-    public bool IsMouseInShopView()
-    {
-        if (_riftScale < 0.05f || _screenVerts == null) return false;
-        // VirtualCursor.Position has y=0 at bottom (mouse convention); GUI space has y=0 at top.
-        Vector2 mp = new Vector2(VirtualCursor.Position.x,
-                                 Screen.height - VirtualCursor.Position.y);
-        return PointInPolygon(mp, _screenVerts);
-    }
-
-    // ── Animations ────────────────────────────────────────────────────────────
-
-    void AnimateItems()
-    {
-        float t = Time.time;
-        float lerpK = 1f - Mathf.Exp(-hoverLerpSpeed * Time.unscaledDeltaTime);
-        bool purchaseGateActive = TutorialDirector.IsPurchaseStepActive;
-        foreach (var item in _items)
+        const float dur = 0.28f;
+        var target = v.scaleRoot != null ? v.scaleRoot : v.rect;
+        if (v.group != null) v.group.alpha = 1f;
+        Vector3 s0 = target != null ? target.localScale : Vector3.one;
+        float t = 0f;
+        while (t < dur && v != null && target != null)
         {
-            if (item.root == null) continue;
-
-            // Tutorial highlight: glow the item the current step is asking for, dim the rest.
-            bool isTarget = purchaseGateActive && TutorialDirector.IsPurchaseTarget(item.sb.data);
-            Color tint = item.baseColor;
-            if (purchaseGateActive)
-            {
-                tint = isTarget
-                    ? Color.Lerp(item.baseColor, tutorialHighlightColor, 0.5f + 0.5f * Mathf.Sin(t * tutorialHighlightPulseSpeed))
-                    : Color.Lerp(item.baseColor, Color.black, tutorialDimAmount);
-            }
-            if (item.renderers != null)
-                foreach (var r in item.renderers) if (r != null) MpbColor.Set(r, tint);
-
-            // Drift: bounded sin around basePos so items never escape their slot.
-            Vector3 drift = new Vector3(
-                Mathf.Sin(t * driftSpeed.x + item.driftPhase.x) * driftAmplitude.x,
-                Mathf.Sin(t * driftSpeed.y + item.driftPhase.y) * driftAmplitude.y,
-                Mathf.Sin(t * driftSpeed.z + item.driftPhase.z) * driftAmplitude.z
-            );
-            item.root.transform.position = item.basePos + drift;
-
-            Vector3 euler = new Vector3(
-                Mathf.Sin(t * tumbleSpeed         + item.tumblePhase.x),
-                Mathf.Sin(t * tumbleSpeed * 0.73f + item.tumblePhase.y),
-                Mathf.Sin(t * tumbleSpeed * 1.31f + item.tumblePhase.z)
-            ) * tumbleAmplitude;
-            item.root.transform.rotation = Quaternion.Euler(euler);
-
-            // Hover feedback: pop up to hoverScale, ease back when not hovered.
-            // Tutorial gate stacks its own emphasis/dim scale on top.
-            float target = (item == _hovered) ? hoverScale : 1f;
-            if (purchaseGateActive) target *= isTarget ? tutorialHighlightScale : tutorialDimScale;
-            float cur    = item.root.transform.localScale.x;
-            float next   = Mathf.Lerp(cur, target, lerpK);
-            item.root.transform.localScale = Vector3.one * next;
+            t += Time.unscaledDeltaTime;
+            float f = Mathf.Clamp01(t / dur);
+            float scale = f < 0.2f ? Mathf.Lerp(1f, 1.25f, f / 0.2f) : Mathf.Lerp(1.25f, 0f, (f - 0.2f) / 0.8f);
+            target.localScale = s0 * scale;
+            yield return null;
         }
-    }
-
-    [Tooltip("SphereCast radius for shop hover — bigger = easier to hover small items. 0 = exact raycast.")]
-    public float hoverRadius = 0.35f;
-
-
-    void UpdateHover()
-    {
-        _hovered = null;
-        if (shopCam == null || !IsMouseInShopView()) return;
-
-        Vector3 vp  = ScreenToShopViewport(VirtualCursor.Position);
-        Ray     ray = shopCam.ViewportPointToRay(vp);
-        RaycastHit hit;
-        bool got = hoverRadius > 0f
-            ? Physics.SphereCast(ray, hoverRadius, out hit, 1000f)
-            : Physics.Raycast(ray, out hit, 1000f);
-        if (!got) return;
-
-        var sb = hit.transform.GetComponentInParent<SelectableBlock>();
-        if (sb == null) return;
-        for (int i = 0; i < _items.Count; i++)
-        {
-            if (_items[i].sb != sb) continue;
-            _hovered = _items[i];
-            return;
-        }
-    }
-
-    Vector3 ScreenToShopViewport(Vector2 mp)
-    {
-        // 1. Offset from rift centre in normalised rift-screen units (still in rotated space).
-        // X uses _riftSizeX (full width). Y uses _riftSizeY * _riftScale because
-        // the polygon's Y is scaled by _riftScale.
-        float guiY = Screen.height - mp.y;
-        float rx   = (mp.x               - _riftScreenCenter.x) / (_riftSizeX + 0.001f);
-        float ry   = (_riftScreenCenter.y - guiY)                / (_riftSizeY * _riftScale + 0.001f);
-
-        // 2. Undo the on-screen rotation to get into the shape's native (unrotated)
-        //    space. UpdateScreenVerts applied +CurrentRotationDeg(), so invert.
-        Vector2 local = Rotate2D(new Vector2(rx, ry), -CurrentRotationDeg());
-
-        // 3. Map to camera viewport using the same shape bounds as DrawContent.
-        //    ViewportPointToRay uses y=0 at bottom, y=1 at top no D3D flip here.
-        var   shape = _runtimeRiftShape ?? BuiltinShape();
-        float minX  = float.MaxValue, maxX = float.MinValue;
-        float minY  = float.MaxValue, maxY = float.MinValue;
-        foreach (var p in shape)
-        {
-            if (p.x < minX) minX = p.x; if (p.x > maxX) maxX = p.x;
-            if (p.y < minY) minY = p.y; if (p.y > maxY) maxY = p.y;
-        }
-        // No U flip: camera.right = world +X, viewport X maps directly to shape X.
-        float vpx = Mathf.Clamp01((local.x - minX) / Mathf.Max(maxX - minX, 0.001f));
-        float vpy = Mathf.Clamp01((local.y - minY) / Mathf.Max(maxY - minY, 0.001f));
-        if (flipHoverX) vpx = 1f - vpx;
-        if (flipHoverY) vpy = 1f - vpy;
-        return new Vector3(vpx, vpy, 0f);
+        if (v != null) Destroy(v.gameObject);
     }
 
     // ── Public query (DebugUI) ────────────────────────────────────────────────
@@ -1108,426 +609,5 @@ public class ShopController : MonoBehaviour
             });
         }
         return result;
-    }
-
-    // ── OnGUI ─────────────────────────────────────────────────────────────────
-
-    void OnGUI()
-    {
-        if (SettingsScreen.Open || IntroDirector.Playing || GameFlowManager.SettlementUp) return;   // hidden behind settings / intro / clear settlement
-        BuildStyles();
-        if (_riftScale > 0.5f)   DrawPriceLabels();
-        if (_hovered != null && _riftScale > 0.1f) DrawTooltip(_hovered);
-        DrawRiftLabel();
-
-        DrawRefreshButton();
-        
-    }
-
-    void DrawRefreshButton()
-    {
-        if (PlacementController.Instance == null) return;
-
-        // Collapsed → a shop-open button in the same spot; click expands the shop.
-        if (!ShopVisible) { DrawShopOpenButton(); return; }
-
-        int   cost = PlacementController.Instance.RefreshCost;
-        float s    = Mathf.Max(0.5f, Screen.height / 1080f);   // scale with screen
-        float d    = refreshButtonSize * s;                    // circle diameter
-
-        // Dock to the shop rift's bottom-right corner, inset by refreshButtonOffset.
-        Vector2 br = ShopBottomRight;
-        Rect r = new Rect(br.x - d - refreshButtonOffset.x * s,
-                          br.y - d - refreshButtonOffset.y * s, d, d);
-
-        bool      hover  = r.Contains(Event.current.mousePosition);
-        Texture2D circle = UIRoundedRect.CircleTex();
-        Color     prev   = GUI.color;
-
-        // Round paper button (no border; gold-tinted on hover).
-        Color fill = hover ? Color.Lerp(tooltipBg, GeoPalette.Gold, 0.28f) : tooltipBg;
-        GUI.color = fill;
-        GUI.DrawTexture(r, circle, ScaleMode.StretchToFill, true);
-
-        // Icon (tinted ink so it reads on paper); fallback glyph if none.
-        if (refreshIcon != null && refreshIcon.texture != null)
-        {
-            float pad = 3f * s;
-            GUI.color = GeoPalette.Ink;
-            GUI.DrawTexture(new Rect(r.x + pad, r.y + pad, d - pad * 2f, d - pad * 2f),
-                            refreshIcon.texture, ScaleMode.ScaleToFit, true);
-        }
-        else
-        {
-            var gs = new GUIStyle(GUI.skin.label) { fontSize = Mathf.RoundToInt(26f * s), fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter };
-            gs.normal.textColor = GeoPalette.Ink;
-            GUI.color = Color.white;
-            GUI.Label(r, "⟳", gs);
-        }
-
-        // Hover → reveal the cost in a small paper tag (shop tooltip style) to the right.
-        if (hover)
-        {
-            float pw = 36f * s, ph = 32f * s;
-            Rect tag = new Rect(r.xMax - 8f * s, r.center.y - ph * 0.5f, pw, ph);
-            GUI.color = tooltipBg;
-            GUI.DrawTexture(tag, Texture2D.whiteTexture);
-            GUI.color = GeoPalette.Signal;                                   // accent spine
-            GUI.DrawTexture(new Rect(tag.x, tag.y, 4f * s, tag.height), Texture2D.whiteTexture);
-            GUI.color = Color.white;
-            var cs = new GUIStyle(GUI.skin.label) { fontSize = Mathf.RoundToInt(17f * s), fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter };
-            cs.normal.textColor = GeoPalette.Ink;
-            GUI.Label(tag, cost.ToString(), cs);
-        }
-
-        GUI.color = prev;
-
-        if (GUI.Button(r, GUIContent.none, GUIStyle.none))
-            PlacementController.Instance.TryRefreshShop();
-    }
-
-    // Shown when the shop is collapsed: a round paper button (shop sprite) at the
-    // bottom-right corner. Clicking it opens the shop. Hidden during combat.
-    void DrawShopOpenButton()
-    {
-        float s = Mathf.Max(0.5f, Screen.height / 1080f);
-        float d = refreshButtonSize * s;
-        Vector2 br = ShopBottomRight;   // bottom-right corner (Screen.width, Screen.height) when collapsed
-        Rect r = new Rect(br.x - d - refreshButtonOffset.x * s,
-                          br.y - d - refreshButtonOffset.y * s, d, d);
-
-        bool  hover  = r.Contains(Event.current.mousePosition);
-        Color prev   = GUI.color;
-        var   circle = UIRoundedRect.CircleTex();
-
-        GUI.color = hover ? Color.Lerp(tooltipBg, GeoPalette.Gold, 0.28f) : tooltipBg;
-        GUI.DrawTexture(r, circle, ScaleMode.StretchToFill, true);
-
-        if (shopButtonIcon != null && shopButtonIcon.texture != null)
-        {
-            float pad = 3f * s;
-            GUI.color = Color.black;
-            GUI.DrawTexture(new Rect(r.x + pad, r.y + pad, d - pad * 2f, d - pad * 2f),
-                            shopButtonIcon.texture, ScaleMode.ScaleToFit, true);
-        }
-        else
-        {
-            var gs = new GUIStyle(GUI.skin.label) { fontSize = Mathf.RoundToInt(22f * s), fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter };
-            gs.normal.textColor = GeoPalette.Ink;
-            GUI.color = Color.white;
-            GUI.Label(r, "S", gs);
-        }
-        GUI.color = prev;
-
-        if (GUI.Button(r, GUIContent.none, GUIStyle.none))
-            _expanded = true;   // open the shop
-    }
-
-    // ── GL rift rendering ─────────────────────────────────────────────────────
-
-    // ── Rift label ────────────────────────────────────────────────────────────
-
-    void DrawRiftLabel()
-    {
-        if (GameFlowManager.Instance?.phase == GamePhase.Running) return;
-        if (_riftScale < 0.01f || _screenVerts == null || _screenVerts.Length == 0) return;
-
-        Vector2 apex  = _screenVerts[0];   // index 0 = top apex
-        float   alpha = _expanded
-                        ? 0.90f
-                        : Mathf.Clamp01(_riftScale / (riftHintScale + 0.01f)) * 0.70f;
-
-        _hintStyle.normal.textColor = new Color(1f, 0.88f, 0.38f, alpha);
-        string lbl = _expanded ? $"SHOP  [{shopToggleKey}]" : $"[{shopToggleKey}]";
-        GUI.Label(new Rect(apex.x - 42f, apex.y - 22f, 110f, 20f), lbl, _hintStyle);
-    }
-
-    // ── Tooltip ───────────────────────────────────────────────────────────────
-
-    void DrawTooltip(ShopItem item)
-    {
-        var rm = ResourceManager.Instance;
-        if (rm == null) return;
-
-        BlockType type    = item.sb.data.blockType;
-        int       price   = item.sb.cachedPrice;
-        bool      afford  = rm.CanAfford(price, type);
-        int       placed  = rm.PlacedCount(type);
-        int       pool    = TurretTypes.Is(type) ? rm.TurretCurrency : rm.BlockCurrency;
-        int       deficit = price - pool;
-
-        // Pin to the side of the rift's screen-space bounds so the tooltip
-        // never covers items. Prefer right; fall back to left if right is
-        // off-screen; finally try below / above as last resorts.
-        float       ts = Mathf.Max(0.5f, tooltipScale);
-        float       bw = 170f * ts;
-        bool        hasTheme = item.sb.color != BlockColor.None;
-        // Tooltip rows: title (shape + colored tag) + price
-        //             + 2-line synergy description if themed.
-        float       bh       = (hasTheme ? 82f : 44f) * ts;
-        float       pad      = 12f * ts;
-
-        float minX = float.MaxValue, maxX = float.MinValue;
-        float minY = float.MaxValue, maxY = float.MinValue;
-        if (_screenVerts != null)
-            foreach (var v in _screenVerts)
-            {
-                if (v.x < minX) minX = v.x;
-                if (v.x > maxX) maxX = v.x;
-                if (v.y < minY) minY = v.y;
-                if (v.y > maxY) maxY = v.y;
-            }
-        if (minX > maxX)   // no verts yet
-        {
-            minX = _riftScreenCenter.x - _riftScreenSize; maxX = _riftScreenCenter.x + _riftScreenSize;
-            minY = _riftScreenCenter.y - _riftScreenSize; maxY = _riftScreenCenter.y + _riftScreenSize;
-        }
-
-        float tx, ty;
-        ty = _riftScreenCenter.y - bh * 0.5f;
-        if (maxX + pad + bw <= Screen.width - 4f)              tx = maxX + pad;            // right
-        else if (minX - pad - bw >= 4f)                        tx = minX - pad - bw;       // left
-        else
-        {
-            tx = Mathf.Clamp(_riftScreenCenter.x - bw * 0.5f, 4f, Screen.width - bw - 4f);
-            ty = (maxY + pad + bh <= Screen.height - 4f) ? maxY + pad : minY - pad - bh;
-        }
-        tx = Mathf.Clamp(tx, 4f, Screen.width  - bw - 4f);
-        ty = Mathf.Clamp(ty, 4f, Screen.height - bh - 4f);
-
-        float inset = 8f * ts;
-        GUI.color = tooltipBg;
-        GUI.DrawTexture(new Rect(tx - inset, ty - inset, bw, bh), Texture2D.whiteTexture);
-        GUI.color = GeoPalette.Ink;                                       // ink top rule
-        GUI.DrawTexture(new Rect(tx - inset, ty - inset, bw, 5f * ts), Texture2D.whiteTexture);
-        GUI.color = afford ? GeoPalette.Blue : GeoPalette.Signal;         // accent spine on the left
-        GUI.DrawTexture(new Rect(tx - inset, ty - inset, 4f * ts, bh), Texture2D.whiteTexture);
-        GUI.color = Color.white;
-
-        string shape = TurretTypes.Is(type) ? TurretTypes.DisplayName(type) : item.sb.data.ShapeName;
-        if (string.IsNullOrEmpty(shape)) shape = "Block";
-
-        string title;
-        if (hasTheme)
-        {
-            var themeRgb = BlockColorPalette.Get(item.sb.color);
-            string hex   = ColorUtility.ToHtmlStringRGB(themeRgb);
-            title = $"{shape}  ·  <color=#{hex}>{item.sb.color}</color>";
-        }
-        else
-        {
-            title = shape;
-        }
-
-        _ttTitle.fontSize = Mathf.RoundToInt(10f * ts);
-        _ttPrice.fontSize = Mathf.RoundToInt(10f * ts);
-        _ttSub.fontSize   = Mathf.RoundToInt(9f  * ts);
-
-        _ttTitle.richText = true;
-        GUI.Label(new Rect(tx, ty, bw - 16f * ts, 16f * ts), title, _ttTitle);
-
-        float yCursor = ty + 18f * ts;
-        _ttPrice.normal.textColor = afford ? GeoPalette.Blue : GeoPalette.Signal;
-        string sfx       = TurretTypes.Is(type) ? " T" : " B";
-        string priceText = afford ? $"{price}{sfx}" : $"{price}{sfx}  (-{deficit})";
-        GUI.Label(new Rect(tx, yCursor, bw - 16f * ts, 14f * ts), priceText, _ttPrice);
-        yCursor += 18f * ts;
-
-        if (hasTheme)
-        {
-            string desc = BlockColorPalette.Description(item.sb.color);
-            if (!string.IsNullOrEmpty(desc))
-            {
-                _ttSub.normal.textColor = new Color(0.30f, 0.30f, 0.30f);   // soft ink on paper
-                _ttSub.wordWrap         = true;
-                GUI.Label(new Rect(tx, yCursor, bw - 16f * ts, 36f * ts), desc, _ttSub);
-            }
-        }
-    }
-
-    // Per-item floating price tag, always visible above each shop block.
-    void DrawPriceLabels()
-    {
-        var rm = ResourceManager.Instance;
-        if (rm == null || shopCam == null) return;
-
-        // Size everything EXPLICITLY here. `_ttSub` is a shared GUIStyle that
-        // DrawTooltip mutates (fontSize = 9 × tooltipScale), so price tags were
-        // stuck at the small base size 9 until the player hovered an item once —
-        // which is why the floating price "sometimes" showed small instead of max.
-        float ts = Mathf.Max(0.5f, tooltipScale);
-        float k  = ts * 0.5f;                 // 1.0 at the default tooltipScale (= 2)
-        float w  = 64f * k, h = 18f * k;
-        int   prevFs   = _ttSub.fontSize;
-        var   prevCol0 = _ttSub.normal.textColor;
-        var   prevAlgn = _ttSub.alignment;
-        _ttSub.fontSize  = Mathf.RoundToInt(9f * ts);
-        _ttSub.alignment = TextAnchor.MiddleCenter;
-
-        foreach (var item in _items)
-        {
-            if (item.root == null || item.sb?.data == null) continue;
-
-            Vector3 vp3 = shopCam.WorldToViewportPoint(item.root.transform.position);
-            if (vp3.z < 0f) continue;
-
-            Vector2 screenPos = ShopViewportToScreen(vp3);
-
-            BlockType type   = item.sb.data.blockType;
-            int       price  = item.sb.cachedPrice;
-            bool      afford = rm.CanAfford(price, type);
-            string    sfx    = TurretTypes.Is(type) ? "T" : "B";
-            Color     col    = afford ? new Color(0.55f, 1f, 0.60f, 1f)
-                                       : new Color(1f,    0.45f, 0.45f, 1f);
-
-            var rect = new Rect(screenPos.x - w * 0.5f, screenPos.y - 34f * k, w, h);
-
-            GUI.color = new Color(0f, 0f, 0f, 0.60f);
-            GUI.DrawTexture(rect, Texture2D.whiteTexture);
-            GUI.color = Color.white;
-
-            _ttSub.normal.textColor = col;
-            GUI.Label(rect, $"{price}¤{sfx}", _ttSub);
-        }
-
-        _ttSub.fontSize         = prevFs;
-        _ttSub.normal.textColor = prevCol0;
-        _ttSub.alignment        = prevAlgn;
-    }
-
-    // Forward map: shop camera viewport (0..1) screen position inside rift polygon.
-    // Mirrors the UV mapping used by DrawContent so item positions track the
-    // visible RT content.
-    Vector2 ShopViewportToScreen(Vector3 shopVp)
-    {
-        var baseShape = _runtimeRiftShape ?? BuiltinShape();
-        float minX = float.MaxValue, maxX = float.MinValue;
-        float minY = float.MaxValue, maxY = float.MinValue;
-        foreach (var p in baseShape)
-        {
-            if (p.x < minX) minX = p.x; if (p.x > maxX) maxX = p.x;
-            if (p.y < minY) minY = p.y; if (p.y > maxY) maxY = p.y;
-        }
-        float rx = Mathf.Max(maxX - minX, 0.001f);
-        float ry = Mathf.Max(maxY - minY, 0.001f);
-
-        // Inverse of toUV in DrawContent: UV.y is V-flipped.
-        Vector2 native = new Vector2(minX + shopVp.x * rx,
-                                     minY + shopVp.y * ry);
-        Vector2 rotated = Rotate2D(native, CurrentRotationDeg());
-        // Match UpdateScreenVerts: X full, Y scaled by _riftScale.
-        return new Vector2(_riftScreenCenter.x + rotated.x * _riftSizeX,
-                           _riftScreenCenter.y - rotated.y * _riftSizeY * _riftScale);
-    }
-
-    // ── Style builder ─────────────────────────────────────────────────────────
-
-    void BuildStyles()
-    {
-        if (_stylesBuilt) return;
-        _stylesBuilt = true;
-
-        _ttTitle = new GUIStyle(GUI.skin.label) { fontSize = 10, fontStyle = FontStyle.Bold };
-        _ttTitle.normal.textColor = GeoPalette.Ink;
-
-        _ttPrice = new GUIStyle(GUI.skin.label) { fontSize = 10, fontStyle = FontStyle.Bold };
-        _ttPrice.normal.textColor = Color.green;
-
-        _ttSub = new GUIStyle(GUI.skin.label) { fontSize = 9 };
-        _ttSub.normal.textColor = new Color(0.65f, 0.65f, 0.65f);
-
-        _hintStyle = new GUIStyle(GUI.skin.label) { fontSize = 11, fontStyle = FontStyle.Bold };
-    }
-
-    // ── Shape builder ─────────────────────────────────────────────────────────
-
-    Vector2[] BuiltinShape() => shapePreset switch
-    {
-        RiftShapePreset.Rectangle => RiftShape_Rectangle,
-        RiftShapePreset.Triangle  => RiftShape_Triangle,
-        RiftShapePreset.Lens      => RiftShape_Lens,
-        RiftShapePreset.Oval      => RiftShape_Oval,
-        RiftShapePreset.Slash     => RiftShape_Slash,
-        RiftShapePreset.Crack     => RiftShape_Crack,
-        RiftShapePreset.Diamond   => RiftShape_Diamond,
-        _                         => RiftShape_Crack,
-    };
-
-    // Total polygon rotation = configured base + animated "spin open" amount.
-    // Used everywhere we need the rift's current world-orientation: vertex
-    // placement, camera counter-roll, hover unprojection.
-    float CurrentRotationDeg() =>
-        riftRotationDeg + (1f - Mathf.Clamp01(_riftScale)) * openSpinDegrees;
-
-    void BuildShapeFromSprite()
-    {
-        if (shapePreset != RiftShapePreset.Custom)
-        {
-            _runtimeRiftShape = BuiltinShape();
-            return;
-        }
-
-        if (riftSprite == null)
-        {
-            _runtimeRiftShape = null;   // falls back to Lens via BuiltinShape
-            return;
-        }
-
-        var pts   = new List<Vector2>();
-        int count = riftSprite.GetPhysicsShapeCount();
-        if (count == 0 || riftSprite.GetPhysicsShape(0, pts) < 3)
-        {
-            Debug.LogWarning("[ShopController] riftSprite has no physics shape. " +
-                             "Enable 'Generate Physics Shape' in its import settings. " +
-                             "Falling back to built-in rift shape.");
-            _runtimeRiftShape = null;
-            return;
-        }
-
-        // Centre and normalise so the largest half-extent = 1.
-        float minX = float.MaxValue, maxX = float.MinValue;
-        float minY = float.MaxValue, maxY = float.MinValue;
-        foreach (var p in pts)
-        {
-            if (p.x < minX) minX = p.x; if (p.x > maxX) maxX = p.x;
-            if (p.y < minY) minY = p.y; if (p.y > maxY) maxY = p.y;
-        }
-        float cx  = (minX + maxX) * 0.5f;
-        float cy  = (minY + maxY) * 0.5f;
-        float ext = Mathf.Max((maxX - minX) * 0.5f, (maxY - minY) * 0.5f, 0.001f);
-
-        _runtimeRiftShape = new Vector2[pts.Count];
-        for (int i = 0; i < pts.Count; i++)
-            _runtimeRiftShape[i] = new Vector2((pts[i].x - cx) / ext,
-                                                (pts[i].y - cy) / ext);
-
-        Debug.Log($"[ShopController] Rift shape loaded from sprite '{riftSprite.name}' " +
-                  $"{pts.Count} vertices.");
-    }
-
-    // Rotate a 2D vector by degrees (counter-clockwise).
-    static Vector2 Rotate2D(Vector2 v, float deg)
-    {
-        if (Mathf.Abs(deg) < 0.001f) return v;
-        float rad = deg * Mathf.Deg2Rad;
-        float cos = Mathf.Cos(rad), sin = Mathf.Sin(rad);
-        return new Vector2(cos * v.x - sin * v.y,
-                           sin * v.x + cos * v.y);
-    }
-
-    // Ray-casting point-in-polygon (even-odd rule).
-    static bool PointInPolygon(Vector2 p, Vector2[] poly)
-    {
-        bool inside = false;
-        int  n      = poly.Length;
-        int  j      = n - 1;
-        for (int i = 0; i < n; j = i++)
-        {
-            if (((poly[i].y > p.y) != (poly[j].y > p.y))
-                && p.x < (poly[j].x - poly[i].x) * (p.y - poly[i].y)
-                          / (poly[j].y - poly[i].y) + poly[i].x)
-                inside = !inside;
-        }
-        return inside;
     }
 }

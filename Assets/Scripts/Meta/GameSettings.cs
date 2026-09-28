@@ -37,6 +37,11 @@ public static class GameSettings
     // ReservedKeys below and give it a row in SettingsScreen next to FastForwardKey.
     public static KeyCode QuickBuyKey = KeyCode.O;
 
+    // Open / close the HUD's edge panels (HudSidePanels): synergies on the left,
+    // controls (or the player roster in multiplayer) on the right. Fixed for now.
+    public static KeyCode SynergyPanelKey  = KeyCode.X;
+    public static KeyCode ControlsPanelKey = KeyCode.V;
+
     // Keys the game already owns. A rebind that lands on one of these is refused:
     // the conflict wouldn't announce itself, it would just make two things happen
     // on one press and look like a bug.
@@ -55,6 +60,7 @@ public static class GameSettings
         KeyCode.G,                                                          // grid overlay
         KeyCode.P,                                                          // re-evaluate path
         KeyCode.O,                                                          // quick buy
+        KeyCode.X, KeyCode.V,                                               // synergy / controls panels
         KeyCode.Space, KeyCode.Tab, KeyCode.Escape, KeyCode.Delete,
         KeyCode.LeftShift, KeyCode.RightShift,                              // peek
         KeyCode.LeftControl, KeyCode.RightControl,

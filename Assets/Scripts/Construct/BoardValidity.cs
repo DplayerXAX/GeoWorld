@@ -35,7 +35,7 @@ public static class BoardValidity
     // so lifting the one block bridging five others produces one message, not six.
     public static event Action<IReadOnlyList<PlacedBlockInstance>> BecameDetached;
 
-    // Level setup reconciles too (the inherited board, the authored layout), and
+    // Level setup reconciles too (the authored layout), and
     // should flag islands without shouting about them before the player has done
     // anything. GameFlowManager holds this on for the length of its setup.
     public static bool Quiet;
@@ -224,6 +224,9 @@ public static class BoardValidity
                 var swapped = new List<Material>(orig.Length);
                 for (int m = 0; m < orig.Length; m++)
                 {
+                    // The weathering overlay (BlockSurface) goes with the surface
+                    // it darkens; it comes back with savedMaterials.
+                    if (IsWeather(orig[m])) continue;
                     if (!IsOutline(orig[m])) swapped.Add(mat);
                     else if (keepOutline)     swapped.Add(orig[m]);
                 }
@@ -245,4 +248,7 @@ public static class BoardValidity
         var n = m.shader.name;
         return n == "GeoWorld/BlockOutline" || n == "Custom/ObjectOutline";
     }
+
+    static bool IsWeather(Material m) =>
+        m != null && m.shader != null && m.shader.name == "GeoWorld/BlockWeather";
 }

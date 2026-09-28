@@ -10,7 +10,7 @@ using UnityEngine;
 //   * on Save & Quit from the pause menu.
 // It goes the moment the attempt is over — cleared, lost, or restarted.
 //
-// Resuming replaces the whole opening (inheritance, first endpoints, starting
+// Resuming replaces the whole opening (first endpoints, starting
 // layout, the first StartTurn) with the saved board and turn: no fresh income, no
 // fresh shop roll — the turn is exactly as it was left.
 public partial class GameFlowManager
@@ -79,8 +79,8 @@ public partial class GameFlowManager
         return s != null && s.board != null ? s : null;
     }
 
-    // Board and turn back from a save — in place of SpawnInheritedLayout,
-    // CreateFirstStage, SpawnStartingLayout and the first StartTurn.
+    // Board and turn back from a save — in place of CreateFirstStage,
+    // SpawnStartingLayout and the first StartTurn.
     void ResumeRun(LevelRunSave s)
     {
         // The run stream: same seed, then exactly where it had got to, so the waves
@@ -108,7 +108,7 @@ public partial class GameFlowManager
                 endpoints.SpawnEndpointAt(e.cell, e.isStart);
                 (e.isStart ? allStarts : allEnds).Add(e.cell);
             }
-        var placed = SnapshotManager.PlaceBlocks(snap, inherited: false, withUpgrades: true, keepFlags: true);
+        var placed = SnapshotManager.PlaceBlocks(snap, withUpgrades: true, keepFlags: true);
         foreach (var ins in placed)
         {
             ResourceManager.Instance?.OnBlockPlaced(ins.data.blockType);

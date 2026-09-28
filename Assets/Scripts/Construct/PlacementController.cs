@@ -134,6 +134,8 @@ public partial class PlacementController : MonoBehaviour
     private int lastBasicBurstUpgradeLevel;
     private int lastAoeFireUpgradeLevel;
     private int lastAoeGravityUpgradeLevel;
+    // Carried through a pickup so a moved block is still as old as it was (BlockSurface wear).
+    private int  lastAge;
 
     // Tray tracking kept so we can show/hide tokens on edit mode enter/exit.
     private List<GameObject> trayBlocks = new();
@@ -601,7 +603,13 @@ public partial class PlacementController : MonoBehaviour
 
         if (!_mouseRotation.Active && (Input.GetMouseButtonDown(0) || VirtualCursor.ConfirmPressedThisFrame))
         {
-            if (IsPointerOverSelectionPanel() || HudSidePanels.PointerOver || PointerOverInfoPanel()
+            if (ShopController.Instance != null && ShopController.Instance.TryHandleClick())
+            {
+                // The shop strip took the click (a purchase, or just a click on the
+                // strip). FIRST: the strip is UGUI, so the generic "pointer over any
+                // UI" test below would otherwise swallow every purchase.
+            }
+            else if (IsPointerOverSelectionPanel() || HudSidePanels.PointerOver || PointerOverInfoPanel()
                 || MultiSelectPanel.IsPointerOver(VirtualCursor.Position))
             {
                 // Click landed on an HUD panel (info / synergies / controls) or the
@@ -611,10 +619,6 @@ public partial class PlacementController : MonoBehaviour
             else if (mode == PlacementMode.Edit)
             {
                 if (currentBlock != null) TryPlace();
-            }
-            else if (ShopController.Instance != null && ShopController.Instance.TryHandleClick())
-            {
-                // Shop viewport consumed the click don't run main-camera selection.
             }
             else if (mode == PlacementMode.Select && Input.GetMouseButtonDown(0))
             {
@@ -944,6 +948,7 @@ public partial class PlacementController : MonoBehaviour
         lastBasicBurstUpgradeLevel = selectedInstance.basicBurstUpgradeLevel;
         lastAoeFireUpgradeLevel = selectedInstance.aoeFireUpgradeLevel;
         lastAoeGravityUpgradeLevel = selectedInstance.aoeGravityUpgradeLevel;
+        lastAge       = selectedInstance.age;
 
         // Keep the original height plane (and steady the camera focus), but let the
         // block follow the cursor directly — no offset back to its old cell.
@@ -1232,7 +1237,6 @@ public partial class PlacementController : MonoBehaviour
     int ComputeSellRefund(PlacedBlockInstance ins)
     {
         if (ins?.data == null || ResourceManager.Instance == null) return 0;
-        if (ins.inherited) return 0;   // paid for in an earlier level — see PlacedBlockInstance.inherited
         int basePrice = ResourceManager.Instance.ComputePrice(ins.data, 1f);
         float fraction = Mathf.Max(0f, Modifiers.Eval(Stat.SellRefund, 1f) * sellRefundFraction);
         return Mathf.Max(1, Mathf.RoundToInt(basePrice * fraction));
@@ -1410,7 +1414,7 @@ public partial class PlacementController : MonoBehaviour
         }
 
         GameFlowManager.Instance?.EvaluateGrid();
-        ShowPlacementPopup(refund > 0 ? $"Sold for +{refund}" : "Cleared (inherited — no refund)");
+        ShowPlacementPopup(refund > 0 ? $"Sold for +{refund}" : "Cleared");
         BlockSold?.Invoke(ins.data);
     }
 
@@ -1552,6 +1556,18 @@ public partial class PlacementController : MonoBehaviour
             upAoeFire    = isPickingUpObject ? lastAoeFireUpgradeLevel    : 0,
             upAoeGravity = isPickingUpObject ? lastAoeGravityUpgradeLevel : 0,
         });
+
+        // The place command builds a fresh instance; a moved block keeps its age
+        // (the command doesn't carry it).
+        if (isPickingUpObject && grid != null)
+        {
+            var moved = grid.GetInstanceAt(placedCells[0]);
+            if (moved != null)
+            {
+                moved.age       = lastAge;
+                BlockSurface.Refresh(grid);
+            }
+        }
 
         // ── Push undo record ──────────────────────────────────────────────────
         if (isPickingUpObject)   // reposition: remember where it came from
@@ -2258,7 +2274,7 @@ public partial class PlacementController : MonoBehaviour
         _ghostAnchorSnap    = true;   // appear at the cursor, don't glide in from the last hold
         currentColor        = sb.color != BlockColor.None
             ? BlockColorPalette.Get(sb.color)
-            : MpbColor.Get(sb.GetComponentInChildren<Renderer>());
+            : sb.displayColor;
         activePhysicsObject = sb.gameObject;
         selectedInstance    = null;
         isPickingUpObject   = false;   // new purchase, not a reposition
@@ -2309,6 +2325,7 @@ public partial class PlacementController : MonoBehaviour
                 basicBurstUpgradeLevel = lastBasicBurstUpgradeLevel,
                 aoeFireUpgradeLevel = lastAoeFireUpgradeLevel,
                 aoeGravityUpgradeLevel = lastAoeGravityUpgradeLevel,
+                age          = lastAge,
             };
 
             foreach (var c in lastObjectCells)

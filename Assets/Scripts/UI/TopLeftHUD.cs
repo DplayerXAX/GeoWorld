@@ -1,11 +1,12 @@
 using UnityEngine;
-using UnityEngine.UI;
 using TMPro;
 
-// Bottom-left resource HUD, built at runtime as UGUI: lives / block currency /
-// turret currency, each shown as an icon + value (+ per-round income). Plus a cell
-// readout that docks above the shop while placing. Semi-transparent panel; TMP text
-// with adjustable font/size. Keep this component in the scene and assign the sprites.
+// The gameplay HUD's numbers: lives, next wave, block / turret currency with their
+// per-round income, and the cell readout while placing. The LAYOUT lives in the
+// scene — a HudView (the GameplayHUD prefab, placed with GeoWorld ▸ UI ▸ Place
+// Gameplay HUD) — so every panel can be moved and resized in the editor; this only
+// writes into it. The icon / colour / font fields below are what that menu builds
+// the layout with the first time.
 public class TopLeftHUD : MonoBehaviour
 {
     public static TopLeftHUD Instance;
@@ -36,7 +37,6 @@ public class TopLeftHUD : MonoBehaviour
     [Header("Layout")]
     public Vector2 panelMargin = new Vector2(16f, 16f);   // from the bottom-left corner
     public float   cellGap     = 8f;                       // readout gap above the shop top
-    public int     cornerRadius = 24;                      // rounded-corner radius (px)
     public float   topMargin  = 14f;                       // top-centre panel gap from the top edge
     public float   topInset   = 28f;                       // padding for lives/wave inside the panel
 
@@ -51,37 +51,39 @@ public class TopLeftHUD : MonoBehaviour
     [Range(0f, 0.3f)] public float cellHysteresis = 0.07f;
     public KeyCode toggleKey = KeyCode.None;
 
+    [Header("Layout (scene)")]
+    [Tooltip("The authored HUD layout (GameplayHUD prefab). Found in the scene if left empty.")]
+    public HudView view;
+
     bool _visible = true;
     Vector3Int _mouseCell;
     bool _mouseHitValid;
     Vector3Int _lastCommittedCell;
     bool _hasCommittedCell;
-
-    Canvas        _canvas;
-    Image         _panelBg;
-    TMP_Text      _livesVal, _waveVal, _blockVal, _blockInc, _turretVal, _turretInc, _cellVal;
-    GameObject    _panel, _cellReadout;
-    RectTransform _cellRect;
+    bool _warned;
 
     void Awake() => Instance = this;
-    void Start() => BuildUI();
+    void Start() => BindView();
 
-    // ── Currency-fly-in target points (screen space — this canvas is ScreenSpaceOverlay,
-    // so a UI RectTransform's .position IS its screen pixel position). ─────────────────
-    public Vector2 BlockCounterScreenPos  => _blockVal  != null ? (Vector2)_blockVal.transform.position  : (Vector2)Input.mousePosition;
-    public Vector2 TurretCounterScreenPos => _turretVal != null ? (Vector2)_turretVal.transform.position : (Vector2)Input.mousePosition;
-
-    public void PulseBlockCounter()  => PulseRow(_blockVal);
-    public void PulseTurretCounter() => PulseRow(_turretVal);
-
-    void PulseRow(TMP_Text val)
+    bool BindView()
     {
-        if (val == null) return;
-        // "Row" is val's grandparent-ish container — walk up to the row built in
-        // BuildRow (val's direct parent holds icon+value+income as siblings).
-        var row = val.transform.parent;
-        if (row != null) StartCoroutine(PulseRoutine(row));
+        if (view == null) view = FindFirstObjectByType<HudView>(FindObjectsInactive.Include);
+        if (view == null && !_warned)
+        {
+            _warned = true;
+            Debug.LogWarning("[HUD] No HudView in the scene — run GeoWorld ▸ UI ▸ Place Gameplay HUD and save the scene.");
+        }
+        if (view != null && view.cellReadout != null) view.cellReadout.gameObject.SetActive(false);
+        return view != null;
     }
+
+    // ── Currency-fly-in target points (screen space — the HUD canvas is ScreenSpaceOverlay,
+    // so a UI RectTransform's .position IS its screen pixel position). ─────────────────
+    public Vector2 BlockCounterScreenPos  => view != null && view.blockValue  != null ? (Vector2)view.blockValue.transform.position  : (Vector2)Input.mousePosition;
+    public Vector2 TurretCounterScreenPos => view != null && view.turretValue != null ? (Vector2)view.turretValue.transform.position : (Vector2)Input.mousePosition;
+
+    public void PulseBlockCounter()  { if (view != null && view.blockRow  != null) StartCoroutine(PulseRoutine(view.blockRow)); }
+    public void PulseTurretCounter() { if (view != null && view.turretRow != null) StartCoroutine(PulseRoutine(view.turretRow)); }
 
     System.Collections.IEnumerator PulseRoutine(Transform row)
     {
@@ -103,10 +105,11 @@ public class TopLeftHUD : MonoBehaviour
     void Update()
     {
         if (toggleKey != KeyCode.None && Input.GetKeyDown(toggleKey)) _visible = !_visible;
-        if (_canvas == null) return;
+        if (view == null && !BindView()) return;
 
-        _canvas.enabled = _visible && !IntroDirector.Playing && !GameFlowManager.SettlementUp;   // hidden during intro / clear settlement
-        if (!_canvas.enabled) return;
+        bool on = _visible && !IntroDirector.Playing && !GameFlowManager.SettlementUp;   // hidden during intro / clear settlement
+        if (view.canvas != null) view.canvas.enabled = on;
+        if (!on) return;
 
         UpdateMouseCell();
         RefreshValues();
@@ -118,211 +121,45 @@ public class TopLeftHUD : MonoBehaviour
         var rm  = ResourceManager.Instance;
         var hp  = PlayerHealth.Instance;
         var gfm = GameFlowManager.Instance;
-        _livesVal.text  = hp != null ? $"{hp.CurrentLives} / {hp.maxLives}" : "0 / 0";
-        int wave = gfm != null ? gfm.UpcomingWaveNumber : 1;
-        string lblHex = ColorUtility.ToHtmlStringRGB(waveLabelColor);
-        _waveVal.text   = $"<size=62%><color=#{lblHex}>WAVE</color></size>  <b>{wave}</b>";
-        _blockVal.text  = (rm != null ? rm.BlockCurrency  : 0).ToString();
-        _turretVal.text = (rm != null ? rm.TurretCurrency : 0).ToString();
-        _blockInc.text  = $"+{PerRoundBlockIncome()}";
-        _turretInc.text = $"+{PerRoundTurretIncome()}";
-
-        // When the shop (black bar) is open: drop the panel background and show the
-        // per-turn income in white so it reads on the black bar.
-        bool shopOpen = ShopController.Instance != null && ShopController.Instance.IsExpanded;
-        if (_panelBg != null) _panelBg.enabled = !shopOpen;
-        Color incCol = shopOpen ? Color.white : incomeColor;
-        _blockInc.color = incCol;
-        _turretInc.color = incCol;
+        if (view.livesValue != null)
+            view.livesValue.text = hp != null ? $"{hp.CurrentLives} / {hp.maxLives}" : "0 / 0";
+        if (view.waveValue != null)
+        {
+            // "Wave 2/4" — the level's wave count when it has one; endless has no end.
+            int wave  = gfm != null ? gfm.UpcomingWaveNumber : 1;
+            var lv    = RunConfig.Mode == GameMode.Level ? RunConfig.Level : null;
+            int total = lv != null && lv.wavesToClear > 0 ? lv.wavesToClear : 0;
+            string lblHex = ColorUtility.ToHtmlStringRGB(waveLabelColor);
+            string count  = total > 0 ? $"{Mathf.Min(wave, total)}/{total}" : wave.ToString();
+            view.waveValue.text = $"<color=#{lblHex}>Wave</color>  <b>{count}</b>";
+        }
+        if (view.blockValue   != null) view.blockValue.text   = (rm != null ? rm.BlockCurrency  : 0).ToString();
+        if (view.turretValue  != null) view.turretValue.text  = (rm != null ? rm.TurretCurrency : 0).ToString();
+        if (view.blockIncome  != null) view.blockIncome.text  = $"+{PerRoundBlockIncome()}";
+        if (view.turretIncome != null) view.turretIncome.text = $"+{PerRoundTurretIncome()}";
     }
 
     void PositionCellReadout()
     {
+        if (view.cellReadout == null) return;
         bool show = !(SettingsScreen.Open || PauseMenu.Paused)
-            && PlacementController.Instance != null && PlacementController.Instance.currentBlock != null
-            && ShopController.Instance != null && ShopController.Instance.ShopVisible;
+            && PlacementController.Instance != null && PlacementController.Instance.currentBlock != null;
+        if (view.dockCellReadoutToShop)
+            show &= ShopController.Instance != null && ShopController.Instance.ShopVisible;
 
-        _cellReadout.SetActive(show);
+        view.cellReadout.gameObject.SetActive(show);
         if (!show) return;
 
-        Vector2 gui = ShopController.Instance.ShopTopCenter;   // GUI coords (top-left origin)
-        float sf = Mathf.Max(0.0001f, _canvas.scaleFactor);
-        float sx = gui.x;
-        float sy = Screen.height - gui.y;                      // → screen (bottom-left origin)
-        _cellRect.anchoredPosition = new Vector2(sx / sf, sy / sf + cellGap);
-
-        _cellVal.text = _mouseHitValid ? $"({_mouseCell.x}, {_mouseCell.y}, {_mouseCell.z})" : "---";
-    }
-
-    // ── Build ──────────────────────────────────────────────────────────────────
-
-    void BuildUI()
-    {
-        var canvasGO = new GameObject("TopLeftHUDCanvas",
-            typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster));
-        canvasGO.transform.SetParent(transform, false);
-
-        _canvas = canvasGO.GetComponent<Canvas>();
-        _canvas.renderMode   = RenderMode.ScreenSpaceOverlay;
-        _canvas.sortingOrder = 90;
-
-        var scaler = canvasGO.GetComponent<CanvasScaler>();
-        scaler.uiScaleMode         = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-        scaler.referenceResolution = new Vector2(1920f, 1080f);
-        scaler.matchWidthOrHeight  = 1f;
-
-        BuildPanel();
-        BuildTopCenter();
-        BuildCellReadout();
-    }
-
-    // Lives + next-wave on ONE integrated panel (top-centre). Lives sits at the left,
-    // wave at the right; the background is a single sprite (topPanelSprite).
-    void BuildTopCenter()
-    {
-        var panel = NewRect("TopPanel", _canvas.transform);
-        panel.anchorMin = panel.anchorMax = new Vector2(0.5f, 1f);
-        panel.pivot = new Vector2(0.5f, 1f);
-        panel.sizeDelta = topPanelSize;
-        panel.anchoredPosition = new Vector2(0f, -topMargin);
-
-        var bg = panel.gameObject.AddComponent<Image>();
-        bg.raycastTarget = false;
-        if (topPanelSprite != null)
+        if (view.dockCellReadoutToShop)
         {
-            bg.sprite = topPanelSprite;
-            bg.type   = topPanelSprite.border != Vector4.zero ? Image.Type.Sliced : Image.Type.Simple;
-            bg.color  = Color.white;
-        }
-        else   // fallback so it's visible before you assign the sprite
-        {
-            bg.sprite = UIRoundedRect.Get(cornerRadius);
-            bg.type   = Image.Type.Sliced;
-            bg.color  = panelColor;
+            // Just above the top of the shop panel (screen space; the pivot decides the rest).
+            Vector2 gui = ShopController.Instance.ShopTopCenter;   // GUI coords (top-left origin)
+            float sf = view.canvas != null ? Mathf.Max(0.0001f, view.canvas.scaleFactor) : 1f;
+            view.cellReadout.position = new Vector3(gui.x, Screen.height - gui.y + cellGap * sf, 0f);
         }
 
-        _livesVal = BuildTopGroup(panel, heartIcon, heartColor, leftSide: true);
-        _waveVal  = BuildTopGroup(panel, null,      waveColor,  leftSide: false);
-        _waveVal.fontSize = waveSize;   // wave has its own size (lives uses valueSize)
-    }
-
-    // Icon + value group anchored to the left or right edge inside the top panel (no own bg).
-    TMP_Text BuildTopGroup(RectTransform parent, Sprite icon, Color valCol, bool leftSide)
-    {
-        float ax = leftSide ? 0f : 1f;
-        var g = NewRect("Group", parent);
-        g.anchorMin = g.anchorMax = new Vector2(ax, 0.5f);
-        g.pivot = new Vector2(ax, 0.5f);
-        g.anchoredPosition = new Vector2(leftSide ? topInset : -topInset, 0f);
-
-        var h = g.gameObject.AddComponent<HorizontalLayoutGroup>();
-        h.spacing = 8f; h.childAlignment = leftSide ? TextAnchor.MiddleLeft : TextAnchor.MiddleRight;
-        h.childControlWidth = h.childControlHeight = true;
-        h.childForceExpandWidth = false; h.childForceExpandHeight = false;
-        var fit = g.gameObject.AddComponent<ContentSizeFitter>();
-        fit.horizontalFit = fit.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
-
-        if (icon != null)
-        {
-            var img = NewImage("Icon", g, valCol, false);
-            img.sprite = icon;
-            var ile = img.gameObject.AddComponent<LayoutElement>();
-            ile.minWidth = ile.preferredWidth = ile.minHeight = ile.preferredHeight = iconSize;
-        }
-
-        var val = NewText("Value", g, valueSize, valCol, FontStyles.Bold,
-                          leftSide ? TextAlignmentOptions.MidlineLeft : TextAlignmentOptions.MidlineRight);
-        val.text = "0";
-        return val;
-    }
-
-    void BuildPanel()
-    {
-        var panel = NewRect("ResourcePanel", _canvas.transform);
-        panel.anchorMin = panel.anchorMax = panel.pivot = new Vector2(0f, 0f);   // bottom-left
-        panel.anchoredPosition = panelMargin;
-        _panel = panel.gameObject;
-
-        var bg = panel.gameObject.AddComponent<Image>();
-        bg.color = panelColor;
-        bg.raycastTarget = false;
-        bg.sprite = UIRoundedRect.Get(cornerRadius);
-        bg.type   = Image.Type.Sliced;
-        _panelBg  = bg;
-
-        var vlg = panel.gameObject.AddComponent<VerticalLayoutGroup>();
-        vlg.padding = new RectOffset(10, 12, 8, 8);
-        vlg.spacing = 4f;
-        vlg.childAlignment = TextAnchor.UpperLeft;
-        vlg.childControlWidth = vlg.childControlHeight = true;
-        vlg.childForceExpandWidth = false; vlg.childForceExpandHeight = false;
-
-        var fitter = panel.gameObject.AddComponent<ContentSizeFitter>();
-        fitter.horizontalFit = fitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
-
-        _blockVal  = BuildRow(panel, blockIcon,  blockColor,  out _blockInc);
-        _turretVal = BuildRow(panel, turretIcon, turretColor, out _turretInc);
-    }
-
-    // icon + value (+ optional income). Returns the value text; income via out.
-    TMP_Text BuildRow(RectTransform parent, Sprite icon, Color valCol, out TMP_Text income)
-    {
-        var row = NewRect("Row", parent);
-        var h = row.gameObject.AddComponent<HorizontalLayoutGroup>();
-        h.childAlignment = TextAnchor.MiddleLeft; h.spacing = 8f;
-        h.childControlWidth = h.childControlHeight = true;
-        h.childForceExpandWidth = false; h.childForceExpandHeight = false;
-        row.gameObject.AddComponent<LayoutElement>().minHeight = iconSize;
-
-        var img = NewImage("Icon", row, Color.white, false);
-        img.sprite = icon;
-        img.enabled = icon != null;
-        img.color=valCol;
-        var ile = img.gameObject.AddComponent<LayoutElement>();
-        ile.minWidth = ile.preferredWidth = ile.minHeight = ile.preferredHeight = iconSize;
-
-        var val = NewText("Value", row, valueSize, valCol, FontStyles.Bold, TextAlignmentOptions.MidlineLeft);
-        val.text = "0";
-        var vle = val.gameObject.AddComponent<LayoutElement>();
-        vle.minWidth = vle.preferredWidth = 56f;
-
-        income = NewText("Income", row, incomeSize, incomeColor, FontStyles.Normal, TextAlignmentOptions.MidlineLeft);
-        income.text = "";
-        return val;
-    }
-
-    void BuildCellReadout()
-    {
-        var rt = NewRect("CellReadout", _canvas.transform);
-        rt.anchorMin = rt.anchorMax = new Vector2(0f, 0f);   // bottom-left origin for screen positioning
-        rt.pivot = new Vector2(0.5f, 0f);                     // bottom-centre over the point
-        rt.sizeDelta = new Vector2(160f, 30f);
-        _cellRect = rt;
-        _cellReadout = rt.gameObject;
-
-        var bg = rt.gameObject.AddComponent<Image>();
-        bg.color = panelColor;
-        bg.raycastTarget = false;
-        bg.sprite = UIRoundedRect.Get(Mathf.Min(cornerRadius, 14));   // smaller radius for the short readout
-        bg.type   = Image.Type.Sliced;
-
-        var h = rt.gameObject.AddComponent<HorizontalLayoutGroup>();
-        h.padding = new RectOffset(8, 8, 4, 4);
-        h.spacing = 6f; h.childAlignment = TextAnchor.MiddleCenter;
-        h.childControlWidth = h.childControlHeight = true;
-        h.childForceExpandWidth = false; h.childForceExpandHeight = false;
-
-        if (gridIcon != null)
-        {
-            var img = NewImage("Icon", rt, Color.white, false);
-            img.sprite = gridIcon;
-            var ile = img.gameObject.AddComponent<LayoutElement>();
-            ile.minWidth = ile.preferredWidth = ile.minHeight = ile.preferredHeight = 18f;
-        }
-
-        _cellVal = NewText("Value", rt, valueSize, valueColor, FontStyles.Bold, TextAlignmentOptions.Midline);
-        _cellVal.text = "---";
-        _cellReadout.SetActive(false);
+        if (view.cellValue != null)
+            view.cellValue.text = _mouseHitValid ? $"({_mouseCell.x}, {_mouseCell.y}, {_mouseCell.z})" : "---";
     }
 
     // ── Mouse cell (unchanged) ────────────────────────────────────────────────────
@@ -369,37 +206,4 @@ public class TopLeftHUD : MonoBehaviour
 
     int PerRoundBlockIncome()  => ResourceManager.Instance?.balance?.GetBlockIncomeForRound(GameFlowManager.Instance?.RoundIndex ?? 0) ?? 0;
     int PerRoundTurretIncome() => ResourceManager.Instance?.balance?.GetTurretIncomeForRound(GameFlowManager.Instance?.RoundIndex ?? 0) ?? 0;
-
-    // ── UI primitives ────────────────────────────────────────────────────────────
-
-    RectTransform NewRect(string name, Transform parent)
-    {
-        var go = new GameObject(name, typeof(RectTransform));
-        go.transform.SetParent(parent, false);
-        return (RectTransform)go.transform;
-    }
-
-    Image NewImage(string name, Transform parent, Color color, bool raycast)
-    {
-        var rt = NewRect(name, parent);
-        var img = rt.gameObject.AddComponent<Image>();
-        img.color = color;
-        img.raycastTarget = raycast;
-        return img;
-    }
-
-    TMP_Text NewText(string name, Transform parent, float size, Color color,
-                     FontStyles style, TextAlignmentOptions align)
-    {
-        var rt = NewRect(name, parent);
-        var t = rt.gameObject.AddComponent<TextMeshProUGUI>();
-        if (font != null) t.font = font;
-        t.fontSize      = size;
-        t.color         = color;
-        t.fontStyle     = style;
-        t.alignment     = align;
-        t.raycastTarget = false;
-        t.textWrappingMode = TextWrappingModes.NoWrap;
-        return t;
-    }
 }

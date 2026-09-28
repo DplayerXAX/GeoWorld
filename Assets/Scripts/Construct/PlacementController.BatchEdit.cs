@@ -40,6 +40,7 @@ public partial class PlacementController
         public Quaternion   rotation;       // current mesh orientation (mutated by group rotate)
         public Quaternion   origRotation;   // orientation at pickup — restored verbatim on cancel
         public int basicPowerUpgradeLevel, basicBurstUpgradeLevel, aoeFireUpgradeLevel, aoeGravityUpgradeLevel;
+        public int  age;         // PlacedBlockInstance.age — a moved block is as old as it was
     }
 
     bool _batchMoving;
@@ -300,6 +301,7 @@ public partial class PlacementController
                 basicBurstUpgradeLevel = ins.basicBurstUpgradeLevel,
                 aoeFireUpgradeLevel    = ins.aoeFireUpgradeLevel,
                 aoeGravityUpgradeLevel = ins.aoeGravityUpgradeLevel,
+                age          = ins.age,
             };
             rec.baseRel  = new Vector3Int[rec.origCells.Length];
             rec.relCells = new Vector3Int[rec.origCells.Length];
@@ -564,6 +566,7 @@ public partial class PlacementController
             basicBurstUpgradeLevel = rec.basicBurstUpgradeLevel,
             aoeFireUpgradeLevel    = rec.aoeFireUpgradeLevel,
             aoeGravityUpgradeLevel = rec.aoeGravityUpgradeLevel,
+            age          = rec.age,
         };
         foreach (var c in worldCells) ins.occupiedCells.Add(c);
 

@@ -15,7 +15,7 @@ public class LevelRunSave
     public string savedAt;
 
     // ── The board ────────────────────────────────────────────────────────────
-    public GridSnapshot board;               // blocks (+ inherited / sealed), endpoints, round counters, camera
+    public GridSnapshot board;               // blocks (+ sealed), endpoints, round counters, camera
     public Vector3Int   challengeCell;
     public bool         challengeIsStart;
 

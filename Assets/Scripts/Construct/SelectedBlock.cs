@@ -18,4 +18,10 @@ public class SelectableBlock : MonoBehaviour
     /// random fluctuation.  Read this when buying — do not recompute.
     /// </summary>
     public int cachedPrice;
+
+    /// <summary>
+    /// The colour the item shows in the shop (synergy colour, or the type palette
+    /// for untagged pieces and turrets) — what it takes on when picked up.
+    /// </summary>
+    public Color displayColor = Color.white;
 }
