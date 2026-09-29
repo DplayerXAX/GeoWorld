@@ -113,8 +113,8 @@ public class BalanceTable : ScriptableObject
     public float slowTurretTypeMult = 0.9f;
     [Tooltip("AOE turret price multiplier. 1.2 ≈ 12 for a 1-cell turret — the priciest of the three, matching its splash.")]
     public float aoeTurretTypeMult = 1.2f;
-    [Tooltip("Debuff turret price multiplier. 0.8 ≈ 8 for a 1-cell turret — it does no damage, so it sits below the Slow turret.")]
-    public float debuffTurretTypeMult = 0.8f;
+    [Tooltip("Prayer turret price multiplier. 0.6 ≈ 6 for a 1-cell turret — it does no damage itself, so it's the cheapest turret.")]
+    public float debuffTurretTypeMult = 0.6f;
     // Every non-turret block type uses 1.0 implicitly.
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -218,15 +218,15 @@ public class BalanceTable : ScriptableObject
         aoeRadius = 1.5f,
     };
 
-    [Header("Turret — Debuff (no attack; a field that curses what walks through it)")]
+    [Header("Turret — Prayer (no attack; a field in which enemies take more damage)")]
     [Tooltip("Only `range` matters — it never fires, so damage / fireRate are unused.")]
     public TurretRecord debuffTurret = new()
     {
         cost = 4, damage = 0f, range = 3.0f, fireRate = 0f,
     };
-    [Tooltip("How much LESS enemies inside the field heal. 0.4 = heals land at 60%.")]
-    [Range(0f, 1f)] public float debuffHealReduction = 0.4f;
-    [Tooltip("Extra TURRET currency for every enemy that dies inside a Debuff field (once per enemy, however many fields overlap).")]
+    [Tooltip("How much MORE damage enemies inside the field take, from every source. 0.2 = +20%.")]
+    [Range(0f, 2f)] public float prayerDamageAmp = 0.2f;
+    [Tooltip("Extra TURRET currency for every enemy that dies inside a Prayer field (once per enemy, however many fields overlap).")]
     [Min(0)] public int debuffKillBonus = 1;
 
     // ═══════════════════════════════════════════════════════════════════════

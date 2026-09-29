@@ -360,7 +360,12 @@ public partial class LevelMapController : MonoBehaviour
                 int dx = Mathf.Max(0, Mathf.Max(-x, x - (e.x - 1)));
                 int dz = Mathf.Max(0, Mathf.Max(-z, z - (e.y - 1)));
                 if (dx * dx + dz * dz > pad * pad) continue;
-                yield return BlockTop(new Vector3Int(o.x + x, o.y, o.z + z));
+                // A plain plot: only its own outline, at the height it will stand
+                // (a volcano's mist sits on the cone, not on the plain under it).
+                var col = new Vector2Int(o.x + x, o.z + z);
+                if (pad == 0 && cfg.CoverageAt(col) <= 0f) continue;
+                int lift = pad == 0 ? cfg.HeightAt(col) : 0;
+                yield return BlockTop(new Vector3Int(col.x, o.y + lift, col.y));
             }
     }
 
@@ -476,7 +481,7 @@ public partial class LevelMapController : MonoBehaviour
     // or a farm that stands barren before its gate (and is revived, not raised).
     bool PlotOnShow(MapDecorConfig cfg)
     {
-        if (string.IsNullOrEmpty(cfg.gateLevelId)) return true;
+        if (string.IsNullOrEmpty(cfg.gateLevelId) || previewAllRegions) return true;
         if (cfg is AbundanceFarmConfig f && f.barrenBeforeGate && BarrenUnlockedBefore(f)) return true;
         bool cleared = SaveSystem.Profile.GetRecord(cfg.gateLevelId)?.cleared ?? false;
         return cleared && cfg.gateLevelId != _growthLevelId;

@@ -178,7 +178,7 @@ public class SettingsScreen : MonoBehaviour
     // ── Live-refresh widgets from GameSettings (called on open + after Reset) ──
     Slider _masterSlider, _musicSlider, _sfxSlider, _panSlider, _lookSlider;
     Toggle _fullscreenToggle, _vsyncToggle, _smoothEditToggle, _freeMoveToggle;
-    TMP_Text _qualityLabel, _frameCapLabel;
+    TMP_Text _qualityLabel, _frameCapLabel, _qualityNote;
     int _qualityIndex, _frameCapIndex;
 
     void RefreshAll()
@@ -193,8 +193,9 @@ public class SettingsScreen : MonoBehaviour
         _smoothEditToggle.SetIsOnWithoutNotify(GameSettings.SmoothBlockEditing);
         _freeMoveToggle.SetIsOnWithoutNotify(GameSettings.FreeMove);
 
-        _qualityIndex = Mathf.Clamp(GameSettings.QualityLevel, 0, QualitySettings.names.Length - 1);
-        _qualityLabel.text = QualitySettings.names.Length > 0 ? QualitySettings.names[_qualityIndex] : "-";
+        _qualityIndex = Mathf.Clamp((int)GameSettings.Graphics, 0, GraphicsQuality.Names.Length - 1);
+        _qualityLabel.text = GraphicsQuality.Names[_qualityIndex];
+        _qualityNote.text  = GraphicsQuality.Descriptions[_qualityIndex];
 
         _frameCapIndex = Mathf.Max(0, System.Array.IndexOf(GameSettings.FrameCaps, GameSettings.FrameCap));
         _frameCapLabel.text = FrameLabels[Mathf.Clamp(_frameCapIndex, 0, FrameLabels.Length - 1)];
@@ -333,9 +334,15 @@ public class SettingsScreen : MonoBehaviour
         _fullscreenToggle = BuildToggleRow(root, "Fullscreen", null, v => { GameSettings.Fullscreen = v; GameSettings.ApplyDisplay(); GameSettings.Save(); });
         _vsyncToggle      = BuildToggleRow(root, "V-Sync",     null, v => { GameSettings.VSync      = v; GameSettings.ApplyDisplay(); GameSettings.Save(); });
 
-        BuildChoiceRow(root, "Quality", out _qualityLabel,
-            () => { _qualityIndex = (_qualityIndex - 1 + QualitySettings.names.Length) % QualitySettings.names.Length; ApplyQuality(); },
-            () => { _qualityIndex = (_qualityIndex + 1) % QualitySettings.names.Length; ApplyQuality(); });
+        int presets = GraphicsQuality.Names.Length;
+        BuildChoiceRow(root, "Graphics", out _qualityLabel,
+            () => { _qualityIndex = (_qualityIndex - 1 + presets) % presets; ApplyQuality(); },
+            () => { _qualityIndex = (_qualityIndex + 1) % presets; ApplyQuality(); });
+        // What the preset gives up, under it. Scenery and effects follow from the
+        // next area loaded; resolution, shadows and the sky change at once.
+        _qualityNote = NewText("GraphicsNote", root, 16f, GeoPalette.Ink, FontStyles.Italic, TextAlignmentOptions.TopLeft);
+        _qualityNote.textWrappingMode = TextWrappingModes.Normal;
+        _qualityNote.gameObject.AddComponent<LayoutElement>().minHeight = 44f;
 
         BuildChoiceRow(root, "Frame cap", out _frameCapLabel,
             () => { _frameCapIndex = (_frameCapIndex - 1 + FrameLabels.Length) % FrameLabels.Length; ApplyFrameCap(); },
@@ -489,8 +496,10 @@ public class SettingsScreen : MonoBehaviour
 
     void ApplyQuality()
     {
-        _qualityLabel.text = QualitySettings.names.Length > 0 ? QualitySettings.names[_qualityIndex] : "-";
-        GameSettings.QualityLevel = _qualityIndex;
+        _qualityLabel.text = GraphicsQuality.Names[_qualityIndex];
+        _qualityNote.text  = GraphicsQuality.Descriptions[_qualityIndex] +
+                             "\nScenery detail applies from the next area you load.";
+        GameSettings.Graphics = (GraphicsQuality.Tier)_qualityIndex;
         GameSettings.ApplyDisplay(); GameSettings.Save();
     }
 

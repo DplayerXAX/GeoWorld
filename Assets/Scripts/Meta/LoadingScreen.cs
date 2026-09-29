@@ -1,4 +1,5 @@
 using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
@@ -6,12 +7,24 @@ using UnityEngine.SceneManagement;
 // Auto-spawns once and persists. Call LoadingScreen.Go("scene") to fade in the
 // overlay, async-load the scene, then drop it — so every transition shows the
 // same spinning-cube loading screen.
+//
+// A scene that keeps building after it has loaded (the level-select map, a
+// level's far scenery) calls Hold(this) and Release(this) round the work: the
+// page stays up until every hold is released, then fades out. A Hold taken in
+// Awake of the FIRST scene (entering Play straight into it) puts the page up
+// too, so a direct start gets it as well.
 [DisallowMultipleComponent]
 public class LoadingScreen : MonoBehaviour
 {
     static LoadingScreen _inst;
     bool     _active;
     GUIStyle _label;
+    float    _alpha = 1f;   // fades out once everything is built
+    Coroutine _boot;
+    static float _drawAlpha = 1f;
+
+    static readonly HashSet<Object> _holds = new();
+    const float HoldTimeout = 30f;   // a hold never released must not trap the player behind the page
 
     // Tips pool — Resources/LoadingTips.asset, edited directly in the Inspector
     // (see LoadingTipsData). Loaded once and cached; a new one is picked each
@@ -28,9 +41,71 @@ public class LoadingScreen : MonoBehaviour
         var go = new GameObject("LoadingScreen");
         DontDestroyOnLoad(go);
         _inst = go.AddComponent<LoadingScreen>();
+        if (Held) _inst._boot = _inst.StartCoroutine(_inst.Boot());   // the first scene is still building
     }
 
     public static bool Active => _inst != null && _inst._active;
+
+    // Keep the page up until Release(key). Keys are the objects doing the work,
+    // so one destroyed mid-build (scene left early) stops holding by itself.
+    public static void Hold(Object key)
+    {
+        if (key == null) return;
+        _holds.Add(key);
+        if (_inst != null && !_inst._active) _inst._boot = _inst.StartCoroutine(_inst.Boot());
+    }
+
+    public static void Release(Object key)
+    {
+        if (key != null) _holds.Remove(key);
+    }
+
+    static bool Held
+    {
+        get
+        {
+            _holds.RemoveWhere(k => k == null);
+            return _holds.Count > 0;
+        }
+    }
+
+    IEnumerator WaitForHolds()
+    {
+        float t = 0f;
+        while (Held && t < HoldTimeout)
+        {
+            t += Time.unscaledDeltaTime;
+            yield return null;
+        }
+        if (Held)
+        {
+            Debug.LogWarning("[Loading] still held after " + HoldTimeout + "s — dropping the page anyway.");
+            _holds.Clear();
+        }
+    }
+
+    IEnumerator FadeOut()
+    {
+        const float dur = 0.3f;
+        for (float t = 0f; t < dur; t += Time.unscaledDeltaTime)
+        {
+            _alpha = 1f - t / dur;
+            yield return null;
+        }
+        _alpha  = 1f;
+        _active = false;
+    }
+
+    // Entering Play straight into a scene that builds: up at once, down when done.
+    IEnumerator Boot()
+    {
+        _active = true;
+        _alpha  = 1f;
+        PickTip();
+        yield return null;
+        yield return WaitForHolds();
+        yield return FadeOut();
+    }
 
     // Show the loading page, then async-load the scene.
     public static void Go(string scene)
@@ -47,14 +122,18 @@ public class LoadingScreen : MonoBehaviour
 
     IEnumerator Run(string scene)
     {
+        if (_boot != null) { StopCoroutine(_boot); _boot = null; }
         _active = true;
+        _alpha  = 1f;
         PickTip();
         yield return null;                 // paint the overlay before the hitch
         var op = SceneManager.LoadSceneAsync(scene);
         while (op != null && !op.isDone) yield return null;
+        yield return null;                 // the new scene's Start runs; whatever it builds over frames holds the page
+        yield return WaitForHolds();
         float hold = 0.25f;                 // brief hold so the spinner reads on fast loads
         while (hold > 0f) { hold -= Time.unscaledDeltaTime; yield return null; }
-        _active = false;
+        yield return FadeOut();
     }
 
     // Picks a fresh random tip for this load. Resources.Load only actually hits
@@ -77,11 +156,11 @@ public class LoadingScreen : MonoBehaviour
         if (!_active) return;
         GUI.depth = -2000;                 // above all other IMGUI (incl. settings)
         float s = UiScale.Get();
+        _drawAlpha = _alpha;
 
+        Fill(new Rect(0, 0, Screen.width, Screen.height), GeoPalette.Paper);
         Color p = GUI.color;
-        GUI.color = GeoPalette.Paper;
-        GUI.DrawTexture(new Rect(0, 0, Screen.width, Screen.height), Texture2D.whiteTexture);
-        GUI.color = p;
+        GUI.color = new Color(1f, 1f, 1f, _alpha);   // the labels fade with the page
         Fill(new Rect(0, 0, Screen.width, 5f * s), GeoPalette.Ink);            // top rule (thinner, like the panels)
         Fill(new Rect(0, 0, 6f * s, Screen.height), GeoPalette.Signal);        // left spine
 
@@ -112,6 +191,7 @@ public class LoadingScreen : MonoBehaviour
             GUI.Label(new Rect(tipX, tipY, tipWidth, 22f * s), "TIP", _tipCaptionStyle);
             GUI.Label(new Rect(tipX, tipY + 22f * s, tipWidth, 90f * s), _currentTip, _tipStyle);
         }
+        GUI.color = p;
     }
 
     // Muted toward paper so the cube reads like a printed mark, not four hard primaries.
@@ -135,7 +215,7 @@ public class LoadingScreen : MonoBehaviour
 
     static void Fill(Rect r, Color c)
     {
-        Color p = GUI.color; GUI.color = c;
+        Color p = GUI.color; GUI.color = new Color(c.r, c.g, c.b, c.a * _drawAlpha);
         GUI.DrawTexture(r, Texture2D.whiteTexture);
         GUI.color = p;
     }

@@ -187,6 +187,7 @@ public partial class GameFlowManager : MonoBehaviour
 
         CreateFirstStage();
         SpawnStartingLayout();       // pre-built blocks authored via LevelMapAuthor, if any
+        SpawnRandomStartBlocks();    // LevelDefinition.randomStartBlocks, if any
         FocusCameraOnFirstStage();   // centre the camera between the first start & end
         // Once unconditionally: the placement ghost asks BoardValidity from the first
         // frame, and a level with no authored layout would otherwise
@@ -215,6 +216,70 @@ public partial class GameFlowManager : MonoBehaviour
 
     // True from level start until the intro has popped the board in (see above).
     bool _routeLinesHeld;
+
+    // LevelDefinition.randomStartBlocks: small random shop shapes in one colour,
+    // dropped between the first start and end points, none touching another block
+    // (so no synergy is formed before the player starts). Its own random stream,
+    // salted off the run seed, so it never shifts the run's shop or wave rolls.
+    void SpawnRandomStartBlocks()
+    {
+        var lv = RunConfig.Mode == GameMode.Level ? RunConfig.Level : null;
+        var pc = PlacementController.Instance;
+        if (lv == null || lv.randomStartBlocks <= 0 || pc == null || pc.blocks == null) return;
+        if (allStarts.Count == 0 || allEnds.Count == 0 || gridSystem == null) return;
+
+        var pool = new List<BlockData>();
+        foreach (var b in pc.blocks)
+            if (b != null && b.cells != null && b.cells.Length > 0 && b.cells.Length <= 4 && !TurretTypes.Is(b.blockType))
+                pool.Add(b);
+        if (pool.Count == 0) return;
+
+        var rng = new Xoshiro256StarStar(runSeed ^ 0x52414E44424CUL);
+        Vector3 s = allStarts[0], e = allEnds[0];
+        Vector3 side = Vector3.Cross(Vector3.up, (e - s).sqrMagnitude > 0.01f ? (e - s).normalized : Vector3.forward);
+        int floor = Mathf.Min(allStarts[0].y, allEnds[0].y);
+        var env = LevelEnvironmentDriver.Current;
+        Color tint = BlockColorPalette.Get(lv.randomStartColor);
+
+        int placed = 0;
+        for (int attempt = 0; attempt < 300 && placed < lv.randomStartBlocks; attempt++)
+        {
+            var data = pool[rng.NextIntInclusive(0, pool.Count - 1)];
+            Vector3 at = Vector3.Lerp(s, e, Mathf.Lerp(0.2f, 0.8f, rng.NextFloat())) + side * rng.NextIntInclusive(-3, 3);
+            var anchor = new Vector3Int(Mathf.RoundToInt(at.x), floor, Mathf.RoundToInt(at.z));
+
+            var cells = new Vector3Int[data.cells.Length];
+            bool ok = true;
+            for (int i = 0; i < cells.Length && ok; i++)
+            {
+                cells[i] = anchor + data.cells[i];
+                ok = !gridSystem.IsOccupied(cells[i]) && !TouchesAnything(cells[i], cells);
+            }
+            if (!ok) continue;
+
+            var ins = pc.PlaceBlockDirect(data, cells, Quaternion.identity, tint, lv.randomStartColor);
+            if (ins == null) continue;
+            ins.locked = true;   // level furniture, like the authored layout
+            ins.age = env != null ? env.prebuiltAge : 0;
+            ResourceManager.Instance?.OnBlockPlaced(data.blockType);
+            if (ins.visualObject != null) startingLayoutVisuals.Add(ins.visualObject);
+            placed++;
+        }
+        if (placed > 0) EvaluateGrid();
+    }
+
+    // A face neighbour of `cell` that's occupied and isn't part of the same piece.
+    bool TouchesAnything(Vector3Int cell, Vector3Int[] own)
+    {
+        foreach (var d in new[] { Vector3Int.right, Vector3Int.left, Vector3Int.up, Vector3Int.down,
+                                  new Vector3Int(0, 0, 1), new Vector3Int(0, 0, -1) })
+        {
+            var n = cell + d;
+            if (System.Array.IndexOf(own, n) >= 0) continue;
+            if (gridSystem.IsOccupied(n)) return true;
+        }
+        return false;
+    }
 
     // Populated by SpawnStartingLayout(); IntroDirector reads this to pop the pre-built
     // blocks in alongside the start/end endpoints once the intro finishes, instead of

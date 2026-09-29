@@ -13,7 +13,9 @@ public static class GameSettings
     // ── Display ──
     public static bool Fullscreen = true;
     public static bool VSync      = true;
-    public static int  QualityLevel;                 // index into QualitySettings.names
+    public static int  QualityLevel;                 // index into QualitySettings.names — now follows Graphics
+    // The graphics preset (see GraphicsQuality). Picks the quality level itself.
+    public static GraphicsQuality.Tier Graphics = GraphicsQuality.Tier.Ultra;
     public static int  FrameCap   = 0;               // 0 = uncapped
 
     // ── Controls ──
@@ -103,6 +105,9 @@ public static class GameSettings
         Fullscreen   = PlayerPrefs.GetInt("set.fullscreen", Fullscreen ? 1 : 0) == 1;
         VSync        = PlayerPrefs.GetInt("set.vsync",      VSync ? 1 : 0) == 1;
         QualityLevel = PlayerPrefs.GetInt("set.quality",    QualitySettings.GetQualityLevel());
+        // No saved preset yet: start from what this machine can likely carry.
+        Graphics = (GraphicsQuality.Tier)Mathf.Clamp(
+            PlayerPrefs.GetInt("set.gfx", (int)GraphicsQuality.Recommended()), 0, GraphicsQuality.Names.Length - 1);
         FrameCap     = PlayerPrefs.GetInt("set.framecap",   FrameCap);
 
         CameraPanSpeed  = PlayerPrefs.GetFloat("set.panspeed", CameraPanSpeed);
@@ -124,6 +129,7 @@ public static class GameSettings
         PlayerPrefs.SetInt("set.fullscreen", Fullscreen ? 1 : 0);
         PlayerPrefs.SetInt("set.vsync",      VSync ? 1 : 0);
         PlayerPrefs.SetInt("set.quality",    QualityLevel);
+        PlayerPrefs.SetInt("set.gfx",        (int)Graphics);
         PlayerPrefs.SetInt("set.framecap",   FrameCap);
         PlayerPrefs.SetFloat("set.panspeed", CameraPanSpeed);
         PlayerPrefs.SetFloat("set.looksens", LookSensitivity);
@@ -137,10 +143,12 @@ public static class GameSettings
 
     public static void ApplyDisplay()
     {
-        Screen.fullScreen          = Fullscreen;
+        Screen.fullScreen = Fullscreen;
+        // The preset first: switching quality level brings that level's own
+        // v-sync setting with it, which the player's choice then overrides.
+        GraphicsQuality.Set(Graphics);
+        QualityLevel = QualitySettings.GetQualityLevel();
         QualitySettings.vSyncCount = VSync ? 1 : 0;
-        if (QualityLevel >= 0 && QualityLevel < QualitySettings.names.Length)
-            QualitySettings.SetQualityLevel(QualityLevel, true);
         // With vSync on, targetFrameRate is ignored; only meaningful when vSync off.
         Application.targetFrameRate = FrameCap <= 0 ? -1 : FrameCap;
     }
@@ -178,6 +186,7 @@ public static class GameSettings
         MasterVolume = 0.9f; MusicVolume = 0.8f; SfxVolume = 0.9f;
         Fullscreen = true; VSync = true;
         QualityLevel = QualitySettings.GetQualityLevel(); FrameCap = 0;
+        Graphics = GraphicsQuality.Recommended();
         CameraPanSpeed = 8f; LookSensitivity = 120f;
         SmoothBlockEditing = true;
         FreeMove = true;

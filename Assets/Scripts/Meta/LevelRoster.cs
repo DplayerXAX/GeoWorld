@@ -75,6 +75,15 @@ public static class LevelRoster
                 $"Sprouts each round{when} next to your build and grants adjacent turrets a free, reversible upgrade while they stay touching it."));
         }
 
+        var boss = lv.GetMechanic<BossMechanicConfig>();
+        if (boss != null)
+        {
+            string when = boss.startWave > 1 ? $" from wave {boss.startWave}" : "";
+            list.Add(new MechanicEntry(boss.displayName,
+                $"A boss perches on your blocks{when} and stays until destroyed. It moves to a new perch every round (the next one is marked), "
+              + "and its laser switches off a synergy it can see — put blocks in the way to shield them, and turrets where it lands."));
+        }
+
         var destruction = lv.GetMechanic<RandomBlockDestructionMechanicConfig>();
         if (destruction != null)
         {

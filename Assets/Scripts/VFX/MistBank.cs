@@ -281,7 +281,7 @@ public class MistBank : MonoBehaviour
         _mat.SetFloat("_Density", s.density);
         _mat.SetFloat("_Scatter", s.scatter);
         _mat.SetFloat("_Anisotropy", s.anisotropy);
-        _mat.SetFloat("_Steps", Mathf.Clamp(s.steps, 6, 48));
+        _mat.SetFloat("_Steps", Mathf.Clamp(Mathf.RoundToInt(s.steps * GraphicsQuality.FogSteps), 6, 48));
         // Noise is sampled in WORLD space, so without this every bank on the map
         // would show the identical cloud pattern wherever it overlapped.
         var rng = new System.Random(seed);

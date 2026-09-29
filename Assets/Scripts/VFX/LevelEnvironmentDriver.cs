@@ -201,6 +201,9 @@ public partial class LevelEnvironmentDriver : MonoBehaviour
     // ── Sky ──────────────────────────────────────────────────────────────────
     void ApplySky()
     {
+        if (_env.paintedSky && ApplyPaintedSky()) return;
+        if (_env.useLandscapeSky && ApplyLandscapeSky()) return;
+
         bool density = !Mathf.Approximately(_env.skyHazeDensity, 1f);
         if (!_env.overrideSky && !density) return;
 
@@ -226,6 +229,59 @@ public partial class LevelEnvironmentDriver : MonoBehaviour
         }
         if (density) sky.SetFloat("_FogDensity", sky.GetFloat("_FogDensity") * _env.skyHazeDensity);
         DynamicGI.UpdateEnvironment();   // ambient light comes from the sky
+    }
+
+    // The plain landscape sky in place of the scene's own (put back in OnDestroy
+    // through the same _skyOriginal / _skyClone pair).
+    bool ApplyLandscapeSky()
+    {
+        var sh = Shader.Find("GeoWorld/LandscapeSky");
+        if (sh == null) { Debug.LogWarning("[Environment] GeoWorld/LandscapeSky shader not found — keeping the default sky."); return false; }
+        _skyOriginal = RenderSettings.skybox;
+        _skyClone = new Material(sh) { name = "LandscapeSky (runtime)" };
+        _skyClone.SetColor("_Zenith",     _env.skyZenith);
+        _skyClone.SetColor("_Horizon",    _env.skyHorizon);
+        _skyClone.SetColor("_Band",       _env.skyHaze);
+        _skyClone.SetColor("_Ground",     _env.skyGround);
+        _skyClone.SetColor("_Sun",        _env.skySun);
+        _skyClone.SetColor("_Cloud",      _env.skyCloud);
+        _skyClone.SetColor("_CloudShade", _env.skyCloudShade);
+        _skyClone.SetFloat("_Cover",      _env.skyCloudCover);
+        RenderSettings.skybox = _skyClone;
+        DynamicGI.UpdateEnvironment();   // ambient light comes from the sky
+        return true;
+    }
+
+    // The painted sky in place of the scene's own. BackgroundReactor follows it
+    // (it drives whatever runtime sky is on screen), so combat, clearing and
+    // damage still move it.
+    bool ApplyPaintedSky()
+    {
+        var sh = Shader.Find("GeoWorld/PaintedSky");
+        if (sh == null) { Debug.LogWarning("[Environment] GeoWorld/PaintedSky shader not found — keeping the default sky."); return false; }
+        _skyOriginal = RenderSettings.skybox;
+        _skyClone = new Material(sh) { name = "PaintedSky (runtime)" };
+        _skyClone.SetColor("_Deep",   _env.paintDeep);
+        _skyClone.SetColor("_Blue",   _env.paintBlue);
+        _skyClone.SetColor("_Teal",   _env.paintTeal);
+        _skyClone.SetColor("_Cream",  _env.paintCream);
+        _skyClone.SetColor("_Warm",   _env.paintWarm);
+        _skyClone.SetColor("_Hot",    _env.paintHot);
+        _skyClone.SetColor("_Ground", _env.skyGround);
+        _skyClone.SetColor("_Sun",    _env.skySun);
+        _skyClone.SetFloat("_StrokeScale", _env.paintStrokeScale);
+        _skyClone.SetFloat("_Swirl",       _env.paintSwirl);
+        _skyClone.SetFloat("_Warmth",      _env.paintWarmth);
+        _skyClone.SetFloat("_Layers",      GraphicsQuality.SkyLayers);
+        GraphicsQuality.Changed += RefreshSkyQuality;
+        RenderSettings.skybox = _skyClone;
+        DynamicGI.UpdateEnvironment();   // ambient light comes from the sky
+        return true;
+    }
+
+    void RefreshSkyQuality()
+    {
+        if (_skyClone != null && _skyClone.HasProperty("_Layers")) _skyClone.SetFloat("_Layers", GraphicsQuality.SkyLayers);
     }
 
     // ── Board ────────────────────────────────────────────────────────────────
@@ -338,6 +394,7 @@ public partial class LevelEnvironmentDriver : MonoBehaviour
 
     void OnDestroy()
     {
+        GraphicsQuality.Changed -= RefreshSkyQuality;
         if (_synergy != null) _synergy.OnTierChanged -= OnSynergyTier;
         if (_sun != null)
         {
@@ -345,7 +402,7 @@ public partial class LevelEnvironmentDriver : MonoBehaviour
             _sun.color     = _sunColor0;
             _sun.transform.rotation = _sunRot0;
         }
-        if (_skyOriginal != null && RenderSettings.skybox == _skyClone) RenderSettings.skybox = _skyOriginal;
+        if (_skyClone != null && RenderSettings.skybox == _skyClone) RenderSettings.skybox = _skyOriginal;
         if (_skyClone != null) Destroy(_skyClone);
         if (_env != null && _env.ambience != null && _env.ambience.IsValid()) _env.ambience.Stop(gameObject);
         DestroyParticleMaterials();

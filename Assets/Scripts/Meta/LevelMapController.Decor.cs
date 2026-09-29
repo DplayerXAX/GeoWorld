@@ -37,6 +37,15 @@ public class MapDecorConfig
     // a BUILT site, and a workshop or an observatory standing on lumpy, half-missing
     // ground reads as broken rather than as characterful. Those two knobs live on
     // AbundanceFarmConfig, and BuildDecor gives everything else a complete flat slab.
+    [Header("Outline")]
+    [Tooltip("0 = the full footprint rectangle. Higher = an organic outline inside it — the edge wanders in and out and the corners round off — so the plot sits on the map like ground, not like a tile.")]
+    [Range(0f, 1f)] public float organic = 0.45f;
+    [Tooltip("Varies the outline's wander, so two plots don't share a shape.")]
+    public int outlineSeed = 1;
+    [Tooltip("Cells of solid rock under the plot, below origin.y. A plot raised above its neighbours then stands on a cliff instead of floating (and can be climbed onto). 0 = none.")]
+    [Range(0, 12)] public int foundation = 0;
+    public Color foundationColor = new Color(0.46f, 0.43f, 0.40f);
+
     [Tooltip("Ground colour for this plot.")]
     public Color soilColor = new Color(0.34f, 0.26f, 0.18f);
     [Tooltip("±brightness jitter per ground block.")]
@@ -87,7 +96,69 @@ public class MapDecorConfig
     // 1 everywhere by default, so the workshop and the observatory stay the complete
     // slabs they are meant to be. The farm has its own coverage rules and does not
     // route through this.
-    public virtual float CoverageAt(Vector2Int column) => 1f;
+    public virtual float CoverageAt(Vector2Int column) => InOutline(column) ? 1f : 0f;
+
+    // Extra ground, in cells above origin.y, for one column — a volcano's cone,
+    // dunes, a mesa. Every column is filled from origin.y up to its top, so a raised
+    // column never floats. 0 everywhere by default: a flat slab.
+    public virtual int HeightAt(Vector2Int column) => 0;
+
+    // Footprint after rotationSteps (odd steps swap width and depth).
+    public Vector2Int Extent => (rotationSteps & 1) == 1 ? new Vector2Int(size.y, size.x) : size;
+
+    // Position of a column inside the footprint: (-1..1, -1..1) from its middle.
+    public Vector2 Local(Vector2Int column)
+    {
+        var e = Extent;
+        return new Vector2((column.x - origin.x - (e.x - 1) * 0.5f) / Mathf.Max(0.5f, e.x * 0.5f),
+                           (column.y - origin.z - (e.y - 1) * 0.5f) / Mathf.Max(0.5f, e.y * 0.5f));
+    }
+
+    // Inside the organic outline? Distance from the middle, measured from square
+    // (organic 0: every column in) toward round (organic 1), against a radius that
+    // wanders with angle — three sine harmonics, their phases from outlineSeed.
+    public bool InOutline(Vector2Int column)
+    {
+        if (organic <= 0.001f) return true;
+        var p = Local(column);
+        float a  = Mathf.Atan2(p.y, p.x);
+        float sq = Mathf.Max(Mathf.Abs(p.x), Mathf.Abs(p.y));
+        float d  = Mathf.Lerp(sq, p.magnitude, organic);
+        float s  = outlineSeed * 1.618f;
+        float r  = 1f - organic * 0.08f
+                 + organic * (0.13f * Mathf.Sin(a * 2f + s) + 0.09f * Mathf.Sin(a * 3f + s * 2.3f) + 0.05f * Mathf.Sin(a * 5f + s * 4.1f));
+        return d <= r;
+    }
+
+    // The column at a footprint-local position — the inverse of Local.
+    public Vector2Int ColumnAt(Vector2 local)
+    {
+        var e = Extent;
+        return new Vector2Int(origin.x + Mathf.RoundToInt((e.x - 1) * 0.5f + local.x * e.x * 0.5f),
+                              origin.z + Mathf.RoundToInt((e.y - 1) * 0.5f + local.y * e.y * 0.5f));
+    }
+
+    // Colour of one ground block. A column's blocks can differ — rock strata down
+    // a cone, sand under a grass cap — so the ground pass asks per cell. Defaults
+    // to the column's SoilAt.
+    public virtual Color CellColor(Vector3Int cell) => SoilAt(new Vector2Int(cell.x, cell.z));
+
+    protected static Color Shade(Color c, float k) => new Color(c.r * k, c.g * k, c.b * k, c.a);
+
+    // Stable per-column noise, 0..1.
+    protected static float Noise01(int x, int z)
+    {
+        unchecked
+        {
+            int h = x * 73856093 ^ z * 83492791;
+            h = (h ^ 61) ^ (h >> 16);
+            h += h << 3;
+            h ^= h >> 4;
+            h *= 0x27d4eb2d;
+            h ^= h >> 15;
+            return (h & 0xffffff) / (float)0xffffff;
+        }
+    }
 }
 
 // Bundled into one field (LevelMapController.decor) instead of ~30 flat fields,
@@ -162,6 +233,19 @@ public partial class LevelMapController : MonoBehaviour
     public ObservatoryConfig observatory = new();
     [Header("Harmony grove")]
     public HarmonyGroveConfig grove = new();
+    [Header("Volcano (chapter 2)")]
+    public VolcanoConfig volcano = new();
+    [Header("Desert (chapter 3)")]
+    public DesertConfig desert = new();
+    [Header("Ocean (chapter 3)")]
+    public OceanConfig ocean = new();
+
+    [Tooltip("Dev: log how long each decor plot takes to build, to find what makes the map slow to load.")]
+    public bool logBuildTimes = false;
+
+    [Header("Map preview")]
+    [Tooltip("Dev: build EVERY region as if its gate were cleared — the whole world at once, no reveal cutscene. For looking at the map's full layout; leave off for play.")]
+    public bool previewAllRegions = false;
 
     // Every plot in build order. Each is independent: its own gate level, its own
     // reveal. Add a theme here and the rest of this file already handles it.
@@ -170,6 +254,9 @@ public partial class LevelMapController : MonoBehaviour
         yield return decor;
         yield return workshop;
         yield return observatory;
+        yield return volcano;
+        yield return desert;
+        yield return ocean;
         // LAST: the wood spills past its own plot, and its scatter checks what is
         // already standing before it plants anything. Built first it would have had
         // nothing to check against and would happily grow into the farm.
@@ -302,19 +389,36 @@ public partial class LevelMapController : MonoBehaviour
     List<DecorPlot> TryBuildDecors()
     {
         var pending = new List<DecorPlot>();
-        if (gridSystem == null || cubePrefab == null) return pending;
+        foreach (var cfg in AllDecorConfigs()) TryBuildDecor(cfg, pending);
+        return pending;
+    }
 
+    // The same, a plot a frame: the map's first build, under the loading page.
+    IEnumerator BuildDecorsSliced(List<DecorPlot> pending)
+    {
         foreach (var cfg in AllDecorConfigs())
         {
-            if (cfg == null || !cfg.enabled) continue;
-            if (_plots.Exists(p => p.cfg == cfg)) continue;   // already standing
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            if (!TryBuildDecor(cfg, pending)) continue;
+            if (logBuildTimes) Debug.Log($"[LevelMap] {cfg.RootName}: {sw.ElapsedMilliseconds} ms");
+            yield return null;
+        }
+    }
 
-            bool gated   = !string.IsNullOrEmpty(cfg.gateLevelId);
+    // One plot, if it is unlocked and not standing yet. True if it was built.
+    bool TryBuildDecor(MapDecorConfig cfg, List<DecorPlot> pending)
+    {
+        if (gridSystem == null || cubePrefab == null) return false;
+        {
+            if (cfg == null || !cfg.enabled) return false;
+            if (_plots.Exists(p => p.cfg == cfg)) return false;   // already standing
+
+            bool gated   = !string.IsNullOrEmpty(cfg.gateLevelId) && !previewAllRegions;
             bool cleared = !gated || (SaveSystem.Profile.GetRecord(cfg.gateLevelId)?.cleared ?? false);
             // A farm set to barrenBeforeGate stands from the start, withered.
             var  farmCfg     = cfg as AbundanceFarmConfig;
             bool barrenFirst = gated && farmCfg != null && farmCfg.barrenBeforeGate && BarrenUnlocked(farmCfg);
-            if (!cleared && !barrenFirst) continue;
+            if (!cleared && !barrenFirst) return false;
 
             // Only the visit right after first clear plays the cutscene; later
             // revisits just rebuild the plot instantly. Read from the copy
@@ -335,11 +439,11 @@ public partial class LevelMapController : MonoBehaviour
                             && _growthLevelId == farmCfg.barrenAfterLevelId;
 
             var plot = BuildDecor(cfg, (growNow && !barren) || barrenRises, barren);
-            if (plot == null) continue;
+            if (plot == null) return false;
             plot.reviveNow = barren && growNow;
             if (growNow || barrenRises) pending.Add(plot);
+            return true;
         }
-        return pending;
     }
 
     // `grow`: sink it, to rise in the cutscene. `barren`: build the farm withered
@@ -347,6 +451,8 @@ public partial class LevelMapController : MonoBehaviour
     bool BarrenUnlocked(AbundanceFarmConfig f) =>
         string.IsNullOrEmpty(f.barrenAfterLevelId)
         || (SaveSystem.Profile.GetRecord(f.barrenAfterLevelId)?.cleared ?? false);
+
+    static readonly Vector2Int[] Side4 = { Vector2Int.right, Vector2Int.left, Vector2Int.up, Vector2Int.down };
 
     DecorPlot BuildDecor(MapDecorConfig cfg, bool grow, bool barren = false)
     {
@@ -386,11 +492,17 @@ public partial class LevelMapController : MonoBehaviour
             bool gamePedestal = wantGame && worldCol == gameCol;
             bool pedestal = npcPedestal || gamePedestal;
 
+            // Ground already standing here (a level block, an earlier plot, the
+            // player's own blocks) wins: plots can be laid out overlapping and the
+            // later one simply gives way, instead of two stacks of cubes fighting.
+            if (_columnTop.ContainsKey(worldCol)) continue;
+
             var kind = farm != null ? RowKindAt(iz) : RowKind.Flower;
             // Lanes are deliberately MORE likely to be covered — they're the
             // farm's walkways, and a frayed walkway just looks like a mistake.
             // Non-farm plots are complete: coverage 1, no fray. See MapDecorConfig.
             float coverageHere = farm == null ? cfg.CoverageAt(worldCol)
+                : !farm.InOutline(worldCol) ? 0f
                 : kind == RowKind.Lane ? Mathf.Clamp01(farm.coverage + farm.pathRowExtraCoverage)
                 : farm.coverage;
 
@@ -405,12 +517,13 @@ public partial class LevelMapController : MonoBehaviour
                 : 0;
             // The minigame's own pedestal stands taller than the NPC's — the well
             // reads better perched a bit above the rest of the field.
+            lift = Mathf.Max(lift, cfg.HeightAt(worldCol));
             if (npcPedestal)  lift = Mathf.Max(lift, 1);
             if (gamePedestal) lift = Mathf.Max(lift, cfg.minigamePedestalLift);
 
             coveredCols.Add(worldCol);
             colKind[worldCol] = kind;
-            for (int y = 0; y <= lift; y++)
+            for (int y = -cfg.foundation; y <= lift; y++)
             {
                 var c = new Vector3Int(worldCol.x, cfg.origin.y + y, worldCol.y);
                 cells.Add(c);
@@ -444,18 +557,33 @@ public partial class LevelMapController : MonoBehaviour
         var br = plot.root.AddComponent<BlockRenderer>();
         br.cubePrefab = cubePrefab;
         var cellsArr = cells.ToArray();
-        br.Render(Vector3Int.zero, cellsArr, cs, gridSystem);
+
+        // A cube only where one can be seen: each column's top, and any cell with
+        // open air beside it. The hidden rest (a volcano's core, the inside of a
+        // mesa, a foundation's middle) is still ground, since walkability reads
+        // every cell, but gets no GameObject. On a tall plot that is most of them.
+        var shown = new List<Vector3Int>(cells.Count);
+        foreach (var c in cells)
+        {
+            var col = new Vector2Int(c.x, c.z);
+            bool open = colTop[col].y == c.y;
+            for (int s = 0; s < 4 && !open; s++)
+                open = !colTop.TryGetValue(col + Side4[s], out var nt) || nt.y < c.y;
+            if (open) shown.Add(c);
+        }
+        var shownArr = shown.ToArray();
+        br.Render(Vector3Int.zero, shownArr, cs, gridSystem);
 
         // BlockRenderer instantiates one cube per cell in array order, so the Nth
-        // renderer is cells[N]. Read the renderers BEFORE anything else is
+        // renderer is shownArr[N]. Read the renderers BEFORE anything else is
         // parented under the root, so later props can't shift the mapping.
         var soilRenderers = plot.root.GetComponentsInChildren<Renderer>();
-        for (int i = 0; i < soilRenderers.Length && i < cellsArr.Length; i++)
+        for (int i = 0; i < soilRenderers.Length && i < shownArr.Length; i++)
         {
-            var c = cellsArr[i];
+            var c = shownArr[i];
             float k = Mathf.Lerp(1f - cfg.soilJitter, 1f + cfg.soilJitter,
                                   Hash01(DecorHash(c.x, c.z) ^ (c.y * 92821)));
-            var alive = Tint(cfg.SoilAt(new Vector2Int(c.x, c.z)), k);
+            var alive = Tint(c.y < cfg.origin.y ? cfg.foundationColor : cfg.CellColor(c), k);
             MpbColor.Set(soilRenderers[i], alive);
             if (_revive != null) ReviveTint(soilRenderers[i], alive, Tint(farm.barrenSoilColor, k));
         }
@@ -504,6 +632,7 @@ public partial class LevelMapController : MonoBehaviour
             foreach (var r in plot.residents) if (r != null) r.SetActive(false);
         }
 
+        QualityPass(plot.root);
         _plots.Add(plot);
         return plot;
     }
@@ -544,6 +673,18 @@ public partial class LevelMapController : MonoBehaviour
 
             case HarmonyGroveConfig g:
                 BuildHarmonyGrove(g, coveredCols, colTop, ext, cs);
+                break;
+
+            case VolcanoConfig v:
+                BuildVolcano(v, coveredCols, colTop, ext, cs);
+                break;
+
+            case DesertConfig ds:
+                BuildDesert(ds, coveredCols, colTop, ext, cs);
+                break;
+
+            case OceanConfig oc:
+                BuildOcean(oc, coveredCols, colTop, ext, cs);
                 break;
 
         }
@@ -754,7 +895,7 @@ public partial class LevelMapController : MonoBehaviour
 
         patch.Grow(tops.ToArray(), DecorPetalPalette(), decor.accentColor,
                    maxFlowersPerCell: 3, flowerSizeWorld: 0.30f * cs,
-                   scatterWorld: 0.28f * cs, maxFlowers: decor.maxFlowers);
+                   scatterWorld: 0.28f * cs, maxFlowers: GraphicsQuality.Scaled(decor.maxFlowers, 20));
     }
 
     // Crop beds: wheat sown in a straight line ACROSS each cell (along X, the row
@@ -764,6 +905,8 @@ public partial class LevelMapController : MonoBehaviour
     // component per stalk.
     void BuildCrops(List<Vector3> tops, float cs)
     {
+        // Fewer stalks a cell on the lower graphics presets (each is its own object).
+        int stalks = GraphicsQuality.Scaled(decor.stalksPerCell, 1);
         if (decor.stalksPerCell <= 0) return;
 
         var root = new GameObject("CropBeds");
@@ -779,11 +922,11 @@ public partial class LevelMapController : MonoBehaviour
         for (int t = 0; t < tops.Count; t++)
         {
             Vector3 top = tops[t];
-            for (int s = 0; s < decor.stalksPerCell; s++)
+            for (int s = 0; s < stalks; s++)
             {
                 // Evenly spaced across the cell, with a hair of jitter so the
                 // line is hand-sown, not machine-printed.
-                float u  = (s + 0.5f) / decor.stalksPerCell - 0.5f;
+                float u  = (s + 0.5f) / stalks - 0.5f;
                 int   hs = DecorHash(t * 31 + s, s * 17);
                 Vector3 pos = top
                             + along  * (u * cs * 0.82f + (Hash01(hs) - 0.5f) * 0.12f * cs)
@@ -1099,6 +1242,8 @@ public partial class LevelMapController : MonoBehaviour
         _skipBakedLoad = true;
         _wheatMesh = _sailMesh = _picketMesh = _railMesh = _towerMesh = _towerCapMesh = null;
         _domeMesh  = _ringMesh = _gableMesh  = null;
+        _puffMesh  = null;
+        _solids.Clear();
 
         var made = new[]
         {
@@ -1111,12 +1256,22 @@ public partial class LevelMapController : MonoBehaviour
             ("DecorDome",    DomeMesh()),
             ("DecorRing",    RingMesh()),
             ("DecorGable",   GableMesh()),
+            ("DecorPuff",    PuffMesh()),
+            ("DecorDrum",    DrumMesh()),
+            ("DecorCone",    ConeMesh()),
+            ("DecorPyramid", PyramidMesh()),
+            ("DecorHex",     HexMesh()),
+            ("DecorHopper",  HopperMesh()),
+            ("DecorObelisk", ObeliskMesh()),
+            ("DecorBeam",    BeamMesh()),
         };
 
         _skipBakedLoad = false;
         // Drop the in-memory copies so the next access loads the saved assets.
         _wheatMesh = _sailMesh = _picketMesh = _railMesh = _towerMesh = _towerCapMesh = null;
         _domeMesh  = _ringMesh = _gableMesh  = null;
+        _puffMesh  = null;
+        _solids.Clear();
         return made;
     }
 #endif

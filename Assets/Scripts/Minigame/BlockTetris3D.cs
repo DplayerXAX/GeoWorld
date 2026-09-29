@@ -653,20 +653,51 @@ public class BlockTetris3D : MonoBehaviour
         _ghostCubes.Clear();
     }
 
-    // How far below the play deck the field lies. Large enough that fog fully
-    // swallows the pillar before it reaches bottom — the platform has to look
-    // unsupported-past-a-point, not like it's standing on a visible floor far away.
-    const float FieldDrop = 240f;
+    // ═════════════════════════════════════════════════════════════════════════
+    // The well
+    // ═════════════════════════════════════════════════════════════════════════
+    // The playfield IS the Stacking Well from the map, grown to size. A round
+    // stone shaft with water at the bottom; the posts, windlass and little red
+    // roof over it; a rope that lowers each piece down into the shaft. The stack
+    // rises out of the water. It stands in the farm's wheat at dusk, as on the
+    // map, with the windmill turning behind it.
+    //
+    // The shaft is cut away on the camera's side. Stones above the water that
+    // face the camera are hidden, so the stack is always in plain sight with the
+    // far half of the shaft standing behind it like a section drawing. The
+    // foundation below the water stays whole all the way round, so the well still
+    // reads as a solid ring standing on the ground.
 
-    // Depth of the plinth under the playfield. Grows downward from y = 0 — raise it
-    // to make the well look like it's perched on a taller pedestal.
-    const float BaseHeight = 0.5f;
-
-    // Lifts the whole play deck (plinth, posts and every block) inside the well
-    // root. The CAMERA does not follow it — its focus stays anchored to the root —
-    // so this is exactly "move the board up in the viewport", and it exposes more
-    // of the pillar underneath at the same time.
+    // Height of the water (the play deck) above the ground: the well's foundation.
+    // The CAMERA does not follow it — its focus stays anchored to the root — so
+    // this is exactly "move the board up in the viewport".
     const float DeckLift = 2.8f;
+    // Depth of the slab under the water.
+    const float BaseHeight = 0.5f;
+    // Inside radius of the shaft (clears the 4×4 field's corners at 2.83), stone
+    // depth, and stones to a course.
+    const float ShaftRadius = 3.0f;
+    const float StoneDepth  = 0.5f;
+    const int   StonesRound = 16;
+    // How far above the rim the windlass turns.
+    const float WindlassRise = 2.4f;
+
+    static readonly Color StoneColor = new(0.72f, 0.68f, 0.60f);
+    static readonly Color WoodColor  = new(0.52f, 0.37f, 0.23f);
+    static readonly Color RoofColor  = new(0.72f, 0.30f, 0.22f);
+    static readonly Color RopeColor  = new(0.85f, 0.78f, 0.60f);
+    static readonly Color WaterColor = new(0.26f, 0.52f, 0.78f);
+    static readonly Color WheatColor = new(0.86f, 0.66f, 0.26f);
+
+    struct WallStone { public Renderer r; public Vector2 outward; }
+    readonly List<WallStone> _cutaway = new();   // shaft stones above the water: hidden when they face the camera
+    float     _cutYaw = float.NaN, _cutPitch = float.NaN;
+    Transform _rope, _hook, _bucket, _millHub;
+    readonly List<Renderer> _water = new();
+    Vector3   _ropeEnd, _windlass;   // deck space
+
+    static Color Tone(Color c, float k) => new(c.r * k, c.g * k, c.b * k, 1f);
+    static float Jit(int n) => Mathf.Repeat(Mathf.Sin(n * 12.9898f + 4.1414f) * 43758.5453f, 1f);
 
     void BuildWellFrame()
     {
@@ -676,65 +707,314 @@ public class BlockTetris3D : MonoBehaviour
         _root.position = new Vector3(0f, 5000f, 0f);
 
         // Everything that makes up the playfield hangs off this, so one offset
-        // moves plinth, posts and blocks together and they can never drift apart.
-        // The pillar and the far field stay on _root, which is what makes the lift
-        // read as the board rising away from the ground rather than the whole
-        // world sliding.
+        // moves the water and every block together and they can never drift apart.
         _deck = new GameObject("Deck").transform;
         _deck.SetParent(_root, false);
         _deck.localPosition = new Vector3(0f, DeckLift, 0f);
 
-        // The plinth the well stands on. Its TOP FACE is pinned at y = 0 because
-        // that's where cell row 0 rests (CellPos puts row 0's centre at +0.5), so a
-        // taller plinth has to grow DOWNWARD — centre at -BaseHeight/2, never
-        // +BaseHeight/2, or the slab rises into the playfield and swallows the
-        // bottom rows of blocks.
-        var floor = MakeBox("Floor", _deck);
-        floor.transform.localPosition = new Vector3(0f, -BaseHeight * 0.5f, 0f);
-        floor.transform.localScale    = new Vector3(W * Cell, BaseHeight, D * Cell);
-        MpbColor.Set(floor.GetComponent<Renderer>(), GeoPalette.Ink);
-
-        // Corner posts the full height of the well — the only cue for how much
-        // room is left above the stack.
-        for (int i = 0; i < 4; i++)
+        // The well bottom: water over a dark slab. Each is two squares turned 45°
+        // apart, an octagon whose corners tuck into the stones.
+        for (int i = 0; i < 2; i++)
         {
-            float sx = (i & 1) == 0 ? -1f : 1f;
-            float sz = (i & 2) == 0 ? -1f : 1f;
-            var post = MakeBox($"Post{i}", _deck);
-            post.transform.localPosition = new Vector3(sx * W * Cell * 0.5f, H * Cell * 0.5f, sz * D * Cell * 0.5f);
-            post.transform.localScale    = new Vector3(0.09f, H * Cell, 0.09f);
-            // Fence timber, like the farm's own posts — and mid-toned, so it reads
-            // against the dark upper sky AND the lit wheat the lower half crosses.
-            MpbColor.Set(post.GetComponent<Renderer>(), new Color(0.55f, 0.40f, 0.26f));
+            var slab = MakeBox($"Floor{i}", _deck);
+            slab.transform.localPosition = new Vector3(0f, -BaseHeight * 0.5f - 0.06f, 0f);
+            slab.transform.localRotation = Quaternion.Euler(0f, i * 45f, 0f);
+            slab.transform.localScale    = new Vector3(ShaftRadius * 2f, BaseHeight, ShaftRadius * 2f);
+            MpbColor.Set(slab.GetComponent<Renderer>(), GeoPalette.Ink);
+
+            var water = MakeBox($"Water{i}", _deck);
+            water.transform.localPosition = new Vector3(0f, -0.04f, 0f);
+            water.transform.localRotation = Quaternion.Euler(0f, i * 45f, 0f);
+            water.transform.localScale    = new Vector3(ShaftRadius * 2f, 0.04f, ShaftRadius * 2f);
+            var wr = water.GetComponent<Renderer>();
+            MpbColor.Set(wr, WaterColor);
+            _water.Add(wr);
         }
 
-        BuildFloatingSupport();
+        // The shaft: courses of stones from the ground to the rim, every other
+        // course offset half a stone, each stone a little off in size and shade.
+        float rimY    = DeckLift + H * Cell;                       // root space
+        float rc      = ShaftRadius + StoneDepth * 0.5f;
+        float stoneW  = 2f * Mathf.PI * rc / StonesRound;
+        int   courses = Mathf.CeilToInt(rimY);
+        float courseH = rimY / courses;
+        for (int k = 0; k < courses; k++)
+            for (int i = 0; i < StonesRound; i++)
+            {
+                float a = (i + (k & 1) * 0.5f) / StonesRound * Mathf.PI * 2f;
+                var outward = new Vector2(Mathf.Cos(a), Mathf.Sin(a));
+                float j = Jit(k * 31 + i);
+                var st = MakeBox($"Stone{k}_{i}", _root);
+                st.transform.localPosition = new Vector3(outward.x * rc, courseH * (k + 0.5f), outward.y * rc);
+                st.transform.localRotation = Quaternion.Euler(0f, -a * Mathf.Rad2Deg, 0f);   // local X points outward
+                st.transform.localScale    = new Vector3(StoneDepth * (0.95f + 0.1f * j), courseH * 0.93f, stoneW * (0.9f + 0.06f * j));
+                var r = st.GetComponent<Renderer>();
+                MpbColor.Set(r, Tone(StoneColor, 0.84f + 0.24f * j));
+                // Above the water a stone can come between the camera and the stack.
+                if (courseH * (k + 1) > DeckLift + 0.2f) _cutaway.Add(new WallStone { r = r, outward = outward });
+            }
+
+        // Coping round the rim.
+        for (int i = 0; i < StonesRound; i++)
+        {
+            float a = (i + 0.25f) / StonesRound * Mathf.PI * 2f;
+            var outward = new Vector2(Mathf.Cos(a), Mathf.Sin(a));
+            var cap = MakeBox($"Coping{i}", _root);
+            cap.transform.localPosition = new Vector3(outward.x * rc, rimY + 0.14f, outward.y * rc);
+            cap.transform.localRotation = Quaternion.Euler(0f, -a * Mathf.Rad2Deg, 0f);
+            cap.transform.localScale    = new Vector3(StoneDepth + 0.25f, 0.28f, stoneW * 0.98f);
+            var r = cap.GetComponent<Renderer>();
+            MpbColor.Set(r, Tone(StoneColor, 0.78f));
+            _cutaway.Add(new WallStone { r = r, outward = outward });
+        }
+
+        BuildWellHouse(rimY + 0.28f, rc);
+        BuildFarmyard();
     }
 
-    // Sells "high in the air" with actual geometry, which a skybox can't: a
-    // tapering pillar dropping from the well's underside, and a patch of field far
-    // below it — both real meshes, so they get genuine perspective/fog falloff as
-    // the camera orbits, unlike the skybox's infinite, parallax-free backdrop.
-    void BuildFloatingSupport()
+    // Posts either side of the shaft, the windlass across them with its rope drum
+    // and crank, and the red gable roof over it all. Then the rope itself, which
+    // lowers each piece into the well (see UpdateRope).
+    void BuildWellHouse(float topY, float rc)
     {
-        // Hangs from the plinth's UNDERSIDE down to the field. Starting it at y = 0
-        // instead put its top face exactly coplanar with the plinth's top face, so
-        // the pillar's cross-section z-fought with the playfield the blocks land on.
-        // Measured in ROOT space, so it stretches to meet the deck wherever
-        // DeckLift puts it — the pillar grows as the board rises.
-        float pillarTop = DeckLift - BaseHeight;
-        float pillarLen = FieldDrop + pillarTop;
-        var pillar = MakeBox("Pillar", _root);
-        pillar.transform.localPosition = new Vector3(0f, pillarTop - pillarLen * 0.5f, 0f);
-        // Slender rather than tapered — a real taper would need its own mesh, and
-        // fog hides the lower two-thirds anyway.
-        pillar.transform.localScale = new Vector3(Cell * 0.55f, pillarLen, Cell * 0.55f);
-        MpbColor.Set(pillar.GetComponent<Renderer>(), new Color(0.55f, 0.40f, 0.26f));
+        float postH = WindlassRise + 1.0f;
+        for (int side = -1; side <= 1; side += 2)
+        {
+            var post = MakeBox($"Post{side}", _root);
+            post.transform.localPosition = new Vector3(side * rc, topY + postH * 0.5f, 0f);
+            post.transform.localScale    = new Vector3(0.26f, postH, 0.26f);
+            MpbColor.Set(post.GetComponent<Renderer>(), WoodColor);
+        }
 
-        var field = MakeBox("FieldFarBelow", _root);
-        field.transform.localPosition = new Vector3(0f, -FieldDrop - 1f, 0f);
-        field.transform.localScale    = new Vector3(FieldDrop * 1.6f, 2f, FieldDrop * 1.6f);
-        MpbColor.Set(field.GetComponent<Renderer>(), new Color(0.62f, 0.58f, 0.24f));   // decor.cropColor
+        float axleY = topY + WindlassRise;
+        var axle = MakeBox("Windlass", _root);
+        axle.transform.localPosition = new Vector3(0f, axleY, 0f);
+        axle.transform.localScale    = new Vector3(2f * rc + 0.5f, 0.26f, 0.26f);
+        MpbColor.Set(axle.GetComponent<Renderer>(), Tone(WoodColor, 0.85f));
+        var coil = MakeBox("RopeCoil", _root);
+        coil.transform.localPosition = new Vector3(0f, axleY, 0f);
+        coil.transform.localScale    = new Vector3(1.1f, 0.42f, 0.42f);
+        MpbColor.Set(coil.GetComponent<Renderer>(), RopeColor);
+        var arm = MakeBox("CrankArm", _root);
+        arm.transform.localPosition = new Vector3(rc + 0.42f, axleY - 0.3f, 0f);
+        arm.transform.localScale    = new Vector3(0.1f, 0.7f, 0.1f);
+        MpbColor.Set(arm.GetComponent<Renderer>(), GeoPalette.Ink);
+        var grip = MakeBox("CrankGrip", _root);
+        grip.transform.localPosition = new Vector3(rc + 0.42f, axleY - 0.62f, 0.22f);
+        grip.transform.localScale    = new Vector3(0.1f, 0.1f, 0.44f);
+        MpbColor.Set(grip.GetComponent<Renderer>(), Tone(WoodColor, 0.7f));
+
+        float roofY = topY + postH;
+        for (int side = -1; side <= 1; side += 2)
+        {
+            var slab = MakeBox($"Roof{side}", _root);
+            slab.transform.localPosition = new Vector3(0f, roofY + 0.45f, side * 0.75f);
+            slab.transform.localRotation = Quaternion.Euler(side * 32f, 0f, 0f);   // outer edge down: a gable
+            slab.transform.localScale    = new Vector3(2f * rc + 0.9f, 0.12f, 1.9f);
+            MpbColor.Set(slab.GetComponent<Renderer>(), RoofColor);
+        }
+        var ridge = MakeBox("Ridge", _root);
+        ridge.transform.localPosition = new Vector3(0f, roofY + 0.95f, 0f);
+        ridge.transform.localScale    = new Vector3(2f * rc + 1.0f, 0.14f, 0.14f);
+        MpbColor.Set(ridge.GetComponent<Renderer>(), Tone(RoofColor, 0.7f));
+
+        // The rope, in deck space like the pieces it carries.
+        _windlass = new Vector3(0f, axleY - DeckLift, 0f);
+        _rope = MakeBox("Rope", _deck).transform;
+        MpbColor.Set(_rope.GetComponent<Renderer>(), RopeColor);
+        _hook = MakeBox("Hook", _deck).transform;
+        _hook.localScale = new Vector3(0.24f, 0.16f, 0.24f);
+        MpbColor.Set(_hook.GetComponent<Renderer>(), GeoPalette.Ink);
+        _bucket = MakeBox("Bucket", _deck).transform;
+        _bucket.localScale = new Vector3(0.55f, 0.5f, 0.55f);
+        MpbColor.Set(_bucket.GetComponent<Renderer>(), WoodColor);
+        _ropeEnd = _windlass + Vector3.down * 1.5f;
+    }
+
+    // The farm round the well: the field it stands in, a trodden clearing and a
+    // path, a fence, rows of wheat running off into the dusk, and the windmill.
+    void BuildFarmyard()
+    {
+        var ground = MakeBox("Field", _root);
+        ground.transform.localPosition = new Vector3(0f, -0.5f, 0f);
+        ground.transform.localScale    = new Vector3(260f, 1f, 260f);
+        MpbColor.Set(ground.GetComponent<Renderer>(), new Color(0.50f, 0.48f, 0.24f));
+
+        var dirt = new Color(0.46f, 0.35f, 0.23f);
+        for (int i = 0; i < 2; i++)
+        {
+            var clearing = MakeBox($"Clearing{i}", _root);
+            clearing.transform.localPosition = new Vector3(0f, 0.01f, 0f);
+            clearing.transform.localRotation = Quaternion.Euler(0f, i * 45f + 22.5f, 0f);
+            clearing.transform.localScale    = new Vector3(13f, 0.02f, 13f);
+            MpbColor.Set(clearing.GetComponent<Renderer>(), dirt);
+        }
+
+        // Toward the windmill, which stands behind the well from the opening view.
+        var back = Quaternion.Euler(0f, _camYaw, 0f) * Vector3.forward;
+        var path = MakeBox("Path", _root);
+        path.transform.localPosition = back * 22f + Vector3.up * 0.015f;
+        path.transform.localRotation = Quaternion.LookRotation(back);
+        path.transform.localScale    = new Vector3(1.8f, 0.02f, 32f);
+        MpbColor.Set(path.GetComponent<Renderer>(), dirt);
+
+        // Fence round the clearing, a gap where the path leaves.
+        const int posts = 20;
+        const float fr = 6.4f;
+        for (int i = 0; i < posts; i++)
+        {
+            float a = i / (float)posts * Mathf.PI * 2f;
+            var d = new Vector3(Mathf.Cos(a), 0f, Mathf.Sin(a));
+            if (Vector3.Dot(d, back) > 0.97f) continue;
+            var post = MakeBox($"FencePost{i}", _root);
+            post.transform.localPosition = d * fr + Vector3.up * 0.45f;
+            post.transform.localScale    = new Vector3(0.14f, 0.9f, 0.14f);
+            MpbColor.Set(post.GetComponent<Renderer>(), WoodColor);
+
+            float b = (i + 1) / (float)posts * Mathf.PI * 2f;
+            var d2 = new Vector3(Mathf.Cos(b), 0f, Mathf.Sin(b));
+            if (Vector3.Dot(d2, back) > 0.97f) continue;
+            var mid = (d + d2) * 0.5f * fr;
+            var rail = MakeBox($"FenceRail{i}", _root);
+            rail.transform.localPosition = mid + Vector3.up * 0.62f;
+            rail.transform.localRotation = Quaternion.LookRotation(d2 - d);
+            rail.transform.localScale    = new Vector3(0.07f, 0.07f, (d2 - d).magnitude * fr);
+            MpbColor.Set(rail.GetComponent<Renderer>(), Tone(WoodColor, 1.1f));
+        }
+
+        // Wheat in rows, beyond the fence and clear of the path.
+        var right = Vector3.Cross(Vector3.up, back);
+        int n = 0;
+        for (int row = -13; row <= 13; row++)
+        {
+            for (float x = -36f; x < 36f; )
+            {
+                float len = 5f + 7f * Jit(n * 7 + row);
+                float gap = 1.2f + 2.5f * Jit(n * 13 + row + 5);
+                var c = new Vector3(x + len * 0.5f, 0f, row * 2.3f);
+                x += len + gap;
+                n++;
+                // Rows run across the view; nothing inside the fence or on the path.
+                var at = right * c.x + back * c.z;
+                if (at.magnitude < fr + 2.5f + len * 0.5f) continue;
+                if (Mathf.Abs(Vector3.Dot(at, right)) < 2.2f && Vector3.Dot(at, back) > 0f) continue;
+                var w = MakeBox($"Wheat{n}", _root);
+                float h = 0.6f + 0.35f * Jit(n * 3);
+                w.transform.localPosition = at + Vector3.up * (h * 0.5f);
+                w.transform.localRotation = Quaternion.LookRotation(right);
+                w.transform.localScale    = new Vector3(1.3f, h, len);
+                MpbColor.Set(w.GetComponent<Renderer>(), Tone(WheatColor, 0.85f + 0.25f * Jit(n * 5 + 1)));
+            }
+        }
+
+        BuildWindmill(back * 44f + right * -9f, back);
+    }
+
+    // A whitewashed mill on the skyline, sails turning (see LateUpdate).
+    void BuildWindmill(Vector3 at, Vector3 back)
+    {
+        var mill = new GameObject("Windmill").transform;
+        mill.SetParent(_root, false);
+        mill.localPosition = at;
+        mill.localRotation = Quaternion.LookRotation(-back);   // faces the well
+
+        var white = new Color(0.88f, 0.84f, 0.76f);
+        var tower = MakeBox("Tower", mill);
+        tower.transform.localPosition = new Vector3(0f, 4.5f, 0f);
+        tower.transform.localScale    = new Vector3(3.2f, 9f, 3.2f);
+        MpbColor.Set(tower.GetComponent<Renderer>(), white);
+        var upper = MakeBox("Upper", mill);
+        upper.transform.localPosition = new Vector3(0f, 10.2f, 0f);
+        upper.transform.localScale    = new Vector3(2.6f, 2.4f, 2.6f);
+        MpbColor.Set(upper.GetComponent<Renderer>(), Tone(white, 0.95f));
+        for (int side = -1; side <= 1; side += 2)
+        {
+            var slab = MakeBox($"Cap{side}", mill);
+            slab.transform.localPosition = new Vector3(side * 0.8f, 11.9f, 0f);
+            slab.transform.localRotation = Quaternion.Euler(0f, 0f, -side * 38f);
+            slab.transform.localScale    = new Vector3(2.1f, 0.14f, 3.0f);
+            MpbColor.Set(slab.GetComponent<Renderer>(), RoofColor);
+        }
+
+        _millHub = new GameObject("Hub").transform;
+        _millHub.SetParent(mill, false);
+        _millHub.localPosition = new Vector3(0f, 10.4f, 1.5f);
+        for (int k = 0; k < 4; k++)
+        {
+            var arm = new GameObject($"Sail{k}").transform;
+            arm.SetParent(_millHub, false);
+            arm.localRotation = Quaternion.Euler(0f, 0f, k * 90f + 20f);
+            var spar = MakeBox("Spar", arm);
+            spar.transform.localPosition = new Vector3(0f, 3.2f, 0f);
+            spar.transform.localScale    = new Vector3(0.18f, 6.4f, 0.18f);
+            MpbColor.Set(spar.GetComponent<Renderer>(), WoodColor);
+            var sail = MakeBox("Cloth", arm);
+            sail.transform.localPosition = new Vector3(0.6f, 3.8f, 0.05f);
+            sail.transform.localScale    = new Vector3(1.0f, 4.6f, 0.06f);
+            MpbColor.Set(sail.GetComponent<Renderer>(), new Color(0.92f, 0.88f, 0.80f));
+        }
+    }
+
+    void LateUpdate()
+    {
+        UpdateCutaway();
+        UpdateRope();
+        if (_millHub != null) _millHub.Rotate(Vector3.forward, 22f * Time.unscaledDeltaTime, Space.Self);
+
+        // The water shimmers a little.
+        float s = 0.5f + 0.5f * Mathf.Sin(Time.unscaledTime * 1.3f);
+        for (int i = 0; i < _water.Count; i++)
+            if (_water[i] != null) MpbColor.Set(_water[i], Color.Lerp(WaterColor, Tone(WaterColor, 1.18f), (i == 0 ? s : 1f - s) * 0.6f));
+    }
+
+    // Hide the shaft's stones on the camera's side, above the water. Only
+    // re-evaluated when the camera has actually swung round.
+    void UpdateCutaway()
+    {
+        if (_cam == null || _root == null) return;
+        if (_camYaw == _cutYaw && _camPitch == _cutPitch) return;
+        _cutYaw = _camYaw; _cutPitch = _camPitch;
+        var c = _cam.transform.position - _root.position;
+        var toCam = new Vector2(c.x, c.z).normalized;
+        foreach (var st in _cutaway)
+            if (st.r != null) st.r.enabled = Vector2.Dot(st.outward, toCam) < 0.2f;
+    }
+
+    // The rope runs from the windlass down to the piece in play, as if it were
+    // being lowered into the well, with a hook on the end. Between pieces it
+    // winds back up with the empty bucket.
+    void UpdateRope()
+    {
+        if (_rope == null) return;
+        bool carrying = _piece != null && _pieceCubes.Count > 0 && !_gameOver;
+        Vector3 end;
+        if (carrying)
+        {
+            var sum = Vector3.zero;
+            float hi = float.MinValue;
+            int n = 0;
+            foreach (var t in _pieceCubes)
+            {
+                if (t == null) continue;
+                sum += t.localPosition;
+                hi = Mathf.Max(hi, t.localPosition.y);
+                n++;
+            }
+            end = n > 0 ? new Vector3(sum.x / n, hi + Cell * 0.55f, sum.z / n) : _windlass + Vector3.down;
+        }
+        else end = _windlass + Vector3.down * 1.5f;
+
+        _ropeEnd = Vector3.Lerp(_ropeEnd, end, 1f - Mathf.Exp(-18f * Time.unscaledDeltaTime));
+        var d = _ropeEnd - _windlass;
+        float len = Mathf.Max(0.05f, d.magnitude);
+        _rope.localPosition = (_windlass + _ropeEnd) * 0.5f;
+        _rope.localRotation = Quaternion.FromToRotation(Vector3.up, d / len);
+        _rope.localScale    = new Vector3(0.06f, len, 0.06f);
+
+        _hook.localPosition = _ropeEnd;
+        _hook.gameObject.SetActive(carrying);
+        _bucket.localPosition = _ropeEnd + Vector3.down * 0.3f;
+        _bucket.gameObject.SetActive(!carrying);
     }
 
     // Every non-block piece of scenery goes through here, because the material a
@@ -830,8 +1110,10 @@ public class BlockTetris3D : MonoBehaviour
         RenderSettings.fog      = true;
         RenderSettings.fogMode  = FogMode.Linear;
         RenderSettings.fogColor = new Color(0.86f, 0.40f, 0.30f);   // skybox's mid-sky band
-        RenderSettings.fogStartDistance = H * Cell * 3.2f;
-        RenderSettings.fogEndDistance   = FieldDrop * 0.75f;
+        // The farm fades into the dusk: the fence and the near wheat crisp, the
+        // windmill a silhouette.
+        RenderSettings.fogStartDistance = H * Cell * 2f;
+        RenderSettings.fogEndDistance   = H * Cell * 9f;
 
         PlaceCamera();
     }
@@ -908,12 +1190,10 @@ public class BlockTetris3D : MonoBehaviour
     // make the world react to the play: without them the clear happens inside the
     // well and the enormous sky around it stays completely indifferent.
 
-    // Distance band the flock lives in. Far enough to sit on the horizon rather
-    // than beside the well, but inside the fog's useful range: fog runs
-    // 38 → 180 units, so at 55-100 they're 12-45% faded into the sky — reading as
-    // distant without dissolving into it.
-    const float CrowNear = 55f;
-    const float CrowFar  = 100f;
+    // Distance band the flock lives in: out over the wheat, inside the fog's
+    // useful range (24 → 108 units), so they read as distant without dissolving.
+    const float CrowNear = 26f;
+    const float CrowFar  = 55f;
 
     void StartleCrows(int count)
     {
@@ -923,9 +1203,9 @@ public class BlockTetris3D : MonoBehaviour
         {
             float a = Random.Range(0f, Mathf.PI * 2f);
             float r = Random.Range(CrowNear, CrowFar);
-            // Well below eye level, so they come UP past the horizon rather than
+            // Out of the wheat itself, so they come UP past the horizon rather than
             // appearing on it — a bird already at cruising height isn't startled.
-            var start = new Vector3(Mathf.Cos(a) * r, Random.Range(-18f, -4f), Mathf.Sin(a) * r);
+            var start = new Vector3(Mathf.Cos(a) * r, Random.Range(0.4f, 1.6f), Mathf.Sin(a) * r);
 
             var go = new GameObject("Crow");
             go.transform.SetParent(_root, false);

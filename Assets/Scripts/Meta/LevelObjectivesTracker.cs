@@ -173,6 +173,10 @@ public class LevelObjectivesTracker : MonoBehaviour
             case ObjectiveType.UpgradeTurretToLevel:
                 cur = _maxTurretUpgradeLevel;
                 return cur >= tgt ? State.Done : State.Pending;
+            case ObjectiveType.DefeatBoss:
+                tgt = 1;
+                cur = BossController.Defeated ? 1 : 0;
+                return cur >= tgt ? State.Done : State.Pending;
         }
         cur = 0; return State.Pending;
     }

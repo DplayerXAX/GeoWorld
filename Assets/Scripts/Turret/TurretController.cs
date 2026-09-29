@@ -573,12 +573,13 @@ public class TurretController : MonoBehaviour
         Visual.OnTarget(t);
     }
 
-    // ── Debuff field ─────────────────────────────────────────────────────────────
-    // Everything inside the range is cursed for a moment, re-applied every frame, so
-    // an enemy is cursed exactly while it is in the field (plus a short grace, so
+    // ── Prayer field (Mode.Debuff) ───────────────────────────────────────────────
+    // Everything inside the range is marked for a moment, re-applied every frame, so
+    // an enemy is marked exactly while it is in the field (plus a short grace, so
     // one that dies on the edge as it leaves still counts):
-    //   * its heals land at (1 - debuffHealReduction) — see EnemySurfaceUnit.Heal;
-    //   * if it dies cursed, the table gets debuffKillBonus turret currency (once
+    //   * it takes (1 + prayerDamageAmp) damage from everything — see
+    //     EnemySurfaceUnit.TakeDamage;
+    //   * if it dies marked, the table gets debuffKillBonus turret currency (once
     //     per enemy — see OnAnyEnemyDied).
     // No line of sight: it's a field, not a shot.
     const float DebuffGrace = 0.3f;
@@ -591,7 +592,7 @@ public class TurretController : MonoBehaviour
         if (enemies == null) { ReportTarget(null); return; }
 
         var   table = balance != null ? balance : BalanceTable.Active;
-        float mult  = 1f - (table != null ? table.debuffHealReduction : 0.4f);
+        float mult  = 1f + (table != null ? table.prayerDamageAmp : 0.2f);
         float range = EffectiveRange, r2 = range * range, best = float.MaxValue;
         EnemySurfaceUnit nearest = null;
 
@@ -601,7 +602,7 @@ public class TurretController : MonoBehaviour
             if (e == null || e.CurrentHealth <= 0) continue;
             float d = (e.transform.position - Origin).sqrMagnitude;
             if (d > r2) continue;
-            e.ApplyHealDebuff(mult, DebuffGrace);
+            e.ApplyPrayer(mult, DebuffGrace);
             if (d < best) { best = d; nearest = e; }
         }
         ReportTarget(nearest);   // the animator knows when something is in the field
@@ -619,7 +620,7 @@ public class TurretController : MonoBehaviour
     // flag — so overlapping fields pay once, not once per turret.
     static void OnAnyEnemyDied(EnemySurfaceUnit e)
     {
-        if (e == null || !e.InHealDebuff) return;
+        if (e == null || !e.InPrayer) return;
         var table = BalanceTable.Active;
         int bonus = table != null ? table.debuffKillBonus : 1;
         var rm = ResourceManager.Instance;

@@ -1,0 +1,31 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 36b72795da164b628f3f79f4469cbd42, type: 3}
+  m_Name: BossMechanic_1-5
+  m_EditorClassIdentifier: Assembly-CSharp::BossMechanicConfig
+  displayName: The Watcher
+  startWave: 1
+  health: 600
+  size: 2
+  hover: 1.4
+  perchCount: 4
+  teleportEachRound: 1
+  teleportInCombatSeconds: 0
+  laserInterval: 9
+  laserCharge: 1.8
+  laserRange: 30
+  suppressSeconds: 0
+  blockerDestroyed: 0
+  bodyColor: {r: 0.14, g: 0.06, b: 0.2, a: 1}
+  ringColor: {r: 0.62, g: 0.24, b: 0.92, a: 1}
+  eyeColor: {r: 1, g: 0.25, b: 0.3, a: 1}
+  laserColor: {r: 2.2, g: 0.45, b: 0.5, a: 1}

@@ -204,14 +204,19 @@ public partial class LevelMapController : MonoBehaviour
     [Header("Aside test")]
     public DialogueCharacter defaultCharacter;
 
+    // False until Start has finished building the map (it spreads the decor plots
+    // over several frames). Nothing that reads the map runs before then.
+    bool _mapReady;
+
     void Awake()
     {
         Instance = this;
+        LoadingScreen.Hold(this);   // released at the end of Start, once the map is built
         LevelRegistry.Register(database);   // so the multiplayer lobby can resolve level ids
         TextBlip.SetFallback(textBlip, gameObject);   // this scene has no AudioManager to carry it
     }
 
-    void Start()
+    IEnumerator Start()
     {
         // Ambient source is Skybox with a PROCEDURAL skybox and no baked GI. The
         // editor recomputes the ambient probe from it live, but a standalone build
@@ -268,7 +273,11 @@ public partial class LevelMapController : MonoBehaviour
         // Scenery only, so it deliberately runs AFTER connectivity is settled. Returns
         // true exactly once — the very first visit after this field's gate level was
         // cleared — in which case the grow-in cutscene below plays before any dialogue.
-        var decorGrowthPending = TryBuildDecors();
+        // The decor plots are the heavy part: one a frame, so the loading page's
+        // spinner keeps turning while they go up.
+        yield return null;
+        var decorGrowthPending = new List<DecorPlot>();
+        yield return BuildDecorsSliced(decorGrowthPending);
         CollectInteractableSpots();   // after the surface — the spots snap onto it
         SinkRisingRegions();          // after markers and spots are placed at full height — see there
         BuildMist();                  // over everything still hidden, and what is about to rise
@@ -309,6 +318,10 @@ public partial class LevelMapController : MonoBehaviour
             // is the one frame in the whole tutorial that ISN'T pulled back — and
             // it's the one with a dialogue box over it.
             _orbit.FocusOnPoint(PulledBack(_camFocus, entryPullBack));
+            // Arrive on the shot. The rig would otherwise glide in from wherever
+            // it stood in the scene, which read as flying up out of the map and
+            // spinning round, right as the loading page lifted.
+            _orbit.SnapNow();
 
             // Floor: the view can't be panned down under the map into the fog sea.
             // Focus stops at the underside of the lowest block; the camera body a
@@ -352,6 +365,9 @@ public partial class LevelMapController : MonoBehaviour
         // A level was left part-way through — say so once the map has settled.
         if (SaveSystem.Profile.runSaves != null && SaveSystem.Profile.runSaves.Count > 0)
             StartCoroutine(RemindUnfinishedLevel());
+
+        _mapReady = true;
+        LoadingScreen.Release(this);
     }
 
     [Header("Unfinished level reminder")]
@@ -621,6 +637,7 @@ public partial class LevelMapController : MonoBehaviour
     // just because the scene unloads, so stop it explicitly or it bleeds into gameplay.
     void OnDestroy()
     {
+        LoadingScreen.Release(this);
         _activeLoop?.Stop(this.gameObject);
         TextBlip.SetFallback(null, null);   // stops a blip still ringing, and forgets this scene's emitter
     }
@@ -633,6 +650,7 @@ public partial class LevelMapController : MonoBehaviour
 
     void LateUpdate()
     {
+        if (!_mapReady) return;
         // OrbitCamera (if present) owns the transform — we drove it via FocusOnPoint.
         if (!cameraFocus || _orbit != null || !_camReady || _cam == null) return;
         _cam.transform.position = Vector3.Lerp(
@@ -1247,6 +1265,7 @@ public partial class LevelMapController : MonoBehaviour
 
     void Update()
     {
+        if (!_mapReady) return;
         UpdateToast();      // fades independently of build/move state
         UpdateTrayAnim();   // bars keep easing open/closed even mid-transition out of build mode
         UpdatePawnBob();    // same idle up/down float as the level markers
@@ -2408,7 +2427,7 @@ public partial class LevelMapController : MonoBehaviour
     // ── Minimal IMGUI fallback (used only until the UGUI infoPanel is wired) ────
     void OnGUI()
     {
-        if (infoPanel != null) return;   // UGUI panel takes over
+        if (infoPanel != null || !_mapReady) return;   // UGUI panel takes over
 
         EnsureStyles();
         if (GUI.Button(new Rect(16f, 16f, 130f, 38f), "← Title", _btn))

@@ -27,11 +27,11 @@ public partial class LevelEnvironmentDriver
         var main = ps.main;
         main.startLifetime   = 1.1f;
         main.startSize       = 0.035f;
-        main.maxParticles    = 6000;
+        main.maxParticles    = Mathf.Max(200, Mathf.RoundToInt(6000 * GraphicsQuality.Particles));
         main.startColor      = new ParticleSystem.MinMaxGradient(new Color(1, 1, 1, 0.6f), Color.white);
 
         var em = ps.emission;
-        em.rateOverTime = 1400f * _env.rainIntensity;
+        em.rateOverTime = 1400f * _env.rainIntensity * GraphicsQuality.Particles;
 
         var shape = ps.shape;
         shape.shapeType = ParticleSystemShapeType.Box;
@@ -71,7 +71,7 @@ public partial class LevelEnvironmentDriver
         main.startLifetime   = new ParticleSystem.MinMaxCurve(0.22f, 0.4f);
         main.startSize       = new ParticleSystem.MinMaxCurve(0.03f, 0.06f);
         main.gravityModifier = 1.4f;
-        main.maxParticles    = 2000;
+        main.maxParticles    = Mathf.Max(100, Mathf.RoundToInt(2000 * GraphicsQuality.Particles));
 
         var em = _splash.emission;
         em.enabled = false;
@@ -90,7 +90,7 @@ public partial class LevelEnvironmentDriver
     {
         if (_splash == null || _tops.Count == 0) return;
 
-        float rate = Mathf.Min(_tops.Count * 1.5f, 90f) * _env.rainIntensity;
+        float rate = Mathf.Min(_tops.Count * 1.5f, 90f) * _env.rainIntensity * GraphicsQuality.Particles;
         _splashAcc += rate * Time.deltaTime;
         var ep = new ParticleSystem.EmitParams();
         while (_splashAcc >= 1f)
@@ -163,10 +163,10 @@ public partial class LevelEnvironmentDriver
         main.prewarm       = true;
         main.startLifetime = new ParticleSystem.MinMaxCurve(life.x, life.y);
         main.startSize     = new ParticleSystem.MinMaxCurve(size.x, size.y);
-        main.maxParticles  = 3000;
+        main.maxParticles  = Mathf.Max(100, Mathf.RoundToInt(3000 * GraphicsQuality.Particles));
 
         var em = ps.emission;
-        em.rateOverTime = rate * _env.moteDensity;
+        em.rateOverTime = rate * _env.moteDensity * GraphicsQuality.Particles;
 
         var shape = ps.shape;
         shape.shapeType = ParticleSystemShapeType.Box;
