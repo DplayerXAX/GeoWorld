@@ -153,6 +153,7 @@ public partial class PlacementController : MonoBehaviour
     class UndoRecord
     {
         public bool rainGranted;
+        public BlockColor synergyColor;
         public UndoType     actionType;
         public BlockData    data;
         public Color        color;
@@ -1570,6 +1571,7 @@ public partial class PlacementController : MonoBehaviour
             PushUndo(new UndoRecord {
                 actionType  = UndoType.Reposition,
                 rainGranted = _heldRainGranted,
+                synergyColor = currentSynergyColor,
                 data        = placedData,
                 color       = currentColor,
                 rotation    = _currentRotation,
@@ -1593,6 +1595,7 @@ public partial class PlacementController : MonoBehaviour
             PushUndo(new UndoRecord {
                 actionType  = UndoType.NewPlace,
                 rainGranted = _heldRainGranted,
+                synergyColor = currentSynergyColor,
                 data        = placedData,
                 color       = currentColor,
                 rotation    = _currentRotation,
@@ -2010,6 +2013,7 @@ public partial class PlacementController : MonoBehaviour
         PushUndo(new UndoRecord {
             actionType  = UndoType.Delete,
             rainGranted = selectedInstance.rainGranted,
+            synergyColor = selectedInstance.color,
             data        = selectedInstance.data,
             color       = blockColor,
             rotation    = selectedInstance.visualObject?.transform.rotation ?? Quaternion.identity,
@@ -2133,7 +2137,7 @@ public partial class PlacementController : MonoBehaviour
             PlaceBlockFromRecord(
                 rec.data, rec.color, rec.prevCells, rec.prevCenter, rec.prevRotation,
                 rec.prevBasicPowerUpgradeLevel, rec.prevBasicBurstUpgradeLevel,
-                rec.prevAoeFireUpgradeLevel, rec.prevAoeGravityUpgradeLevel, rec.rainGranted);
+                rec.prevAoeFireUpgradeLevel, rec.prevAoeGravityUpgradeLevel, rec.rainGranted, rec.synergyColor);
         else
             Debug.LogWarning("[Undo] Reposition origin cells now occupied block removed without restore.");
     }
@@ -2156,7 +2160,7 @@ public partial class PlacementController : MonoBehaviour
         PlaceBlockFromRecord(
             rec.data, rec.color, rec.cells, rec.worldCenter, rec.rotation,
             rec.basicPowerUpgradeLevel, rec.basicBurstUpgradeLevel,
-            rec.aoeFireUpgradeLevel, rec.aoeGravityUpgradeLevel, rec.rainGranted);
+            rec.aoeFireUpgradeLevel, rec.aoeGravityUpgradeLevel, rec.rainGranted, rec.synergyColor);
     }
 
     // ── Shared: instantiate a placed block from saved state ───────────────────
@@ -2170,7 +2174,8 @@ public partial class PlacementController : MonoBehaviour
     int basicBurstUpgradeLevel = 0,
     int aoeFireUpgradeLevel = 0,
     int aoeGravityUpgradeLevel = 0,
-    bool rainGranted = false)
+    bool rainGranted = false,
+    BlockColor synergyColor = BlockColor.None)
     {
         var obj = new GameObject("PlacedBlock");
         obj.transform.position = center;
@@ -2208,13 +2213,17 @@ public partial class PlacementController : MonoBehaviour
             basicBurstUpgradeLevel = basicBurstUpgradeLevel,
             aoeFireUpgradeLevel = aoeFireUpgradeLevel,
             aoeGravityUpgradeLevel = aoeGravityUpgradeLevel,
-            rainGranted = rainGranted
+            rainGranted = rainGranted,
+            color = synergyColor
         };
 
         foreach (var c in cells)
             ins.occupiedCells.Add(c);
 
         RegisterPlacedBlock(ins);
+
+        ins.placedPiece = SynergyEvaluator.Instance?.OnPiecePlaced(
+            ins.data, ins.color, ins.occupiedCells.ToArray());
 
         StartCoroutine(GrowIn(obj));
 

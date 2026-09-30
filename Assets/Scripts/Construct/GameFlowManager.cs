@@ -21,6 +21,10 @@ public partial class GameFlowManager : MonoBehaviour
     public EnemyBaseManager enemyBaseManager;
     public static GameFlowManager Instance;
 
+    [Header("Endless environment preview")]
+    [Tooltip("Single-player Endless weather. Leave empty to disable; formal levels do not use this preview.")]
+    public ChapterEnvironmentProfile endlessEnvironment;
+
     // Fired at the start of each Build phase (end of StartTurn). Per-turn synergy
     // effects (e.g. Abundance harvest income) subscribe to pay out once per turn.
     public static event System.Action OnTurnStarted;
@@ -157,7 +161,7 @@ public partial class GameFlowManager : MonoBehaviour
 
         RunStats.BeginRun();   // reset kill/blocks/time counters for score-keeping
         ApplyRunConfig();
-        ChapterEnvironmentController.Ensure(this);   // Level vs Endless setup (seed, pacing, authored waves)
+        ChapterEnvironmentController.Ensure(this);   // Single-player Endless weather preview.
 
         // Everything placed from here on is placed while hidden for the intro —
         // synergy visuals wait until the board has popped in (SynergyVisualFX.Hold).

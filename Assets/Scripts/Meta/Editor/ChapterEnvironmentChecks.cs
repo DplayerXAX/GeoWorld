@@ -67,8 +67,15 @@ public static class ChapterEnvironmentChecks
             var level = ScriptableObject.CreateInstance<LevelDefinition>(); assets.Add(level);
             level.environment = profile;
             RunConfig.Mode = GameMode.Level; RunConfig.Level = level;
+            flow.endlessEnvironment = profile;
+            Check(ChapterEnvironmentController.Ensure(flow) == null, "formal levels excluded even with a profile");
+            RunConfig.SetEndless();
+            flow.endlessEnvironment = null;
+            Check(ChapterEnvironmentController.Ensure(flow) == null, "empty Endless profile disables weather");
+            flow.endlessEnvironment = profile;
             env = ChapterEnvironmentController.Ensure(flow);
-            Check(env != null, "single player controller created");
+            Check(env != null && env.Profile == profile, "single player Endless controller uses scene profile");
+            passed.Add("Endless routing, optional profile, formal levels excluded");
             Call(env, "Awake");
 
             PlacedBlockInstance Place(BlockData data, Vector3Int cell, bool turret = false)
@@ -94,12 +101,22 @@ public static class ChapterEnvironmentChecks
             mist.mistCenters.Add(grid.GridToWorld(Vector3Int.zero));
             mist.mistCenters.Add(grid.GridToWorld(Vector3Int.zero));
             env.Restore(mist, 1);
+            var markers = (GameObject)typeof(ChapterEnvironmentController).GetField("_markers", Private).GetValue(env);
+            Check(markers != null && markers.GetComponentsInChildren<ParticleSystem>(true).Length == 2,
+                "each mist region has visible rain");
+            foreach (var rain in markers.GetComponentsInChildren<ParticleSystem>(true))
+                Check(rain.main.maxParticles <= 256 && rain.emission.rateOverTime.constant > 0f,
+                    "rain is enabled with a bounded particle budget");
+            foreach (var collider in markers.GetComponentsInChildren<Collider>(true))
+                Check(!collider.enabled, "weather visuals never intercept gameplay input");
             Check(Mathf.Approximately(turret.EffectiveRange, 9f), "mist stacks with existing modifiers, not overlapping mist");
             Check(env.IsInMist(turret), "mist selection readout");
             tower.occupiedCells[0] = new Vector3Int(8, 0, 0); env.RefreshBoard();
             Check(Mathf.Approximately(turret.EffectiveRange, 12f), "moving out removes only environment modifier");
             tower.occupiedCells[0] = new Vector3Int(1, 0, 0); env.RefreshBoard();
             env.EndCombat(); env.RefreshBoard();
+            Check((GameObject)typeof(ChapterEnvironmentController).GetField("_markers", Private).GetValue(env) == null,
+                "mist and rain cleaned up together");
             Check(Mathf.Approximately(turret.EffectiveRange, 12f), "ended effects cannot reappear on board refresh");
             passed.Add("mist overlap, range composition, moving out, cleanup");
 
@@ -163,7 +180,9 @@ public static class ChapterEnvironmentChecks
             var snapshot = JsonUtility.FromJson<GridSnapshot>(JsonUtility.ToJson(SnapshotManager.Capture()));
             Check(snapshot.blocks.Exists(x => x.rainGranted), "snapshot preserves free provenance");
             var oldSave = JsonUtility.FromJson<LevelRunSave>("{\"version\":1,\"levelId\":\"1-1\"}");
-            Check(oldSave.environment == null, "legacy save defaults");
+            // Unity's serializer may materialize a missing nested class as an empty
+            // object, rather than null. Either must take the legacy initialization path.
+            Check(oldSave.environment == null || string.IsNullOrEmpty(oldSave.environment.themeId), "legacy save defaults");
             env.Restore(oldSave.environment, 40);
             Check(env.State.wave == 40, "legacy save initializes environment once");
             passed.Add("refund provenance, snapshot roundtrip, legacy save initialization");
@@ -171,11 +190,13 @@ public static class ChapterEnvironmentChecks
             foreach (int n in new[] { 1, 2, 3 })
             {
                 var authored = AssetDatabase.LoadAssetAtPath<LevelDefinition>($"Assets/scriptableObject/Level/Level_{n}.asset");
-                Check(authored != null && authored.environment != null && authored.environment.themeId == "rain", "chapter level reference " + n);
+                Check(authored != null && authored.environment == null, "formal level has no environment binding " + n);
             }
             var material = Resources.Load<Material>("GeoWorldShaderKeepalive/EnvironmentMarker_keep");
             Check(material != null && !ShaderUtil.ShaderHasError(material.shader), "marker shader retained and valid");
-            passed.Add("three chapter bindings and shader resource");
+            var mistMaterial = Resources.Load<Material>("GeoWorldShaderKeepalive/RainMist_keep");
+            Check(mistMaterial != null && !ShaderUtil.ShaderHasError(mistMaterial.shader), "rain mist shader retained and valid");
+            passed.Add("formal chapter bindings removed and shader resources valid");
             return "PASS: " + string.Join("; ", passed);
         }
         finally

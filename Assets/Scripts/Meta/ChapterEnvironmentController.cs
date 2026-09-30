@@ -31,8 +31,9 @@ public partial class ChapterEnvironmentController : MonoBehaviour
 
     public static ChapterEnvironmentController Ensure(GameFlowManager flow)
     {
-        var profile = RunConfig.Mode == GameMode.Level ? RunConfig.Level?.environment : null;
-        if (flow == null || profile == null || NetBootstrap.Online
+        if (flow == null || RunConfig.Mode != GameMode.Endless) return null;
+        var profile = flow.endlessEnvironment;
+        if (profile == null || NetBootstrap.Online
             || MultiplayerSession.ConnectedCount > 1) return null;
         var controller = flow.GetComponent<ChapterEnvironmentController>();
         if (controller == null) controller = flow.gameObject.AddComponent<ChapterEnvironmentController>();

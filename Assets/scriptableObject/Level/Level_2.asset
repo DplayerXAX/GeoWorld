@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: Level_2
   m_EditorClassIdentifier: Assembly-CSharp::LevelDefinition
   levelId: 1-2
-  environment: {fileID: 11400000, guid: 6f7c645fbe624bd1815eb9cb113b710a, type: 2}
+  environment: {fileID: 0}
   displayName: 1-2
   description: 
   runSeed: 0

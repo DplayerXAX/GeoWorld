@@ -18,6 +18,8 @@ MonoBehaviour:
   mistCount: 3
   mistRadius: 2.5
   mistRangeMultiplier: 0.75
+  mistOpacity: 0.55
+  rainRate: 85
   puddleFraction: 0.25
   puddleLimit: 12
   puddleSpeedMultiplier: 0.75

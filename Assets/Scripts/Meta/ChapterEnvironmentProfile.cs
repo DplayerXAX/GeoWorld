@@ -13,6 +13,9 @@ public class ChapterEnvironmentProfile : ScriptableObject
     [Min(0)] public int mistCount = 3;
     [Min(0.1f)] public float mistRadius = 2.5f;
     [Range(0.1f, 1f)] public float mistRangeMultiplier = 0.75f;
+    [Header("Rain mist presentation")]
+    [Range(0f, 1f)] public float mistOpacity = 0.55f;
+    [Min(0f)] public float rainRate = 85f;
     [Range(0f, 1f)] public float puddleFraction = 0.25f;
     [Min(0)] public int puddleLimit = 12;
     [Range(0.1f, 1f)] public float puddleSpeedMultiplier = 0.75f;
