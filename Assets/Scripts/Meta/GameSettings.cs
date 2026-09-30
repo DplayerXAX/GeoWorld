@@ -13,7 +13,9 @@ public static class GameSettings
     // ── Display ──
     public static bool Fullscreen = true;
     public static bool VSync      = true;
-    public static int  QualityLevel;                 // index into QualitySettings.names
+    public static int  QualityLevel;                 // index into QualitySettings.names — now follows Graphics
+    // The graphics preset (see GraphicsQuality). Picks the quality level itself.
+    public static GraphicsQuality.Tier Graphics = GraphicsQuality.Tier.Ultra;
     public static int  FrameCap   = 0;               // 0 = uncapped
 
     // ── Controls ──
@@ -28,6 +30,9 @@ public static class GameSettings
     // PlacementController.SnapToNearestSupported), with WASDQE/scroll nudging it
     // further from there.
     public static bool FreeMove = true;
+    // On (default): on the level-select map, whatever stands between the camera
+    // and the pawn is cut away (LevelMapController.Occlusion). Off: nothing is.
+    public static bool SeeThrough = true;
 
     // Cycles the game speed — the same action as clicking the fast-forward chip.
     public static KeyCode FastForwardKey = KeyCode.C;
@@ -103,12 +108,16 @@ public static class GameSettings
         Fullscreen   = PlayerPrefs.GetInt("set.fullscreen", Fullscreen ? 1 : 0) == 1;
         VSync        = PlayerPrefs.GetInt("set.vsync",      VSync ? 1 : 0) == 1;
         QualityLevel = PlayerPrefs.GetInt("set.quality",    QualitySettings.GetQualityLevel());
+        // No saved preset yet: start from what this machine can likely carry.
+        Graphics = (GraphicsQuality.Tier)Mathf.Clamp(
+            PlayerPrefs.GetInt("set.gfx", (int)GraphicsQuality.Recommended()), 0, GraphicsQuality.Names.Length - 1);
         FrameCap     = PlayerPrefs.GetInt("set.framecap",   FrameCap);
 
         CameraPanSpeed  = PlayerPrefs.GetFloat("set.panspeed", CameraPanSpeed);
         LookSensitivity = PlayerPrefs.GetFloat("set.looksens", LookSensitivity);
         SmoothBlockEditing = PlayerPrefs.GetInt("set.smoothedit", SmoothBlockEditing ? 1 : 0) == 1;
         FreeMove           = PlayerPrefs.GetInt("set.freemove",   FreeMove ? 1 : 0) == 1;
+        SeeThrough         = PlayerPrefs.GetInt("set.seethrough", SeeThrough ? 1 : 0) == 1;
 
         // Guarded on load too, not just at rebind time: the reserved list can grow
         // after a player has already saved a binding that later became a conflict.
@@ -124,11 +133,13 @@ public static class GameSettings
         PlayerPrefs.SetInt("set.fullscreen", Fullscreen ? 1 : 0);
         PlayerPrefs.SetInt("set.vsync",      VSync ? 1 : 0);
         PlayerPrefs.SetInt("set.quality",    QualityLevel);
+        PlayerPrefs.SetInt("set.gfx",        (int)Graphics);
         PlayerPrefs.SetInt("set.framecap",   FrameCap);
         PlayerPrefs.SetFloat("set.panspeed", CameraPanSpeed);
         PlayerPrefs.SetFloat("set.looksens", LookSensitivity);
         PlayerPrefs.SetInt("set.smoothedit", SmoothBlockEditing ? 1 : 0);
         PlayerPrefs.SetInt("set.freemove",   FreeMove ? 1 : 0);
+        PlayerPrefs.SetInt("set.seethrough", SeeThrough ? 1 : 0);
         PlayerPrefs.SetInt("set.ffkey",      (int)FastForwardKey);
         PlayerPrefs.Save();
     }
@@ -137,10 +148,12 @@ public static class GameSettings
 
     public static void ApplyDisplay()
     {
-        Screen.fullScreen          = Fullscreen;
+        Screen.fullScreen = Fullscreen;
+        // The preset first: switching quality level brings that level's own
+        // v-sync setting with it, which the player's choice then overrides.
+        GraphicsQuality.Set(Graphics);
+        QualityLevel = QualitySettings.GetQualityLevel();
         QualitySettings.vSyncCount = VSync ? 1 : 0;
-        if (QualityLevel >= 0 && QualityLevel < QualitySettings.names.Length)
-            QualitySettings.SetQualityLevel(QualityLevel, true);
         // With vSync on, targetFrameRate is ignored; only meaningful when vSync off.
         Application.targetFrameRate = FrameCap <= 0 ? -1 : FrameCap;
     }
@@ -178,9 +191,11 @@ public static class GameSettings
         MasterVolume = 0.9f; MusicVolume = 0.8f; SfxVolume = 0.9f;
         Fullscreen = true; VSync = true;
         QualityLevel = QualitySettings.GetQualityLevel(); FrameCap = 0;
+        Graphics = GraphicsQuality.Recommended();
         CameraPanSpeed = 8f; LookSensitivity = 120f;
         SmoothBlockEditing = true;
         FreeMove = true;
+        SeeThrough = true;
         FastForwardKey = KeyCode.C;
         Save(); ApplyAll();
     }

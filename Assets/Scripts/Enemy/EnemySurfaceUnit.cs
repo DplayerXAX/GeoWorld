@@ -154,6 +154,16 @@ public class EnemySurfaceUnit : MonoBehaviour
         if (IsProxy) return;
         if (amount <= 0 || _health <= 0) return;
 
+        // Inside a Prayer turret's field it takes more. Hits are small ints, so the
+        // fraction is carried between hits instead of rounded away — at +20%, five
+        // hits of 1 deal 6.
+        if (InPrayer && _prayerMult > 1.0001f)
+        {
+            float due = amount * _prayerMult + _prayerCarry;
+            amount       = Mathf.FloorToInt(due);
+            _prayerCarry = due - amount;
+        }
+
         _health = Mathf.Max(0, _health - amount);
 
         // The flinch. Before this, taking a hit and missing looked identical: the
@@ -174,35 +184,25 @@ public class EnemySurfaceUnit : MonoBehaviour
     {
         if (amount <= 0 || _health <= 0 || _health >= maxHealth) return 0;
 
-        // Heal-received debuff (a Debuff Turret's field): heals land at a fraction.
-        // Heals are small ints (1 a pulse), so the fraction is carried between heals
-        // rather than rounded away — at 60%, three pulses of 1 heal 2, not 0 or 3.
-        if (InHealDebuff && _healDebuffMult < 0.9999f)
-        {
-            float due = amount * _healDebuffMult + _healCarry;
-            amount     = Mathf.FloorToInt(due);
-            _healCarry = due - amount;
-            if (amount <= 0) return 0;
-        }
         int before = _health;
         _health = Mathf.Min(maxHealth, _health + amount);
         return _health - before;
     }
 
-    // ── Heal-received debuff ────────────────────────────────────────────────────
-    // Re-applied every frame by each Debuff Turret field the enemy stands in, and
+    // ── Prayer field: damage taken up ───────────────────────────────────────────
+    // Re-applied every frame by each Prayer Turret field the enemy stands in, and
     // lapses on its own a moment after it walks out — no field has to remember whom
     // it touched. Overlapping fields don't stack: the strongest one applies.
-    float _healDebuffMult = 1f, _healDebuffUntil = -1f, _healCarry;
+    float _prayerMult = 1f, _prayerUntil = -1f, _prayerCarry;
 
-    public bool  InHealDebuff    => Time.time < _healDebuffUntil;
-    public float HealDebuffMult  => InHealDebuff ? _healDebuffMult : 1f;
+    public bool  InPrayer   => Time.time < _prayerUntil;
+    public float PrayerMult => InPrayer ? _prayerMult : 1f;
 
-    public void ApplyHealDebuff(float mult, float duration)
+    public void ApplyPrayer(float damageMult, float duration)
     {
-        mult = Mathf.Clamp01(mult);
-        _healDebuffMult  = InHealDebuff ? Mathf.Min(_healDebuffMult, mult) : mult;
-        _healDebuffUntil = Mathf.Max(_healDebuffUntil, Time.time + duration);
+        damageMult  = Mathf.Max(1f, damageMult);
+        _prayerMult  = InPrayer ? Mathf.Max(_prayerMult, damageMult) : damageMult;
+        _prayerUntil = Mathf.Max(_prayerUntil, Time.time + duration);
     }
 
     public void SetSpeedMultiplier(float multiplier)

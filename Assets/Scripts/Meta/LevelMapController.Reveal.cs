@@ -55,6 +55,9 @@ public partial class LevelMapController : MonoBehaviour
     [Tooltip("How far a block overshoots its resting place before settling, as a fraction of the rise. 0 = plain ease-out.")]
     [Range(0f, 0.3f)] public float revealOvershoot = 0.08f;
 
+    [Tooltip("Field of view the reveal cutscene frames its shot with — its own, NOT bound by the player's scroll range (minFov..maxFov), so the whole farm / wood / new ground fits however far in the player was zoomed. The player's own view comes back at the hand-off. 0 = keep the current view.")]
+    [Range(0f, 100f)] public float revealFov = 65f;
+
     [Header("Mist")]
     // Ground that has not been revealed is not simply absent: it lies under mist,
     // so the player can see that there IS more map out there and roughly where.
@@ -360,7 +363,12 @@ public partial class LevelMapController : MonoBehaviour
                 int dx = Mathf.Max(0, Mathf.Max(-x, x - (e.x - 1)));
                 int dz = Mathf.Max(0, Mathf.Max(-z, z - (e.y - 1)));
                 if (dx * dx + dz * dz > pad * pad) continue;
-                yield return BlockTop(new Vector3Int(o.x + x, o.y, o.z + z));
+                // A plain plot: only its own outline, at the height it will stand
+                // (a volcano's mist sits on the cone, not on the plain under it).
+                var col = new Vector2Int(o.x + x, o.z + z);
+                if (pad == 0 && cfg.CoverageAt(col) <= 0f) continue;
+                int lift = pad == 0 ? cfg.HeightAt(col) : 0;
+                yield return BlockTop(new Vector3Int(col.x, o.y + lift, col.y));
             }
     }
 
@@ -476,7 +484,7 @@ public partial class LevelMapController : MonoBehaviour
     // or a farm that stands barren before its gate (and is revived, not raised).
     bool PlotOnShow(MapDecorConfig cfg)
     {
-        if (string.IsNullOrEmpty(cfg.gateLevelId)) return true;
+        if (string.IsNullOrEmpty(cfg.gateLevelId) || previewAllRegions) return true;
         if (cfg is AbundanceFarmConfig f && f.barrenBeforeGate && BarrenUnlockedBefore(f)) return true;
         bool cleared = SaveSystem.Profile.GetRecord(cfg.gateLevelId)?.cleared ?? false;
         return cleared && cfg.gateLevelId != _growthLevelId;
@@ -507,6 +515,13 @@ public partial class LevelMapController : MonoBehaviour
         foreach (var p in plots)  { focus += p.center; count++; }
         foreach (var n in _rising) if (_risingRest.TryGetValue(n, out var rp)) { focus += rp; count++; }
         if (count > 0) focus /= count;
+
+        // The cutscene's own lens, eased to alongside the camera's glide
+        // (UpdateFovZoom keeps running under the cutscene); scroll zoom is locked
+        // out meanwhile, so nothing clamps it back into the player's range.
+        float fovBefore = _fovTarget >= 0f ? _fovTarget : (_cam != null ? _cam.fieldOfView : 0f);
+        bool ownFov = revealFov > 0f && _cam != null;
+        if (ownFov) _fovTarget = revealFov;
 
         if (_orbit != null && count > 0)
         {
@@ -601,6 +616,9 @@ public partial class LevelMapController : MonoBehaviour
 
         // Fade for the hand-off — focusViewport resets with no lerp of its own.
         yield return FadeScreen(0f, 1f, lead.transitionFadeDuration);
+
+        // Under the black: the player's own view back, at once, with no ease to watch.
+        if (ownFov) { _fovTarget = fovBefore; _cam.fieldOfView = fovBefore; }
 
         if (_orbit != null)
         {

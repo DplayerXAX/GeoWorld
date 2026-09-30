@@ -176,6 +176,85 @@ Shader "GeoWorld/HaloCore_GlassySupernova"
             }
             ENDHLSL
         }
+
+        // Depth, and depth + normals, for the camera's depth texture. Without
+        // these the object is missing from _CameraDepthTexture whenever URP
+        // builds it from a depth prepass, and everything that reads depth (the
+        // height fog, the far haze, the mist banks) draws straight through it as
+        // if it weren't there: a blurred ghost behind the fog.
+        Pass
+        {
+            Name "DepthOnly"
+            Tags { "LightMode" = "DepthOnly" }
+            ZWrite On
+            ColorMask R
+            Cull Back
+
+            HLSLPROGRAM
+            #pragma vertex   DepthVert
+            #pragma fragment DepthFrag
+            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
+            CBUFFER_START(UnityPerMaterial)
+                float4 _CoreColor, _VoidColor, _ColorA, _ColorB;
+                float  _CoreRadius, _OuterFade, _EruptionSpeed;
+                float  _GlassSharpness, _ShardSteps;
+                float  _SwirlArms, _SwirlTwist, _SwirlWarp, _StreakSharp;
+                float  _NoiseScale, _ColorContrast;
+                float  _StreakIntensity, _CoreGlow, _Brightness;
+                float  _FresnelPower, _FresnelStrength, _GrainAmount;
+            CBUFFER_END
+            struct DepthAttributes { float4 positionOS : POSITION; float3 normalOS : NORMAL; };
+            struct DepthVaryings   { float4 positionCS : SV_POSITION; float3 normalWS : TEXCOORD0; };
+
+            DepthVaryings DepthVert(DepthAttributes IN)
+            {
+                DepthVaryings o;
+                o.positionCS = TransformObjectToHClip(IN.positionOS.xyz);
+                o.normalWS   = TransformObjectToWorldNormal(IN.normalOS);
+                return o;
+            }
+
+            half DepthFrag(DepthVaryings IN) : SV_Target { return 0; }
+            ENDHLSL
+        }
+
+        Pass
+        {
+            Name "DepthNormals"
+            Tags { "LightMode" = "DepthNormals" }
+            ZWrite On
+            Cull Back
+
+            HLSLPROGRAM
+            #pragma vertex   DepthVert
+            #pragma fragment NormalsFrag
+            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
+            CBUFFER_START(UnityPerMaterial)
+                float4 _CoreColor, _VoidColor, _ColorA, _ColorB;
+                float  _CoreRadius, _OuterFade, _EruptionSpeed;
+                float  _GlassSharpness, _ShardSteps;
+                float  _SwirlArms, _SwirlTwist, _SwirlWarp, _StreakSharp;
+                float  _NoiseScale, _ColorContrast;
+                float  _StreakIntensity, _CoreGlow, _Brightness;
+                float  _FresnelPower, _FresnelStrength, _GrainAmount;
+            CBUFFER_END
+            struct DepthAttributes { float4 positionOS : POSITION; float3 normalOS : NORMAL; };
+            struct DepthVaryings   { float4 positionCS : SV_POSITION; float3 normalWS : TEXCOORD0; };
+
+            DepthVaryings DepthVert(DepthAttributes IN)
+            {
+                DepthVaryings o;
+                o.positionCS = TransformObjectToHClip(IN.positionOS.xyz);
+                o.normalWS   = TransformObjectToWorldNormal(IN.normalOS);
+                return o;
+            }
+
+            half4 NormalsFrag(DepthVaryings IN) : SV_Target
+            {
+                return half4(NormalizeNormalPerPixel(IN.normalWS), 0.0);
+            }
+            ENDHLSL
+        }
     }
     FallBack "Hidden/Universal Render Pipeline/FallbackError"
 }

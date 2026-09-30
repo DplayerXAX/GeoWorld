@@ -124,6 +124,27 @@ public class ChaosBlockController : MonoBehaviour
         var grid = GridSystem.instance;
         if (grid == null) return;
         SpawnAt(PickSpawnCell(grid), Mathf.Max(1, _cfg.health));
+        ShowFirstAside();
+    }
+
+    // LevelDefinition.chaosFirstAside, once per level run: on the first chaos
+    // block to appear. A run resumed with chaos blocks already standing has seen it.
+    bool _asideShown;
+    void ShowFirstAside()
+    {
+        if (_asideShown || _lv == null || string.IsNullOrEmpty(_lv.chaosFirstAside)) return;
+        _asideShown = true;
+        AsideBubble.Show(_lv.chaosFirstAsideSpeaker, "default", _lv.chaosFirstAside, _lv.chaosFirstAsideSeconds);
+    }
+
+    // The cells chaos blocks stand on — the level's fog keeps them clear.
+    public static IEnumerable<Vector3Int> Cells
+    {
+        get
+        {
+            if (Instance == null) yield break;
+            foreach (var kv in Instance._cellOf) if (kv.Key != null) yield return kv.Value;
+        }
     }
 
     // ── Mid-level save ────────────────────────────────────────────────────────
@@ -139,6 +160,7 @@ public class ChaosBlockController : MonoBehaviour
     public void Restore(List<CellHealth> saved)
     {
         if (saved == null) return;
+        if (saved.Count > 0) _asideShown = true;
         foreach (var c in saved)
             if (c != null && GridSystem.instance != null && !GridSystem.instance.IsOccupied(c.cell))
                 SpawnAt(c.cell, c.health);
@@ -170,12 +192,17 @@ public class ChaosBlockController : MonoBehaviour
         unit.OnDied += HandleChaosBlockDied;
 
         EnemyBaseManager.Instance?.RegisterPersistentTarget(unit);
+        LevelEnvironmentDriver.NotifyBoard(grid);   // the fog keeps it clear, like a block
     }
+
+    // Every chaos block destroyed by the player (level objectives count these).
+    public static event System.Action AnyDestroyed;
 
     void HandleChaosBlockDied(EnemySurfaceUnit died)
     {
         if (died == null) return;
         died.OnDied -= HandleChaosBlockDied;
+        AnyDestroyed?.Invoke();
         EnemyBaseManager.Instance?.UnregisterPersistentTarget(died);
 
         if (_cellOf.TryGetValue(died, out var cell))
@@ -185,6 +212,7 @@ public class ChaosBlockController : MonoBehaviour
         }
         _alive.Remove(died);
         Destroy(died.gameObject);
+        LevelEnvironmentDriver.NotifyBoard(GridSystem.instance);
     }
 
     // A free cell in the RING [minDistance, maxDistance] around the build.
@@ -248,6 +276,7 @@ public class ChaosBlockController : MonoBehaviour
     // trigger collider (matches how bullets auto-collider enemies — see
     // TurretBullet.EnsureEnemyCollider — and keeps physics from pushing it).
     static Material _fallbackMat;
+    static bool     _fallbackIsChaos;
     GameObject BuildFallbackVisual(float cellSize)
     {
         var go = GameObject.CreatePrimitive(PrimitiveType.Cube);
@@ -257,15 +286,19 @@ public class ChaosBlockController : MonoBehaviour
 
         if (_fallbackMat == null)
         {
-            var sh = Shader.Find("GeoWorld/SilkscreenFlat")
-                  ?? Shader.Find("Universal Render Pipeline/Lit")
-                  ?? Shader.Find("Standard");
+            // GeoWorld/ChaosCube: a churning, cracked, glitching cube that lights
+            // itself (kept in builds by ChaosCube_keep). Falls back to a flat
+            // near-black cube if it's missing.
+            var sh = Shader.Find("GeoWorld/ChaosCube");
+            bool chaos = sh != null;
+            if (!chaos) sh = Shader.Find("GeoWorld/SilkscreenFlat") ?? Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard");
             _fallbackMat = new Material(sh) { hideFlags = HideFlags.DontSave };
+            _fallbackIsChaos = chaos;
         }
         var mr = go.GetComponent<MeshRenderer>();
         mr.sharedMaterial = _fallbackMat;
         mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-        MpbColor.Set(mr, new Color(0.03f, 0.03f, 0.05f, 1f));
+        if (!_fallbackIsChaos) MpbColor.Set(mr, new Color(0.03f, 0.03f, 0.05f, 1f));
 
         return go;
     }

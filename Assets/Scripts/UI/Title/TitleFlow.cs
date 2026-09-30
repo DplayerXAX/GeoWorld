@@ -74,6 +74,21 @@ public class TitleFlow : MonoBehaviour
     // order matching what SaveSlotButton.Init() assumed at Start().
     public void SelectSlotAndPlay(int slot)
     {
+        // A slot saved by an older build: say so, and recommend a fresh start
+        // for testing. Either choice then plays the slot; Esc stays on the title.
+        if (SaveSystem.SlotIsOutdated(slot))
+        {
+            SaveSlotInfoDisplay.Hide();
+            ConfirmDialog.Ask(
+                "OLD SAVE",
+                $"Slot {slot + 1} holds a save from an earlier version of the game. For the best playtest experience, we recommend deleting it and starting fresh.",
+                "Delete & Start Fresh",
+                () => { SaveSystem.DeleteSlot(slot); SaveSystem.SelectSlot(slot); LoadLevelSelect(); },
+                "Keep Playing",
+                () => { SaveSystem.SelectSlot(slot); SaveSystem.MarkActiveSlotCurrent(); LoadLevelSelect(); });
+            return;
+        }
+
         SaveSystem.SelectSlot(slot);
         LoadLevelSelect();
     }

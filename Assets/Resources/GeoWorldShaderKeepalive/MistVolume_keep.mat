@@ -22,8 +22,39 @@ Material:
   m_LockedProperties: 
   m_SavedProperties:
     serializedVersion: 3
-    m_TexEnvs: []
+    m_TexEnvs:
+    - _Mask:
+        m_Texture: {fileID: 0}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
     m_Ints: []
-    m_Floats: []
-    m_Colors: []
+    m_Floats:
+    - _Anisotropy: 0.55
+    - _Density: 0.9
+    - _Dissolve: 0
+    - _EdgeWarp: 1.2
+    - _Extinction: 1.2
+    - _Falloff: 1.1
+    - _Floor: 0.1
+    - _Isotropic: 0.25
+    - _Lift: 0
+    - _NoiseAmount: 0.75
+    - _NoiseScale: 0.35
+    - _Protect: 0
+    - _Scatter: 1.6
+    - _SkyBlend: 0
+    - _SkyMip: 3
+    - _Soften: 0
+    - _Steps: 20
+    - _Strength: 0.85
+    - _WarpScale: 0.22
+    m_Colors:
+    - _BoxSize: {r: 1, g: 1, b: 1, a: 0}
+    - _FogColor: {r: 0.93, g: 0.9, b: 0.85, a: 1}
+    - _Offset: {r: 0, g: 0, b: 0, a: 0}
+    - _ScatterTint: {r: 1, g: 0.95, b: 0.85, a: 1}
+    - _Sink: {r: 0, g: 0, b: 0, a: 1}
+    - _SinkCentre: {r: 0, g: 0, b: 0, a: 0}
+    - _Wind: {r: 0.25, g: 0.03, b: 0.18, a: 0}
   m_BuildTextureStacks: []
+  m_AllowLocking: 1

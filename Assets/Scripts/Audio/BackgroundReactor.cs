@@ -2,12 +2,16 @@ using UnityEngine;
 
 // Drives ManifoldSkybox shader properties in response to music events.
 // Auto-grabs RenderSettings.skybox if no material is assigned in Inspector.
+// Follows the sky actually on screen: when a level's environment swaps in its
+// own runtime sky (LevelEnvironmentDriver's painted sky), the combat, clear and
+// damage reactions go to that one. GeoWorld/PaintedSky reads the same properties.
 public class BackgroundReactor : MonoBehaviour
 {
     public static BackgroundReactor Instance;
 
     [Header("Target")]
     public Material skyboxMaterial;
+    Material _ownClone;   // the copy made in Awake — the only material this destroys
 
     [Header("Beat")]
     [Range(0.5f, 8f)] public float beatDecay     = 4f;
@@ -102,7 +106,7 @@ public class BackgroundReactor : MonoBehaviour
         var source = skyboxMaterial != null ? skyboxMaterial : RenderSettings.skybox;
         if (source != null)
         {
-            skyboxMaterial = new Material(source) { name = source.name + " (runtime)" };
+            skyboxMaterial = _ownClone = new Material(source) { name = source.name + " (runtime)" };
             RenderSettings.skybox = skyboxMaterial;
         }
 
@@ -116,8 +120,7 @@ public class BackgroundReactor : MonoBehaviour
     {
         // Restore RenderSettings to the asset (if we replaced it) and free
         // the runtime clone. Avoids growing leaked materials across reloads.
-        if (skyboxMaterial != null && skyboxMaterial.name.EndsWith(" (runtime)"))
-            Destroy(skyboxMaterial);
+        if (_ownClone != null) Destroy(_ownClone);
     }
 
     void Update()
@@ -169,6 +172,11 @@ public class BackgroundReactor : MonoBehaviour
 );
         _flashAmount = Mathf.Lerp(_flashAmount, 0f, 1f - Mathf.Exp(-themeFlashDecay * dt));
         _killReact   = Mathf.Lerp(_killReact,   0f, 1f - Mathf.Exp(-killReactDecay  * dt));
+
+        // Follow the sky on screen. Only runtime copies: a material asset (a
+        // minigame's own sky, swapped in for a while) is never written to.
+        var shown = RenderSettings.skybox;
+        if (shown != null && shown != skyboxMaterial && shown.name.EndsWith("(runtime)")) skyboxMaterial = shown;
         if (skyboxMaterial == null) return;
         skyboxMaterial.SetFloat(BeatPulseId,  _beatPulse);
         skyboxMaterial.SetFloat(IntensityId,  _smoothIntensity); 

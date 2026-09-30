@@ -13,15 +13,17 @@ public partial class PlacementController
     /// edge in the direction of travel like a branch creeping forward.
     /// Off-path cubes bloom afterwards, rippling out from the nearest path cube.
     /// </summary>
-    public void TriggerCombatRipple(List<FaceNode> path)
+    // onBlocksGrown: called once every cube is standing again (at once if there
+    // is nothing to grow) — what's drawn over the board waits for it.
+    public void TriggerCombatRipple(List<FaceNode> path, System.Action onBlocksGrown = null)
     {
-        StartCoroutine(CombatRippleCoroutine(path));
+        StartCoroutine(CombatRippleCoroutine(path, onBlocksGrown));
     }
 
-    System.Collections.IEnumerator CombatRippleCoroutine(List<FaceNode> path)
+    System.Collections.IEnumerator CombatRippleCoroutine(List<FaceNode> path, System.Action onBlocksGrown)
     {
         var all = grid.GetAllInstances();
-        if (all.Count == 0) yield break;
+        if (all.Count == 0) { onBlocksGrown?.Invoke(); yield break; }
 
         // Step 1: collect every cube (cell-sized child of a placed block) and
         // hide it. Children are created 1:1 with occupiedCells in render order.
@@ -54,7 +56,7 @@ public partial class PlacementController
                 beacon.transform.localScale = Vector3.zero;
             }
         }
-        if (cubes.Count == 0 && beacons.Count == 0) yield break;
+        if (cubes.Count == 0 && beacons.Count == 0) { onBlocksGrown?.Invoke(); yield break; }
         yield return null;
 
         // Step 2: cell first index along path.
@@ -134,6 +136,7 @@ public partial class PlacementController
         float blocksDoneAt = Mathf.Max(pathSweepEnd, pathSweepEnd - cubeDur * 0.5f + 0.55f + cubeDur);
         System.Func<Vector3, float> synergyDelayFor = wp => blocksDoneAt + Mathf.Min(0.25f, delayFor(wp) * 0.12f);
         SynergyVisualFX.ReplayGrowIn(synergyDelayFor);
+        if (onBlocksGrown != null) StartCoroutine(InvokeAfter(blocksDoneAt, onBlocksGrown));
 
         // Step 5: off-path cubes bloom from their nearest path cube. Small
         // overlap with the path sweep so it doesn't feel halted.
@@ -171,6 +174,12 @@ public partial class PlacementController
             // No entry direction cube does a uniform bloom from its centre.
             StartCoroutine(BranchSproutCube(offPath[i].t, delay, cubeDur, Vector3.zero, offPath[i].origLocalPos));
         }
+    }
+
+    static System.Collections.IEnumerator InvokeAfter(float seconds, System.Action action)
+    {
+        yield return new WaitForSeconds(seconds);
+        action?.Invoke();
     }
 
     // ── Per-cube branch growth ──────────────────────────────────────────────

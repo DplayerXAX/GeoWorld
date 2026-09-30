@@ -25,6 +25,11 @@ public class ConfirmDialog : MonoBehaviour
     public static bool BlockingInput => _open != null || Time.frameCount == _closedFrame;
 
     public static void Ask(string headline, string body, string yesLabel, Action onYes)
+        => Ask(headline, body, yesLabel, onYes, null, null);
+
+    // Two real choices: the left button runs onNo (labelled noLabel) instead of
+    // just cancelling. Esc still only closes, running neither.
+    public static void Ask(string headline, string body, string yesLabel, Action onYes, string noLabel, Action onNo)
     {
         if (_open != null) return;
         var go = new GameObject("ConfirmDialog");
@@ -33,10 +38,12 @@ public class ConfirmDialog : MonoBehaviour
         _open._body     = body;
         _open._yesLabel = yesLabel;
         _open._onYes    = onYes;
+        _open._noLabel  = string.IsNullOrEmpty(noLabel) ? "Cancel" : noLabel;
+        _open._onNo     = onNo;
     }
 
-    string _headline, _body, _yesLabel;
-    Action _onYes;
+    string _headline, _body, _yesLabel, _noLabel = "Cancel";
+    Action _onYes, _onNo;
     int    _openedFrame;
 
     void Start()
@@ -55,6 +62,13 @@ public class ConfirmDialog : MonoBehaviour
     void Yes()
     {
         var go = _onYes;
+        Close();
+        go?.Invoke();
+    }
+
+    void No()
+    {
+        var go = _onNo;
         Close();
         go?.Invoke();
     }
@@ -99,7 +113,7 @@ public class ConfirmDialog : MonoBehaviour
         body.textWrappingMode = TextWrappingModes.Normal;
         body.text = _body;
 
-        NewButton(panel, "No",  "Cancel",  new Vector2(-150f, -90f), new Color(1f, 1f, 1f, 0.10f), GeoPalette.Paper, Close);
+        NewButton(panel, "No",  _noLabel,  new Vector2(-150f, -90f), new Color(1f, 1f, 1f, 0.10f), GeoPalette.Paper, No);
         NewButton(panel, "Yes", _yesLabel, new Vector2( 150f, -90f), GeoPalette.Signal,            Color.white,      Yes);
     }
 

@@ -16,6 +16,12 @@ Shader "GeoWorld/Backdrop"
     // on the gentlest, sunniest ground and in patches, then across the slopes until
     // only the steepest rock shows — two greens mottled together, with flowers
     // scattered through it (_Flower / _Flower2).
+    //
+    // Ripening (vertex-coloured land, _VertexColor on): the vertex colour is the
+    // dry colour. TEXCOORD2 carries the ripe colour (rgb) and when that vertex
+    // turns, in seconds after the bloom (w). _RipenT is the bloom's clock, and -1
+    // means not yet. Each vertex eases across over 1.4 s once the clock passes it,
+    // so a whole landscape ripens for the cost of one float a frame.
     Properties
     {
         _Color      ("Colour",         Color) = (0.35, 0.38, 0.42, 1)
@@ -35,6 +41,8 @@ Shader "GeoWorld/Backdrop"
         _Flower2  ("Flowers, 2",   Color) = (1, 0.9, 0.6, 1)
         _GreenAmount ("Grass cover", Range(0, 1)) = 0
         [Enum(UnityEngine.Rendering.CullMode)] _Cull ("Cull", Float) = 2
+        [Toggle] _VertexColor ("Colour from vertices", Float) = 0
+        _RipenT ("Ripen clock (s since the bloom, -1 = dry)", Float) = -1
     }
     SubShader
     {
@@ -68,6 +76,8 @@ Shader "GeoWorld/Backdrop"
                 float4 _Flower;
                 float4 _Flower2;
                 float  _GreenAmount;
+                float  _VertexColor;
+                float  _RipenT;
             CBUFFER_END
 
             float hash13(float3 p)
@@ -86,8 +96,8 @@ Shader "GeoWorld/Backdrop"
                                  lerp(hash13(i + float3(0,1,1)), hash13(i + float3(1,1,1)), f.x), f.y), f.z);
             }
 
-            struct Attributes { float4 positionOS : POSITION; float3 normalOS : NORMAL; };
-            struct Varyings   { float4 positionCS : SV_POSITION; float3 positionWS : TEXCOORD0; float3 normalWS : TEXCOORD1; };
+            struct Attributes { float4 positionOS : POSITION; float3 normalOS : NORMAL; float4 color : COLOR; float4 ripe : TEXCOORD2; };
+            struct Varyings   { float4 positionCS : SV_POSITION; float3 positionWS : TEXCOORD0; float3 normalWS : TEXCOORD1; float4 color : COLOR; float4 ripe : TEXCOORD2; };
 
             Varyings vert(Attributes IN)
             {
@@ -95,6 +105,8 @@ Shader "GeoWorld/Backdrop"
                 o.positionWS = TransformObjectToWorld(IN.positionOS.xyz);
                 o.positionCS = TransformWorldToHClip(o.positionWS);
                 o.normalWS   = TransformObjectToWorldNormal(IN.normalOS);
+                o.color      = IN.color;
+                o.ripe       = IN.ripe;
                 return o;
             }
 
@@ -104,7 +116,13 @@ Shader "GeoWorld/Backdrop"
                 // becomes a white bloom flash on screen.
                 float3 N = IN.normalWS;
                 N = dot(N, N) > 1e-10 ? normalize(N) : float3(0, 1, 0);
-                float3 c = _Color.rgb * (0.85 + 0.25 * saturate(N.y) + 0.06 * N.x);
+                float3 baseCol = _VertexColor > 0.5 ? IN.color.rgb : _Color.rgb;
+                if (_VertexColor > 0.5 && _RipenT > 0.0)
+                {
+                    float k = saturate((_RipenT - IN.ripe.w) / 1.4);
+                    baseCol = lerp(baseCol, IN.ripe.rgb, k * k * (3.0 - 2.0 * k));
+                }
+                float3 c = baseCol * (0.85 + 0.25 * saturate(N.y) + 0.06 * N.x);
 
                 // Grass skin. Score = how grass-friendly this spot is: flat and facing
                 // up, plus patchy noise; the cover threshold drops as _GreenAmount grows.

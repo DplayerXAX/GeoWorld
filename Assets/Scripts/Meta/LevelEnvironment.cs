@@ -16,7 +16,7 @@ public class LevelEnvironment : ScriptableObject
 {
     // Appended only — assets store these as numbers.
     public enum Motes    { None, Dust, Pollen, Snow, Embers, Spores }
-    public enum Backdrop { None, Cliffs, Ruins, FloatingIslands, BarrenFields }
+    public enum Backdrop { None, Cliffs, Ruins, FloatingIslands, BarrenFields, Terraces, Countryside }
 
     [Header("Block age")]
     [Tooltip("Age given to the level's prebuilt (startingLayout) blocks — they were here before the player.")]
@@ -73,6 +73,30 @@ public class LevelEnvironment : ScriptableObject
     public Color skyGrid = new(0.25f, 0.35f, 0.65f, 1f);
     [Tooltip("How far the sky's stained-glass haze turns hue. 1 = full rainbow spread; low keeps the sky in the colours above.")]
     [Range(0f, 1f)] public float skyHueRange = 1f;
+    [Tooltip("Swap the level's sky for a plain landscape sky (GeoWorld/LandscapeSky): zenith-to-horizon gradient, a sun where the main light is, soft clouds. For natural scenery that the abstract default sky fights. Uses skyZenith / skyHorizon / skyHaze (the band at the horizon) and the fields below. The default sky's music/combat reactions don't run on it.")]
+    public bool useLandscapeSky = false;
+    [Tooltip("Landscape sky: below the horizon.")]
+    public Color skyGround = new(0.72f, 0.64f, 0.52f, 1f);
+    [ColorUsage(false, true)] public Color skySun = new(1.6f, 1.2f, 0.8f, 1f);
+    public Color skyCloud      = new(1f, 0.95f, 0.88f, 1f);
+    public Color skyCloudShade = new(0.72f, 0.66f, 0.66f, 1f);
+    [Range(0f, 1f)] public float skyCloudCover = 0.45f;
+
+    [Header("Painted sky")]
+    [Tooltip("A painted sky (GeoWorld/PaintedSky) in place of the scene's own: the dome laid in thick brush strokes swirling round slow whirls, the sun ringed in cream and yellow. It reacts to combat, clearing, damage and low health the way the default sky does. Takes precedence over useLandscapeSky. The sun and below-horizon colours come from skySun / skyGround.")]
+    public bool paintedSky = false;
+    public Color paintDeep  = new(0.06f, 0.18f, 0.50f, 1f);
+    public Color paintBlue  = new(0.15f, 0.40f, 0.78f, 1f);
+    public Color paintTeal  = new(0.34f, 0.70f, 0.82f, 1f);
+    public Color paintCream = new(0.97f, 0.92f, 0.74f, 1f);
+    public Color paintWarm  = new(1.00f, 0.78f, 0.28f, 1f);
+    public Color paintHot   = new(0.96f, 0.44f, 0.14f, 1f);
+    [Tooltip("Strokes per radian of sky: higher = smaller strokes.")]
+    [Range(4f, 40f)] public float paintStrokeScale = 16f;
+    [Tooltip("How hard the strokes wind round the whirls.")]
+    [Range(0f, 2f)] public float paintSwirl = 1f;
+    [Tooltip("How much the low sky warms toward yellow and orange.")]
+    [Range(0f, 1f)] public float paintWarmth = 0.6f;
 
     [Header("Fog — the same height fog and far haze as the level map")]
     [Tooltip("A sea of fog under the board: the bottoms of the lowest blocks sink into it; the board above stays clear.")]
@@ -115,6 +139,12 @@ public class LevelEnvironment : ScriptableObject
     [Tooltip("Motes' preset colour × this.")]
     public Color moteTint = Color.white;
 
+    [Header("Intro")]
+    [Tooltip("The level opens low down (just above the lake, if there is one) looking up into the sky as it comes into colour, then rises and turns to the opening view of the board.")]
+    public bool introSkyRise = false;
+    [Tooltip("Seconds for the rise.")]
+    [Range(1.5f, 10f)] public float introSkyRiseSeconds = 4.5f;
+
     [Header("Scenery (outside the build area, never in the way)")]
     public Backdrop backdrop = Backdrop.None;
     public Color backdropColor = new(0.34f, 0.37f, 0.40f, 1f);
@@ -129,8 +159,20 @@ public class LevelEnvironment : ScriptableObject
     public Vector2 backdropPeakRise = new(4f, 15f);
     [Tooltip("Barren fields: height of each shelf's top relative to the board's floor, in cells (lowest, highest).")]
     public Vector2 backdropShelfHeight = new(-9f, -2f);
+    [Tooltip("Water in the hollow round and under the board: a still lake mirroring the sky over it — the painted sky's own brushwork, reacting with it (combat, clear, flashes). Woods, fields and farms keep to its banks.")]
+    public bool backdropLake = false;
+    [Tooltip("The lake's surface, in cells relative to the board's floor.")]
+    public float backdropLakeLevel = -8.5f;
+    [Tooltip("The water's own colour, where it isn't mirroring the sky.")]
+    public Color backdropLakeTint = new(0.14f, 0.28f, 0.36f, 1f);
+    [Tooltip("How much of the sky it mirrors looking straight down: 1 = a perfect mirror. Grazing views mirror more (Fresnel); where it doesn't mirror, the water is clear in the shallows and deepens to its own colour.")]
+    [Range(0f, 1f)] public float backdropLakeMirror = 0.5f;
+    [Tooltip("How much the ripples waver the reflection.")]
+    [Range(0f, 0.4f)] public float backdropLakeRipple = 0.025f;
     [Tooltip("Barren fields: dress the land as farmland — field strips divided by dirt tracks, red barns, hay bales.")]
     public bool backdropFarm = false;
+    [Tooltip("Farmland: how much bigger each piece of land is — bigger pieces overlap into one broad, continuous spread of fields.")]
+    [Range(1f, 3f)] public float backdropFieldScale = 1f;
     [Tooltip("What grows over the land when it blooms (see backdropBloomOn) — grass, or a crop. Alpha 0 = green from backdropLeafColor.")]
     public Color backdropGrowth  = new(0f, 0f, 0f, 0f);
     [Tooltip("When the land blooms, grow that colour over the ground itself (the grass / crop skin). Off = the ground keeps its colour; only the plants come up.")]
@@ -146,8 +188,34 @@ public class LevelEnvironment : ScriptableObject
     [Range(0f, 1f)] public float backdropAccentAmount = 0f;
     [Tooltip("Barren fields only: the first time this synergy is formed in the level, the dry tufts flower and the dead trees leaf out. None = never.")]
     public BlockColor backdropBloomOn = BlockColor.None;
+    [Tooltip("The growing tree the bloom uses (a VineEffect prefab — the one Harmony grows, VinePrefab). Trees and shrubs then grow branch by branch instead of scaling up. Empty = the plain grove trees, popping in.")]
+    public GameObject backdropTreePrefab;
     [Tooltip("Leaf colour for that bloom (the flowers take the synergy's own colours).")]
     public Color backdropLeafColor = new(0.42f, 0.66f, 0.30f, 1f);
+
+    [Header("Scenery — landscape (Terraces, Countryside)")]
+    [Tooltip("Dry ground. Terraces: the treads. Countryside: stubble and dry grass are varied round it.")]
+    public Color landDry   = new(0.60f, 0.48f, 0.33f, 1f);
+    [Tooltip("Bare earth. Terraces: the risers between treads. Countryside: ploughland and field margins.")]
+    public Color landEarth = new(0.42f, 0.31f, 0.21f, 1f);
+    [Tooltip("Countryside: brightness of all the land — fields, verges, woodland floor — both before and after it blooms. Below 1 = deeper, richer ground.")]
+    [Range(0.4f, 1.3f)] public float landTone = 1f;
+    [Tooltip("Terraces: the height of each step, in cells. Low = paddies; high = a desert's mesa steps.")]
+    [Range(0.3f, 4f)] public float terraceStep = 0.9f;
+    [Tooltip("Terraces: how much of each step is flat tread; the rest is the riser.")]
+    [Range(0.4f, 0.97f)] public float terraceTread = 0.82f;
+    [Tooltip("Countryside: field size, in cells (along the rows, across them). Rows are staggered and every field grows its own crop.")]
+    public Vector2 fieldSize = new(9f, 6f);
+    [Tooltip("Countryside: how much of the land is woodland.")]
+    [Range(0f, 0.6f)] public float woodland = 0.22f;
+    [Tooltip("Countryside: the share of fields hedged round.")]
+    [Range(0f, 1f)] public float hedgerows = 0.4f;
+    [Tooltip("Countryside: windmills on the hills. Their sails start turning when the land blooms.")]
+    [Range(0, 8)] public int windmills = 3;
+    [Tooltip("Houses, bare trees and flower spots scattered on the land (Terraces and Countryside).")]
+    [Range(0, 40)] public int landHouses = 14;
+    [Range(0, 80)] public int landTrees  = 36;
+    [Range(0, 80)] public int landSpots  = 40;
 
     [Header("Sun glow (a soft bloom on the horizon where the light comes from)")]
     public bool sunGlow = false;

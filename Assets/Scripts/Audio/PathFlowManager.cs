@@ -136,6 +136,42 @@ public class PathFlowManager : MonoBehaviour
         }
     }
 
+    // Keeps exactly one loop line per route in `paths`: a line whose route no
+    // longer exists is removed (the board was rebuilt, a route moved, a spawn
+    // was cut off), and with addMissing a route with no line yet gets one. Lines
+    // used to go only when a block under them was LIFTED, so a route changed any
+    // other way — a block placed across it, a reroute mid-wave — left its old
+    // line behind, and every wave stacked another on the same route.
+    public void SyncFlows(List<List<FaceNode>> paths, bool addMissing)
+    {
+        var want = new List<(List<FaceNode> path, HashSet<Vector3Int> cells)>();
+        if (paths != null)
+            foreach (var p in paths)
+            {
+                if (p == null || p.Count < 2) continue;
+                var set = new HashSet<Vector3Int>();
+                foreach (var n in p) set.Add(n.cell);
+                want.Add((p, set));
+            }
+
+        var covered = new bool[want.Count];
+        for (int i = _flows.Count - 1; i >= 0; i--)
+        {
+            int match = -1;
+            for (int k = 0; k < want.Count && match < 0; k++)
+                if (!covered[k] && _flows[i].cells.SetEquals(want[k].cells)) match = k;
+            if (match >= 0) { covered[match] = true; continue; }
+
+            if (_flows[i].revealCoroutine != null) StopCoroutine(_flows[i].revealCoroutine);
+            if (_flows[i].go != null) Destroy(_flows[i].go);
+            _flows.RemoveAt(i);
+        }
+
+        if (!addMissing) return;
+        for (int k = 0; k < want.Count; k++)
+            if (!covered[k]) AddFlow(want[k].path);
+    }
+
     public void ClearAll()
     {
         ClearLiveLine();

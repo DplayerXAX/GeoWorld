@@ -258,18 +258,29 @@ public class OrbitCamera : MonoBehaviour
         transform.position += worldDelta;
     }
 
+    // Set by SnapNow: the next rig update lands straight on the framing instead
+    // of easing there. For arriving somewhere (a scene opening behind its loading
+    // page), where a glide from wherever the rig was left reads as the camera
+    // flying up out of the ground and spinning round to face the scene.
+    bool _snapNext;
+
+    /// <summary>Put the camera straight onto its current framing on the next frame, with no glide.</summary>
+    public void SnapNow() => _snapNext = true;
+
+    float Ease() => _snapNext ? 1f : 1f - Mathf.Exp(-transitionSpeed * Time.unscaledDeltaTime);
+
     void LateUpdate()
     {
         distance = Mathf.Lerp(
     distance,
     targetDistance,
-    1f - Mathf.Exp(-transitionSpeed * Time.unscaledDeltaTime)
+    Ease()
 );
 
         orthoSize = Mathf.Lerp(
             orthoSize,
             targetOrthoSize,
-            1f - Mathf.Exp(-transitionSpeed * Time.unscaledDeltaTime)
+            Ease()
         );
         if (myCam != null && useOrthographic)
         {
@@ -288,7 +299,7 @@ public class OrbitCamera : MonoBehaviour
         currentFocusPoint = Vector3.Lerp(
             currentFocusPoint,
             focusGoal,
-            1f - Mathf.Exp(-transitionSpeed * Time.unscaledDeltaTime)
+            Ease()
         );
 
         bool rotatingBlock = (PlacementController.Instance != null && PlacementController.Instance.IsMouseRotating)
@@ -370,7 +381,7 @@ public class OrbitCamera : MonoBehaviour
         transform.position = Vector3.Lerp(
             transform.position - _shakeOffset,
             desiredPos,
-            1f - Mathf.Exp(-transitionSpeed * Time.unscaledDeltaTime)
+            Ease()
         );
 
         // Smooth aim (eased rotation, not a per-frame snap). Looking at the SHIFTED
@@ -378,6 +389,7 @@ public class OrbitCamera : MonoBehaviour
         transform.LookAt(currentFocusPoint + shift);
 
         ApplyShake();
+        _snapNext = false;
     }
 
     // ── Screen shake ─────────────────────────────────────────────────────────
@@ -434,7 +446,7 @@ public class OrbitCamera : MonoBehaviour
     {
         if (!_viewportSeeded) { _viewportShown = focusViewport; _viewportSeeded = true; return; }
         _viewportShown = Vector2.Lerp(_viewportShown, focusViewport,
-                                      1f - Mathf.Exp(-transitionSpeed * Time.unscaledDeltaTime));
+                                      Ease());
     }
 
     Vector3 ViewportBiasShift(Quaternion rot)

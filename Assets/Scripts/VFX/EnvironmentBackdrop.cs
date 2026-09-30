@@ -7,11 +7,12 @@ using UnityEngine;
 // Drawn flat (GeoWorld/Backdrop) and hazed with distance, so it reads as shapes in
 // the air behind the board rather than as detail to look at; the height fog and
 // far haze, when on, swallow its feet.
-public class EnvironmentBackdrop : MonoBehaviour
+public partial class EnvironmentBackdrop : MonoBehaviour
 {
     static Mesh _cube, _spike;
 
     Material _mat, _wheatMat;
+    readonly List<Material> _ownedMats = new();
     readonly List<(Transform t, float baseY, float amp, float phase)> _bob = new();
 
     // Where barren fields can come back to life (Bloom): dry tufts and bare
@@ -24,19 +25,48 @@ public class EnvironmentBackdrop : MonoBehaviour
     struct Greening { public Renderer r; public float delay; }
     Vector2 _peakRise = new(4f, 15f);
     bool    _farm;
+    float   _fieldScale = 1f;
     Vector2 _shelf = new(-9f, -2f);
     // The field strips of the piece being built, in its own space — flowers are kept off them.
     readonly List<Rect> _pieceStrips = new();
     Color   _growth, _growth2;   // bloom colours; alpha 0 = derive from the leaf colour
     bool    _growSkin = true;
     readonly List<Greening> _greening = new();
+    // Land that ripens when it blooms. The vertex colour is the dry colour; the
+    // ripe colour and when each vertex turns (seconds after the bloom) ride in
+    // TEXCOORD2, and GeoWorld/Backdrop eases between them from _RipenT. So the
+    // ripening costs one float a frame per material, not a re-upload of every
+    // vertex colour. Terraces ripen bottom up; the countryside field by field,
+    // outward from the board, with its woods and hedges.
+    readonly List<Material> _ripenMats = new();
+    float _ripenEnd;
+    bool  _ripen;
+
+    // The plants the bloom grows, built while the level loads rather than on the
+    // frame the synergy fires.
+    Mesh[] _bloomTrees, _bloomShrubs, _bloomGrass;
+    TreeMesh.Recipe _treeR, _shrubR, _grassR;
+    Color _bloomLeaf;
+
+    // Trees grown branch by branch (VineEffect) instead of popped in.
+    GameObject _treePrefab;
+    class VineSpawn { public Vector3 at; public float scale, delay; public bool done; public Color leaf; }
+    readonly List<VineSpawn> _vines = new();
+    Transform _growthRoot;
     MaterialPropertyBlock _mpb;
     readonly List<Mesh> _grownMeshes = new();
     float _cs = 1f;
     float _dist01;   // how far out the piece being built stands, 0 (inner edge of the ring) … 1 (outer)
     bool  _bloomed;
 
-    struct Growing { public Transform t; public Vector3 scale; public float delay; public bool shrink, rise; }
+    // shrink: withers away. rise: grows in height only. emerge: comes up out of the
+    // ground from `depth` below `home` (a field of stalks on a slope, which a
+    // height-only scale would drag toward its pivot). Otherwise: pops, all three axes.
+    struct Growing
+    {
+        public Transform t; public Vector3 scale; public float delay; public bool shrink, rise, emerge;
+        public Vector3 home; public float depth;
+    }
 
     // Field strips (Farmland) the wheat grows on: the piece, the strip's top-centre
     // in the piece's space, and its size (x across, y along).
@@ -68,7 +98,30 @@ public class EnvironmentBackdrop : MonoBehaviour
         b._mat.SetFloat("_AccentAmount", env.backdropAccentAmount);
 
         var rng = new System.Random(env.backdropSeed);
-        int n = env.backdropCount;
+        // Out to just past the scenery's far ring; the land hides what runs under it.
+        if (env.backdropLake)
+            SkyLake.Create(go.transform, centre, floorY + env.backdropLakeLevel * cs,
+                           env.backdropDistance.y * cs * 1.05f, env, cs);
+        b._peakRise   = env.backdropPeakRise;
+        // Low preset: bloom trees pop in instead of growing branch by branch.
+        b._treePrefab = GraphicsQuality.GrowingTrees ? env.backdropTreePrefab : null;
+        b._growth     = env.backdropGrowth;
+        b._growth2    = env.backdropGrowth2;
+        bool blooms = env.backdropBloomOn != BlockColor.None;
+        // One landform, not pieces.
+        if (env.backdrop == LevelEnvironment.Backdrop.Terraces)
+        {
+            b.TerraceLand(go.transform, env, centre, floorY, cs, rng);
+            if (blooms) b.PrepareBloom(env.backdropLeafColor);
+            return b;
+        }
+        if (env.backdrop == LevelEnvironment.Backdrop.Countryside)
+        {
+            // Built over several frames, holding the loading page until it's done.
+            b.StartCoroutine(b.Countryside(go.transform, env, centre, floorY, cs, rng));
+            return b;
+        }
+        int n = GraphicsQuality.Scaled(env.backdropCount, 4);
         for (int i = 0; i < n; i++)
         {
             // Stratified round the ring: one piece per sector, jittered, so it never clumps.
@@ -83,6 +136,7 @@ public class EnvironmentBackdrop : MonoBehaviour
             b._dist01 = Mathf.InverseLerp(env.backdropDistance.x, env.backdropDistance.y, dist / cs);
             b._peakRise = env.backdropPeakRise;
             b._farm     = env.backdropFarm;
+            b._fieldScale = env.backdropFieldScale;
             b._shelf    = env.backdropShelfHeight;
             b._growth   = env.backdropGrowth;
             b._growth2  = env.backdropGrowth2;
@@ -96,6 +150,7 @@ public class EnvironmentBackdrop : MonoBehaviour
                 case LevelEnvironment.Backdrop.BarrenFields:    b.Barren(piece, rng, cs); break;
             }
         }
+        if (blooms) b.PrepareBloom(env.backdropLeafColor);
         return b;
     }
 
@@ -186,6 +241,7 @@ public class EnvironmentBackdrop : MonoBehaviour
     void Barren(Transform p, System.Random rng, float cs)
     {
         float w = Rand(rng, 16f, 30f) * cs, d = Rand(rng, 10f, 20f) * cs;
+        if (_farm) { w *= _fieldScale; d *= _fieldScale; }   // broad, overlapping farmland
         float top = Rand(rng, Mathf.Min(_shelf.x, _shelf.y), Mathf.Max(_shelf.x, _shelf.y)) * cs;
         _pieceStrips.Clear();
         Land(Box(p, new Vector3(0f, (top - 60f * cs) * 0.5f, 0f), new Vector3(w, top + 60f * cs, d), Vector3.zero));
@@ -220,25 +276,7 @@ public class EnvironmentBackdrop : MonoBehaviour
         // Dead trees: a leaning trunk, a few bare limbs.
         int trees = rng.Next(0, 3);
         for (int i = 0; i < trees; i++)
-        {
-            var at = new Vector3(Rand(rng, -0.4f, 0.4f) * w, top, Rand(rng, -0.4f, 0.4f) * d);
-            float th = Rand(rng, 3.5f, 7f) * cs, tw = Rand(rng, 0.35f, 0.6f) * cs;
-            var tree = new GameObject("DeadTree").transform;
-            tree.SetParent(p, false);
-            tree.localPosition = at;
-            tree.localRotation = Quaternion.Euler(Rand(rng, -9f, 9f), Rand(rng, 0f, 360f), Rand(rng, -9f, 9f));
-            Box(tree, new Vector3(0f, th * 0.5f, 0f), new Vector3(tw, th, tw), Vector3.zero);
-            int limbs = rng.Next(2, 5);
-            for (int k = 0; k < limbs; k++)
-            {
-                float y = th * Rand(rng, 0.45f, 0.95f), len = th * Rand(rng, 0.25f, 0.45f);
-                float yaw = Rand(rng, 0f, 360f), lift = Rand(rng, 25f, 60f);
-                var dir = Quaternion.Euler(-lift, yaw, 0f) * Vector3.forward;
-                Box(tree, new Vector3(0f, y, 0f) + dir * (len * 0.5f), new Vector3(tw * 0.45f, tw * 0.45f, len),
-                    Quaternion.LookRotation(dir).eulerAngles);
-            }
-            _deadTrees.Add((tree, th));
-        }
+            DeadTree(p, new Vector3(Rand(rng, -0.4f, 0.4f) * w, top, Rand(rng, -0.4f, 0.4f) * d), rng, cs, 1f);
 
         // A broken fence line: leaning posts in a rough row.
         if (rng.NextDouble() < 0.6)
@@ -284,16 +322,182 @@ public class EnvironmentBackdrop : MonoBehaviour
         return false;
     }
 
+    // A bare tree — a leaning trunk, a few limbs. Leafs out (a living grove tree
+    // comes up in its place) when the land blooms.
+    void DeadTree(Transform p, Vector3 localAt, System.Random rng, float cs, float scale)
+    {
+        float th = Rand(rng, 3.5f, 7f) * cs * scale, tw = Rand(rng, 0.35f, 0.6f) * cs * scale;
+        var tree = new GameObject("DeadTree").transform;
+        tree.SetParent(p, false);
+        tree.localPosition = localAt;
+        tree.localRotation = Quaternion.Euler(Rand(rng, -9f, 9f), Rand(rng, 0f, 360f), Rand(rng, -9f, 9f));
+        Box(tree, new Vector3(0f, th * 0.5f, 0f), new Vector3(tw, th, tw), Vector3.zero);
+        int limbs = rng.Next(2, 5);
+        for (int k = 0; k < limbs; k++)
+        {
+            float y = th * Rand(rng, 0.45f, 0.95f), len = th * Rand(rng, 0.25f, 0.45f);
+            float yaw = Rand(rng, 0f, 360f), lift = Rand(rng, 25f, 60f);
+            var dir = Quaternion.Euler(-lift, yaw, 0f) * Vector3.forward;
+            Box(tree, new Vector3(0f, y, 0f) + dir * (len * 0.5f), new Vector3(tw * 0.45f, tw * 0.45f, len),
+                Quaternion.LookRotation(dir).eulerAngles);
+        }
+        _deadTrees.Add((tree, th));
+    }
+
+    // ── Terraces ─────────────────────────────────────────────────────────────
+    // One continuous terraced landscape round the board: a heightfield of rolling
+    // hills that climb with distance, cut into treads by quantising the height — so
+    // every terrace edge follows the land's own contour and runs on round one hill
+    // into the next, the way paddies do. Coloured per vertex: treads by terrace
+    // (dusty now; gold and green in turn once it blooms, bottom up), risers as bare
+    // earth. Houses on flat treads; bare trees that grow leaves when it blooms.
+    void TerraceLand(Transform parent, LevelEnvironment env, Vector3 centre, float floorY, float cs, System.Random rng)
+    {
+        float inner = env.backdropDistance.x * cs, outer = env.backdropDistance.y * cs;
+        float grid  = GraphicsQuality.BackdropGrid * cs;
+        int   n     = Mathf.CeilToInt(outer * 2f / grid) + 1;
+        float stepCells = env.terraceStep;             // terrace height, in cells
+        float tread     = env.terraceTread;            // flat share of each step
+        Color ripeA = env.backdropGrowth.a  > 0f ? env.backdropGrowth  : new Color(0.88f, 0.66f, 0.20f, 1f);
+        Color ripeB = env.backdropGrowth2.a > 0f ? env.backdropGrowth2 : new Color(0.50f, 0.66f, 0.24f, 1f);
+        float ox = Rand(rng, 0f, 100f), oz = Rand(rng, 0f, 100f);
+
+        var verts = new Vector3[n * n];
+        var dry   = new Color[n * n];
+        var ripe  = new Color[n * n];
+        var h01   = new float[n * n];
+        var level = new float[n * n];
+        float lo = float.MaxValue, hi = float.MinValue;
+
+        for (int iz = 0; iz < n; iz++)
+            for (int ix = 0; ix < n; ix++)
+            {
+                int i = iz * n + ix;
+                float x = -outer + ix * grid, z = -outer + iz * grid;
+                float d = Mathf.Sqrt(x * x + z * z);
+                float t = Mathf.InverseLerp(inner, outer, d);
+
+                // Rolling hills that rise toward the outside, in cells above the floor.
+                float hill = Fbm2(x / cs * 0.02f + ox, z / cs * 0.02f + oz);
+                float raw  = -8f + (_peakRise.y + 8f) * Mathf.Pow(t, 0.8f) * (0.35f + 0.9f * hill) + (hill - 0.5f) * 5f;
+
+                // Treads and risers: flat most of each step, a short steep rise at its end.
+                float lv  = raw / stepCells;
+                float fl  = Mathf.Floor(lv), fr = lv - fl;
+                float rise = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(tread, 1f, fr));
+                float y   = (fl + rise) * stepCells;
+
+                // Dropped away under the board and toward the middle.
+                float ramp = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(inner - 4f * cs, inner + 14f * cs, d));
+                y = Mathf.Lerp(-30f, y, ramp);
+
+                verts[i] = centre + new Vector3(x, 0f, z) + Vector3.up * (floorY - centre.y + y * cs);
+                level[i] = fl;
+                lo = Mathf.Min(lo, y); hi = Mathf.Max(hi, y);
+
+                float j = 0.92f + 0.08f * Mathf.Repeat(fl * 0.37f, 1f);
+                bool riser = fr > tread - 0.02f;
+                var earth = Shade(env.landEarth, j);
+                dry[i]  = riser ? earth : Shade(env.landDry, j);
+                ripe[i] = riser ? earth : Shade((int)fl % 2 == 0 ? ripeA : ripeB, j);
+                h01[i] = y;
+            }
+        for (int i = 0; i < h01.Length; i++) h01[i] = Mathf.InverseLerp(lo, hi, h01[i]);
+
+        // Triangles, leaving the middle open where the board is.
+        var tris = new List<int>((n - 1) * (n - 1) * 6);
+        float hole = (inner - 6f * cs) * (inner - 6f * cs);
+        for (int iz = 0; iz < n - 1; iz++)
+            for (int ix = 0; ix < n - 1; ix++)
+            {
+                int a = iz * n + ix, b = a + 1, c = a + n, e = c + 1;
+                Vector3 mid = (verts[a] + verts[e]) * 0.5f - centre;
+                if (mid.x * mid.x + mid.z * mid.z < hole) continue;
+                tris.Add(a); tris.Add(c); tris.Add(b);   // clockwise from above
+                tris.Add(b); tris.Add(c); tris.Add(e);
+            }
+
+        var terrain = new Mesh { name = "TerraceLand" };
+        if (verts.Length > 65000) terrain.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32;
+        terrain.vertices = verts;
+        terrain.colors   = dry;
+        terrain.SetTriangles(tris, 0);
+        terrain.RecalculateNormals();
+        terrain.RecalculateBounds();
+        _grownMeshes.Add(terrain);
+        var at = new float[h01.Length];
+        for (int i = 0; i < at.Length; i++) at[i] = h01[i] * 2.6f;   // bottom up
+
+        var land = new GameObject("TerraceLand");
+        land.transform.SetParent(parent, false);
+        land.AddComponent<MeshFilter>().sharedMesh = terrain;
+        var r = land.AddComponent<MeshRenderer>();
+        var landMat = new Material(_mat) { name = "TerraceLand (runtime)" };
+        landMat.SetFloat("_VertexColor", 1f);
+        Ripens(terrain, ripe, at, landMat);
+        _ownedMats.Add(landMat);
+        r.sharedMaterial = landMat;
+        r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        r.receiveShadows = false;
+
+        // Houses, trees and flower spots on flat treads (a vertex whose neighbours
+        // share its terrace), in the band beyond the board.
+        bool FlatAt(int ix, int iz)
+        {
+            if (ix < 1 || iz < 1 || ix >= n - 1 || iz >= n - 1) return false;
+            int i = iz * n + ix;
+            return level[i] == level[i - 1] && level[i] == level[i + 1] && level[i] == level[i - n] && level[i] == level[i + n];
+        }
+        int houses = 0, trees = 0, spots = 0;
+        int wantHouses = GraphicsQuality.Scaled(env.landHouses), wantTrees = GraphicsQuality.Scaled(env.landTrees);
+        int wantSpots  = GraphicsQuality.Scaled(env.landSpots);
+        for (int tries = 0; tries < 4000 && (houses < wantHouses || trees < wantTrees || spots < wantSpots); tries++)
+        {
+            int ix = rng.Next(1, n - 1), iz = rng.Next(1, n - 1);
+            int i = iz * n + ix;
+            Vector3 rel = verts[i] - centre; rel.y = 0f;
+            float d = rel.magnitude;
+            if (d < inner + 6f * cs || d > outer * 0.9f || !FlatAt(ix, iz)) continue;
+            Vector3 local = parent.InverseTransformPoint(verts[i]);
+            if (houses < wantHouses && rng.NextDouble() < 0.25) { House(parent, local, rng, cs); houses++; }
+            else if (trees < wantTrees && rng.NextDouble() < 0.5) { DeadTree(parent, local, rng, cs, 0.7f); trees++; }
+            else if (spots < wantSpots) { _groundSpots.Add((verts[i], 1.3f * cs)); spots++; }
+        }
+    }
+
+    static float Fbm2(float x, float z)
+    {
+        float s = 0f, a = 0.5f, f = 1f;
+        for (int k = 0; k < 4; k++) { s += Mathf.PerlinNoise(x * f, z * f) * a; f *= 2.03f; a *= 0.5f; }
+        return s / 0.9375f;
+    }
+
+    // A farmhouse: timber walls under a dark gable roof, turned to look downhill.
+    void House(Transform p, Vector3 localAt, System.Random rng, float cs)
+    {
+        var h = new GameObject("House").transform;
+        h.SetParent(p, false);
+        h.localPosition = localAt;
+        var outward = new Vector3(localAt.x, 0f, localAt.z);
+        h.localRotation = outward.sqrMagnitude > 1e-4f ? Quaternion.LookRotation(outward) : Quaternion.identity;
+        float w = Rand(rng, 1.8f, 2.6f) * cs, d = Rand(rng, 1.4f, 1.9f) * cs, hh = Rand(rng, 1f, 1.4f) * cs;
+        Paint(Box(h, new Vector3(0f, hh * 0.5f, 0f), new Vector3(w, hh, d), Vector3.zero), new Color(0.56f, 0.42f, 0.3f, 1f));
+        Paint(Part(h, Gable(), new Vector3(0f, hh, 0f), new Vector3(w * 1.2f, hh * 0.7f, d * 1.3f), Vector3.zero),
+              new Color(0.24f, 0.22f, 0.23f, 1f));
+    }
+
     // Worked land on the shelf: strips of field running across it, split by a dirt
     // track; now and then a red barn with a grey roof, and hay bales. The strips are
     // land, so when the land blooms the crop grows over them.
     void Farmland(Transform p, System.Random rng, float cs, float w, float d, float top)
     {
-        int rows = rng.Next(3, 7);
+        // Rows about two and a half cells deep, however big the piece — a bigger
+        // piece is more field, not fatter strips.
+        int rows = Mathf.Max(3, Mathf.RoundToInt(d / (2.5f * cs)));
         float rowD = d / rows;
         for (int r = 0; r < rows; r++)
         {
-            if (rng.NextDouble() < 0.15) continue;   // a fallow gap
+            if (rng.NextDouble() < 0.06) continue;   // the odd fallow gap
             float z = -d * 0.5f + rowD * (r + 0.5f);
             float sw = w * Rand(rng, 0.8f, 0.97f);
             var strip = Box(p, new Vector3(0f, top + 0.12f * cs, z),
@@ -393,10 +597,11 @@ public class EnvironmentBackdrop : MonoBehaviour
     // delay, so the green spreads across the land rather than switching on. Once.
     public void Bloom(Color[] petals, Color leaf)
     {
-        if (_bloomed || (_groundSpots.Count == 0 && _deadTrees.Count == 0)) return;
+        if (_bloomed || (_groundSpots.Count == 0 && _deadTrees.Count == 0 && _ripenMats.Count == 0)) return;
         _bloomed = true;
         var rng = new System.Random(_groundSpots.Count * 7919 + _deadTrees.Count);
         const float Spread = 2.6f;   // seconds for the green to cross the land
+        _ripen = _ripenMats.Count > 0;
 
         // Flowers — sized for the distance they're seen from.
         var tops = new List<Vector3>();
@@ -420,7 +625,7 @@ public class EnvironmentBackdrop : MonoBehaviour
             patch.bobSpeed      = 0.8f;
             patch.stemHeight    = 0.5f * _cs;
             patch.Grow(tops.ToArray(), petals, new Color(1f, 0.85f, 0.35f), maxFlowersPerCell: 3,
-                       flowerSizeWorld: 0.8f * _cs, scatterWorld: 0.9f * _cs, maxFlowers: 480);
+                       flowerSizeWorld: 0.8f * _cs, scatterWorld: 0.9f * _cs, maxFlowers: GraphicsQuality.Scaled(480, 60));
         }
 
         // The land grows a skin of grass and flowers (GeoWorld/Backdrop's
@@ -440,36 +645,38 @@ public class EnvironmentBackdrop : MonoBehaviour
         // Real wheat on the field strips — the farm's own stalk, a field at a time,
         // rising out of the stubble.
         if (_fieldStrips.Count > 0) GrowWheat(rng, Spread);
+        if (_wheatFields.Count > 0) GrowCountryWheat(rng);
 
         var mat = FoliageMaterial();
         if (mat == null) { _growT = 0f; return; }
 
-        var treeR  = Leafed(TreeMesh.Recipe.Tree(),  leaf);
-        var shrubR = Leafed(TreeMesh.Recipe.Shrub(), leaf);
-        var trees  = new Mesh[3];
-        var shrubs = new Mesh[3];
-        for (int v = 0; v < 3; v++)
-        {
-            _grownMeshes.Add(trees[v]  = TreeMesh.Build(treeR,  rng.Next()));
-            _grownMeshes.Add(shrubs[v] = TreeMesh.Build(shrubR, rng.Next()));
-        }
+        PrepareBloom(leaf);
+        var treeR  = _treeR;
+        var shrubR = _shrubR;
+        var trees  = _bloomTrees;
+        var shrubs = _bloomShrubs;
         var root = new GameObject("Growth").transform;
         root.SetParent(transform, false);
 
+        _growthRoot = root;
+
         // A living tree where each dead one stood, about its height; the dead one
-        // shrinks away as it comes up.
+        // shrinks away as it comes up. With a growing-tree prefab it grows branch by
+        // branch (VineEffect); without, a grove tree pops in.
         foreach (var (dead, height) in _deadTrees)
         {
             if (dead == null) continue;
             float delay = Rand(rng, 0f, Spread);
-            Plant(root, trees[rng.Next(trees.Length)], mat, dead.position,
-                  height / Mathf.Max(0.1f, treeR.height) * 0.8f, Rand(rng, 0f, 360f), delay);
+            if (_treePrefab != null)
+                _vines.Add(new VineSpawn { at = dead.position, scale = height / (1.6f * _cs) * _cs, delay = delay, leaf = leaf });
+            else
+                Plant(root, trees[rng.Next(trees.Length)], mat, dead.position,
+                      height / Mathf.Max(0.1f, treeR.height) * 0.8f, Rand(rng, 0f, 360f), delay);
             _growing.Add(new Growing { t = dead, scale = dead.localScale, delay = delay, shrink = true });
         }
         // Grass all the way up the peaks, the lushest green.
-        var grassR = Leafed(TreeMesh.Recipe.Tuft(), Color.Lerp(leaf, new Color(0.55f, 0.85f, 0.3f), 0.4f));
-        var grass  = new Mesh[3];
-        for (int v = 0; v < 3; v++) _grownMeshes.Add(grass[v] = TreeMesh.Build(grassR, rng.Next()));
+        var grassR = _grassR;
+        var grass  = _bloomGrass;
         var apex = new Vector3(0.08f, 1f, -0.05f);   // Peak()'s summit
         foreach (var peak in _peaks)
         {
@@ -488,8 +695,11 @@ public class EnvironmentBackdrop : MonoBehaviour
         foreach (var (at, _) in _groundSpots)
         {
             if (rng.NextDouble() > 0.4) continue;
-            Plant(root, shrubs[rng.Next(shrubs.Length)], mat, at,
-                  _cs * Rand(rng, 1.5f, 2.6f) / Mathf.Max(0.1f, shrubR.height), Rand(rng, 0f, 360f), Rand(rng, 0f, Spread));
+            if (_treePrefab != null)
+                _vines.Add(new VineSpawn { at = at, scale = _cs * Rand(rng, 0.9f, 1.5f), delay = Rand(rng, 0f, Spread), leaf = leaf });
+            else
+                Plant(root, shrubs[rng.Next(shrubs.Length)], mat, at,
+                      _cs * Rand(rng, 1.5f, 2.6f) / Mathf.Max(0.1f, shrubR.height), Rand(rng, 0f, 360f), Rand(rng, 0f, Spread));
         }
         _growT = 0f;
     }
@@ -500,13 +710,7 @@ public class EnvironmentBackdrop : MonoBehaviour
     void GrowWheat(System.Random rng, float spread)
     {
         var stalk = LevelMapController.SharedWheatMesh();
-        if (stalk == null || _mat == null) return;
-        if (_wheatMat == null)
-        {
-            _wheatMat = new Material(_mat) { name = "BackdropWheat (runtime)" };
-            _wheatMat.SetFloat("_Cull", 0f);          // the stalk is single-sided cards
-            _wheatMat.SetFloat("_GreenAmount", 0f);
-        }
+        if (stalk == null || WheatMat() == null) return;
         Color gold  = _growth.a  > 0f ? _growth  : new Color(0.84f, 0.6f, 0.18f, 1f);
         Color gold2 = _growth2.a > 0f ? _growth2 : new Color(1f, 0.8f, 0.32f, 1f);
 
@@ -615,6 +819,11 @@ public class EnvironmentBackdrop : MonoBehaviour
             // Back-out: overshoots a touch and settles, so each one pops.
             const float c1 = 1.70158f, c3 = c1 + 1f;
             float e = Mathf.Max(0.02f, 1f + c3 * Mathf.Pow(k - 1f, 3f) + c1 * Mathf.Pow(k - 1f, 2f));
+            if (g.emerge)
+            {
+                g.t.localPosition = g.home + Vector3.down * (g.depth * (1f - e));
+                continue;
+            }
             // A field rises (height only); a plant pops (all three).
             g.t.localScale = g.rise ? new Vector3(g.scale.x, g.scale.y * e, g.scale.z) : g.scale * e;
         }
@@ -631,7 +840,33 @@ public class EnvironmentBackdrop : MonoBehaviour
                 g.r.SetPropertyBlock(_mpb);
             }
         }
-        if (!any) { _growT = -1f; _growing.Clear(); _greening.Clear(); }
+        foreach (var v in _vines)
+        {
+            if (v.done) continue;
+            any = true;
+            if (_growT < v.delay) continue;
+            v.done = true;
+            GrowVine(v);
+        }
+        if (_ripen)
+        {
+            foreach (var rm in _ripenMats) if (rm != null) rm.SetFloat("_RipenT", _growT);
+            if (_growT < _ripenEnd) any = true;
+        }
+        if (!any) { _growT = -1f; _growing.Clear(); _greening.Clear(); _vines.Clear(); _ripen = false; }
+    }
+
+    // One growing tree (the Harmony vine prefab), sized for the backdrop. Its trunk
+    // and every fork grow node by node; leaves and blossoms open as they go.
+    void GrowVine(VineSpawn v)
+    {
+        var go = Instantiate(_treePrefab, v.at, Quaternion.identity, _growthRoot != null ? _growthRoot : transform);
+        if (!go.TryGetComponent<VineEffect>(out var fx)) { Destroy(go); return; }
+        fx.worldScale   = Mathf.Max(0.1f, v.scale);
+        fx.castShadows  = false;
+        fx.leafColor    = v.leaf;
+        fx.leafTipColor = Color.Lerp(v.leaf, new Color(0.85f, 0.95f, 0.5f), 0.4f);
+        fx.GrowTree(new Color(0.40f, 0.29f, 0.2f), new Color(0.55f, 0.42f, 0.28f), Vector3.up, _treePrefab);
     }
 
     // ── Horizon glow ─────────────────────────────────────────────────────────
@@ -690,6 +925,11 @@ public class EnvironmentBackdrop : MonoBehaviour
     void Update()
     {
         if (_growT >= 0f) GrowStep();
+        // Windmills stand still over the dead land and start turning once it blooms.
+        _sailSpeed = Mathf.MoveTowards(_sailSpeed, _bloomed ? 40f : 0f, 12f * Time.deltaTime);
+        if (_sailSpeed > 0f)
+            foreach (var s in _sails)
+                if (s != null) s.Rotate(Vector3.forward, _sailSpeed * Time.deltaTime, Space.Self);
         float t = Time.time * 0.35f;
         foreach (var b in _bob)
         {
@@ -702,8 +942,10 @@ public class EnvironmentBackdrop : MonoBehaviour
 
     void OnDestroy()
     {
+        LoadingScreen.Release(this);
         if (_mat != null) Destroy(_mat);
         if (_wheatMat != null) Destroy(_wheatMat);
+        foreach (var m in _ownedMats) if (m != null) Destroy(m);
         foreach (var m in _grownMeshes) if (m != null) Destroy(m);
     }
 
@@ -729,6 +971,56 @@ public class EnvironmentBackdrop : MonoBehaviour
     }
 
     static float Rand(System.Random rng, float a, float b) => a + (float)rng.NextDouble() * (b - a);
+
+    static Color Shade(Color c, float k) => new Color(c.r * k, c.g * k, c.b * k, 1f);
+
+    // Gives a vertex-coloured mesh its ripe colour and timing (TEXCOORD2) and puts
+    // its material on the bloom's clock.
+    void Ripens(Mesh m, Color[] ripe, float[] at, Material mat)
+    {
+        var uv = new List<Vector4>(ripe.Length);
+        for (int i = 0; i < ripe.Length; i++)
+        {
+            uv.Add(new Vector4(ripe[i].r, ripe[i].g, ripe[i].b, at[i]));
+            _ripenEnd = Mathf.Max(_ripenEnd, at[i] + 1.4f);
+        }
+        m.SetUVs(2, uv);
+        mat.SetFloat("_RipenT", -1f);
+        if (!_ripenMats.Contains(mat)) _ripenMats.Add(mat);
+    }
+
+    // The bloom's trees, shrubs and grass. Building them is the slow part of a
+    // bloom, so it happens while the level loads (see Build); Bloom only rebuilds
+    // them if it is asked for a different leaf colour.
+    void PrepareBloom(Color leaf)
+    {
+        if (_bloomTrees != null && _bloomLeaf == leaf) return;
+        _bloomLeaf = leaf;
+        var rng = new System.Random(7919);
+        _treeR  = Leafed(TreeMesh.Recipe.Tree(),  leaf);
+        _shrubR = Leafed(TreeMesh.Recipe.Shrub(), leaf);
+        _grassR = Leafed(TreeMesh.Recipe.Tuft(), Color.Lerp(leaf, new Color(0.55f, 0.85f, 0.3f), 0.4f));
+        _bloomTrees  = new Mesh[3];
+        _bloomShrubs = new Mesh[3];
+        _bloomGrass  = new Mesh[3];
+        for (int v = 0; v < 3; v++)
+        {
+            _grownMeshes.Add(_bloomTrees[v]  = TreeMesh.Build(_treeR,  rng.Next()));
+            _grownMeshes.Add(_bloomShrubs[v] = TreeMesh.Build(_shrubR, rng.Next()));
+            _grownMeshes.Add(_bloomGrass[v]  = TreeMesh.Build(_grassR, rng.Next()));
+        }
+    }
+
+    Material WheatMat()
+    {
+        if (_wheatMat == null && _mat != null)
+        {
+            _wheatMat = new Material(_mat) { name = "BackdropWheat (runtime)" };
+            _wheatMat.SetFloat("_Cull", 0f);          // the stalk is single-sided cards
+            _wheatMat.SetFloat("_GreenAmount", 0f);
+        }
+        return _wheatMat;
+    }
 
     static Mesh Cube()
     {

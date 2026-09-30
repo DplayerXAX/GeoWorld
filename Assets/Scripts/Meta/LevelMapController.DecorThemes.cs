@@ -29,7 +29,7 @@ public class OrderWorkshopConfig : MapDecorConfig
 
     [Header("Gears")]
     [Tooltip("Free-standing gears scattered across the yard, on top of the ground blocks.")]
-    [Range(0, 24)] public int yardGears = 10;
+    [Range(0, 32)] public int yardGears = 18;
     [Tooltip("Gears mounted flat on the house's long walls.")]
     [Range(0, 8)] public int wallGears = 4;
     [Range(0.25f, 1.5f)] public float gearSize = 0.62f;
@@ -42,7 +42,45 @@ public class OrderWorkshopConfig : MapDecorConfig
     [Header("Pipes & stacks")]
     [Range(0, 6)] public int chimneys = 2;
     [Tooltip("Upright pipes standing around the yard.")]
-    [Range(0, 12)] public int pipes = 5;
+    [Range(0, 16)] public int pipes = 8;
+    [Tooltip("Smoke puffs kept rising off each chimney. 0 = cold stacks.")]
+    [Range(0, 12)] public int smokePuffs = 6;
+    public Color smokeColor = new Color(0.80f, 0.80f, 0.82f);
+
+    [Header("Yard")]
+    [Tooltip("Floor plates: every other 2×2 patch a shade lighter, like bolted steel plate.")]
+    public Color plateColor  = new Color(0.39f, 0.40f, 0.43f);
+    [Tooltip("The hazard stripe along the conveyor's lane, and the crane's paint.")]
+    public Color hazardColor = new Color(0.88f, 0.66f, 0.16f);
+    [Tooltip("A rail line down the back of the yard, with a cart shuttling along it.")]
+    public bool railEnabled = true;
+    [Tooltip("A conveyor down the front: hopper, press, goods riding it.")]
+    public bool conveyorEnabled = true;
+    [Tooltip("A lattice jib crane slewing over the conveyor.")]
+    public bool craneEnabled = true;
+    public bool waterTowerEnabled = true;
+    [Tooltip("Machine sheds either side of the house: sawtooth roofs, a turning gear on the front. For a wide yard; each is skipped where it wouldn't fit.")]
+    [Range(0, 4)] public int sheds = 2;
+    [Range(0, 24)] public int crates = 16;
+    [Tooltip("Lamp posts round the rim.")]
+    [Range(0, 16)] public int lamps = 9;
+    public Color crateColor  = new Color(0.58f, 0.42f, 0.26f);
+    public Color barrelColor = new Color(0.62f, 0.22f, 0.18f);
+    [ColorUsage(false, true)] public Color lampColor = new Color(1.6f, 1.2f, 0.6f);
+
+    // The two lanes, as world rows. The ground pass (SoilAt) and the builder both read these.
+    public int RailRow     => origin.z + Mathf.RoundToInt((Extent.y - 1) * 0.82f);
+    public int ConveyorRow => origin.z + Mathf.RoundToInt((Extent.y - 1) * 0.18f);
+
+    public override Color SoilAt(Vector2Int c)
+    {
+        if (railEnabled && c.y == RailRow)
+            return new Color(0.24f, 0.22f, 0.21f);                       // ballast
+        if (conveyorEnabled && c.y == ConveyorRow)
+            return ((c.x & 1) == 0) ? Color.Lerp(plateColor, hazardColor, 0.55f) : Shade(plateColor, 0.7f);
+        bool light = ((((c.x - origin.x) >> 1) + ((c.y - origin.z) >> 1)) & 1) == 0;
+        return light ? plateColor : soilColor;
+    }
 
     public override string RootName => "OrderWorkshop";
 
@@ -50,8 +88,10 @@ public class OrderWorkshopConfig : MapDecorConfig
     {
         enabled       = true;
         gateLevelId   = "1-2";
-        origin        = new Vector3Int(6, 2, -2);
-        size          = new Vector2Int(11, 10);
+        origin        = new Vector3Int(-5, 2, 12);
+        size          = new Vector2Int(27, 13);
+        organic       = 0.4f;
+        outlineSeed   = 2;
         soilColor     = new Color(0.32f, 0.33f, 0.36f);   // oil-stained plate, not earth
         soilJitter    = 0.10f;
         growYawOffset = -80f;
@@ -99,14 +139,61 @@ public class ObservatoryConfig : MapDecorConfig
     [Tooltip("A meridian arc standing over the plaza — the instrument an observatory is FOR. 0 = none.")]
     [Range(0, 24)] public int meridianSegments = 14;
 
+    [Header("Garden")]
+    [Tooltip("The paved plaza round the dome, as a fraction of the plot's half-size. Paths run from it to a gateway on every side (gateWidth wide).")]
+    [Range(0.15f, 0.7f)] public float plazaRadius = 0.5f;
+    public Color pathColor   = new Color(0.60f, 0.58f, 0.54f);
+    public Color gardenColor = new Color(0.24f, 0.33f, 0.28f);
+    public bool orrery  = true;
+    public bool sundial = true;
+    [Tooltip("A small second observatory in one corner of the garden, under its own turning dome.")]
+    public bool annex   = true;
+    [Range(0, 12)] public int lanterns    = 6;
+    [Range(0, 24)] public int hedges      = 12;
+    [Range(0, 12)] public int gardenTrees = 6;
+    [Range(0, 60)] public int flowers     = 28;
+    [ColorUsage(false, true)] public Color lanternColor = new Color(1.5f, 1.25f, 0.7f);
+    public Color leafDeep  = new Color(0.16f, 0.30f, 0.26f);
+    public Color leafLight = new Color(0.34f, 0.52f, 0.42f);
+    public Color bark      = new Color(0.46f, 0.40f, 0.38f);
+    [Tooltip("Night-blooming beds: cool blues, white, a violet, a pale gold.")]
+    public Color[] flowerPalette =
+    {
+        new Color(0.62f, 0.72f, 1.00f), new Color(0.88f, 0.90f, 1.00f),
+        new Color(0.70f, 0.55f, 0.95f), new Color(0.98f, 0.92f, 0.65f),
+    };
+
+    public bool OnPlaza(Vector2Int c) => Local(c).magnitude <= plazaRadius;
+
+    // The cross of paths through the middle, gateWidth cells wide. None when
+    // gateWidth is 0 (an unbroken wall has nowhere for a path to go).
+    public bool OnPath(Vector2Int c)
+    {
+        if (gateWidth <= 0) return false;
+        var e = Extent;
+        float cx = origin.x + (e.x - 1) * 0.5f, cz = origin.z + (e.y - 1) * 0.5f;
+        float half = gateWidth * 0.5f - 0.01f;
+        return Mathf.Abs(c.x - cx) <= half || Mathf.Abs(c.y - cz) <= half;
+    }
+
+    public override Color SoilAt(Vector2Int c)
+    {
+        if (OnPlaza(c))
+            return Local(c).magnitude > plazaRadius * 0.72f ? Color.Lerp(soilColor, brassColor, 0.18f) : soilColor;
+        return OnPath(c) ? pathColor : gardenColor;
+    }
+
     public override string RootName => "Observatory";
 
     public ObservatoryConfig()
     {
         enabled       = true;
         gateLevelId   = "1-3";
-        origin        = new Vector3Int(-6, 2, -13);
+        origin        = new Vector3Int(-12, 6, 23);
         size          = new Vector2Int(10, 10);
+        foundation    = 4;   // up on a rise behind the workshop
+        organic       = 0.5f;
+        outlineSeed   = 3;
         soilColor     = new Color(0.26f, 0.27f, 0.33f);   // night slate
         soilJitter    = 0.06f;   // barely there — flagstone variation, not soil
         growYawOffset = 120f;
@@ -132,6 +219,9 @@ public partial class LevelMapController : MonoBehaviour
         // else is arranged around it.
         var centreCol = new Vector2Int(cfg.origin.x + ext.x / 2, cfg.origin.z + ext.y / 2);
         Vector3 housePos = ColumnSurface(colTop, centreCol, cfg, cs);
+        // What the yard's machinery claims, so the scatter below stays out of it.
+        var shedCols = new List<Vector2Int>();
+        var taken = WorkshopReserved(cfg, coveredCols, ext, centreCol, out var craneCol, out var towerCol, shedCols);
 
         float w = cfg.houseSize.x * cs;
         float d = cfg.houseSize.y * cs;
@@ -162,6 +252,8 @@ public partial class LevelMapController : MonoBehaviour
                          Quaternion.identity, new Vector3(0.06f, wall * 0.24f, d * 0.18f), cfg.gearAccent);
         }
 
+        DetailMachineHouse(root, cfg, housePos, w, d, wall, cs);
+
         // ── Chimneys ─────────────────────────────────────────────────────────
         for (int i = 0; i < cfg.chimneys; i++)
         {
@@ -174,6 +266,9 @@ public partial class LevelMapController : MonoBehaviour
             MakeMeshProp(root, $"StackCap{i}", RailMesh(),
                          housePos + new Vector3(x, wall + cfg.roofRise * 0.5f + h, d * 0.18f),
                          Quaternion.identity, new Vector3(cs * 0.22f, cs * 0.06f, cs * 0.22f), cfg.trimColor);
+            if (cfg.smokePuffs > 0)
+                SpawnSmoke(root, housePos + new Vector3(x, wall + cfg.roofRise * 0.5f + h + cs * 0.05f, d * 0.18f),
+                           cfg.smokePuffs, cfg.smokeColor, cs, i);
         }
 
         // ── Wall gears ───────────────────────────────────────────────────────
@@ -191,12 +286,12 @@ public partial class LevelMapController : MonoBehaviour
         // ── Yard gears ───────────────────────────────────────────────────────
         // Lying flat on the ground like millstones, so the yard reads as machinery
         // half-buried in the plate rather than as scattered props.
-        var cols = new List<Vector2Int>(coveredCols);
-        cols.Sort((a, b) => a.x != b.x ? a.x.CompareTo(b.x) : a.y.CompareTo(b.y));   // deterministic, unlike HashSet order
+        var cols = SortedCols(coveredCols);   // deterministic, unlike HashSet order
+        cols.RemoveAll(taken.Contains);
         for (int i = 0; i < cfg.yardGears && cols.Count > 0; i++)
         {
             var col = cols[Mathf.FloorToInt(Hash01(DecorHash(i, 331)) * cols.Count) % cols.Count];
-            if (col == centreCol) continue;
+            if (col == centreCol || !taken.Add(col)) continue;
             float r = cfg.gearSize * (0.4f + Hash01(DecorHash(i, 733)) * 0.8f);
             var pos = ColumnSurface(colTop, col, cfg, cs) + Vector3.up * (cs * 0.06f);
             SpawnGear(root, $"YardGear{i}", pos, Quaternion.identity, r, i + 7, cfg);
@@ -206,14 +301,17 @@ public partial class LevelMapController : MonoBehaviour
         for (int i = 0; i < cfg.pipes && cols.Count > 0; i++)
         {
             var col = cols[Mathf.FloorToInt(Hash01(DecorHash(i, 1279)) * cols.Count) % cols.Count];
-            if (col == centreCol) continue;
+            if (col == centreCol || !taken.Add(col)) continue;
             float h = cs * (0.5f + Hash01(DecorHash(i, 977)) * 0.9f);
             var pos = ColumnSurface(colTop, col, cfg, cs);
+            Obstacle(col);
             MakeMeshProp(root, $"Pipe{i}", TowerMesh(), pos + Vector3.up * (cs * 0.02f),
                          Quaternion.identity, new Vector3(cs * 0.18f, h, cs * 0.18f), cfg.wallColor);
             MakeMeshProp(root, $"PipeCollar{i}", RailMesh(), pos + Vector3.up * h,
                          Quaternion.identity, new Vector3(cs * 0.26f, cs * 0.07f, cs * 0.26f), cfg.gearAccent);
         }
+
+        BuildWorkshopYard(root, cfg, coveredCols, colTop, ext, cs, housePos, taken, craneCol, towerCol, shedCols);
     }
 
     // One gear, spinning. Speed is inversely proportional to radius and the
@@ -246,8 +344,10 @@ public partial class LevelMapController : MonoBehaviour
 
         var centreCol = new Vector2Int(cfg.origin.x + ext.x / 2, cfg.origin.z + ext.y / 2);
         Vector3 basePos = ColumnSurface(colTop, centreCol, cfg, cs);
+        ObstacleDisc(basePos, cfg.domeRadius * cs * 0.95f + cs * 0.45f);   // the dome's drum
 
-        if (cfg.wallEnabled) BuildPrecinctWall(root, cfg, colTop, ext, cs);
+        if (cfg.wallEnabled) BuildPrecinctWall(root, cfg, coveredCols, colTop, cs);
+        var taken = new HashSet<Vector2Int>();
 
         float drum = cfg.drumHeight;
         float rad  = cfg.domeRadius * cs;
@@ -301,7 +401,9 @@ public partial class LevelMapController : MonoBehaviour
         // plot a silhouette instead of one lump in the middle.
         if (cfg.armillaryRings > 0)
         {
-            var armCol = new Vector2Int(cfg.origin.x + ext.x / 4, cfg.origin.z + ext.y * 3 / 4);
+            var armCol = ColAtLocal(cfg, coveredCols, -0.5f, 0.5f, RimCols(coveredCols));
+            Reserve(armCol, 1, taken);
+            Obstacle(armCol);
             Vector3 armPos = ColumnSurface(colTop, armCol, cfg, cs) + Vector3.up * (cs * 0.55f);
             MakeMeshProp(root, "ArmillaryStand", TowerMesh(),
                          armPos - Vector3.up * (cs * 0.55f), Quaternion.identity,
@@ -324,19 +426,18 @@ public partial class LevelMapController : MonoBehaviour
         // ── Sight stones ─────────────────────────────────────────────────────
         // Low markers around the plaza, each turned to face the dome — the plot
         // then reads as a place FOR observing, not just a building that observes.
-        // Interior columns only — the rim belongs to the wall, and a stone sharing
-        // a cell with a wall segment just clips through it.
-        int wx0 = cfg.origin.x, wx1 = cfg.origin.x + ext.x - 1;
-        int wz0 = cfg.origin.z, wz1 = cfg.origin.z + ext.y - 1;
+        // Paved ground only, clear of the drum's steps, and never the rim — that
+        // belongs to the wall, and a stone sharing a cell with it clips through.
+        var rimCols = RimCols(coveredCols);
         var cols = new List<Vector2Int>();
-        foreach (var c in coveredCols)
-            if (c.x > wx0 && c.x < wx1 && c.y > wz0 && c.y < wz1) cols.Add(c);
-        cols.Sort((a, b) => a.x != b.x ? a.x.CompareTo(b.x) : a.y.CompareTo(b.y));
+        foreach (var c in SortedCols(coveredCols))
+            if (!rimCols.Contains(c) && (cfg.OnPlaza(c) || cfg.OnPath(c)) && (c - centreCol).sqrMagnitude > 4)
+                cols.Add(c);
 
         for (int i = 0; i < cfg.sightStones && cols.Count > 0; i++)
         {
             var col = cols[Mathf.FloorToInt(Hash01(DecorHash(i, 613)) * cols.Count) % cols.Count];
-            if (col == centreCol) continue;
+            if (col == centreCol || !taken.Add(col)) continue;
             Vector3 pos = ColumnSurface(colTop, col, cfg, cs);
             Vector3 toDome = basePos - pos; toDome.y = 0f;
             if (toDome.sqrMagnitude < 0.0001f) continue;
@@ -379,6 +480,7 @@ public partial class LevelMapController : MonoBehaviour
         }
 
         BuildMeridianArc(root, cfg, basePos, rad, cs);
+        BuildObservatoryGrounds(root, cfg, coveredCols, colTop, ext, cs, basePos, centreCol, taken);
     }
 
     // Joins some of the motes into constellations.
@@ -475,64 +577,6 @@ public partial class LevelMapController : MonoBehaviour
                          Quaternion.LookRotation(outward, Vector3.up),
                          new Vector3(cs * 0.02f, cs * (i % 3 == 0 ? 0.16f : 0.09f), cs * 0.02f),
                          cfg.drumColor);
-        }
-    }
-
-    // A continuous low wall around the plot's rim, with a gateway centred on each
-    // side and taller posts at the corners.
-    //
-    // Built from the FOOTPRINT rectangle: the wall is what makes this a precinct,
-    // so it has to be a clean rectangle. Walking through it still works — the
-    // walkable proxy is the ground blocks, and this is decoration standing on top.
-    void BuildPrecinctWall(Transform root, ObservatoryConfig cfg,
-                           Dictionary<Vector2Int, Vector3Int> colTop,
-                           Vector2Int ext, float cs)
-    {
-        var wall = new GameObject("PrecinctWall").transform;
-        wall.SetParent(root, false);
-
-        int x0 = cfg.origin.x, x1 = cfg.origin.x + ext.x - 1;
-        int z0 = cfg.origin.z, z1 = cfg.origin.z + ext.y - 1;
-        float h = cfg.wallHeight;
-
-        // Gateway cells, centred on each run. Half-open on even spans, which is
-        // fine — a gate that's off-centre by half a cell isn't readable at this
-        // camera distance, and forcing symmetry would need an odd footprint.
-        int gx0 = cfg.origin.x + (ext.x - cfg.gateWidth) / 2;
-        int gz0 = cfg.origin.z + (ext.y - cfg.gateWidth) / 2;
-
-        bool IsCorner(int x, int z) => (x == x0 || x == x1) && (z == z0 || z == z1);
-
-        for (int x = x0; x <= x1; x++)
-        for (int z = z0; z <= z1; z++)
-        {
-            bool edge = x == x0 || x == x1 || z == z0 || z == z1;
-            if (!edge) continue;
-
-            bool corner = IsCorner(x, z);
-            if (!corner)
-            {
-                // Gate openings on the two runs that cross the centre line.
-                if ((z == z0 || z == z1) && x >= gx0 && x < gx0 + cfg.gateWidth) continue;
-                if ((x == x0 || x == x1) && z >= gz0 && z < gz0 + cfg.gateWidth) continue;
-            }
-
-            var col = new Vector2Int(x, z);
-            Vector3 pos = ColumnSurface(colTop, col, cfg, cs);
-            float ph = corner ? h * cfg.cornerPostScale : h;
-
-            MakeMeshProp(wall, corner ? $"Post_{x}_{z}" : $"Wall_{x}_{z}", RailMesh(),
-                         pos + Vector3.up * (ph * 0.5f), Quaternion.identity,
-                         new Vector3(cs * (corner ? 0.44f : 0.30f), ph,
-                                     cs * (corner ? 0.44f : 0.30f)),
-                         cfg.wallColor);
-
-            // A capstone course along the run ties the segments into one wall
-            // instead of a row of separate blocks.
-            if (!corner)
-                MakeMeshProp(wall, $"Cap_{x}_{z}", RailMesh(),
-                             pos + Vector3.up * ph, Quaternion.identity,
-                             new Vector3(cs * 0.42f, cs * 0.08f, cs * 0.42f), cfg.brassColor);
         }
     }
 

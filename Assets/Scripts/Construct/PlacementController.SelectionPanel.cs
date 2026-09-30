@@ -189,9 +189,9 @@ public partial class PlacementController
             // No shot, so no damage / fire rate / bullets — just what the field does.
             if (t.mode == TurretController.Mode.Debuff)
             {
-                DebuffNumbers(out int healPct, out int bonus);
+                PrayerNumbers(out int ampPct, out int bonus);
                 sb.AppendLine($"Range      <b>{t.EffectiveRange:0.#}</b>");
-                sb.AppendLine($"Heals at   <b>{healPct}%</b>  <color=#A85CF2>(enemies in range)</color>");
+                sb.AppendLine($"Damage taken <b>+{ampPct}%</b>  <color=#A85CF2>(enemies in range)</color>");
                 sb.AppendLine($"Kill bonus <b>+{bonus} turret ¤</b>  <color=#A85CF2>(dies in range)</color>");
                 return sb.ToString().TrimEnd();
             }
@@ -519,7 +519,7 @@ public partial class PlacementController
             else
             {
                 rows = 3;   // Damage, Range, Fire rate
-                if      (t.mode == TurretController.Mode.Debuff) { }   // Range, Heals at, Kill bonus — also 3
+                if      (t.mode == TurretController.Mode.Debuff) { }   // Range, Damage taken, Kill bonus — also 3
                 else if (t.mode == TurretController.Mode.Slow) rows += 2;
                 else if (t.mode == TurretController.Mode.Aoe)
                 {
@@ -650,12 +650,12 @@ public partial class PlacementController
         return 1f - xm * xm * xm;
     }
 
-    // What a Debuff turret's field does, from the live balance table.
-    static void DebuffNumbers(out int healPct, out int bonus)
+    // What a Prayer turret's field does, from the live balance table.
+    static void PrayerNumbers(out int ampPct, out int bonus)
     {
         var table = BalanceTable.Active;
-        healPct = Mathf.RoundToInt((1f - (table != null ? table.debuffHealReduction : 0.4f)) * 100f);
-        bonus   = table != null ? table.debuffKillBonus : 1;
+        ampPct = Mathf.RoundToInt((table != null ? table.prayerDamageAmp : 0.2f) * 100f);
+        bonus  = table != null ? table.debuffKillBonus : 1;
     }
 
     void DrawTurretStats(PlacedBlockInstance ins)
@@ -669,9 +669,9 @@ public partial class PlacementController
 
         if (turret.mode == TurretController.Mode.Debuff)
         {
-            DebuffNumbers(out int healPct, out int bonus);
-            PanelRow("Range",      turret.EffectiveRange.ToString("0.#"));
-            PanelRow("Heals at",   healPct + "% (in range)");
+            PrayerNumbers(out int ampPct, out int bonus);
+            PanelRow("Range",        turret.EffectiveRange.ToString("0.#"));
+            PanelRow("Damage taken", "+" + ampPct + "% (in range)");
             PanelRow("Kill bonus", "+" + bonus + " turret ¤");
             return;
         }

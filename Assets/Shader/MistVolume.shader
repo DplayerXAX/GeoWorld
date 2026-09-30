@@ -44,6 +44,8 @@ Shader "GeoWorld/MistVolume"
         _Protect     ("Keep visible map clear", Float)        = 0
         _Floor       ("Ground level (box fraction)", Range(0, 1)) = 0.1
         _Falloff     ("Upward falloff",     Float)            = 1.1
+        _Soften      ("Soften floating edges", Range(0, 1))   = 0
+        _Clarity     ("Clarity (light only)",  Range(0, 1))   = 0
         _SkyBlend    ("Sky blend",          Range(0, 1))      = 0
         _SkyMip      ("Sky blur (mip)",     Float)            = 3
         _SinkCentre  ("Sink centre (world xz)", Vector)       = (0, 0, 0, 0)
@@ -86,6 +88,8 @@ Shader "GeoWorld/MistVolume"
                 float  _Protect;
                 float  _Floor;
                 float  _Falloff;
+                float  _Soften;
+                float  _Clarity;
                 float  _SkyBlend;
                 float  _SkyMip;
                 float4 _SinkCentre;
@@ -249,10 +253,26 @@ Shader "GeoWorld/MistVolume"
                     float top  = fl + (1.0 - fl) * lerp(0.15, 1.0, mask) * (0.35 + 0.8 * big);
                     top        = clamp(top, fl + 0.02, 0.97);
                     float hn   = max(0.0, (h - fl) / (top - fl));      // 0 at and below the ground line
+
+                    // _Soften, for a bank hanging in the air (the canopy mist) whose
+                    // underside and sides are in plain view:
+                    //   * the underside fades over the WHOLE depth, not just its
+                    //     bottom part — densest at the ground line, thinning both ways;
+                    //   * that underside rolls on the large noise and rises toward
+                    //     the edge, so the bank is a lens, not a slab with a flat floor;
+                    //   * and it drifts in thicker and thinner patches a few cells
+                    //     across, so it never lies as one even sheet.
+                    float clump = smoothstep(0.15, 0.85,
+                                  vnoise(pW * (_NoiseScale * 0.55) + wind * 0.7 + 11.3));
+                    float fm    = mask * lerp(1.0, clump, 0.45 * _Soften);
+                    float hb   = h + (big - 0.5) * fl * 0.9 * _Soften
+                                   - (1.0 - mask) * fl * 0.8 * _Soften;
+                    float low  = max(0.05, fl * lerp(0.6, 1.0, _Soften));
+
                     // Gentle exponential thinning, and a long soft fade into the
                     // ceiling rather than a cut — so there is no line where the mist
                     // stops, only less and less of it.
-                    float body = mask * smoothstep(0.0, max(0.05, fl * 0.6), h)
+                    float body = fm * smoothstep(0.0, low, hb)
                                * exp(-_Falloff * hn) * smoothstep(1.0, 0.3, hn);
                     if (body <= 0.001) continue;
 
@@ -297,7 +317,12 @@ Shader "GeoWorld/MistVolume"
                     fogCol = lerp(fogCol, sky, _SkyBlend * saturate(0.25 + grazing));
                 }
 
-                float fogAmt = saturate((1.0 - transmittance) * _Strength);
+                // _Clarity takes away the VEIL — the flat mist colour laid over
+                // what is behind — and keeps the light the mist scatters. What is
+                // left is the Tyndall look itself: sunlit shafts glowing through
+                // the air, broken by the trees' shadows, with the ground and the
+                // pieces still plainly seen through them.
+                float fogAmt = saturate((1.0 - transmittance) * _Strength) * (1.0 - _Clarity);
                 float amount = fogAmt * keep;
                 float3 col   = (fogCol * fogAmt + scattered * _Strength) * keep;
                 return half4(col, amount);

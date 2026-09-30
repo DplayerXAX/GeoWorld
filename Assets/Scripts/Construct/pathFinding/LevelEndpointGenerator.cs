@@ -99,9 +99,15 @@ public class LevelEndpointGenerator : MonoBehaviour
     // `reachEnds`: pass the level's end cells to constrain a NEW START to the
     // union of the existing starts' reach circles (see SampleStartInsideReach).
     // Null / empty (and every end-point call) keeps the plain shell sampling.
+    // Whether the last GenerateSinglePoint placed an endpoint. Check this, not the
+    // returned cell: (0,0,0) is a perfectly good cell, and treating it as "failed"
+    // left an endpoint on the board that was never registered.
+    public bool LastGenerated { get; private set; }
+
     public Vector3Int GenerateSinglePoint(List<Vector3Int> existingPoints, bool isStart,
                                           List<Vector3Int> reachEnds = null)
     {
+        LastGenerated = false;
         if (existingPoints == null || existingPoints.Count == 0) return Vector3Int.zero;
 
         Vector3Int cell;
@@ -128,6 +134,7 @@ public class LevelEndpointGenerator : MonoBehaviour
             allEndpoints.Add(obj);
         }
 
+        LastGenerated = true;
         return cell;
     }
 

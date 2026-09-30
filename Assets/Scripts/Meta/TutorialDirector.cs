@@ -828,7 +828,10 @@ public class TutorialDirector : MonoBehaviour
         var cells = focus == TutorialFocus.StartPoint ? gfm.AllStarts : gfm.AllEnds;
         if (cells == null || cells.Count == 0) return null;
 
-        return grid.GridToWorld(cells[0]) + Vector3.up * (grid.cellSize * 0.5f);
+        // The NEWEST one (endpoints are appended as they open): a step that
+        // introduces a freshly opened spawn point must look at that one, not the
+        // first. With a single endpoint this is the same cell as before.
+        return grid.GridToWorld(cells[cells.Count - 1]) + Vector3.up * (grid.cellSize * 0.5f);
     }
 
     // First currently-alive Chaos Block (see ChaosBlockController). Null if the

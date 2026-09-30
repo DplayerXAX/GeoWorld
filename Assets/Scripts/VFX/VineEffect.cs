@@ -234,6 +234,12 @@ public class VineEffect : MonoBehaviour
     Coroutine  _routine;
     bool       _retiring;
     GameObject _prefab;
+
+    // Grows the whole plant at this multiple of its authored size — segment
+    // length, wander, widths, leaves and blossoms — and every fork inherits it (they
+    // clone the prefab, so they'd otherwise come out at the default size). For a
+    // tree seen far off in the level backdrop (EnvironmentBackdrop). 1 = as authored.
+    [System.NonSerialized] public float worldScale = 1f;
     int        _forks;
     Vector3    _coilCenter;
     float      _coilStartAngle;
@@ -384,8 +390,8 @@ public class VineEffect : MonoBehaviour
         _tipCol  = tipColor;
 
         float w = Mathf.Pow(Mathf.Clamp(forkWidthScale, 0.2f, 1f), depth);
-        _rootRadius = baseWidth * w;
-        _tipRadius  = tipWidth  * w;
+        _rootRadius = baseWidth * w * worldScale;
+        _tipRadius  = tipWidth  * w * worldScale;
         _widthScale = 1f;
 
         // The sweep, decided here so it is constant for the whole branch.
@@ -560,11 +566,11 @@ public class VineEffect : MonoBehaviour
             Vector3 noise = new Vector3(
                 Random.Range(-randomness, randomness),
                 Random.Range(-randomness, randomness),
-                Random.Range(-randomness, randomness));
+                Random.Range(-randomness, randomness)) * worldScale;
 
             Vector3 next = current
-                         + growDir  * (segmentLength * lengthScale)
-                         + driftDir * (outwardDrift * i * lengthScale)
+                         + growDir  * (segmentLength * lengthScale * worldScale)
+                         + driftDir * (outwardDrift * i * lengthScale * worldScale)
                          + noise    * lengthScale;
 
             _nodes.Add(current);                      // extend, then animate the new tip
@@ -623,6 +629,8 @@ public class VineEffect : MonoBehaviour
         GameObject clone = Instantiate(_prefab, transform);
         if (!clone.TryGetComponent<VineEffect>(out var child)) { Destroy(clone); return; }
         child._prefab = _prefab;
+        child.worldScale = worldScale;
+        child.castShadows = castShadows;
         child.Begin(rootColor, tipColor, atPos, DeviateDirection(parentDir, depth), depth + 1);
     }
 
@@ -1083,7 +1091,7 @@ public class VineEffect : MonoBehaviour
             GetLeafMeshVariant(leafColor, leafTipColor, Random.Range(0, 3));
         ApplyRendererSettings(go.AddComponent<MeshRenderer>());
 
-        float target = Random.Range(leafSize.x, leafSize.y) * Mathf.Max(0.4f, sizeScale);
+        float target = Random.Range(leafSize.x, leafSize.y) * Mathf.Max(0.4f, sizeScale) * worldScale;
         StartCoroutine(LeafGrow(go.transform, target));
     }
 
@@ -1091,12 +1099,12 @@ public class VineEffect : MonoBehaviour
     {
         var go = new GameObject("VineBlossom");
         go.transform.SetParent(transform, false);
-        go.transform.SetPositionAndRotation(pos + Random.onUnitSphere * (blossomSize * 0.5f), Random.rotation);
+        go.transform.SetPositionAndRotation(pos + Random.onUnitSphere * (blossomSize * 0.5f * worldScale), Random.rotation);
 
         go.AddComponent<MeshFilter>().sharedMesh = GetBlossomMesh(blossomColor);
         ApplyRendererSettings(go.AddComponent<MeshRenderer>());
 
-        float target = blossomSize * Mathf.Max(0.4f, sizeScale) * Random.Range(0.8f, 1.2f);
+        float target = blossomSize * Mathf.Max(0.4f, sizeScale) * Random.Range(0.8f, 1.2f) * worldScale;
         StartCoroutine(LeafGrow(go.transform, target));
     }
 

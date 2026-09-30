@@ -119,6 +119,19 @@ public class OrderArchitectVisualizer : SynergyVisualizer
     [Tooltip("Every N beats the whole clockwork reverses direction in one synchronized clunk (0 = never). Makes the ticking read as a machine cycle, not a metronome.")]
     public int shiftEveryBeats = 8;
 
+    [Header("Pipework")]
+    [Tooltip("An industrial pipe run round each piece's outline: flanges at the joints, elbows at the corners, bright collars flowing round, and a valve riser that turns on the beat and vents steam.")]
+    public bool showPipes = true;
+    [Range(0.02f, 0.12f)] public float pipeRadiusFrac = 0.055f;
+    [Tooltip("Pipe height from the cell centre, in cell-size units (negative = low on the side faces, under the cogs).")]
+    [Range(-0.45f, 0.3f)] public float pipeHeightFrac = -0.38f;
+    public Color pipeColor   = new Color(0.30f, 0.32f, 0.36f, 1f);
+    public Color flangeColor = new Color(0.78f, 0.60f, 0.24f, 1f);
+    [Tooltip("Flow collar trips per second along each face-length run.")]
+    public float flowSpeed = 0.9f;
+    public bool showValve = true;
+    [Min(1)] public int steamEveryBeats = 4;
+
     [Header("Hologram")]
     [Tooltip("Render the cogs as translucent, floating, flickering holograms (additive glow) instead of solid metal.")]
     public bool holographic = true;
@@ -294,6 +307,14 @@ public class OrderArchitectVisualizer : SynergyVisualizer
         rig.witherDuration   = witherDuration;
         rig.pulseSpeed       = pulseSpeed;
         rig.pulseDepth       = pulseDepth;
+        rig.showPipes        = showPipes;
+        rig.pipeRadiusFrac   = pipeRadiusFrac;
+        rig.pipeHeightFrac   = pipeHeightFrac;
+        rig.pipeColor        = pipeColor;
+        rig.flangeColor      = flangeColor;
+        rig.flowSpeed        = flowSpeed;
+        rig.showValve        = showValve;
+        rig.steamEveryBeats  = steamEveryBeats;
 
         rig.Build(centers, cs, target.line, target.gear);
 

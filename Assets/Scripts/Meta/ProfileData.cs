@@ -8,7 +8,11 @@ using UnityEngine;
 [Serializable]
 public class ProfileData
 {
-    public int version = 1;
+    // Bump when a build changes what a profile means (layout, progression, map
+    // content): the title then warns about slots saved by an older build. 1 = every
+    // save made before versioning was checked.
+    public const int CurrentVersion = 2;
+    public int version = CurrentVersion;
 
     // ── Level progression (keyed by LevelDefinition.levelId) ────────────────
     public List<string>      unlockedLevels = new();

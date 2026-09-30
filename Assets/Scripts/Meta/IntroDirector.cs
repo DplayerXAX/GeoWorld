@@ -96,15 +96,21 @@ public class IntroDirector : MonoBehaviour
         for (float t = 0f; t < hold; t += Time.unscaledDeltaTime) yield return null;
 
         // Phase B — fade out white/name while the sky reveals from mono → full.
+        // With the level's sky rise on, the camera starts low looking up into
+        // that sky and rises to the opening view meanwhile.
+        bool rise = BeginSkyRise();
         float dur = Mathf.Max(fadeOut, revealTime);
+        if (rise) dur = Mathf.Max(dur, _riseSeconds);
         for (float t = 0f; t < dur; t += Time.unscaledDeltaTime)
         {
             float fo = 1f - Mathf.Clamp01(t / fadeOut);
             SetWhite(fo); SetName(fo);
             SetBlend(Mathf.Clamp01(t / revealTime));
+            if (rise) StepSkyRise(t / _riseSeconds);
             yield return null;
         }
         SetWhite(0f); SetName(0f); SetBlend(1f);
+        if (rise) EndSkyRise();
 
         // Phase C — pop the endpoints in.
         for (float t = 0f; t < popTime; t += Time.unscaledDeltaTime)
@@ -118,6 +124,85 @@ public class IntroDirector : MonoBehaviour
         Playing = false;
         Destroy(gameObject);
     }
+
+    // ── Sky rise (LevelEnvironment.introSkyRise) ─────────────────────────────────
+    // The orbit rig is switched off for the move and the camera driven directly:
+    // from low down (just over the lake — the rig's own floor — or a few cells
+    // under the board), looking up into the sky off to one side, it rises and
+    // turns to the pose the rig settled on under the white — so handing back is
+    // seamless. The look lags the climb a little: it keeps its eyes on the sky
+    // as it starts to rise, then comes round and down onto the board.
+    OrbitCamera _riseOrbit;
+    Transform   _riseCam;
+    Vector3     _riseFocus, _riseEndPos;
+    float       _riseSeconds, _riseStartYaw, _riseEndYaw, _riseStartDist, _riseEndDist;
+    float       _riseStartH, _riseEndH;
+    float       _riseStartLookYaw, _riseEndLookYaw, _riseStartPitch, _riseEndPitch;
+
+    bool BeginSkyRise()
+    {
+        var env = RunConfig.Level != null ? RunConfig.Level.environment : null;
+        if (env == null || !env.introSkyRise) return false;
+        _riseOrbit = FindFirstObjectByType<OrbitCamera>();
+        if (_riseOrbit == null) return false;
+        _riseCam = _riseOrbit.transform;
+        _riseSeconds = Mathf.Max(0.5f, env.introSkyRiseSeconds);
+
+        var grid = FindFirstObjectByType<GridSystem>();
+        float cs = grid != null ? grid.cellSize : 1f;
+
+        // Where the rig has settled (under the white): the end of the move.
+        _riseFocus  = _riseOrbit.FocusPoint;
+        _riseEndPos = _riseCam.position;
+        var e = _riseEndPos - _riseFocus;
+        _riseEndYaw  = Mathf.Atan2(e.z, e.x) * Mathf.Rad2Deg;
+        _riseEndDist = new Vector2(e.x, e.z).magnitude;
+        _riseEndH    = e.y;
+        var er = _riseCam.rotation.eulerAngles;
+        _riseEndLookYaw = er.y;
+        _riseEndPitch   = er.x > 180f ? er.x - 360f : er.x;
+
+        // The start: a quarter-turn round, a little further out, low down.
+        float low = float.IsNegativeInfinity(_riseOrbit.minCameraY)
+                  ? _riseFocus.y - 5f * cs
+                  : _riseOrbit.minCameraY + 0.5f * cs;
+        _riseStartYaw  = _riseEndYaw - 55f;
+        _riseStartDist = Mathf.Max(_riseEndDist * 1.25f, 4f * cs);
+        _riseStartH    = Mathf.Min(low - _riseFocus.y, _riseEndH - 4f * cs);
+        _riseStartLookYaw = _riseEndLookYaw - 55f + 40f;   // off past the board, into open sky
+        _riseStartPitch   = -38f;                          // looking up
+
+        OrbitCamera.InputLocked = true;
+        _riseOrbit.enabled = false;
+        StepSkyRise(0f);
+        return true;
+    }
+
+    void StepSkyRise(float u)
+    {
+        if (_riseCam == null) return;
+        u = Mathf.Clamp01(u);
+        float kp = EaseInOut(u);                               // along the ground
+        float kh = EaseInOut(Mathf.Clamp01(u / 0.9f));         // up
+        float kl = EaseInOut(Mathf.Clamp01((u - 0.18f) / 0.82f));   // the look comes round last
+
+        float yaw  = Mathf.LerpAngle(_riseStartYaw, _riseEndYaw, kp) * Mathf.Deg2Rad;
+        float dist = Mathf.Lerp(_riseStartDist, _riseEndDist, kp);
+        float h    = Mathf.Lerp(_riseStartH, _riseEndH, kh);
+        _riseCam.position = _riseFocus + new Vector3(Mathf.Cos(yaw) * dist, h, Mathf.Sin(yaw) * dist);
+        _riseCam.rotation = Quaternion.Euler(Mathf.Lerp(_riseStartPitch, _riseEndPitch, kl),
+                                             Mathf.LerpAngle(_riseStartLookYaw, _riseEndLookYaw, kl), 0f);
+    }
+
+    void EndSkyRise()
+    {
+        if (_riseCam != null) _riseCam.SetPositionAndRotation(_riseEndPos, Quaternion.Euler(_riseEndPitch, _riseEndLookYaw, 0f));
+        if (_riseOrbit != null) _riseOrbit.enabled = true;
+        OrbitCamera.InputLocked = false;
+        _riseOrbit = null; _riseCam = null;
+    }
+
+    static float EaseInOut(float x) => x < 0.5f ? 4f * x * x * x : 1f - Mathf.Pow(-2f * x + 2f, 3f) * 0.5f;
 
     // ── Skybox intro blend ───────────────────────────────────────────────────────
     // Drive _IntroBlend on the actual skybox material (no instancing / swap) so the
@@ -135,6 +220,7 @@ public class IntroDirector : MonoBehaviour
 
     void OnDestroy()
     {
+        if (_riseOrbit != null) EndSkyRise();   // interrupted mid-rise: hand the camera back
         if (_hasBlend && _sky != null) _sky.SetFloat("_IntroBlend", 1f);   // ensure full sky if interrupted
         Playing = false;
     }

@@ -278,7 +278,7 @@ public class ResourceManager : MonoBehaviour
         BlockType.Turret     => 0.7f,
         BlockType.SlowTurret => 0.9f,
         BlockType.AoeTurret  => 1.2f,
-        BlockType.DebuffTurret => 0.8f,
+        BlockType.DebuffTurret => 0.6f,   // the Prayer turret
         _                    => 1.0f
     };
 

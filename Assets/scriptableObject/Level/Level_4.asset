@@ -1,0 +1,60 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 83c315048f6cbe6419d5516add01351e, type: 3}
+  m_Name: Level_4
+  m_EditorClassIdentifier: Assembly-CSharp::LevelDefinition
+  levelId: 1-4
+  displayName: 1-4
+  description: Hold the line with all we have learned.
+  runSeed: 0
+  blocksPerTurn: 4
+  startingBlockCurrencyMult: 1
+  turretsPerTurn: 3
+  synergyEnabled: 1
+  allowedColors: 010000000400000002000000
+  startingShop: []
+  waves:
+  - {fileID: 11400000, guid: 080e4b2a67c19904bbbfdce56bfad1ae, type: 2}
+  - {fileID: 11400000, guid: 805195553d7548d7b575d4c0394cb94b, type: 2}
+  - {fileID: 11400000, guid: d54378f6fe064d08ba34d6c8e1f8ff1d, type: 2}
+  - {fileID: 11400000, guid: 936c96e931544f789d15a0b24fa27475, type: 2}
+  - {fileID: 0}
+  - {fileID: 0}
+  - {fileID: 0}
+  - {fileID: 0}
+  - {fileID: 0}
+  - {fileID: 0}
+  wavesToClear: 6
+  objectives:
+  - type: 1
+    target: 7
+    description: 
+    optional: 0
+  requireAllObjectives: 1
+  clearOnObjectivesComplete: 0
+  unlockedByDefault: 1
+  unlocks: []
+  techReward: 1
+  mapBlockRewards: []
+  rewardConversation: {fileID: 0}
+  isTutorial: 0
+  fixedEndpoints: 0
+  startCell: {x: 0, y: 0, z: 0}
+  endCell: {x: 0, y: 0, z: 0}
+  tutorialSteps: []
+  revealAfter: {fileID: 11400000, guid: 29d513e867274c4f982465da057d3436, type: 2}
+  startingLayout: {fileID: 0}
+  overrideEndpointDistance: 0
+  endpointMinDistance: 5
+  endpointMaxDistance: 10
+  mechanics:
+  - {fileID: 11400000, guid: 49e6eb7ca9c24522886d1aeaa87d2cfa, type: 2}
