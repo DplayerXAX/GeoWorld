@@ -252,6 +252,8 @@ public partial class LevelMapController : MonoBehaviour
                          Quaternion.identity, new Vector3(0.06f, wall * 0.24f, d * 0.18f), cfg.gearAccent);
         }
 
+        DetailMachineHouse(root, cfg, housePos, w, d, wall, cs);
+
         // ── Chimneys ─────────────────────────────────────────────────────────
         for (int i = 0; i < cfg.chimneys; i++)
         {
@@ -302,6 +304,7 @@ public partial class LevelMapController : MonoBehaviour
             if (col == centreCol || !taken.Add(col)) continue;
             float h = cs * (0.5f + Hash01(DecorHash(i, 977)) * 0.9f);
             var pos = ColumnSurface(colTop, col, cfg, cs);
+            Obstacle(col);
             MakeMeshProp(root, $"Pipe{i}", TowerMesh(), pos + Vector3.up * (cs * 0.02f),
                          Quaternion.identity, new Vector3(cs * 0.18f, h, cs * 0.18f), cfg.wallColor);
             MakeMeshProp(root, $"PipeCollar{i}", RailMesh(), pos + Vector3.up * h,
@@ -341,6 +344,7 @@ public partial class LevelMapController : MonoBehaviour
 
         var centreCol = new Vector2Int(cfg.origin.x + ext.x / 2, cfg.origin.z + ext.y / 2);
         Vector3 basePos = ColumnSurface(colTop, centreCol, cfg, cs);
+        ObstacleDisc(basePos, cfg.domeRadius * cs * 0.95f + cs * 0.45f);   // the dome's drum
 
         if (cfg.wallEnabled) BuildPrecinctWall(root, cfg, coveredCols, colTop, cs);
         var taken = new HashSet<Vector2Int>();
@@ -399,6 +403,7 @@ public partial class LevelMapController : MonoBehaviour
         {
             var armCol = ColAtLocal(cfg, coveredCols, -0.5f, 0.5f, RimCols(coveredCols));
             Reserve(armCol, 1, taken);
+            Obstacle(armCol);
             Vector3 armPos = ColumnSurface(colTop, armCol, cfg, cs) + Vector3.up * (cs * 0.55f);
             MakeMeshProp(root, "ArmillaryStand", TowerMesh(),
                          armPos - Vector3.up * (cs * 0.55f), Quaternion.identity,

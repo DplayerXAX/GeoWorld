@@ -55,6 +55,9 @@ public partial class LevelMapController : MonoBehaviour
     [Tooltip("How far a block overshoots its resting place before settling, as a fraction of the rise. 0 = plain ease-out.")]
     [Range(0f, 0.3f)] public float revealOvershoot = 0.08f;
 
+    [Tooltip("Field of view the reveal cutscene frames its shot with — its own, NOT bound by the player's scroll range (minFov..maxFov), so the whole farm / wood / new ground fits however far in the player was zoomed. The player's own view comes back at the hand-off. 0 = keep the current view.")]
+    [Range(0f, 100f)] public float revealFov = 65f;
+
     [Header("Mist")]
     // Ground that has not been revealed is not simply absent: it lies under mist,
     // so the player can see that there IS more map out there and roughly where.
@@ -513,6 +516,13 @@ public partial class LevelMapController : MonoBehaviour
         foreach (var n in _rising) if (_risingRest.TryGetValue(n, out var rp)) { focus += rp; count++; }
         if (count > 0) focus /= count;
 
+        // The cutscene's own lens, eased to alongside the camera's glide
+        // (UpdateFovZoom keeps running under the cutscene); scroll zoom is locked
+        // out meanwhile, so nothing clamps it back into the player's range.
+        float fovBefore = _fovTarget >= 0f ? _fovTarget : (_cam != null ? _cam.fieldOfView : 0f);
+        bool ownFov = revealFov > 0f && _cam != null;
+        if (ownFov) _fovTarget = revealFov;
+
         if (_orbit != null && count > 0)
         {
             _orbit.focusViewport = new Vector2(0.5f, 0.5f);
@@ -606,6 +616,9 @@ public partial class LevelMapController : MonoBehaviour
 
         // Fade for the hand-off — focusViewport resets with no lerp of its own.
         yield return FadeScreen(0f, 1f, lead.transitionFadeDuration);
+
+        // Under the black: the player's own view back, at once, with no ease to watch.
+        if (ownFov) { _fovTarget = fovBefore; _cam.fieldOfView = fovBefore; }
 
         if (_orbit != null)
         {

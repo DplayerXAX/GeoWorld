@@ -112,6 +112,47 @@ public partial class LevelMapController : MonoBehaviour
             foreach (var s in sets) s.Add(c + new Vector2Int(x, z));
     }
 
+    // ── Obstacles ──
+    // Columns of decor ground with something standing on them. BuildSurface
+    // leaves them off the walkable surface, so the pawn can't stop there and its
+    // routes go round. Marked by the builders as they place each solid prop.
+    readonly HashSet<Vector2Int> _decorSolid = new();
+    readonly HashSet<LevelNode>  _plotNodes  = new();   // the plots' walkable proxies
+
+    Vector2Int ColumnOf(Vector3 world)
+    {
+        var c = gridSystem.WorldToGrid(world);
+        return new Vector2Int(c.x, c.z);
+    }
+
+    void Obstacle(Vector2Int col) => _decorSolid.Add(col);
+    void Obstacle(Vector3 world)  => _decorSolid.Add(ColumnOf(world));
+
+    // Every column an axis-aligned footprint covers more than a sliver of.
+    void ObstacleBox(Vector3 centre, float halfX, float halfZ)
+    {
+        float inset = gridSystem.cellSize * 0.1f;
+        var a = ColumnOf(centre - new Vector3(Mathf.Max(0f, halfX - inset), 0f, Mathf.Max(0f, halfZ - inset)));
+        var b = ColumnOf(centre + new Vector3(Mathf.Max(0f, halfX - inset), 0f, Mathf.Max(0f, halfZ - inset)));
+        for (int x = a.x; x <= b.x; x++)
+            for (int z = a.y; z <= b.y; z++) _decorSolid.Add(new Vector2Int(x, z));
+    }
+
+    // Every column whose centre lies within `radius` (world units) of `centre`.
+    void ObstacleDisc(Vector3 centre, float radius)
+    {
+        float cs = gridSystem.cellSize;
+        var c0 = ColumnOf(centre);
+        int n = Mathf.CeilToInt(radius / cs) + 1;
+        for (int x = -n; x <= n; x++)
+            for (int z = -n; z <= n; z++)
+            {
+                var col = c0 + new Vector2Int(x, z);
+                var w = gridSystem.GridToWorld(new Vector3Int(col.x, 0, col.y));
+                if (new Vector2(w.x - centre.x, w.z - centre.z).magnitude <= radius) _decorSolid.Add(col);
+            }
+    }
+
     // A thin bar between two points in `parent`'s local space: a tie line, a cable, a brace.
     void TieLine(Transform parent, Vector3 a, Vector3 b, float thick, Color color)
     {
@@ -265,11 +306,134 @@ public partial class LevelMapController : MonoBehaviour
         BuildLampPosts(root, cfg, covered, colTop, taken, cfg.lamps, cfg.roofColor, cfg.lampColor, cs * 1.25f, cs);
     }
 
+    // The machine house, finished. Corner pilasters and a cornice; a string course
+    // and a row of framed windows down both long walls, some lit, with sills and
+    // vents under them; gutters and downpipes. On the roof, a monitor with glazed
+    // sides along the ridge and two turbine vents turning. A clock on the gable
+    // over the door. At the door, a frame with hazard stripes, a canopy on
+    // brackets, a sign with the Order gear, and a step.
+    void DetailMachineHouse(Transform root, OrderWorkshopConfig cfg, Vector3 at, float w, float d, float wall, float cs)
+    {
+        ObstacleBox(at, w * 0.5f, d * 0.5f);
+        var trim      = cfg.trimColor;
+        var dark      = cfg.roofColor;
+        var glassLit  = Color.Lerp(cfg.gearAccent, Color.white, 0.3f);
+        var glassDark = new Color(0.22f, 0.28f, 0.36f);
+        float rise    = cfg.roofRise;
+
+        // ── Walls ──
+        for (int i = 0; i < 4; i++)
+        {
+            float sx = (i & 1) == 0 ? -1f : 1f, sz = (i & 2) == 0 ? -1f : 1f;
+            MakeMeshProp(root, $"Pilaster{i}", RailMesh(), at + new Vector3(sx * w * 0.5f, wall * 0.5f, sz * d * 0.5f),
+                         Quaternion.identity, new Vector3(cs * 0.16f, wall * 1.02f, cs * 0.16f), trim);
+        }
+        MakeMeshProp(root, "Cornice", RailMesh(), at + Vector3.up * (wall - cs * 0.04f), Quaternion.identity,
+                     new Vector3(w + cs * 0.14f, cs * 0.09f, d + cs * 0.14f), trim);
+
+        int panes = Mathf.Max(2, Mathf.RoundToInt(w / cs));
+        float bay = w / panes;
+        for (int s = -1; s <= 1; s += 2)
+        {
+            float z = s * (d * 0.5f + 0.012f);
+            MakeMeshProp(root, $"Band{s}", RailMesh(), at + new Vector3(0f, wall * 0.42f, z), Quaternion.identity,
+                         new Vector3(w, cs * 0.05f, cs * 0.03f), dark);
+            for (int i = 0; i < panes; i++)
+            {
+                float x = (i + 0.5f) * bay - w * 0.5f;
+                bool lit = Hash01(DecorHash(i, s + 7)) > 0.4f;
+                var p = at + new Vector3(x, wall * 0.68f, z);
+                MakeMeshProp(root, $"Frame{s}_{i}", RailMesh(), p, Quaternion.identity,
+                             new Vector3(bay * 0.62f, wall * 0.36f, cs * 0.03f), trim);
+                MakeMeshProp(root, $"Pane{s}_{i}", RailMesh(), p + new Vector3(0f, 0f, s * 0.004f), Quaternion.identity,
+                             new Vector3(bay * 0.5f, wall * 0.3f, cs * 0.034f), lit ? glassLit : glassDark);
+                MakeMeshProp(root, $"Mullion{s}_{i}", RailMesh(), p + new Vector3(0f, 0f, s * 0.008f), Quaternion.identity,
+                             new Vector3(cs * 0.02f, wall * 0.3f, cs * 0.036f), trim);
+                MakeMeshProp(root, $"Sill{s}_{i}", RailMesh(), at + new Vector3(x, wall * 0.49f, z + s * cs * 0.03f), Quaternion.identity,
+                             new Vector3(bay * 0.66f, cs * 0.04f, cs * 0.08f), trim);
+                MakeMeshProp(root, $"Vent{s}_{i}", RailMesh(), at + new Vector3(x, wall * 0.2f, z), Quaternion.identity,
+                             new Vector3(bay * 0.4f, wall * 0.12f, cs * 0.03f), dark);
+            }
+
+            // Gutter along the eave, downpipes at its ends.
+            float ez = s * (d * 0.56f + cs * 0.03f);
+            MakeMeshProp(root, $"Gutter{s}", RailMesh(), at + new Vector3(0f, wall - cs * 0.02f, ez), Quaternion.identity,
+                         new Vector3(w * 1.12f, cs * 0.06f, cs * 0.08f), dark);
+            for (int e = -1; e <= 1; e += 2)
+                MakeMeshProp(root, $"Downpipe{s}_{e}", DrumMesh(), at + new Vector3(e * (w * 0.5f - cs * 0.1f), 0f, ez), Quaternion.identity,
+                             new Vector3(cs * 0.07f, wall, cs * 0.07f), dark);
+        }
+
+        // ── Roof ──
+        float monitorBase = wall + rise * 0.6f;
+        MakeMeshProp(root, "Monitor", RailMesh(), at + Vector3.up * (monitorBase + cs * 0.15f), Quaternion.identity,
+                     new Vector3(w * 0.72f, cs * 0.3f, d * 0.26f), cfg.wallColor);
+        for (int s = -1; s <= 1; s += 2)
+            MakeMeshProp(root, $"MonitorGlass{s}", RailMesh(), at + new Vector3(0f, monitorBase + cs * 0.17f, s * (d * 0.13f + 0.012f)),
+                         Quaternion.identity, new Vector3(w * 0.68f, cs * 0.16f, cs * 0.02f), glassLit);
+        MakeMeshProp(root, "MonitorCap", GableMesh(), at + Vector3.up * (monitorBase + cs * 0.3f), Quaternion.identity,
+                     new Vector3(w * 0.76f, cs * 0.16f, d * 0.34f), dark);
+
+        for (int k = -1; k <= 1; k += 2)
+        {
+            // On the +Z slope, a third of the way down from the ridge.
+            float vz = d * 0.3f;
+            float vy = wall + rise * (1f - vz / (d * 0.56f));
+            var vp = at + new Vector3(k * w * 0.3f, vy, vz);
+            MakeMeshProp(root, $"VentStack{k}", DrumMesh(), vp - Vector3.up * (cs * 0.05f), Quaternion.identity,
+                         new Vector3(cs * 0.14f, cs * 0.22f, cs * 0.14f), dark);
+            var head = MakeMeshProp(root, $"VentHead{k}", GearMeshFactory.Get(8), vp + Vector3.up * (cs * 0.2f), Quaternion.identity,
+                                    Vector3.one * (cs * 0.1f), trim);
+            head.gameObject.AddComponent<DecorGearSpin>().Init(90f * k, Vector3.up);
+            MakeMeshProp(root, $"VentCap{k}", ConeMesh(), vp + Vector3.up * (cs * 0.24f), Quaternion.identity,
+                         new Vector3(cs * 0.2f, cs * 0.1f, cs * 0.2f), dark);
+        }
+
+        // ── Clock on the gable over the door ──
+        float cr = Mathf.Min(rise * 0.3f, d * 0.14f);
+        var clockAt = at + new Vector3(w * 0.56f + cs * 0.03f, wall + rise * 0.36f, 0f);
+        MakeMeshProp(root, "ClockFace", DrumMesh(), clockAt, Quaternion.Euler(0f, 0f, 90f),
+                     new Vector3(cr * 2f, cs * 0.03f, cr * 2f), new Color(0.95f, 0.93f, 0.85f));
+        MakeMeshProp(root, "ClockRim", RingMesh(), clockAt + Vector3.right * (cs * 0.005f), Quaternion.Euler(0f, 0f, 90f),
+                     new Vector3(cr * 2.1f, cr * 1.5f, cr * 2.1f), dark);
+        for (int h = 0; h < 2; h++)
+        {
+            var hand = new GameObject(h == 0 ? "MinuteHand" : "HourHand").transform;
+            hand.SetParent(root, false);
+            hand.position = clockAt + Vector3.right * (cs * 0.012f + h * 0.004f);
+            float len = cr * (h == 0 ? 0.85f : 0.55f);
+            MakeMeshProp(hand, "Hand", RailMesh(), new Vector3(0f, len * 0.5f, 0f), Quaternion.identity,
+                         new Vector3(cs * 0.01f, len, cs * 0.025f), GeoPalette.Ink, true);
+            hand.localRotation = Quaternion.Euler(Hash01(DecorHash(h, 3)) * 360f, 0f, 0f);
+            hand.gameObject.AddComponent<DecorGearSpin>().Init(h == 0 ? 6f : 0.5f, Vector3.right);
+        }
+
+        // ── The door ──
+        float front = w * 0.5f + 0.01f;
+        for (int s = -1; s <= 1; s += 2)
+            MakeMeshProp(root, $"DoorJamb{s}", RailMesh(), at + new Vector3(front + 0.01f, wall * 0.33f, s * d * 0.13f), Quaternion.identity,
+                         new Vector3(cs * 0.04f, wall * 0.66f, cs * 0.05f), cfg.hazardColor);
+        MakeMeshProp(root, "DoorLintel", RailMesh(), at + new Vector3(front + 0.01f, wall * 0.66f, 0f), Quaternion.identity,
+                     new Vector3(cs * 0.05f, cs * 0.06f, d * 0.3f), cfg.hazardColor);
+        MakeMeshProp(root, "Canopy", RailMesh(), at + new Vector3(front + cs * 0.24f, wall * 0.74f, 0f), Quaternion.identity,
+                     new Vector3(cs * 0.48f, cs * 0.05f, d * 0.34f), trim);
+        for (int s = -1; s <= 1; s += 2)
+            MakeMeshProp(root, $"CanopyBracket{s}", RailMesh(), at + new Vector3(front + cs * 0.12f, wall * 0.66f, s * d * 0.15f),
+                         Quaternion.Euler(0f, 0f, 45f), new Vector3(cs * 0.03f, cs * 0.3f, cs * 0.03f), dark);
+        MakeMeshProp(root, "Sign", RailMesh(), at + new Vector3(front + 0.01f, wall * 0.87f, 0f), Quaternion.identity,
+                     new Vector3(cs * 0.04f, wall * 0.13f, d * 0.4f), cfg.gearAccent);
+        MakeMeshProp(root, "SignGear", GearMeshFactory.Get(10), at + new Vector3(front + 0.035f, wall * 0.87f, -d * 0.14f),
+                     Quaternion.Euler(0f, 0f, 90f), Vector3.one * (wall * 0.045f), dark);
+        MakeMeshProp(root, "Step", RailMesh(), at + new Vector3(front + cs * 0.16f, cs * 0.04f, 0f), Quaternion.identity,
+                     new Vector3(cs * 0.32f, cs * 0.08f, d * 0.34f), Tint(trim, 0.8f));
+    }
+
     // A machine shed: a long low hall under a sawtooth roof (each tooth glazed
     // on its steep face), a big door and a turning gear on the front, a stack
     // smoking at one end.
     void BuildShed(Transform root, OrderWorkshopConfig cfg, Vector3 at, float cs, int i)
     {
+        ObstacleBox(at, cs * 1.45f, cs * 0.95f);
         var shed = new GameObject($"Shed{i}").transform;
         shed.SetParent(root, false);
         shed.position = at;
@@ -391,6 +555,7 @@ public partial class LevelMapController : MonoBehaviour
         float len = pb.x - pa.x + cs * 0.8f;
         var   mid = new Vector3((pa.x + pb.x) * 0.5f, pa.y, pa.z);
         var  dark = new Color(0.13f, 0.13f, 0.15f);
+        ObstacleBox(mid, len * 0.5f, cs * 0.3f);
 
         MakeMeshProp(belt, "Belt", RailMesh(), mid + Vector3.up * (top - cs * 0.04f), Quaternion.identity,
                      new Vector3(len, cs * 0.08f, cs * 0.46f), dark);
@@ -466,6 +631,7 @@ public partial class LevelMapController : MonoBehaviour
     // along the jib, and the hook swings under it.
     void BuildJibCrane(Transform root, OrderWorkshopConfig cfg, Vector3 at, Vector3 toward, float cs)
     {
+        Obstacle(at);
         var crane = new GameObject("JibCrane").transform;
         crane.SetParent(root, false);
         crane.position = at;
@@ -539,6 +705,7 @@ public partial class LevelMapController : MonoBehaviour
 
     void BuildWaterTower(Transform root, OrderWorkshopConfig cfg, Vector3 at, float cs)
     {
+        Obstacle(at);
         var tw = new GameObject("WaterTower").transform;
         tw.SetParent(root, false);
         tw.position = at;
@@ -639,6 +806,7 @@ public partial class LevelMapController : MonoBehaviour
 
     void CrateStack(Transform root, OrderWorkshopConfig cfg, Vector3 at, float cs, int seed)
     {
+        Obstacle(at);
         int n = 1 + Mathf.FloorToInt(Hash01(DecorHash(seed, 19)) * 3f);
         float y = 0f;
         for (int k = 0; k < n; k++)
@@ -658,6 +826,7 @@ public partial class LevelMapController : MonoBehaviour
 
     void BarrelCluster(Transform root, OrderWorkshopConfig cfg, Vector3 at, float cs, int seed)
     {
+        Obstacle(at);
         int n = 2 + Mathf.FloorToInt(Hash01(DecorHash(seed, 23)) * 2f);
         for (int k = 0; k < n; k++)
         {
@@ -732,6 +901,7 @@ public partial class LevelMapController : MonoBehaviour
         var gates = new HashSet<Vector2Int>();
         foreach (var c in rim) if (cfg.OnPath(c)) gates.Add(c);
         rim.ExceptWith(gates);
+        foreach (var c in rim) Obstacle(c);   // in only through the gates
 
         var links = new Dictionary<Vector2Int, List<Vector2Int>>();
         void Link(Vector2Int a, Vector2Int b)
@@ -858,6 +1028,7 @@ public partial class LevelMapController : MonoBehaviour
         {
             var c = hedgeCols[i];
             taken.Add(c);
+            Obstacle(c);
             var p = ColumnSurface(colTop, c, cfg, cs);
             var leaf = Tint(cfg.leafDeep, 0.9f + 0.2f * Hash01(DecorHash(c.x, c.y ^ 41)));
             MakeMeshProp(root, $"Hedge_{c.x}_{c.y}", RailMesh(), p + Vector3.up * (cs * 0.18f), Quaternion.identity,
@@ -934,6 +1105,7 @@ public partial class LevelMapController : MonoBehaviour
 
     void BuildOrrery(Transform root, ObservatoryConfig cfg, Vector3 at, float cs)
     {
+        Obstacle(at);
         var o = new GameObject("Orrery").transform;
         o.SetParent(root, false);
         o.position = at;
@@ -974,6 +1146,7 @@ public partial class LevelMapController : MonoBehaviour
 
     void BuildSundial(Transform root, ObservatoryConfig cfg, Vector3 at, float cs)
     {
+        Obstacle(at);
         var s = new GameObject("Sundial").transform;
         s.SetParent(root, false);
         s.position = at;
@@ -1008,6 +1181,7 @@ public partial class LevelMapController : MonoBehaviour
     // door toward the main one.
     void BuildAnnex(Transform root, ObservatoryConfig cfg, Vector3 at, Vector3 faceDir, float cs)
     {
+        Obstacle(at);
         var a = new GameObject("Annex").transform;
         a.SetParent(root, false);
         a.position = at;

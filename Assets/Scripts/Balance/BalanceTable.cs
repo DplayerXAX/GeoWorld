@@ -228,6 +228,8 @@ public class BalanceTable : ScriptableObject
     [Range(0f, 2f)] public float prayerDamageAmp = 0.2f;
     [Tooltip("Extra TURRET currency for every enemy that dies inside a Prayer field (once per enemy, however many fields overlap).")]
     [Min(0)] public int debuffKillBonus = 1;
+    [Tooltip("Chance that an enemy dying inside a Prayer field pays debuffKillBonus at all.")]
+    [Range(0f, 1f)] public float debuffKillBonusChance = 0.6f;
 
     // ═══════════════════════════════════════════════════════════════════════
     // Records (inner types)

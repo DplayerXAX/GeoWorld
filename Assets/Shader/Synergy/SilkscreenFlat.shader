@@ -32,6 +32,7 @@ Shader "GeoWorld/SilkscreenFlat"
             #pragma fragment Frag
 
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
+            #include "Assets/Shader/Include/MapOcclusion.hlsl"
 
             CBUFFER_START(UnityPerMaterial)
                 float4 _BaseColor;
@@ -94,6 +95,7 @@ Shader "GeoWorld/SilkscreenFlat"
 
             half4 Frag(Varyings IN) : SV_Target
             {
+                MapOccludeClip(IN.positionCS);   // level-select see-through; off everywhere else
                 float3 n = normalize(IN.normalWS);
 
                 // Consistent graphic shade from a fixed emulated light → faces
@@ -107,6 +109,84 @@ Shader "GeoWorld/SilkscreenFlat"
 
                 half3 col = _BaseColor.rgb * shade * grainMul;
                 return half4(col, 1.0);
+            }
+            ENDHLSL
+        }
+
+        // Depth, and depth + normals, for the camera's depth texture. Without
+        // these the object is missing from _CameraDepthTexture whenever URP
+        // builds it from a depth prepass, and everything that reads depth (the
+        // height fog, the far haze, the mist banks) draws straight through it as
+        // if it weren't there: a blurred ghost behind the fog.
+        Pass
+        {
+            Name "DepthOnly"
+            Tags { "LightMode" = "DepthOnly" }
+            ZWrite On
+            ColorMask R
+            Cull Off
+
+            HLSLPROGRAM
+            #pragma vertex   DepthVert
+            #pragma fragment DepthFrag
+            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
+            #include "Assets/Shader/Include/MapOcclusion.hlsl"
+            CBUFFER_START(UnityPerMaterial)
+                float4 _BaseColor;
+                float  _FaceShade;
+                float4 _EmuLightDir;
+                float  _GrainStrength;
+                float  _GrainScale;
+            CBUFFER_END
+            struct DepthAttributes { float4 positionOS : POSITION; float3 normalOS : NORMAL; };
+            struct DepthVaryings   { float4 positionCS : SV_POSITION; float3 normalWS : TEXCOORD0; };
+
+            DepthVaryings DepthVert(DepthAttributes IN)
+            {
+                DepthVaryings o;
+                o.positionCS = TransformObjectToHClip(IN.positionOS.xyz);
+                o.normalWS   = TransformObjectToWorldNormal(IN.normalOS);
+                return o;
+            }
+
+            half DepthFrag(DepthVaryings IN) : SV_Target { MapOccludeClip(IN.positionCS); return 0; }
+            ENDHLSL
+        }
+
+        Pass
+        {
+            Name "DepthNormals"
+            Tags { "LightMode" = "DepthNormals" }
+            ZWrite On
+            Cull Off
+
+            HLSLPROGRAM
+            #pragma vertex   DepthVert
+            #pragma fragment NormalsFrag
+            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
+            #include "Assets/Shader/Include/MapOcclusion.hlsl"
+            CBUFFER_START(UnityPerMaterial)
+                float4 _BaseColor;
+                float  _FaceShade;
+                float4 _EmuLightDir;
+                float  _GrainStrength;
+                float  _GrainScale;
+            CBUFFER_END
+            struct DepthAttributes { float4 positionOS : POSITION; float3 normalOS : NORMAL; };
+            struct DepthVaryings   { float4 positionCS : SV_POSITION; float3 normalWS : TEXCOORD0; };
+
+            DepthVaryings DepthVert(DepthAttributes IN)
+            {
+                DepthVaryings o;
+                o.positionCS = TransformObjectToHClip(IN.positionOS.xyz);
+                o.normalWS   = TransformObjectToWorldNormal(IN.normalOS);
+                return o;
+            }
+
+            half4 NormalsFrag(DepthVaryings IN) : SV_Target
+            {
+                MapOccludeClip(IN.positionCS);
+                return half4(NormalizeNormalPerPixel(IN.normalWS), 0.0);
             }
             ENDHLSL
         }

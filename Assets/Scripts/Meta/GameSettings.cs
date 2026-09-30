@@ -30,6 +30,9 @@ public static class GameSettings
     // PlacementController.SnapToNearestSupported), with WASDQE/scroll nudging it
     // further from there.
     public static bool FreeMove = true;
+    // On (default): on the level-select map, whatever stands between the camera
+    // and the pawn is cut away (LevelMapController.Occlusion). Off: nothing is.
+    public static bool SeeThrough = true;
 
     // Cycles the game speed — the same action as clicking the fast-forward chip.
     public static KeyCode FastForwardKey = KeyCode.C;
@@ -114,6 +117,7 @@ public static class GameSettings
         LookSensitivity = PlayerPrefs.GetFloat("set.looksens", LookSensitivity);
         SmoothBlockEditing = PlayerPrefs.GetInt("set.smoothedit", SmoothBlockEditing ? 1 : 0) == 1;
         FreeMove           = PlayerPrefs.GetInt("set.freemove",   FreeMove ? 1 : 0) == 1;
+        SeeThrough         = PlayerPrefs.GetInt("set.seethrough", SeeThrough ? 1 : 0) == 1;
 
         // Guarded on load too, not just at rebind time: the reserved list can grow
         // after a player has already saved a binding that later became a conflict.
@@ -135,6 +139,7 @@ public static class GameSettings
         PlayerPrefs.SetFloat("set.looksens", LookSensitivity);
         PlayerPrefs.SetInt("set.smoothedit", SmoothBlockEditing ? 1 : 0);
         PlayerPrefs.SetInt("set.freemove",   FreeMove ? 1 : 0);
+        PlayerPrefs.SetInt("set.seethrough", SeeThrough ? 1 : 0);
         PlayerPrefs.SetInt("set.ffkey",      (int)FastForwardKey);
         PlayerPrefs.Save();
     }
@@ -190,6 +195,7 @@ public static class GameSettings
         CameraPanSpeed = 8f; LookSensitivity = 120f;
         SmoothBlockEditing = true;
         FreeMove = true;
+        SeeThrough = true;
         FastForwardKey = KeyCode.C;
         Save(); ApplyAll();
     }

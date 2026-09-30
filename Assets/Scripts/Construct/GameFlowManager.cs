@@ -242,6 +242,7 @@ public partial class GameFlowManager : MonoBehaviour
         Color tint = BlockColorPalette.Get(lv.randomStartColor);
 
         int placed = 0;
+        var placedCells = new List<Vector3Int[]>();
         for (int attempt = 0; attempt < 300 && placed < lv.randomStartBlocks; attempt++)
         {
             var data = pool[rng.NextIntInclusive(0, pool.Count - 1)];
@@ -253,7 +254,7 @@ public partial class GameFlowManager : MonoBehaviour
             for (int i = 0; i < cells.Length && ok; i++)
             {
                 cells[i] = anchor + data.cells[i];
-                ok = !gridSystem.IsOccupied(cells[i]) && !TouchesAnything(cells[i], cells);
+                ok = !gridSystem.IsOccupied(cells[i]) && !TouchesAnything(cells[i], cells) && !NearEndpoint(cells[i]);
             }
             if (!ok) continue;
 
@@ -263,9 +264,67 @@ public partial class GameFlowManager : MonoBehaviour
             ins.age = env != null ? env.prebuiltAge : 0;
             ResourceManager.Instance?.OnBlockPlaced(data.blockType);
             if (ins.visualObject != null) startingLayoutVisuals.Add(ins.visualObject);
+            placedCells.Add(cells);
             placed++;
         }
+        if (placed > 0) SpawnRandomStartTurret(lv, pc, placedCells, rng);
         if (placed > 0) EvaluateGrid();
+    }
+
+    // LevelDefinition.randomStartTurret: one turret on top of one of the random
+    // start blocks — on a top face with open air above it. Level furniture like
+    // the blocks under it: locked (can't be moved or sold), and so never flagged
+    // detached — it fires from the start, with no build of the player's under it
+    // (BoardValidity treats locked pieces as attached).
+    void SpawnRandomStartTurret(LevelDefinition lv, PlacementController pc, List<Vector3Int[]> blocks,
+                                Xoshiro256StarStar rng)
+    {
+        if (!TurretTypes.Is(lv.randomStartTurret) || blocks.Count == 0) return;
+        var data = pc.FindBlockData(lv.randomStartTurret);
+        if (data == null || data.cells == null || data.cells.Length == 0)
+        {
+            Debug.LogWarning($"[GameFlowManager] randomStartTurret: no BlockData for {lv.randomStartTurret}.");
+            return;
+        }
+
+        // Start from a random block and try each in turn until one has a free top.
+        int first = rng.NextIntInclusive(0, blocks.Count - 1);
+        for (int k = 0; k < blocks.Count; k++)
+        {
+            var own = blocks[(first + k) % blocks.Count];
+            var tops = new List<Vector3Int>();
+            foreach (var c in own)
+                if (System.Array.IndexOf(own, c + Vector3Int.up) < 0 && !gridSystem.IsOccupied(c + Vector3Int.up))
+                    tops.Add(c);
+            if (tops.Count == 0) continue;
+
+            var top = tops[rng.NextIntInclusive(0, tops.Count - 1)] + Vector3Int.up;
+            var cells = new Vector3Int[data.cells.Length];
+            bool ok = true;
+            for (int i = 0; i < cells.Length && ok; i++)
+            {
+                cells[i] = top + data.cells[i];
+                ok = !gridSystem.IsOccupied(cells[i]);
+            }
+            if (!ok) continue;
+
+            var ins = pc.PlaceBlockDirect(data, cells, Quaternion.identity, TurretTypes.DisplayColor(data.blockType));
+            if (ins == null) continue;
+            ins.locked = true;
+            ResourceManager.Instance?.OnBlockPlaced(data.blockType);
+            if (ins.visualObject != null) startingLayoutVisuals.Add(ins.visualObject);   // pops in with the board
+            return;
+        }
+    }
+
+    // Within two cells (across the ground) of a start or end point. The random
+    // start blocks keep that clear, so an endpoint is never boxed in or hidden
+    // behind one.
+    bool NearEndpoint(Vector3Int cell)
+    {
+        foreach (var e in allStarts) if (Mathf.Abs(e.x - cell.x) <= 2 && Mathf.Abs(e.z - cell.z) <= 2) return true;
+        foreach (var e in allEnds)   if (Mathf.Abs(e.x - cell.x) <= 2 && Mathf.Abs(e.z - cell.z) <= 2) return true;
+        return false;
     }
 
     // A face neighbour of `cell` that's occupied and isn't part of the same piece.
@@ -626,7 +685,7 @@ public partial class GameFlowManager : MonoBehaviour
             // allEnds constrains the new start to the union of the existing
             // starts' reach circles — see LevelEndpointGenerator.SampleStartInsideReach.
             var cell = endpoints.GenerateSinglePoint(allStarts, true, allEnds);
-            if (cell != Vector3Int.zero)
+            if (endpoints.LastGenerated)
             {
                 allStarts.Add(cell);
                 _challengeCell    = cell;
@@ -636,13 +695,19 @@ public partial class GameFlowManager : MonoBehaviour
         else
         {
             var cell = endpoints.GenerateSinglePoint(allEnds, false);
-            if (cell != Vector3Int.zero)
+            if (endpoints.LastGenerated)
             {
                 allEnds.Add(cell);
                 _challengeCell    = cell;
                 _challengeIsStart = false;
             }
         }
+
+        // The environment keeps its fog and far haze clear round the endpoints, but
+        // only hears about the board when a block is placed. A new endpoint out past
+        // the cleared ring sat inside the haze until then — which read as the
+        // endpoint never having been made.
+        LevelEnvironmentDriver.NotifyBoard(gridSystem);
 
         roundIndex++;
     }
@@ -808,7 +873,8 @@ public partial class GameFlowManager : MonoBehaviour
 
                         ArpeggiatorManager.Instance.PlayAmbientNote(deg, oct, 0.28f,
                             inst.visualObject);
-                        BackgroundReactor.Instance?.OnNote(0.2f);
+                        // No sky pulse per lit block for now: the scan reads on the
+                        // board and in the notes; the sky blinking along was a distraction.
 
                         if (inst.visualObject != null)
                             StartCoroutine(ScanFlashBlock(inst.visualObject, stepSec * 0.7f));
@@ -940,10 +1006,14 @@ public partial class GameFlowManager : MonoBehaviour
                 ResourceManager.Instance?.SetCombatActive(false);
                 phase = GamePhase.Build;
                 // No live line yet — will appear on next block placement.
+                PathFlowManager.Instance?.SyncFlows(FindAllSpawnPaths(), addMissing: false);
+                return;
             }
             // Path still valid while running — re-route live enemies so anything the
             // newly-placed block blocked finds a fresh way to the end.
             enemyBaseManager?.RerouteActive(graph, CurrentEndFaces());
+            // …and the route lines follow them: old routes' lines go, new ones appear.
+            PathFlowManager.Instance?.SyncFlows(FindAllSpawnPaths(), addMissing: true);
             return;
         }
 
@@ -951,7 +1021,13 @@ public partial class GameFlowManager : MonoBehaviour
         // point, not just the challenge path (multi-spawn rounds redraw all routes).
         // Not while the board is still hidden for the intro — a route drawn over
         // blocks that haven't appeared yet; the release redraws it.
-        if (!_routeLinesHeld) PathFlowManager.Instance?.UpdateLiveLines(FindAllSpawnPaths());
+        if (!_routeLinesHeld)
+        {
+            var routes = FindAllSpawnPaths();
+            PathFlowManager.Instance?.UpdateLiveLines(routes);
+            // Last wave's route lines stay only where the route still runs.
+            PathFlowManager.Instance?.SyncFlows(routes, addMissing: false);
+        }
         phase = path != null ? GamePhase.ReadyToRun : GamePhase.Build;
     }
 
@@ -984,10 +1060,12 @@ public partial class GameFlowManager : MonoBehaviour
         if (spawnPaths.Count == 0) spawnPaths.Add(path);   // safety net
 
         // Live preview line → tracked loop lines, one per active route so the
-        // player can see where every wave of enemies will come from.
+        // player can see where every wave of enemies will come from. The combat
+        // ripple below takes the board down and grows it back, so every line is
+        // wiped now and drawn afresh once the blocks are standing again (a line
+        // hanging over a board that isn't there yet reads as a glitch).
         PathFlowManager.Instance?.ClearLiveLine();
-        foreach (var p in spawnPaths)
-            PathFlowManager.Instance?.AddFlow(p);
+        PathFlowManager.Instance?.SyncFlows(null, addMissing: false);
 
         // No more music SurfaceUnit — combat timing is driven by the enemy
         // wave. EndRunningPhase fires when EnemyBaseManager.OnWaveCompleted.
@@ -1002,7 +1080,13 @@ public partial class GameFlowManager : MonoBehaviour
         // Combat ripple is a one-shot grow animation that touches every cube;
         // run it once on the challenge path (running it per-route would have
         // multiple coroutines fighting over the same cube scales).
-        placement.TriggerCombatRipple(path);                // wave grows along path, then off-path blocks bloom
+        placement.TriggerCombatRipple(path, () =>           // wave grows along path, then off-path blocks bloom
+        {
+            // The routes as they stand once it has grown back (the player may
+            // have built meanwhile); nothing if the wave is already over.
+            if (phase == GamePhase.Running)
+                PathFlowManager.Instance?.SyncFlows(FindAllSpawnPaths(), addMissing: true);
+        });
     }
 
     // Lazy run-scoped RNG. First call rolls a fresh seed if runSeed==0 so the

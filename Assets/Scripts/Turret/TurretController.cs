@@ -623,6 +623,10 @@ public class TurretController : MonoBehaviour
         if (e == null || !e.InPrayer) return;
         var table = BalanceTable.Active;
         int bonus = table != null ? table.debuffKillBonus : 1;
+        float chance = table != null ? table.debuffKillBonusChance : 0.6f;
+        // UnityEngine.Random, not the run's seeded stream: a coin-flip per kill
+        // must not shift the shop and wave rolls.
+        if (Random.value >= chance) return;
         var rm = ResourceManager.Instance;
         if (bonus > 0 && rm != null) rm.AddTurretCurrency(bonus);
     }

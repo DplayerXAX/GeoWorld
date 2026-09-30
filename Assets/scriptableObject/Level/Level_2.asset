@@ -16,6 +16,8 @@ MonoBehaviour:
   displayName: 1-2
   description: 
   runSeed: 0
+  startPointWaves: 03000000
+  endPointWaves: 
   blocksPerTurn: 3
   startingBlockCurrencyMult: 1
   environment: {fileID: 11400000, guid: 71fe97475a0540a788498eba0c8f3a71, type: 2}
@@ -29,8 +31,8 @@ MonoBehaviour:
   - {fileID: 11400000, guid: 080e4b2a67c19904bbbfdce56bfad1ae, type: 2}
   - {fileID: 11400000, guid: 805195553d7548d7b575d4c0394cb94b, type: 2}
   - {fileID: 11400000, guid: d54378f6fe064d08ba34d6c8e1f8ff1d, type: 2}
-  - {fileID: 11400000, guid: 936c96e931544f789d15a0b24fa27475, type: 2}
-  - {fileID: 0}
+  - {fileID: 11400000, guid: a1c4e7f02b5d48a39c6e1f2a3b4c5d64, type: 2}
+  - {fileID: 11400000, guid: b2d5f8a13c6e49b4ad7f203b4c5d6e75, type: 2}
   - {fileID: 0}
   - {fileID: 0}
   - {fileID: 0}
@@ -39,15 +41,15 @@ MonoBehaviour:
   wavesToClear: 5
   objectives:
   - type: 0
-    target: 8
+    target: 5
     description: 
     optional: 0
-  - type: 8
-    target: 3
+  - type: 6
+    target: 5
     description: 
     optional: 0
-  - type: 4
-    target: 3
+  - type: 10
+    target: 2
     description: 
     optional: 0
   requireAllObjectives: 1
@@ -79,7 +81,49 @@ MonoBehaviour:
     cameraFocus: 0
     focusZoom: 0
     openPanel: 0
-    hint: 'Mind the ground itself, My Lord. This land is unstable. After every wave, one or two of our blocks will crumble away, and no telling which. Build with room to spare, and be ready to mend the gaps.'
+    hint: 'Look there, My Lord. Old structures stand abandoned about this field, and one still carries a turret that can fire.'
+    conversation: {fileID: 0}
+    speaker: {fileID: 11400000, guid: 80993e3c86b4337429c2d6273c8eedc2, type: 2}
+    speakerSlot: 1
+    speakerPortrait: 
+  - kind: 5
+    block: {fileID: 0}
+    origin: {x: 0, y: 0, z: 0}
+    rotation90: {x: 0, y: 0, z: 0}
+    cellsOverride: []
+    waitSeconds: 0
+    count: 1
+    inputKey: 323
+    pathLength: 0
+    freeOperations: 1
+    hideInCombat: 0
+    requiredWave: 0
+    unlocksOps: 
+    cameraFocus: 0
+    focusZoom: 0
+    openPanel: 0
+    hint: 'We cannot move them, but perhaps we can make use of them.'
+    conversation: {fileID: 0}
+    speaker: {fileID: 11400000, guid: 80993e3c86b4337429c2d6273c8eedc2, type: 2}
+    speakerSlot: 1
+    speakerPortrait: 
+  - kind: 5
+    block: {fileID: 0}
+    origin: {x: 0, y: 0, z: 0}
+    rotation90: {x: 0, y: 0, z: 0}
+    cellsOverride: []
+    waitSeconds: 0
+    count: 1
+    inputKey: 323
+    pathLength: 0
+    freeOperations: 1
+    hideInCombat: 0
+    requiredWave: 0
+    unlocksOps: 
+    cameraFocus: 0
+    focusZoom: 0
+    openPanel: 0
+    hint: 'Oh, and keep an Abundance synergy standing, My Lord. Without it, our coffers will run dry fast.'
     conversation: {fileID: 0}
     speaker: {fileID: 11400000, guid: 80993e3c86b4337429c2d6273c8eedc2, type: 2}
     speakerSlot: 1
@@ -126,12 +170,37 @@ MonoBehaviour:
     speaker: {fileID: 11400000, guid: 80993e3c86b4337429c2d6273c8eedc2, type: 2}
     speakerSlot: 1
     speakerPortrait: 
+  - kind: 5
+    block: {fileID: 0}
+    origin: {x: 0, y: 0, z: 0}
+    rotation90: {x: 0, y: 0, z: 0}
+    cellsOverride: []
+    waitSeconds: 0
+    count: 1
+    inputKey: 323
+    pathLength: 0
+    freeOperations: 1
+    hideInCombat: 0
+    requiredWave: 4
+    unlocksOps: 
+    cameraFocus: 0
+    focusZoom: 0
+    openPanel: 0
+    hint: 'Watch for the Suppressors coming in, My Lord. Any turret near one fires at half pace, so strike them down before they reach our guns.'
+    conversation: {fileID: 0}
+    speaker: {fileID: 11400000, guid: 80993e3c86b4337429c2d6273c8eedc2, type: 2}
+    speakerSlot: 1
+    speakerPortrait: 
   revealAfter: {fileID: 11400000, guid: 1b45f2b9e94ad084180100d47c626f51, type: 2}
   startingLayout: {fileID: 0}
   randomStartBlocks: 3
   randomStartColor: 1
+  randomStartTurret: 7
+  chaosFirstAside: 'Oh, another chaos block appears...'
+  chaosFirstAsideSpeaker: {fileID: 11400000, guid: 80993e3c86b4337429c2d6273c8eedc2, type: 2}
+  chaosFirstAsideSeconds: 3.5
   overrideEndpointDistance: 0
   endpointMinDistance: 5
   endpointMaxDistance: 10
   mechanics:
-  - {fileID: 11400000, guid: ee2ab2f9dff7f574ba705fe2988bd81c, type: 2}
+  - {fileID: 11400000, guid: 49e6eb7ca9c24522886d1aeaa87d2cfa, type: 2}

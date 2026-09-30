@@ -131,6 +131,7 @@ public class BalanceTower : MonoBehaviour
     readonly MinigameStage _stage = new();
 
     Camera    _cam;
+    readonly PlacementRotationInput _rotation = new();
     Transform _root;    // stage root, never moves
     Transform _pivot;   // the pan: Rigidbody + joint. Pedestal AND tower hang off it, so both tip
     Transform _tower;   // everything placed, plus the held piece
@@ -194,6 +195,8 @@ public class BalanceTower : MonoBehaviour
     void Quit()
     {
         Active = false;
+        VirtualCursor.EndRotation();
+        _rotation.Reset();
         StopMusic();
         _stage.Restore();
         if (_cam != null) Destroy(_cam.gameObject);
@@ -340,9 +343,15 @@ public class BalanceTower : MonoBehaviour
         if (Input.GetKeyDown(KeyCode.W)) Step(CamForward());
         if (Input.GetKeyDown(KeyCode.S)) Step(-CamForward());
 
-        if (Input.GetKeyDown(KeyCode.Alpha1)) Rotate(Quaternion.Euler(90f, 0f, 0f));
-        if (Input.GetKeyDown(KeyCode.Alpha2)) Rotate(Quaternion.Euler(0f, 90f, 0f));
-        if (Input.GetKeyDown(KeyCode.Alpha3)) Rotate(Quaternion.Euler(0f, 0f, 90f));
+        // Hold Alt: scroll turns the block about the vertical, a drag tips it —
+        // the level-placement gesture (PlacementRotationInput). Axes are read in
+        // the tower's own frame, so a leaning tower still turns the block square
+        // to itself.
+        bool rotating = Application.isFocused && Input.GetKey(KeyCode.LeftAlt) && _cam != null;
+        if (_cam != null) VirtualCursor.SetRotationAnchor(rotating, _cam, _held.position);
+        Vector3 right = _cam != null && _tower != null ? _tower.InverseTransformDirection(_cam.transform.right) : Vector3.right;
+        var turn = _rotation.Read(rotating, VirtualCursor.MouseDelta, Input.mouseScrollDelta.y, right);
+        if (turn != Quaternion.identity) Rotate(turn);
     }
 
     // NOT clamped to the pedestal. Building out past the edge is the whole point —
@@ -892,7 +901,7 @@ public class BalanceTower : MonoBehaviour
 
         var help = NewText("Help", 24f, TextAlignmentOptions.BottomLeft);
         help.color = GeoPalette.WithAlpha(GeoPalette.Paper, 0.8f);
-        help.text = "WASD steer   ·   1/2/3 rotate   ·   Space drop faster\n"
+        help.text = "WASD steer   ·   Alt + scroll / drag rotate   ·   Space drop faster\n"
                   + "Right-drag orbit";
         var hrt = help.rectTransform;
         hrt.anchorMin = hrt.anchorMax = hrt.pivot = new Vector2(0f, 0f);

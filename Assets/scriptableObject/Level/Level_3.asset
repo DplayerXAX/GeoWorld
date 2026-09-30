@@ -17,10 +17,15 @@ MonoBehaviour:
   description: Order is the second blessing.
   runSeed: 0
   blocksPerTurn: 4
-  startingBlockCurrencyMult: 1
   turretsPerTurn: 3
+  startingBlockCurrencyMult: 1
+  infiniteResources: 0
+  startPointWaves: 
+  endPointWaves: 
   synergyEnabled: 1
   allowedColors: 010000000400000002000000
+  turretPool: 
+  environment: {fileID: 0}
   startingShop: []
   waves:
   - {fileID: 11400000, guid: 080e4b2a67c19904bbbfdce56bfad1ae, type: 2}
@@ -46,6 +51,9 @@ MonoBehaviour:
   techReward: 1
   mapBlockRewards: []
   rewardConversation: {fileID: 0}
+  rewardSuggestCubeSide: 0
+  rewardSuggestOrigin: {x: 0, y: 0, z: 0}
+  rewardSuggestRotation90: {x: 0, y: 0, z: 0}
   isTutorial: 1
   fixedEndpoints: 0
   startCell: {x: 0, y: 0, z: 0}
@@ -58,16 +66,65 @@ MonoBehaviour:
     cellsOverride: []
     waitSeconds: 0
     count: 1
-    inputKey: 323
+    inputKey: 289
     pathLength: 0
     freeOperations: 1
     hideInCombat: 0
+    shopOnlyTarget: 0
+    shopOnlyColor: 0
+    freeRefreshAfter: 0
     requiredWave: 0
     unlocksOps: 
     cameraFocus: 0
     focusZoom: 0
     openPanel: 0
-    hint: 'A new power answers us, My Lord: ORDER. Join three or more ORDER blocks and they hold fast as one.'
+    hint: Hey, this is the dev team! This level is not finished yet, so it is not
+      useful for playtesting.
+    suggestCubeSide: 0
+    suggestOrigin: {x: 0, y: 0, z: 0}
+    suggestSpanEndpoints: 0
+    suggestSpanMargin: 2
+    suggestTransient: 0
+    suggestCubeSide2: 0
+    suggestOrigin2: {x: 0, y: 0, z: 0}
+    asideText: 
+    asideSpeaker: {fileID: 0}
+    asideSpeakerPortrait: 
+    conversation: {fileID: 0}
+    speaker: {fileID: 0}
+    speakerSlot: 1
+    speakerPortrait: 
+  - kind: 5
+    block: {fileID: 0}
+    origin: {x: 0, y: 0, z: 0}
+    rotation90: {x: 0, y: 0, z: 0}
+    cellsOverride: []
+    waitSeconds: 0
+    count: 1
+    inputKey: 323
+    pathLength: 0
+    freeOperations: 1
+    hideInCombat: 0
+    shopOnlyTarget: 0
+    shopOnlyColor: 0
+    freeRefreshAfter: 0
+    requiredWave: 0
+    unlocksOps: 
+    cameraFocus: 0
+    focusZoom: 0
+    openPanel: 0
+    hint: 'A new power answers us, My Lord: ORDER. Join three or more ORDER blocks
+      and they hold fast as one.'
+    suggestCubeSide: 0
+    suggestOrigin: {x: 0, y: 0, z: 0}
+    suggestSpanEndpoints: 0
+    suggestSpanMargin: 2
+    suggestTransient: 0
+    suggestCubeSide2: 0
+    suggestOrigin2: {x: 0, y: 0, z: 0}
+    asideText: 
+    asideSpeaker: {fileID: 0}
+    asideSpeakerPortrait: 
     conversation: {fileID: 0}
     speaker: {fileID: 11400000, guid: 80993e3c86b4337429c2d6273c8eedc2, type: 2}
     speakerSlot: 1
@@ -83,12 +140,26 @@ MonoBehaviour:
     pathLength: 0
     freeOperations: 1
     hideInCombat: 0
+    shopOnlyTarget: 0
+    shopOnlyColor: 0
+    freeRefreshAfter: 0
     requiredWave: 0
     unlocksOps: 
     cameraFocus: 0
     focusZoom: 0
     openPanel: 0
-    hint: 'Foes that march beside a linked ORDER set are weakened as they pass. Lay it along their road.'
+    hint: Foes that march beside a linked ORDER set are weakened as they pass. Lay
+      it along their road.
+    suggestCubeSide: 0
+    suggestOrigin: {x: 0, y: 0, z: 0}
+    suggestSpanEndpoints: 0
+    suggestSpanMargin: 2
+    suggestTransient: 0
+    suggestCubeSide2: 0
+    suggestOrigin2: {x: 0, y: 0, z: 0}
+    asideText: 
+    asideSpeaker: {fileID: 0}
+    asideSpeakerPortrait: 
     conversation: {fileID: 0}
     speaker: {fileID: 11400000, guid: 80993e3c86b4337429c2d6273c8eedc2, type: 2}
     speakerSlot: 1
@@ -104,19 +175,45 @@ MonoBehaviour:
     pathLength: 0
     freeOperations: 1
     hideInCombat: 0
+    shopOnlyTarget: 0
+    shopOnlyColor: 0
+    freeRefreshAfter: 0
     requiredWave: 0
     unlocksOps: 
     cameraFocus: 0
     focusZoom: 0
     openPanel: 0
-    hint: 'Our shop will offer ORDER blocks from now on. Build a set, and watch the enemy falter.'
+    hint: Our shop will offer ORDER blocks from now on. Build a set, and watch the
+      enemy falter.
+    suggestCubeSide: 0
+    suggestOrigin: {x: 0, y: 0, z: 0}
+    suggestSpanEndpoints: 0
+    suggestSpanMargin: 2
+    suggestTransient: 0
+    suggestCubeSide2: 0
+    suggestOrigin2: {x: 0, y: 0, z: 0}
+    asideText: 
+    asideSpeaker: {fileID: 0}
+    asideSpeakerPortrait: 
     conversation: {fileID: 0}
     speaker: {fileID: 11400000, guid: 80993e3c86b4337429c2d6273c8eedc2, type: 2}
     speakerSlot: 1
     speakerPortrait: 
   revealAfter: {fileID: 11400000, guid: fb1db61d4cd59c545b71466b020d5f0e, type: 2}
+  randomStartBlocks: 0
+  randomStartColor: 1
+  randomStartTurret: 5
+  chaosFirstAside: 
+  chaosFirstAsideSpeaker: {fileID: 0}
+  chaosFirstAsideSeconds: 3.5
   startingLayout: {fileID: 0}
   overrideEndpointDistance: 0
   endpointMinDistance: 5
   endpointMaxDistance: 10
+  overrideInitialCamera: 0
+  initialCameraFocus: {x: 0, y: 0, z: 0}
+  initialCameraYaw: 45
+  initialCameraPitch: 35
+  initialCameraDistance: 15
+  initialCameraFov: 60
   mechanics: []

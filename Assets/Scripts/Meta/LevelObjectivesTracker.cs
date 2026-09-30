@@ -54,7 +54,7 @@ public class LevelObjectivesTracker : MonoBehaviour
     public TMP_FontAsset font;
 
     LevelDefinition _lv;
-    int _kills, _leaks, _placed, _maxSynergies, _maxTurretUpgradeLevel;
+    int _kills, _leaks, _placed, _maxSynergies, _maxTurretUpgradeLevel, _chaosDestroyed;
 
     Canvas    _canvas;
     TMP_Text[] _rows;
@@ -87,6 +87,7 @@ public class LevelObjectivesTracker : MonoBehaviour
         EnemySurfaceUnit.AnyReachedEnd += OnLeak;
         PlacementController.BlockPlaced += OnPlaced;
         PlacementController.TurretUpgradeLevelReached += OnTurretUpgradeLevelReached;
+        ChaosBlockController.AnyDestroyed += OnChaosDestroyed;
     }
 
     void OnDisable()
@@ -95,6 +96,7 @@ public class LevelObjectivesTracker : MonoBehaviour
         EnemySurfaceUnit.AnyReachedEnd -= OnLeak;
         PlacementController.BlockPlaced -= OnPlaced;
         PlacementController.TurretUpgradeLevelReached -= OnTurretUpgradeLevelReached;
+        ChaosBlockController.AnyDestroyed -= OnChaosDestroyed;
         if (_inst == this) _inst = null;
     }
 
@@ -104,6 +106,7 @@ public class LevelObjectivesTracker : MonoBehaviour
         if (_inst == null || save == null) return;
         save.objKills = _inst._kills;   save.objLeaks = _inst._leaks;   save.objPlaced = _inst._placed;
         save.objMaxSynergies = _inst._maxSynergies;  save.objMaxTurretLevel = _inst._maxTurretUpgradeLevel;
+        save.objChaosDestroyed = _inst._chaosDestroyed;
     }
 
     public static void Restore(LevelRunSave save)
@@ -111,12 +114,14 @@ public class LevelObjectivesTracker : MonoBehaviour
         if (_inst == null || save == null) return;
         _inst._kills = save.objKills;   _inst._leaks = save.objLeaks;   _inst._placed = save.objPlaced;
         _inst._maxSynergies = save.objMaxSynergies;  _inst._maxTurretUpgradeLevel = save.objMaxTurretLevel;
+        _inst._chaosDestroyed = save.objChaosDestroyed;
     }
 
     void OnKill(EnemySurfaceUnit _)            => _kills++;
     void OnLeak(EnemySurfaceUnit _)            => _leaks++;
     void OnPlaced(BlockData _, Vector3Int[] __) => _placed++;
     void OnTurretUpgradeLevelReached(int level) => _maxTurretUpgradeLevel = Mathf.Max(_maxTurretUpgradeLevel, level);
+    void OnChaosDestroyed()                     => _chaosDestroyed++;
 
     void Start() { if (_lv != null && _lv.objectives.Count > 0) BuildUI(); }
 
@@ -172,6 +177,9 @@ public class LevelObjectivesTracker : MonoBehaviour
                 return cur >= tgt ? State.Done : State.Pending;
             case ObjectiveType.UpgradeTurretToLevel:
                 cur = _maxTurretUpgradeLevel;
+                return cur >= tgt ? State.Done : State.Pending;
+            case ObjectiveType.DestroyChaosBlocks:
+                cur = _chaosDestroyed;
                 return cur >= tgt ? State.Done : State.Pending;
             case ObjectiveType.DefeatBoss:
                 tgt = 1;

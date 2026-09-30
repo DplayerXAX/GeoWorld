@@ -177,7 +177,7 @@ public class SettingsScreen : MonoBehaviour
 
     // ── Live-refresh widgets from GameSettings (called on open + after Reset) ──
     Slider _masterSlider, _musicSlider, _sfxSlider, _panSlider, _lookSlider;
-    Toggle _fullscreenToggle, _vsyncToggle, _smoothEditToggle, _freeMoveToggle;
+    Toggle _fullscreenToggle, _vsyncToggle, _smoothEditToggle, _freeMoveToggle, _seeThroughToggle;
     TMP_Text _qualityLabel, _frameCapLabel, _qualityNote;
     int _qualityIndex, _frameCapIndex;
 
@@ -192,6 +192,7 @@ public class SettingsScreen : MonoBehaviour
         _vsyncToggle.SetIsOnWithoutNotify(GameSettings.VSync);
         _smoothEditToggle.SetIsOnWithoutNotify(GameSettings.SmoothBlockEditing);
         _freeMoveToggle.SetIsOnWithoutNotify(GameSettings.FreeMove);
+        _seeThroughToggle.SetIsOnWithoutNotify(GameSettings.SeeThrough);
 
         _qualityIndex = Mathf.Clamp((int)GameSettings.Graphics, 0, GraphicsQuality.Names.Length - 1);
         _qualityLabel.text = GraphicsQuality.Names[_qualityIndex];
@@ -527,6 +528,9 @@ public class SettingsScreen : MonoBehaviour
         _freeMoveToggle   = BuildToggleRow(root, "Free move",
             "Off: the held block snaps to the nearest cell touching your build. On: it follows the mouse freely.",
             v => { GameSettings.FreeMove = v; GameSettings.Save(); });
+        _seeThroughToggle = BuildToggleRow(root, "See-through obstacles",
+            "On the world map, anything standing between the camera and your piece turns see-through.",
+            v => { GameSettings.SeeThrough = v; GameSettings.Save(); });
 
         BuildRebindRow(root, "Fast forward", "Cycles game speed — the same as the fast forward button.");
 

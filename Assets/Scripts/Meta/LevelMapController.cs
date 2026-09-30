@@ -56,7 +56,9 @@ public partial class LevelMapController : MonoBehaviour
     [Range(0.02f, 0.3f)] public float trailWidth = 0.07f;
 
     [Header("Camera")]
-    [Tooltip("WASDQE pan speed, matching gameplay's PlacementController.panSpeed.")]
+    [Tooltip("ON: the camera follows the pawn, and the player can't pan it — only turn and zoom. It lets go while a conversation or the reveal cutscene is framing the shot (the tutorial and reward beats point it at things), then glides back to the pawn. OFF: WASDQE pans freely, as before.")]
+    public bool followPawn = true;
+    [Tooltip("WASDQE pan speed (followPawn off only), matching gameplay's PlacementController.panSpeed.")]
     public float mapPanSpeed = 8f;
     [Tooltip("World units the opening shot backs off by, so an entry dialogue doesn't sit on top of whatever the camera framed. Matches LevelSelectTutorialGuide.walkFocusPullBack.")]
     public float entryPullBack = 3.2f;
@@ -71,17 +73,19 @@ public partial class LevelMapController : MonoBehaviour
     public float cameraLerp  = 4f;
     [Tooltip("Where the focused cell sits horizontally on screen. 0.5 = centre, ~0.3 = left-centre (leaves room for the right info panel).")]
     [Range(0f, 1f)] public float focusViewportX = 0.3f;
-    [Range(0f, 1f)] public float focusViewportY = 0.3f;
+    [Range(0f, 1f)] public float focusViewportY = 0.10f;
     [Tooltip("Hold the middle mouse button and drag to nudge focusViewportX/Y live — a manual composition tweak on top of the authored default. The new values stick (no auto-reset) until dragged again.")]
     public bool  middleDragAdjustsFocus = true;
     [Tooltip("Drag speed, in viewport fraction per second at Input.GetAxis's typical magnitude.")]
     public float focusDragSpeed = 0.6f;
 
     [Header("Camera zoom (scroll)")]
-    [Tooltip("Mouse wheel changes the camera's field of view (a perspective zoom) instead of distance. Disabled while a block is held (that scroll pushes the block instead — see HandleGhostScroll).")]
+    [Tooltip("ON: the mouse wheel changes the camera's field of view (a perspective zoom), except while a block is held (that scroll pushes the block instead — see HandleGhostScroll). OFF: the wheel does nothing to it. Either way the map opens at mapFov.")]
     public bool  scrollZoomsFov = true;
+    [Tooltip("The field of view the map opens at, in degrees (clamped to minFov..maxFov while scroll zoom is on).")]
+    [Range(10f, 100f)] public float mapFov = 30f;
     public float minFov = 25f;
-    public float maxFov = 65f;
+    public float maxFov = 50f;
     public float fovScrollSpeed = 6f;
     [Tooltip("How quickly the lens eases toward the scrolled-to FOV. Higher = snappier, lower = dreamier.")]
     public float fovSmoothSpeed = 8f;
@@ -212,6 +216,7 @@ public partial class LevelMapController : MonoBehaviour
     {
         Instance = this;
         LoadingScreen.Hold(this);   // released at the end of Start, once the map is built
+        SetupSeeThroughMaterial();  // before any cube is instantiated from the template
         LevelRegistry.Register(database);   // so the multiplayer lobby can resolve level ids
         TextBlip.SetFallback(textBlip, gameObject);   // this scene has no AudioManager to carry it
     }
@@ -317,6 +322,13 @@ public partial class LevelMapController : MonoBehaviour
             // no actionGateId), so without this the very first thing the player sees
             // is the one frame in the whole tutorial that ISN'T pulled back — and
             // it's the one with a dialogue box over it.
+            // A fixed view: set straight away, so it doesn't ease in from the
+            // camera's own default under the loading page.
+            if (_cam != null)
+            {
+                float fov = scrollZoomsFov ? Mathf.Clamp(mapFov, minFov, maxFov) : mapFov;
+                _cam.fieldOfView = fov; _fovTarget = fov;
+            }
             _orbit.FocusOnPoint(PulledBack(_camFocus, entryPullBack));
             // Arrive on the shot. The rig would otherwise glide in from wherever
             // it stood in the scene, which read as flying up out of the map and
@@ -637,6 +649,7 @@ public partial class LevelMapController : MonoBehaviour
     // just because the scene unloads, so stop it explicitly or it bleeds into gameplay.
     void OnDestroy()
     {
+        ClearSeeThrough();
         LoadingScreen.Release(this);
         _activeLoop?.Stop(this.gameObject);
         TextBlip.SetFallback(null, null);   // stops a blip still ringing, and forgets this scene's emitter
@@ -644,6 +657,7 @@ public partial class LevelMapController : MonoBehaviour
 
     void OnDisable()
     {
+        ClearSeeThrough();
         if (_mouseRotation.Active) VirtualCursor.EndRotation();
         _mouseRotation.Reset();
     }
@@ -651,6 +665,7 @@ public partial class LevelMapController : MonoBehaviour
     void LateUpdate()
     {
         if (!_mapReady) return;
+        UpdateSeeThrough();
         // OrbitCamera (if present) owns the transform — we drove it via FocusOnPoint.
         if (!cameraFocus || _orbit != null || !_camReady || _cam == null) return;
         _cam.transform.position = Vector3.Lerp(
@@ -683,6 +698,22 @@ public partial class LevelMapController : MonoBehaviour
 
         if (delta.sqrMagnitude > 0.0001f)
             _orbit.Pan(delta.normalized * mapPanSpeed * Time.unscaledDeltaTime);
+    }
+
+    // The camera follows the pawn (followPawn), framed as the opening shot is:
+    // pulled back by entryPullBack so the two agree and nothing drifts on arrival.
+    // It lets go while something else frames the shot: the reveal cutscene, a
+    // conversation (the tutorial and reward beats point the camera while they
+    // talk), a minigame. Then it glides back. Height comes from the cell the
+    // pawn stands on, not the pawn itself, so the idle bob doesn't rock the view.
+    void UpdateFollow()
+    {
+        if (!followPawn || _orbit == null || pawn == null) return;
+        if (_decorCutscenePlaying || MinigameStage.AnyActive || BlockTetris3D.Active) return;
+        if (DialogueRunner.Instance != null && DialogueRunner.Instance.IsPlaying) return;
+        var at = pawn.position;
+        at.y = SurfaceTop(_currentCell).y;
+        _orbit.FocusOnPoint(PulledBack(at, entryPullBack), snap: false);
     }
 
     // `worldPoint` moved back along the camera's own horizontal facing. Feed this to
@@ -1275,6 +1306,7 @@ public partial class LevelMapController : MonoBehaviour
         PulseRewardSuggestBox();    // runs whether or not build mode is actually open yet (the box can
                                      // show before F is pressed, while the ls.openbuild gate is waiting)
         HandleFocusViewportDrag();   // middle-mouse drag — no conflict with build mode, so it runs unconditionally
+        UpdateFollow();
         // No clicking/walking/building while the grow-in reveal owns the camera, or
         // while a minigame is running on top of this scene.
         if (SettingsScreen.Open || _decorCutscenePlaying || MinigameStage.AnyActive || ConfirmDialog.BlockingInput)
@@ -1286,7 +1318,7 @@ public partial class LevelMapController : MonoBehaviour
 
         if (_buildMode) { UpdateBuildMode(); return; }   // scroll is reserved for HandleGhostScroll in there
 
-        HandleMapPan();
+        if (!followPawn) HandleMapPan();
         HandleCameraZoomScroll();
 
         if (!_moving && Input.GetKeyDown(buildModeKey)) EnterBuildMode();
@@ -1470,9 +1502,14 @@ public partial class LevelMapController : MonoBehaviour
         foreach (var c in _allCells)
             if (!_allCells.Contains(c + Vector3Int.up))
             {
-                _surface.Add(c);
                 var col = new Vector2Int(c.x, c.z);
                 if (!_columnTop.TryGetValue(col, out var ex) || c.y > ex.y) _columnTop[col] = c;
+                // Decor ground with a prop standing on it (a house, a tree, a crate,
+                // lava): still ground, so later plots give way to it, but nowhere the
+                // pawn can stand or route through. Only on decor plots, never on a
+                // level block or the player's own.
+                if (_decorSolid.Contains(col) && _cellToNode.TryGetValue(c, out var owner) && _plotNodes.Contains(owner)) continue;
+                _surface.Add(c);
             }
     }
 
@@ -2040,18 +2077,37 @@ public partial class LevelMapController : MonoBehaviour
         VirtualCursor.Warp(_cam.WorldToScreenPoint(gridSystem.GridToWorld(_ghostOrigin)));
     }
 
-    // Mouse wheel pushes the held block away from / toward the camera, one cell per
-    // notch — the map's equivalent of gameplay's edit-mode scroll (which walks the
-    // block along the build plane instead of zooming). Nothing else on this map
-    // binds the wheel, so there's no conflict with camera zoom here.
+    // Mouse wheel pushes the held block away from / toward the camera ALONG THE
+    // CURSOR'S RAY — exactly gameplay's perspective edit-mode scroll
+    // (PlacementController.HandleScroll: `_depth -= s * scrollSpeed * _depth`), so
+    // it follows the camera's angle, climbing or dropping with it, instead of
+    // stepping along one flat grid axis. The new cell becomes the pinned build
+    // plane, so the ghost stays at that depth as the mouse moves on.
+    [Tooltip("Held-block scroll: fraction of the current depth moved per wheel unit — gameplay's PlacementController.scrollSpeed.")]
+    public float ghostScrollSpeed = 3f;
+    public float ghostMinDepth = 2f, ghostMaxDepth = 40f;
+
     void HandleGhostScroll()
     {
-        if (_cam == null) return;
+        if (_cam == null || gridSystem == null) return;
         float s = Input.GetAxis("Mouse ScrollWheel");
         if (Mathf.Abs(s) < 0.001f) return;
 
-        Vector3Int forward = SnapToHorizontalAxis(_cam.transform.forward);
-        MoveGhost(s > 0f ? forward : -forward);
+        Ray ray = _cam.ScreenPointToRay(VirtualCursor.Position);
+        float depth = Vector3.Dot(gridSystem.GridToWorld(_ghostOrigin) - ray.origin, ray.direction);
+        depth = Mathf.Clamp(depth, ghostMinDepth, ghostMaxDepth);
+        float next = Mathf.Clamp(depth - s * ghostScrollSpeed * depth, ghostMinDepth, ghostMaxDepth);
+
+        var cell = gridSystem.WorldToGrid(ray.origin + ray.direction * next);
+        if (cell == _ghostOrigin)
+        {
+            // Too small a step to leave the cell: go one cell along the ray instead,
+            // so every notch visibly moves the block.
+            cell = gridSystem.WorldToGrid(ray.origin + ray.direction * (depth + Mathf.Sign(next - depth) * gridSystem.cellSize));
+        }
+        _ghostOrigin = cell;
+        _ghostHover  = cell - Vector3Int.up;
+        PinGhostPlane();
     }
 
     static Vector3Int SnapToHorizontalAxis(Vector3 dir)

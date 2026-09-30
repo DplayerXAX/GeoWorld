@@ -98,6 +98,10 @@ public partial class EnvironmentBackdrop : MonoBehaviour
         b._mat.SetFloat("_AccentAmount", env.backdropAccentAmount);
 
         var rng = new System.Random(env.backdropSeed);
+        // Out to just past the scenery's far ring; the land hides what runs under it.
+        if (env.backdropLake)
+            SkyLake.Create(go.transform, centre, floorY + env.backdropLakeLevel * cs,
+                           env.backdropDistance.y * cs * 1.05f, env, cs);
         b._peakRise   = env.backdropPeakRise;
         // Low preset: bloom trees pop in instead of growing branch by branch.
         b._treePrefab = GraphicsQuality.GrowingTrees ? env.backdropTreePrefab : null;

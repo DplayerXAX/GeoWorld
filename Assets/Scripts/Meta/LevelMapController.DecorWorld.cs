@@ -428,6 +428,7 @@ public partial class LevelMapController : MonoBehaviour
             float along = 0f;
             if (!crater && !cfg.OnRiver(c, out along)) continue;
             taken.Add(c);
+            Obstacle(c);   // nobody walks on lava
             var p = ColumnSurface(colTop, c, cfg, cs);
             if (crater) { vent += p; ventN++; }
             var skin = MakeMeshProp(root, $"Lava_{c.x}_{c.y}", RailMesh(), p + Vector3.up * (cs * 0.02f), Quaternion.identity,
@@ -466,6 +467,7 @@ public partial class LevelMapController : MonoBehaviour
             var p = ColumnSurface(colTop, c, cfg, cs);
             int h = DecorHash(c.x, c.y);
             float s = cs * (0.35f + 0.4f * Hash01(h ^ 91));
+            Obstacle(c);
             MakeMeshProp(root, $"Boulder{bi++}", PuffMesh(), p + Vector3.up * (s * 0.22f),
                          Quaternion.Euler(Hash01(h) * 40f, Hash01(h + 1) * 360f, Hash01(h + 2) * 30f),
                          new Vector3(s, s * 0.7f, s * 0.9f), Tint(cfg.rockColor, 0.8f + 0.3f * Hash01(h + 3)));
@@ -477,6 +479,7 @@ public partial class LevelMapController : MonoBehaviour
         foreach (var c in Scatter(low, cfg.basaltClusters, 3319, 2.5f, taken))
         {
             var p = ColumnSurface(colTop, c, cfg, cs);
+            Obstacle(c);
             int n = 3 + Mathf.FloorToInt(Hash01(DecorHash(c.x, c.y ^ 7)) * 4f);
             for (int k = 0; k < n; k++)
             {
@@ -496,6 +499,7 @@ public partial class LevelMapController : MonoBehaviour
         {
             var p = ColumnSurface(colTop, c, cfg, cs);
             int h = DecorHash(c.y, c.x);
+            Obstacle(c);
             MakeMeshProp(root, $"Obsidian{oi++}", PyramidMesh(), p - Vector3.up * (cs * 0.05f),
                          Quaternion.Euler((Hash01(h) - 0.5f) * 40f, Hash01(h + 1) * 360f, (Hash01(h + 2) - 0.5f) * 40f),
                          new Vector3(cs * 0.2f, cs * (0.45f + 0.4f * Hash01(h + 3)), cs * 0.16f), cfg.obsidianColor);
@@ -597,6 +601,7 @@ public partial class LevelMapController : MonoBehaviour
         // the obelisks flanking its forecourt are props.
         if (cfg.pyramid && covered.Contains(P))
         {
+            Obstacle(P);
             var cap = MakeMeshProp(root, "Capstone", PyramidMesh(), ColumnSurface(colTop, P, cfg, cs), Quaternion.identity,
                                    new Vector3(cs, cs * 0.8f, cs), cfg.capColor);
             PulseOn(root, 0.7f).Add(cap.GetComponent<Renderer>(), cfg.capColor, Color.Lerp(cfg.capColor, Color.white, 0.45f));
@@ -612,6 +617,7 @@ public partial class LevelMapController : MonoBehaviour
                     var col  = NearestCovered(covered, new Vector2Int(Mathf.RoundToInt(want.x), Mathf.RoundToInt(want.y)), taken);
                     taken.Add(col);
                     var p = ColumnSurface(colTop, col, cfg, cs);
+                    Obstacle(col);
                     MakeMeshProp(root, $"Obelisk{s}", ObeliskMesh(), p, Quaternion.identity,
                                  new Vector3(cs * 0.3f, cs * 1.7f, cs * 0.3f), cfg.stoneColor);
                     MakeMeshProp(root, $"ObeliskTip{s}", PyramidMesh(), p + Vector3.up * (cs * 1.7f), Quaternion.identity,
@@ -762,6 +768,7 @@ public partial class LevelMapController : MonoBehaviour
     // that sways, and a few coconuts. Used by the desert oasis and the islands.
     void BuildPalm(Transform parent, Vector3 at, float cs, int i, Color leaf, Color trunk)
     {
+        Obstacle(at);
         var palm = new GameObject($"Palm{i}").transform;
         palm.SetParent(parent, false);
         palm.position = at;
@@ -807,6 +814,7 @@ public partial class LevelMapController : MonoBehaviour
 
     void BuildCactus(Transform parent, DesertConfig cfg, Vector3 at, float cs, int i)
     {
+        Obstacle(at);
         var c = new GameObject($"Cactus{i}").transform;
         c.SetParent(parent, false);
         c.position = at;
@@ -842,6 +850,7 @@ public partial class LevelMapController : MonoBehaviour
     // fallen in front and a drum rolled aside.
     void BuildRuin(Transform parent, DesertConfig cfg, Vector3 at, Vector3 facing, float cs, int i)
     {
+        Obstacle(at);
         var r = new GameObject($"Ruin{i}").transform;
         r.SetParent(parent, false);
         r.position = at;
@@ -893,6 +902,7 @@ public partial class LevelMapController : MonoBehaviour
     // A striped tent by the water, a rug before it and a small fire smoking.
     void BuildTent(Transform parent, Vector3 at, Vector3 facing, float cs)
     {
+        Obstacle(at);
         var t = new GameObject("Tent").transform;
         t.SetParent(parent, false);
         t.position = at;
@@ -955,6 +965,7 @@ public partial class LevelMapController : MonoBehaviour
             var head = NearestCovered(covered, cfg.ColumnAt(new Vector2(cfg.islands[0].x, cfg.islands[0].y)));
             Reserve(head, 1, taken);
             var hp = ColumnSurface(colTop, head, cfg, cs);
+            Obstacle(head);
             beacon = BuildLighthouse(root, cfg, hp, cs);
             hasBeacon = true;
 
@@ -1019,6 +1030,7 @@ public partial class LevelMapController : MonoBehaviour
             var p = ColumnSurface(colTop, c, cfg, cs);
             int h = DecorHash(c.x, c.y);
             float s = cs * (0.5f + 0.35f * Hash01(h));
+            Obstacle(c);
             MakeMeshProp(root, $"SeaRock{ri}", PuffMesh(), p + Vector3.up * (s * 0.12f),
                          Quaternion.Euler(Hash01(h + 1) * 30f, Hash01(h + 2) * 360f, 0f), new Vector3(s, s * 0.8f, s * 0.9f),
                          Tint(cfg.cliffColor, 0.8f + 0.2f * Hash01(h + 3)));
@@ -1368,6 +1380,7 @@ public partial class LevelMapController : MonoBehaviour
 
     void BuildCottage(Transform root, Vector3 at, Vector3 face, Color wall, Color roof, float cs, string name)
     {
+        Obstacle(at);
         var h = new GameObject(name).transform;
         h.SetParent(root, false);
         h.position = at;

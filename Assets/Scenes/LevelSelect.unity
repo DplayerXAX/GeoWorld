@@ -1267,6 +1267,7 @@ MonoBehaviour:
   trailMaterial: {fileID: 0}
   trailColor: {r: 1, g: 0.95, b: 0.75, a: 0.9}
   trailWidth: 0.07
+  followPawn: 1
   mapPanSpeed: 8
   entryPullBack: 3.2
   rewardFocusPullBack: 2.5
@@ -1275,12 +1276,14 @@ MonoBehaviour:
   cameraFocus: 1
   cameraLerp: 4
   focusViewportX: 0.4
-  focusViewportY: 0.25
+  focusViewportY: 0
   middleDragAdjustsFocus: 1
   focusDragSpeed: 0.6
   scrollZoomsFov: 1
+  mapFov: 35
+  occludableLitShader: {fileID: 4800000, guid: df59feb508284ff5b88e7645e6092bfc, type: 3}
   minFov: 25
-  maxFov: 100
+  maxFov: 50
   fovScrollSpeed: 60
   fovSmoothSpeed: 8
   buildableBlocks:
@@ -1543,22 +1546,25 @@ MonoBehaviour:
     leafDeep: {r: 0.2, g: 0.52, b: 0.3, a: 1}
     leafLight: {r: 0.47, g: 0.8, b: 0.42, a: 1}
     groundMist: 1
+    mistAroundTrees: 1
     groundMistStyle:
       color: {r: 0.86, g: 0.9, b: 0.84, a: 1}
-      strength: 0.7
-      density: 0.7
-      height: 5
-      depth: 0
-      offset: 0
+      strength: 0.8
+      density: 0.9
+      height: 2.4
+      depth: 1.4
+      offset: 3.4
       falloff: 0
       skyBlend: 0
-      scatter: 2.6
+      scatter: 3.6
       anisotropy: 0.6
       steps: 24
-      edge: 2.5
+      edge: 3.6
       clearance: 0
-      edgeWarp: 1.2
+      edgeWarp: 1.4
       noiseScale: 0
+      soften: 1
+      clarity: 0.6
     variants: 6
     castShadows: 1
   volcano:
@@ -1741,6 +1747,8 @@ MonoBehaviour:
     clearance: 1.4
     edgeWarp: 1.4
     noiseScale: 0
+    soften: 0
+    clarity: 0
   mistDisperse: 1.4
   mistLead: 0.6
   heightFogEnabled: 1
@@ -1774,6 +1782,8 @@ MonoBehaviour:
     clearance: 2.5
     edgeWarp: 3
     noiseScale: 0.1
+    soften: 0
+    clarity: 0
   hazeMargin: 30
   hazeAtBanks: 0.4
   hazeSink:
@@ -2003,7 +2013,7 @@ MonoBehaviour:
   orthoSize: 5
   orthoZoomSpeed: 2
   orthoAngle: {x: 35, y: 45, z: 0}
-  focusViewport: {x: 0.5, y: 0.2}
+  focusViewport: {x: 0.5, y: 0.1}
   gamepadLookScale: 1
   gamepadZoomSpeed: 12
   projectionToggleKey: 289

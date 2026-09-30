@@ -102,6 +102,12 @@ public partial class LevelEnvironmentDriver : MonoBehaviour
         {
             _synergy = SynergyEvaluator.Instance;
             _synergy.OnTierChanged += OnSynergyTier;
+            // A resumed run rebuilds its board before this runs, so the synergy
+            // may already be up with no 0 → n change left to hear. The land
+            // still grows in, the same way, once the intro lets it.
+            foreach (var a in _synergy.Actives)
+                if (a != null && a.rule != null && a.rule.color == _env.backdropBloomOn && a.tier > 0)
+                { _bloomPending = true; break; }
         }
 
         if (_env.sunGlow)
@@ -316,6 +322,8 @@ public partial class LevelEnvironmentDriver : MonoBehaviour
             foreach (var c in gfm.AllStarts) keep.Add(grid.GridToWorld(c) + Vector3.up * (_cs * 0.5f));
             foreach (var c in gfm.AllEnds)   keep.Add(grid.GridToWorld(c) + Vector3.up * (_cs * 0.5f));
         }
+        // Chaos blocks too: they're targets, and a target lost in the haze can't be aimed at.
+        foreach (var c in ChaosBlockController.Cells) keep.Add(grid.GridToWorld(c) + Vector3.up * (_cs * 0.5f));
         MistBank.SetProtected(keep, _cs);
 
         float floor = FloorY(grid);
@@ -354,7 +362,7 @@ public partial class LevelEnvironmentDriver : MonoBehaviour
                                        _env.farHazeMargin, 104729, null, 0f, _env.farHazeSink);
     }
 
-    // Underside of the lowest thing on the board (blocks, endpoints) — the height
+    // Underside of the lowest thing on the board (blocks, endpoints, chaos blocks) — the height
     // fog's top is measured from it, like the level map's.
     float FloorY(GridSystem grid)
     {
@@ -369,6 +377,10 @@ public partial class LevelEnvironmentDriver : MonoBehaviour
             foreach (var c in gfm.AllStarts) minY = Mathf.Min(minY, c.y);
             foreach (var c in gfm.AllEnds)   minY = Mathf.Min(minY, c.y);
         }
+        // Chaos blocks count too. They can spawn below everything built; the fog
+        // top is measured from this floor, so one sitting lower than every block
+        // stood in the fog (and came clear only once a block was built down to it).
+        foreach (var c in ChaosBlockController.Cells) minY = Mathf.Min(minY, c.y);
         if (minY == int.MaxValue) minY = 0;
         return grid.Origin.y + minY * grid.cellSize;
     }

@@ -135,6 +135,14 @@ public class LevelDefinition : ScriptableObject
     [Tooltip("Blocks dropped at level start somewhere between the first start and end points — each a random small shop shape in randomStartColor, and none touching another block, so they can't already form a synergy. Fixed like the authored layout (they can't be moved or sold). 0 = none.")]
     [Min(0)] public int randomStartBlocks = 0;
     public BlockColor randomStartColor = BlockColor.Universal;
+    [Tooltip("A turret of this type placed at level start on top of one of the random start blocks (randomStartBlocks), so the first wave already has something to fight with. Empty = none.")]
+    public BlockType randomStartTurret = BlockType.Empty;
+
+    [Header("Chaos Block (if the level has the mechanic)")]
+    [Tooltip("Aside bubble shown the first time a chaos block appears in this level. Blank = none.")]
+    [TextArea] public string chaosFirstAside = "";
+    public DialogueCharacter chaosFirstAsideSpeaker;
+    [Min(0.5f)] public float chaosFirstAsideSeconds = 3.5f;
 
     [Header("Starting layout")]
     [Tooltip("Optional pre-built blocks placed on the grid at level start, authored with LevelMapAuthor "
@@ -197,6 +205,7 @@ public enum ObjectiveType
     BuildPathLength,    // build an enemy path of AT LEAST `target` faces long (each block face = 1)
     UpgradeTurretToLevel, // upgrade any turret branch to AT LEAST `target`
     DefeatBoss,         // destroy the level's boss (BossMechanicConfig); `target` is ignored
+    DestroyChaosBlocks, // destroy `target` chaos blocks (ChaosBlockMechanicConfig). Appended: serialized as an int
 }
 
 [System.Serializable]
@@ -221,6 +230,7 @@ public class LevelObjective
         ObjectiveType.BuildPathLength   => $"Build a path {target}+ long",
         ObjectiveType.UpgradeTurretToLevel => $"Upgrade a turret to level {target}",
         ObjectiveType.DefeatBoss        => "Destroy the boss",
+        ObjectiveType.DestroyChaosBlocks => $"Destroy {target} chaos blocks",
         _                               => "",
     };
 

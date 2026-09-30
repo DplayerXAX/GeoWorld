@@ -69,6 +69,7 @@ public class BlockTetris3D : MonoBehaviour
 
     Camera        _cam;
     Transform     _root, _deck;
+    readonly PlacementRotationInput _rotation = new();
     Canvas        _canvas;
     TMP_Text      _scoreText, _overLeft, _overRight;
 
@@ -117,6 +118,8 @@ public class BlockTetris3D : MonoBehaviour
     void Quit()
     {
         Active = false;
+        VirtualCursor.EndRotation();
+        _rotation.Reset();
         foreach (var c in _suppressed) if (c != null) c.enabled = true;
         _suppressed.Clear();
         if (_skyboxSwapped) { RenderSettings.skybox = _hostSkybox; _skyboxSwapped = false; }
@@ -238,10 +241,16 @@ public class BlockTetris3D : MonoBehaviour
         if (Input.GetKeyDown(KeyCode.W) || Input.GetKeyDown(KeyCode.UpArrow))    TryMove( CamForward());
         if (Input.GetKeyDown(KeyCode.S) || Input.GetKeyDown(KeyCode.DownArrow))  TryMove(-CamForward());
 
-        // 1/2/3 rotate around X/Y/Z — the same binding block editing uses.
-        if (Input.GetKeyDown(KeyCode.Alpha1)) TryRotate(Quaternion.Euler(90f, 0f, 0f));
-        if (Input.GetKeyDown(KeyCode.Alpha2)) TryRotate(Quaternion.Euler(0f, 90f, 0f));
-        if (Input.GetKeyDown(KeyCode.Alpha3)) TryRotate(Quaternion.Euler(0f, 0f, 90f));
+        // Hold Alt: scroll turns the piece about the vertical, a drag tips it
+        // forward/back or side to side. The same gesture as placing blocks in a
+        // level (PlacementRotationInput), grid-snapped to the camera's view.
+        bool rotating = Application.isFocused && Input.GetKey(KeyCode.LeftAlt) && _cam != null;
+        if (_cam != null)
+            VirtualCursor.SetRotationAnchor(rotating, _cam,
+                _pieceCubes.Count > 0 && _pieceCubes[0] != null ? _pieceCubes[0].position : transform.position);
+        var turn = _rotation.Read(rotating, VirtualCursor.MouseDelta, Input.mouseScrollDelta.y,
+                                  _cam != null ? _cam.transform.right : Vector3.right);
+        if (turn != Quaternion.identity) TryRotate(turn);
 
         if (Input.GetKey(KeyCode.E)) _fallTimer += Time.unscaledDeltaTime * 12f;   // soft drop
         if (Input.GetKeyDown(KeyCode.Space))                                        // hard drop
@@ -1471,7 +1480,7 @@ public class BlockTetris3D : MonoBehaviour
         // field, and the dark grey this used to be disappeared into it entirely.
         help.color = GeoPalette.WithAlpha(GeoPalette.Paper, 0.8f);
         // No "Esc leave" — the Leave button in the opposite corner already says it.
-        help.text = "WASD move   ·   1/2/3 rotate   ·   E soft drop\n"
+        help.text = "WASD move   ·   Alt + scroll / drag rotate   ·   E soft drop\n"
                   + "Space hard drop   ·   Right-drag orbit";
         var hrt = help.rectTransform;
         hrt.anchorMin = hrt.anchorMax = hrt.pivot = new Vector2(0f, 0f);

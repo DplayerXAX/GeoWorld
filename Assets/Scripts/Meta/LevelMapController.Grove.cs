@@ -99,14 +99,16 @@ public class HarmonyGroveConfig : MapDecorConfig
     public Color leafDeep  = new(0.20f, 0.52f, 0.30f);
     public Color leafLight = new(0.47f, 0.80f, 0.42f);
 
-    [Header("Ground mist")]
-    [Tooltip("A low, thin mist lying in the wood. It is lit through the shadow map, so the trees throw shafts of shade through it and the sun between them stands out as light beams — the Tyndall look. Needs Cast Shadows on.")]
+    [Header("Canopy mist")]
+    [Tooltip("A thin mist hanging among the trees' crowns rather than on the floor. The bank is densest just BELOW its ground line: `offset` lifts that line (in cells) to the middle of the crowns, `depth` is how far down the dense band reaches, `height` how far the thinning wisps rise above it. Clear air under the trunks. It is lit through the shadow map, so the trees throw shafts of shade through it and the sun between them stands out as light beams — the Tyndall look. Needs Cast Shadows on.")]
     public bool groundMist = true;
+    [Tooltip("ON: the mist's footprint is the trees themselves — it gathers round the crowns and groups, with clear air over the paths and clearings. OFF: one bank over the whole wood.")]
+    public bool mistAroundTrees = true;
     public MistBank.Settings groundMistStyle = new()
     {
-        color = new Color(0.86f, 0.90f, 0.84f), strength = 0.7f, density = 0.7f,
-        height = 5f, scatter = 2.6f, anisotropy = 0.6f, steps = 24,
-        edge = 2.5f, clearance = 0f, edgeWarp = 1.2f,
+        color = new Color(0.86f, 0.90f, 0.84f), strength = 0.8f, density = 0.9f,
+        height = 2.4f, depth = 1.4f, offset = 3.4f, scatter = 3.6f, anisotropy = 0.6f, steps = 24,
+        edge = 3.6f, clearance = 0f, edgeWarp = 1.4f, soften = 1f, clarity = 0.6f,
     };
 
     [Header("Render")]
@@ -495,6 +497,8 @@ public partial class LevelMapController : MonoBehaviour
                          new Vector2(0.8f, 1.35f), cfg.castShadows && GraphicsQuality.TreeShadows, "Tree");
         }
 
+        int treeCount = taken.Count;   // the elder, the avenue and the groves — before undergrowth joins the list
+
         // ── 4. Undergrowth ───────────────────────────────────────────────────
         Fill(root, mat, cfg, colTop, paths, cs, rng, taken, elder, shrubs, coveredCols,
              GraphicsQuality.Scaled(cfg.shrubs), verge: true,  cfg.spacing * 0.6f,  new Vector2(0.8f, 1.4f), "Shrub");
@@ -509,7 +513,10 @@ public partial class LevelMapController : MonoBehaviour
         if (cfg.groundMist)
         {
             var pts = new List<Vector3>(coveredCols.Count);
-            foreach (var c in coveredCols) pts.Add(GroveGround(new Vector2(c.x, c.y), colTop, cfg, cs));
+            if (cfg.mistAroundTrees && treeCount > 0)
+                for (int i = 0; i < treeCount; i++) pts.Add(GroveGround(taken[i], colTop, cfg, cs));
+            else
+                foreach (var c in coveredCols) pts.Add(GroveGround(new Vector2(c.x, c.y), colTop, cfg, cs));
             MistBank.Create(root, "GroundMist", pts, cs, cfg.groundMistStyle, rng.Next());
         }
     }
@@ -695,6 +702,9 @@ public partial class LevelMapController : MonoBehaviour
     void PlantGrove(Transform root, Mesh mesh, Material mat, Vector3 pos,
                     float scale, float yaw, bool shadows, string label)
     {
+        // A tree's trunk blocks its column; undergrowth (shrubs, tufts, scrub) doesn't.
+        if (label.Contains("Tree") || label.StartsWith("Charred")) Obstacle(pos);
+
         var go = new GameObject(label);
         go.transform.SetParent(root, false);
         go.transform.SetPositionAndRotation(

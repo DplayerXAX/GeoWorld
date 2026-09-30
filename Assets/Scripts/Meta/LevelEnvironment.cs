@@ -139,6 +139,12 @@ public class LevelEnvironment : ScriptableObject
     [Tooltip("Motes' preset colour × this.")]
     public Color moteTint = Color.white;
 
+    [Header("Intro")]
+    [Tooltip("The level opens low down (just above the lake, if there is one) looking up into the sky as it comes into colour, then rises and turns to the opening view of the board.")]
+    public bool introSkyRise = false;
+    [Tooltip("Seconds for the rise.")]
+    [Range(1.5f, 10f)] public float introSkyRiseSeconds = 4.5f;
+
     [Header("Scenery (outside the build area, never in the way)")]
     public Backdrop backdrop = Backdrop.None;
     public Color backdropColor = new(0.34f, 0.37f, 0.40f, 1f);
@@ -153,6 +159,16 @@ public class LevelEnvironment : ScriptableObject
     public Vector2 backdropPeakRise = new(4f, 15f);
     [Tooltip("Barren fields: height of each shelf's top relative to the board's floor, in cells (lowest, highest).")]
     public Vector2 backdropShelfHeight = new(-9f, -2f);
+    [Tooltip("Water in the hollow round and under the board: a still lake mirroring the sky over it — the painted sky's own brushwork, reacting with it (combat, clear, flashes). Woods, fields and farms keep to its banks.")]
+    public bool backdropLake = false;
+    [Tooltip("The lake's surface, in cells relative to the board's floor.")]
+    public float backdropLakeLevel = -8.5f;
+    [Tooltip("The water's own colour, where it isn't mirroring the sky.")]
+    public Color backdropLakeTint = new(0.14f, 0.28f, 0.36f, 1f);
+    [Tooltip("How much of the sky it mirrors looking straight down: 1 = a perfect mirror. Grazing views mirror more (Fresnel); where it doesn't mirror, the water is clear in the shallows and deepens to its own colour.")]
+    [Range(0f, 1f)] public float backdropLakeMirror = 0.5f;
+    [Tooltip("How much the ripples waver the reflection.")]
+    [Range(0f, 0.4f)] public float backdropLakeRipple = 0.025f;
     [Tooltip("Barren fields: dress the land as farmland — field strips divided by dirt tracks, red barns, hay bales.")]
     public bool backdropFarm = false;
     [Tooltip("Farmland: how much bigger each piece of land is — bigger pieces overlap into one broad, continuous spread of fields.")]
@@ -182,6 +198,8 @@ public class LevelEnvironment : ScriptableObject
     public Color landDry   = new(0.60f, 0.48f, 0.33f, 1f);
     [Tooltip("Bare earth. Terraces: the risers between treads. Countryside: ploughland and field margins.")]
     public Color landEarth = new(0.42f, 0.31f, 0.21f, 1f);
+    [Tooltip("Countryside: brightness of all the land — fields, verges, woodland floor — both before and after it blooms. Below 1 = deeper, richer ground.")]
+    [Range(0.4f, 1.3f)] public float landTone = 1f;
     [Tooltip("Terraces: the height of each step, in cells. Low = paddies; high = a desert's mesa steps.")]
     [Range(0.3f, 4f)] public float terraceStep = 0.9f;
     [Tooltip("Terraces: how much of each step is flat tread; the rest is the riser.")]

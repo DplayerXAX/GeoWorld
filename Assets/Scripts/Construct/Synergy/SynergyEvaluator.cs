@@ -370,8 +370,13 @@ public class SynergyEvaluator : MonoBehaviour
     List<SynergyRule> SortedRules()
     {
         var list = new List<SynergyRule>();
+        // A theme the level doesn't deal in (LevelDefinition.allowedColors) can't
+        // be formed on it at all — not even out of Universal jokers, which would
+        // otherwise stand in for it. 1-2 hands out Universal and Abundance only,
+        // and three Universal blocks in a row used to switch Order on.
+        var level = RunConfig.Mode == GameMode.Level ? RunConfig.Level : null;
         for (int i = 0; i < rules.Count; i++)
-            if (rules[i] != null) list.Add(rules[i]);
+            if (rules[i] != null && (level == null || level.AllowsColor(rules[i].color))) list.Add(rules[i]);
         list.Sort((a, b) => b.priority.CompareTo(a.priority));
         return list;
     }

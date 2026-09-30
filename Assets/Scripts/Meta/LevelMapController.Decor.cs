@@ -598,6 +598,7 @@ public partial class LevelMapController : MonoBehaviour
         var proxy = new GameObject($"{cfg.RootName}_Walkable");
         proxy.transform.SetParent(transform, false);
         var ln = proxy.AddComponent<LevelNode>();
+        _plotNodes.Add(ln);
         ln.cells      = cellsArr;
         ln.level      = null;
         ln.isStart    = false;
@@ -608,6 +609,7 @@ public partial class LevelMapController : MonoBehaviour
         RefreshNodes();
 
         // ── Props, largest first ─────────────────────────────────────────────
+        int solidBefore = _decorSolid.Count;
         BuildThemeProps(cfg, coveredCols, colTop, occupied, colKind, ext, cs);
         if (_revive == null) PlantResidents(plot, cfg, colTop, ext, cs);
         else
@@ -618,6 +620,12 @@ public partial class LevelMapController : MonoBehaviour
             _revive.SetBarren();
         }
         _revive = null;
+
+        // The props just built block the ground under them (see _decorSolid); the
+        // residents stay reachable whatever stands round them.
+        _decorSolid.Remove(NpcColumn(cfg, ext));
+        _decorSolid.Remove(GameColumn(cfg, ext));
+        if (_decorSolid.Count != solidBefore) { BuildSurface(); RefreshNodes(); }
 
         // Sink the WHOLE plot below ground — every prop is a child of plot.root, so
         // one offset on the root moves them all together. PlayRevealCutscene
@@ -1022,6 +1030,7 @@ public partial class LevelMapController : MonoBehaviour
         if (!found || !colTop.TryGetValue(best, out var top)) return;
 
         Vector3 basePos = gridSystem.GridToWorld(top) + Vector3.up * (cs * 0.5f);
+        Obstacle(best);
 
         var root = new GameObject("Windmill");
         root.transform.SetParent(_buildingRoot.transform, false);

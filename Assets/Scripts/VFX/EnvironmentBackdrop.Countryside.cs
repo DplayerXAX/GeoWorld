@@ -101,6 +101,10 @@ public partial class EnvironmentBackdrop
             return Mathf.Lerp(Mathf.Lerp(a[i], a[i + 1], tx), Mathf.Lerp(a[i + n], a[i + n + 1], tx), tz);
         }
         Vector3 World(float x, float z) => centre + new Vector3(x, floorY - centre.y + Sample(h, x, z) * cs, z);
+        // Nothing stands, grows or is sown under the lake (backdropLake), with a
+        // little bank kept dry above it.
+        float dryAbove = env.backdropLake ? env.backdropLakeLevel + 0.4f : float.NegativeInfinity;
+        bool  Dry(float x, float z) => Sample(h, x, z) > dryAbove;
         bool Wood(float x, float z) => x * x + z * z > woodIn2 && Sample(wood, x, z) > woodCut;
 
         // Two octaves: plenty to make a field edge wander.
@@ -175,8 +179,9 @@ public partial class EnvironmentBackdrop
             var mid = (p0 + p1 + p2) / 3f - centre;
             float d01 = Mathf.InverseLerp(inner, outer, new Vector2(mid.x, mid.z).magnitude);
             var (key, edge) = FieldAt(mid.x, mid.z);
-            float tone = 0.9f + 0.16f * Hash01i(key, 19);
+            float tone = (0.9f + 0.16f * Hash01i(key, 19)) * env.landTone;
             float at = 0.3f + 2.4f * d01 + 0.7f * Hash01i(key, 23);
+            bool dryHere = (p0.y + p1.y + p2.y) / 3f > floorY + dryAbove * cs;
             bool woodHere = mid.x * mid.x + mid.z * mid.z > woodIn2 &&
                             (wood[az * n + ax] + wood[bz * n + bx] + wood[cz * n + cx]) / 3f > woodCut;
             Color dry, ripe;
@@ -191,7 +196,7 @@ public partial class EnvironmentBackdrop
                 // Field margins: a dark line of verge between the crops.
                 dry  = Shade(Color.Lerp(env.landEarth, env.landDry, 0.3f), 0.85f);
                 ripe = Shade(Color.Lerp(leaf, Color.black, 0.3f), 0.95f);
-                if (Hash01i(key, 41) < env.hedgerows && d01 < 0.9f && Hash01i(ax * 131 + az, bx * 17 + cz) < 0.45f)
+                if (dryHere && Hash01i(key, 41) < env.hedgerows && d01 < 0.9f && Hash01i(ax * 131 + az, bx * 17 + cz) < 0.45f)
                     hedges.Add((p0 * 0.5f + (p1 + p2) * 0.25f, at));
             }
             else
@@ -200,7 +205,7 @@ public partial class EnvironmentBackdrop
                 (dry, ripe) = CropColours(crop, key);
                 dry  = Shade(dry, tone);
                 ripe = Shade(ripe, tone);
-                if (crop == Crop.Wheat && d01 < 0.35f)
+                if (crop == Crop.Wheat && d01 < 0.35f && dryHere)
                 {
                     if (!wheat.TryGetValue(key, out var f)) wheat[key] = f = new WheatField { delay = at };
                     f.spots.Add(mid + centre);
@@ -255,7 +260,7 @@ public partial class EnvironmentBackdrop
                 float x = -outer + (gx + Rand(rng, 0.15f, 0.85f)) * sp;
                 float z = -outer + (gz + Rand(rng, 0.15f, 0.85f)) * sp;
                 float d = Mathf.Sqrt(x * x + z * z);
-                if (d > outer * 0.97f || !Wood(x, z) || rng.NextDouble() < 0.12) continue;
+                if (d > outer * 0.97f || !Wood(x, z) || !Dry(x, z) || rng.NextDouble() < 0.12) continue;
                 float d01 = Mathf.InverseLerp(inner, outer, d);
                 bool conifer = Sample(h, x, z) > _peakRise.y * 0.55f || rng.NextDouble() < 0.3;
                 CountryTree(Veg(), World(x, z), Rand(rng, 2.2f, 3.4f) * cs, conifer, Rand(rng, 0f, Mathf.PI * 2f), leaf,
@@ -300,7 +305,7 @@ public partial class EnvironmentBackdrop
             float a = Rand(rng, 0f, Mathf.PI * 2f);
             float d = Mathf.Lerp(inner + 7f * cs, outer * 0.85f, Mathf.Pow(Rand(rng, 0f, 1f), 1.4f));
             float x = Mathf.Cos(a) * d, z = Mathf.Sin(a) * d;
-            if (Wood(x, z)) continue;
+            if (Wood(x, z) || !Dry(x, z)) continue;
             float hc = Sample(h, x, z);
             float slope = Mathf.Abs(Sample(h, x + cs, z) - Sample(h, x - cs, z)) + Mathf.Abs(Sample(h, x, z + cs) - Sample(h, x, z - cs));
             var w = World(x, z);

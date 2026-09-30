@@ -40,6 +40,7 @@ Shader "GeoWorld/BlockOutline"
             #pragma fragment Frag
 
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
+            #include "Assets/Shader/Include/MapOcclusion.hlsl"
 
             CBUFFER_START(UnityPerMaterial)
                 half4 _OutlineColor;
@@ -62,6 +63,7 @@ Shader "GeoWorld/BlockOutline"
 
             half4 Frag(Varyings IN) : SV_Target
             {
+                MapOccludeClip(IN.positionCS);   // the cube it outlines may be cut away (level-select see-through)
                 return _OutlineColor;
             }
             ENDHLSL
