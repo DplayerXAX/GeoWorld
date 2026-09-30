@@ -1548,6 +1548,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 0a6233f53522e7e4ab2c276ea96ea805, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::GameFlowManager
+  endlessEnvironment: {fileID: 11400000, guid: 6f7c645fbe624bd1815eb9cb113b710a, type: 2}
   endpoints: {fileID: 2091747065}
   unitPrefab: {fileID: 1207342289}
   gridSystem: {fileID: 164805054}

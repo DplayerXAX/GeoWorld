@@ -30,7 +30,8 @@ public class BlockSnapshot
     // Turret upgrade levels, so a restored turret is the turret you left.
     public int upBasicPower, upBasicBurst, upAoeFire, upAoeGravity;
 
-    // A mid-level save brings it back as it was: a sealed block can't be moved.
+    // Free weather supply keeps its no-refund provenance when restored.
+    public bool rainGranted;
     public bool sealedByEnemy;
 
     // PlacedBlockInstance.age — a resume keeps it.
@@ -56,7 +57,7 @@ public class CameraSnapshot
 [Serializable]
 public class GridSnapshot
 {
-    public int    version = 2;   // 2: BlockSnapshot gained asset name, synergy tag, upgrades
+    public int    version = 3;   // 2: BlockSnapshot gained asset name, synergy tag, upgrades
     public string name;
     public string timestamp;     // ISO-ish: "2026-05-19_14-30-22"
     public int    roundIndex;

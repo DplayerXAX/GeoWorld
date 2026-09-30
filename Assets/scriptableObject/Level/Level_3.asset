@@ -25,8 +25,8 @@ MonoBehaviour:
   synergyEnabled: 1
   allowedColors: 010000000400000002000000
   turretPool: 
-  environment: {fileID: 0}
   startingShop: []
+  environment: {fileID: 0}
   waves:
   - {fileID: 11400000, guid: 080e4b2a67c19904bbbfdce56bfad1ae, type: 2}
   - {fileID: 11400000, guid: 805195553d7548d7b575d4c0394cb94b, type: 2}

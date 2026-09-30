@@ -32,6 +32,8 @@ public class PlacedBlockInstance
     // delete paths, same shape as the existing combat-phase lock.
     public bool locked;
 
+    public bool rainGranted; // Free environment supply: no sale refund.
+
     // Not connected back to an endpoint — see BoardValidity. Shown with hazard
     // stripes; a turret in this state holds its fire.
     public bool detached;
@@ -186,6 +188,7 @@ public class GridSystem : MonoBehaviour
 
     public void RemoveInstance(PlacedBlockInstance instance)
     {
+        ChapterEnvironmentController.Instance?.BoardChanged();
         foreach (var pos in instance.occupiedCells)
         {
             occupied.Remove(pos);

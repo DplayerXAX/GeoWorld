@@ -31,6 +31,7 @@ public partial class PlacementController
     // ── Batch-move state ─────────────────────────────────────────────────────
     class BatchMoveRecord
     {
+        public bool rainGranted;
         public BlockData    data;
         public Vector3Int[] origCells;   // absolute — used to restore exactly on cancel
         public Vector3Int[] baseRel;     // UNROTATED offsets from the group anchor at pickup — the fixed shape group-rotate spins
@@ -292,6 +293,7 @@ public partial class PlacementController
             var rec = new BatchMoveRecord
             {
                 data         = ins.data,
+                rainGranted  = ins.rainGranted,
                 origCells    = ins.occupiedCells.ToArray(),
                 color        = rend != null ? MpbColor.Get(rend) : Color.white,
                 synergyColor = ins.color,
@@ -560,6 +562,7 @@ public partial class PlacementController
         var ins = new PlacedBlockInstance
         {
             data         = rec.data,
+            rainGranted  = rec.rainGranted,
             visualObject = obj,
             color        = rec.synergyColor,
             basicPowerUpgradeLevel = rec.basicPowerUpgradeLevel,
