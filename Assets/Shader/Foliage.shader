@@ -45,6 +45,7 @@ Shader "GeoWorld/Foliage"
 
         HLSLINCLUDE
         #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
+        #include "Assets/Shader/Include/MapOcclusion.hlsl"
 
         CBUFFER_START(UnityPerMaterial)
             float4 _BaseColor;
@@ -108,6 +109,7 @@ Shader "GeoWorld/Foliage"
 
             half4 frag(Varyings IN, FRONT_FACE_TYPE face : FRONT_FACE_SEMANTIC) : SV_Target
             {
+                MapOccludeClip(IN.positionCS);   // level-select see-through; off everywhere else
                 // A leaf is one quad. Seen from behind, its authored normal points
                 // away from the light and the leaf goes black — so flip it on the
                 // back face and both sides read as the same piece of foliage.
@@ -235,6 +237,7 @@ Shader "GeoWorld/Foliage"
 
             half4 dnFrag(DVaryings IN, FRONT_FACE_TYPE face : FRONT_FACE_SEMANTIC) : SV_Target
             {
+                MapOccludeClip(IN.positionCS);
                 float3 N = normalize(IN.normalWS) * IS_FRONT_VFACE(face, 1.0, -1.0);
                 return half4(NormalizeNormalPerPixel(N), 0.0);
             }
@@ -254,7 +257,7 @@ Shader "GeoWorld/Foliage"
             #pragma fragment doFrag
             float4 doVert(float4 positionOS : POSITION) : SV_POSITION
             { return TransformObjectToHClip(positionOS.xyz); }
-            half4 doFrag() : SV_Target { return 0; }
+            half4 doFrag(float4 positionCS : SV_POSITION) : SV_Target { MapOccludeClip(positionCS); return 0; }
             ENDHLSL
         }
     }

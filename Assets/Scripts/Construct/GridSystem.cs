@@ -32,12 +32,6 @@ public class PlacedBlockInstance
     // delete paths, same shape as the existing combat-phase lock.
     public bool locked;
 
-    // Carried over from the previous level of the chapter. The player may move,
-    // pick up and remove it freely — it is their own build — but removing it pays
-    // nothing back. The sell refund is priced off the block's base cost, not off
-    // anything spent THIS level, so without this the first move of every chapter
-    // level would be to sell the entire inherited base for cash.
-    public bool inherited;
     public bool rainGranted; // Free environment supply: no sale refund.
 
     // Not connected back to an endpoint — see BoardValidity. Shown with hazard
@@ -57,6 +51,11 @@ public class PlacedBlockInstance
     // the 50% sell refund is the punishment, and it keeps a badly-placed seal from
     // permanently wrecking a synergy loop or the only route with zero counterplay.
     public bool sealedByEnemy;
+
+    // How old this block looks — the look of age, not a rule. The level's prebuilt
+    // furniture starts at its environment's prebuiltAge; the player's new ones are 0.
+    // Rendered by BlockSurface / GeoWorld/BlockWeather in the level's LevelEnvironment.
+    public int age;
 }
 
 public class GridSystem : MonoBehaviour

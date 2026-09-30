@@ -20,7 +20,7 @@ public static class TurretTypes
     {
         BlockType.SlowTurret => "Slow Turret",
         BlockType.AoeTurret  => "AOE Turret",
-        BlockType.DebuffTurret => "Debuff Turret",
+        BlockType.DebuffTurret => "Prayer Turret",
         BlockType.Turret     => "Basic Turret",
         _                    => type.ToString(),
     };

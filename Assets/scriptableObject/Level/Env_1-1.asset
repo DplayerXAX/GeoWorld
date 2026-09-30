@@ -1,0 +1,147 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 805a189660094c8b95283a23b742e707, type: 3}
+  m_Name: Env_1-1
+  m_EditorClassIdentifier:
+  prebuiltAge: 4
+  maxAge: 4
+  wearTint: {r: 0.66, g: 0.54, b: 0.38, a: 1}
+  wearStrength: 0.9
+  crackStrength: 1
+  contactShadow: 0.4
+  contactRadius: 0.32
+  rain: 0
+  rainIntensity: 1
+  rainColor: {r: 0.78, g: 0.84, b: 0.92, a: 0.35}
+  rainWind: {x: 1.2, y: 0.4}
+  splashes: 0
+  wetness: 0
+  wetAtStart: 0
+  wetUpSeconds: 30
+  puddles: 0
+  floodSeconds: 40
+  streaks: 0
+  corrosion: 0
+  overrideSky: 1
+  skyZenith: {r: 0.45, g: 0.6, b: 0.82, a: 1}
+  skyHorizon: {r: 1, g: 0.86, b: 0.68, a: 1}
+  skyHaze: {r: 1, g: 0.8, b: 0.56, a: 1}
+  skyGrid: {r: 1, g: 0.7, b: 0.35, a: 1}
+  skyHueRange: 0.12
+  useLandscapeSky: 1
+  skyGround: {r: 0.78, g: 0.66, b: 0.5, a: 1}
+  skySun: {r: 1.8, g: 1.3, b: 0.8, a: 1}
+  skyCloud: {r: 1, g: 0.94, b: 0.86, a: 1}
+  skyCloudShade: {r: 0.74, g: 0.66, b: 0.66, a: 1}
+  skyCloudCover: 0.45
+  paintedSky: 1
+  paintDeep: {r: 0.06, g: 0.18, b: 0.5, a: 1}
+  paintBlue: {r: 0.15, g: 0.4, b: 0.78, a: 1}
+  paintTeal: {r: 0.34, g: 0.7, b: 0.82, a: 1}
+  paintCream: {r: 0.97, g: 0.92, b: 0.74, a: 1}
+  paintWarm: {r: 1, g: 0.78, b: 0.28, a: 1}
+  paintHot: {r: 0.96, g: 0.44, b: 0.14, a: 1}
+  paintStrokeScale: 16
+  paintSwirl: 1
+  paintWarmth: 0.6
+  skyHazeDensity: 1.3
+  heightFogEnabled: 0
+  heightFog:
+    color: {r: 1, g: 0.88, b: 0.72, a: 1}
+    density: 0.03
+    topOffset: -6
+    falloff: 0.35
+    wave: 0.6
+    maxDistance: 180
+    skyBlend: 0
+    scatter: 0.8
+    anisotropy: 0.6
+    mapClear: 1
+    clearFrom: 0
+    clearTo: 0.6
+  farHazeEnabled: 0
+  farHaze:
+    color: {r: 1, g: 0.64, b: 0.36, a: 1}
+    strength: 0.95
+    density: 0.4
+    height: 9
+    depth: 10
+    offset: -9
+    falloff: 0.7
+    skyBlend: 0.15
+    scatter: 1.8
+    anisotropy: 0.6
+    steps: 28
+    edge: 24
+    clearance: 2.5
+    edgeWarp: 3
+    noiseScale: 0.1
+  farHazeClear: 8
+  farHazeMargin: 100
+  farHazeSink:
+    start: 14
+    rate: 0.35
+    max: 12
+    soft: 8
+  sunIntensity: 1.1
+  sunTint: {r: 1, g: 0.85, b: 0.65, a: 1}
+  overrideSunDirection: 1
+  sunPitch: 18
+  sunYaw: 250
+  motes: 1
+  moteDensity: 1.2
+  moteTint: {r: 1, g: 0.85, b: 0.65, a: 1}
+  backdrop: 6
+  backdropColor: {r: 0.4, g: 0.27, b: 0.17, a: 1}
+  backdropHaze: {r: 1, g: 0.84, b: 0.64, a: 1}
+  backdropHazeMax: 0
+  backdropCount: 16
+  backdropDistance: {x: 28, y: 68}
+  backdropPeakRise: {x: -2, y: 12}
+  backdropShelfHeight: {x: -13, y: -6}
+  backdropLake: 1
+  backdropLakeLevel: -8.5
+  backdropLakeTint: {r: 0.14, g: 0.28, b: 0.36, a: 1}
+  backdropLakeMirror: 0.5
+  backdropLakeRipple: 0.025
+  landTone: 0.78
+  introSkyRise: 1
+  introSkyRiseSeconds: 4.5
+  backdropSeed: 11
+  backdropSunGlow: {r: 0.6, g: 0.45, b: 0.25, a: 1}
+  backdropRim: {r: 0.5, g: 0.35, b: 0.2, a: 1}
+  backdropAccent: {r: 0, g: 0, b: 0, a: 1}
+  backdropAccentAmount: 0
+  backdropBloomOn: 4
+  backdropFarm: 1
+  backdropFieldScale: 1
+  backdropGrowSkin: 0
+  backdropGrowth: {r: 0.84, g: 0.58, b: 0.16, a: 1}
+  backdropGrowth2: {r: 1, g: 0.8, b: 0.32, a: 1}
+  backdropTreePrefab: {fileID: 5386003392207672047, guid: 835a92ac1a661154b973e5d4184d2def, type: 3}
+  backdropLeafColor: {r: 0.42, g: 0.66, b: 0.3, a: 1}
+  landDry: {r: 0.62, g: 0.5, b: 0.34, a: 1}
+  landEarth: {r: 0.44, g: 0.32, b: 0.22, a: 1}
+  terraceStep: 0.9
+  terraceTread: 0.82
+  fieldSize: {x: 9, y: 6}
+  woodland: 0.22
+  hedgerows: 0.45
+  windmills: 3
+  landHouses: 12
+  landTrees: 24
+  landSpots: 40
+  sunGlow: 0
+  sunGlowColor: {r: 1.6, g: 0.85, b: 0.35, a: 0.9}
+  sunGlowSize: 110
+  sunGlowDistance: 190
+  dissolveEdge: {r: 1, g: 0.7, b: 0.4, a: 1}

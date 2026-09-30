@@ -103,7 +103,7 @@ public partial class GameFlowManager : MonoBehaviour
     void Start()
     {
         Instance = this;
-        // Setup builds a board (inherited, authored) before the player has done
+        // Setup builds a board (the authored layout) before the player has done
         // anything — flag islands, but do not pop up messages about them.
         BoardValidity.Quiet = true;
         graph = new SurfaceGraphBuilder();
@@ -170,6 +170,9 @@ public partial class GameFlowManager : MonoBehaviour
         StartCoroutine(ReleaseSynergyFxAfterIntro());
 
         var startLv = RunConfig.Mode == GameMode.Level ? RunConfig.Level : null;
+        // Weather, light and what block age looks like here — before anything is
+        // placed, since the prebuilt layout takes its age from it.
+        LevelEnvironmentDriver.Apply(startLv != null ? startLv.environment : null);
         if (startLv != null && !Mathf.Approximately(startLv.startingBlockCurrencyMult, 1f))
             ResourceManager.Instance?.ScaleBlockWallets(startLv.startingBlockCurrencyMult);
 
@@ -187,87 +190,18 @@ public partial class GameFlowManager : MonoBehaviour
             return;
         }
 
-        // BEFORE the first endpoints, not after: the new spawn and defence points are
-        // placed around the inherited build, so it has to be standing already.
-        SpawnInheritedLayout();
         CreateFirstStage();
-        if (_inheritCentre.HasValue) EvaluateGrid();   // pathing/synergy over the inherited board, now that endpoints exist
         SpawnStartingLayout();       // pre-built blocks authored via LevelMapAuthor, if any
+        SpawnRandomStartBlocks();    // LevelDefinition.randomStartBlocks, if any
         FocusCameraOnFirstStage();   // centre the camera between the first start & end
         // Once unconditionally: the placement ghost asks BoardValidity from the first
-        // frame, and a level with no authored or inherited layout would otherwise
+        // frame, and a level with no authored layout would otherwise
         // reach this point without ever having been reconciled.
         BoardValidity.Reconcile(gridSystem, allStarts, allEnds);
         BoardValidity.Quiet = false;
 
         phase = GamePhase.Build;
         StartTurn();
-    }
-
-    // ── Chapter inheritance ──────────────────────────────────────────────────
-    // Footprint of the board carried over from LevelDefinition.inheritFrom, in grid
-    // columns. Null when this level starts from nothing — CreateFirstStage reads it
-    // to decide where the new endpoints go.
-    Vector2? _inheritCentre;
-    Vector2  _inheritHalf;
-
-    // From the same keepsake: every core the last level ended with (kept, see
-    // LevelDefinition.inheritCores), and every spawn point it had (NOT kept — only
-    // read, so the new spawn can be placed away from them).
-    readonly List<Vector3Int> _inheritedCores  = new();
-    readonly List<Vector3Int> _inheritedSpawns = new();
-
-    // Lay down the board the player last cleared the previous level with: blocks
-    // only, editable, no refund on removal (see PlacedBlockInstance.inherited).
-    void SpawnInheritedLayout()
-    {
-        _inheritCentre = null;
-        _inheritedCores.Clear();
-        _inheritedSpawns.Clear();
-
-        var lv   = RunConfig.Mode == GameMode.Level ? RunConfig.Level : null;
-        var from = lv?.InheritSource;   // explicit inheritFrom, else the previous level of the chapter
-        if (from == null || from == lv || string.IsNullOrEmpty(from.levelId)) return;
-
-        var snap = SaveSystem.Profile.GetRecord(from.levelId)?.buildSnapshot;
-        if (snap?.blocks == null || snap.blocks.Count == 0) return;   // never cleared: start fresh
-
-        // A clear saved before endpoints were recorded has none — CreateFirstStage
-        // then falls back to a fresh pair around the build, as before.
-        if (snap.endpoints != null)
-            foreach (var ep in snap.endpoints)
-            {
-                if (ep == null) continue;
-                var list = ep.isStart ? _inheritedSpawns : _inheritedCores;
-                if (!list.Contains(ep.cell)) list.Add(ep.cell);
-            }
-        if (!lv.inheritCores) _inheritedCores.Clear();
-
-        var placed = SnapshotManager.PlaceBlocks(snap, inherited: true, withUpgrades: lv.inheritUpgrades,
-                                                 skipTurrets: !lv.inheritTurrets);
-        if (placed.Count == 0) return;
-
-        int x0 = int.MaxValue, x1 = int.MinValue, z0 = int.MaxValue, z1 = int.MinValue;
-        foreach (var ins in placed)
-        {
-            foreach (var c in ins.occupiedCells)
-            {
-                if (c.x < x0) x0 = c.x; if (c.x > x1) x1 = c.x;
-                if (c.z < z0) z0 = c.z; if (c.z > z1) z1 = c.z;
-            }
-
-            ResourceManager.Instance?.OnBlockPlaced(ins.data.blockType);
-
-            // Handed to IntroDirector with the authored layout, so the inherited base
-            // pops in with the endpoints instead of standing at full size through the
-            // whole intro.
-            if (ins.visualObject != null) startingLayoutVisuals.Add(ins.visualObject);
-        }
-
-        // Half-extents to the cells' EDGES, so "ring cells beyond the edge" is
-        // measured from where the blocks actually stop.
-        _inheritCentre = new Vector2((x0 + x1) * 0.5f, (z0 + z1) * 0.5f);
-        _inheritHalf   = new Vector2((x1 - x0 + 1) * 0.5f, (z1 - z0 + 1) * 0.5f);
     }
 
     // Lets the intro start (it sets Playing on its first frame), waits it out —
@@ -288,24 +222,127 @@ public partial class GameFlowManager : MonoBehaviour
     // True from level start until the intro has popped the board in (see above).
     bool _routeLinesHeld;
 
-    // Remove any INHERITED block covering one of these cells. Only inherited ones —
-    // a player's own block from this level, an endpoint or authored furniture is
-    // never touched by this.
-    void ClearInheritedAt(IEnumerable<Vector3Int> cells)
+    // LevelDefinition.randomStartBlocks: small random shop shapes in one colour,
+    // dropped between the first start and end points, none touching another block
+    // (so no synergy is formed before the player starts). Its own random stream,
+    // salted off the run seed, so it never shifts the run's shop or wave rolls.
+    void SpawnRandomStartBlocks()
     {
-        if (cells == null || gridSystem == null) return;
+        var lv = RunConfig.Mode == GameMode.Level ? RunConfig.Level : null;
+        var pc = PlacementController.Instance;
+        if (lv == null || lv.randomStartBlocks <= 0 || pc == null || pc.blocks == null) return;
+        if (allStarts.Count == 0 || allEnds.Count == 0 || gridSystem == null) return;
 
-        var seen = new HashSet<PlacedBlockInstance>();
-        foreach (var c in cells)
+        var pool = new List<BlockData>();
+        foreach (var b in pc.blocks)
+            if (b != null && b.cells != null && b.cells.Length > 0 && b.cells.Length <= 4 && !TurretTypes.Is(b.blockType))
+                pool.Add(b);
+        if (pool.Count == 0) return;
+
+        var rng = new Xoshiro256StarStar(runSeed ^ 0x52414E44424CUL);
+        Vector3 s = allStarts[0], e = allEnds[0];
+        Vector3 side = Vector3.Cross(Vector3.up, (e - s).sqrMagnitude > 0.01f ? (e - s).normalized : Vector3.forward);
+        int floor = Mathf.Min(allStarts[0].y, allEnds[0].y);
+        var env = LevelEnvironmentDriver.Current;
+        Color tint = BlockColorPalette.Get(lv.randomStartColor);
+
+        int placed = 0;
+        var placedCells = new List<Vector3Int[]>();
+        for (int attempt = 0; attempt < 300 && placed < lv.randomStartBlocks; attempt++)
         {
-            var ins = gridSystem.GetInstanceAt(c);
-            if (ins == null || !ins.inherited || !seen.Add(ins)) continue;
+            var data = pool[rng.NextIntInclusive(0, pool.Count - 1)];
+            Vector3 at = Vector3.Lerp(s, e, Mathf.Lerp(0.2f, 0.8f, rng.NextFloat())) + side * rng.NextIntInclusive(-3, 3);
+            var anchor = new Vector3Int(Mathf.RoundToInt(at.x), floor, Mathf.RoundToInt(at.z));
 
-            if (ins.visualObject != null) startingLayoutVisuals.Remove(ins.visualObject);
-            ResourceManager.Instance?.OnBlockRemoved(ins.data.blockType);
-            SynergyEvaluator.Instance?.OnPieceRemoved(ins.placedPiece);
-            gridSystem.RemoveInstance(ins);   // destroys visualObject
+            var cells = new Vector3Int[data.cells.Length];
+            bool ok = true;
+            for (int i = 0; i < cells.Length && ok; i++)
+            {
+                cells[i] = anchor + data.cells[i];
+                ok = !gridSystem.IsOccupied(cells[i]) && !TouchesAnything(cells[i], cells) && !NearEndpoint(cells[i]);
+            }
+            if (!ok) continue;
+
+            var ins = pc.PlaceBlockDirect(data, cells, Quaternion.identity, tint, lv.randomStartColor);
+            if (ins == null) continue;
+            ins.locked = true;   // level furniture, like the authored layout
+            ins.age = env != null ? env.prebuiltAge : 0;
+            ResourceManager.Instance?.OnBlockPlaced(data.blockType);
+            if (ins.visualObject != null) startingLayoutVisuals.Add(ins.visualObject);
+            placedCells.Add(cells);
+            placed++;
         }
+        if (placed > 0) SpawnRandomStartTurret(lv, pc, placedCells, rng);
+        if (placed > 0) EvaluateGrid();
+    }
+
+    // LevelDefinition.randomStartTurret: one turret on top of one of the random
+    // start blocks — on a top face with open air above it. Level furniture like
+    // the blocks under it: locked (can't be moved or sold), and so never flagged
+    // detached — it fires from the start, with no build of the player's under it
+    // (BoardValidity treats locked pieces as attached).
+    void SpawnRandomStartTurret(LevelDefinition lv, PlacementController pc, List<Vector3Int[]> blocks,
+                                Xoshiro256StarStar rng)
+    {
+        if (!TurretTypes.Is(lv.randomStartTurret) || blocks.Count == 0) return;
+        var data = pc.FindBlockData(lv.randomStartTurret);
+        if (data == null || data.cells == null || data.cells.Length == 0)
+        {
+            Debug.LogWarning($"[GameFlowManager] randomStartTurret: no BlockData for {lv.randomStartTurret}.");
+            return;
+        }
+
+        // Start from a random block and try each in turn until one has a free top.
+        int first = rng.NextIntInclusive(0, blocks.Count - 1);
+        for (int k = 0; k < blocks.Count; k++)
+        {
+            var own = blocks[(first + k) % blocks.Count];
+            var tops = new List<Vector3Int>();
+            foreach (var c in own)
+                if (System.Array.IndexOf(own, c + Vector3Int.up) < 0 && !gridSystem.IsOccupied(c + Vector3Int.up))
+                    tops.Add(c);
+            if (tops.Count == 0) continue;
+
+            var top = tops[rng.NextIntInclusive(0, tops.Count - 1)] + Vector3Int.up;
+            var cells = new Vector3Int[data.cells.Length];
+            bool ok = true;
+            for (int i = 0; i < cells.Length && ok; i++)
+            {
+                cells[i] = top + data.cells[i];
+                ok = !gridSystem.IsOccupied(cells[i]);
+            }
+            if (!ok) continue;
+
+            var ins = pc.PlaceBlockDirect(data, cells, Quaternion.identity, TurretTypes.DisplayColor(data.blockType));
+            if (ins == null) continue;
+            ins.locked = true;
+            ResourceManager.Instance?.OnBlockPlaced(data.blockType);
+            if (ins.visualObject != null) startingLayoutVisuals.Add(ins.visualObject);   // pops in with the board
+            return;
+        }
+    }
+
+    // Within two cells (across the ground) of a start or end point. The random
+    // start blocks keep that clear, so an endpoint is never boxed in or hidden
+    // behind one.
+    bool NearEndpoint(Vector3Int cell)
+    {
+        foreach (var e in allStarts) if (Mathf.Abs(e.x - cell.x) <= 2 && Mathf.Abs(e.z - cell.z) <= 2) return true;
+        foreach (var e in allEnds)   if (Mathf.Abs(e.x - cell.x) <= 2 && Mathf.Abs(e.z - cell.z) <= 2) return true;
+        return false;
+    }
+
+    // A face neighbour of `cell` that's occupied and isn't part of the same piece.
+    bool TouchesAnything(Vector3Int cell, Vector3Int[] own)
+    {
+        foreach (var d in new[] { Vector3Int.right, Vector3Int.left, Vector3Int.up, Vector3Int.down,
+                                  new Vector3Int(0, 0, 1), new Vector3Int(0, 0, -1) })
+        {
+            var n = cell + d;
+            if (System.Array.IndexOf(own, n) >= 0) continue;
+            if (gridSystem.IsOccupied(n)) return true;
+        }
+        return false;
     }
 
     // Populated by SpawnStartingLayout(); IntroDirector reads this to pop the pre-built
@@ -329,11 +366,6 @@ public partial class GameFlowManager : MonoBehaviour
         {
             if (node.cells == null || node.cells.Length == 0) continue;
 
-            // Level furniture outranks the inherited base: where the two want the
-            // same cell, the inherited block gives way. Anything else in the way —
-            // an endpoint, other furniture — still makes this piece skip as before.
-            ClearInheritedAt(node.cells);
-
             bool clash = false;
             foreach (var c in node.cells) if (gridSystem.IsOccupied(c)) { clash = true; break; }
             if (clash) continue;
@@ -350,6 +382,7 @@ public partial class GameFlowManager : MonoBehaviour
             if (ins != null)
             {
                 ins.locked = true;   // level furniture — not pickup/sell/delete-able
+                ins.age = LevelEnvironmentDriver.Current != null ? LevelEnvironmentDriver.Current.prebuiltAge : 0;
                 ResourceManager.Instance?.OnBlockPlaced(bd.blockType);
                 if (ins.visualObject != null) startingLayoutVisuals.Add(ins.visualObject);
             }
@@ -611,49 +644,12 @@ public partial class GameFlowManager : MonoBehaviour
         // Tutorials / authored levels can pin the start & end instead of randomising.
         var lv = RunConfig.Mode == GameMode.Level ? RunConfig.Level : null;
         if (lv != null && lv.fixedEndpoints)
-        {
-            // An authored level's pinned endpoints win over an inherited block that
-            // happens to sit on one of them — the level was designed around those
-            // cells; the inherited base was not designed around anything.
-            ClearInheritedAt(new[] { lv.startCell, lv.endCell });
             endpoints.GenerateFixed(lv.startCell, lv.endCell);
-        }
-        else if (_inheritCentre.HasValue && _inheritedCores.Count > 0)
-        {
-            // Same base, same cores, new attack: every core the last level ended
-            // with stays where it was (an inherited block that happens to cover one
-            // gives way), and one new spawn opens beyond the build — measured around
-            // the cores too, so it comes up outside everything that is already there.
-            ClearInheritedAt(_inheritedCores);
-            var (c, h) = GrowExtent(_inheritCentre.Value, _inheritHalf, _inheritedCores);
-            endpoints.GenerateKeepingEnds(_inheritedCores, c, h, lv != null ? lv.inheritRing : 4f, _inheritedSpawns);
-
-            allStarts.Add(endpoints.startCell);
-            allEnds.AddRange(_inheritedCores);
-            return;
-        }
-        else if (_inheritCentre.HasValue)
-            endpoints.GenerateAround(_inheritCentre.Value, _inheritHalf, lv != null ? lv.inheritRing : 4f);
         else
             endpoints.Generate();
 
         allStarts.Add(endpoints.startCell);
         allEnds.Add(endpoints.endCell);
-    }
-
-    // A build's footprint (centre / half-extents to the cells' edges, grid columns)
-    // grown to take in extra cells as well.
-    static (Vector2 centre, Vector2 half) GrowExtent(Vector2 centre, Vector2 half, List<Vector3Int> cells)
-    {
-        float x0 = centre.x - half.x, x1 = centre.x + half.x;
-        float z0 = centre.y - half.y, z1 = centre.y + half.y;
-        foreach (var c in cells)
-        {
-            x0 = Mathf.Min(x0, c.x - 0.5f); x1 = Mathf.Max(x1, c.x + 0.5f);
-            z0 = Mathf.Min(z0, c.z - 0.5f); z1 = Mathf.Max(z1, c.z + 0.5f);
-        }
-        return (new Vector2((x0 + x1) * 0.5f, (z0 + z1) * 0.5f),
-                new Vector2((x1 - x0) * 0.5f, (z1 - z0) * 0.5f));
     }
 
     // Centre the orbit camera on the midpoint of the first start & end endpoints —
@@ -696,7 +692,7 @@ public partial class GameFlowManager : MonoBehaviour
             // allEnds constrains the new start to the union of the existing
             // starts' reach circles — see LevelEndpointGenerator.SampleStartInsideReach.
             var cell = endpoints.GenerateSinglePoint(allStarts, true, allEnds);
-            if (cell != Vector3Int.zero)
+            if (endpoints.LastGenerated)
             {
                 allStarts.Add(cell);
                 _challengeCell    = cell;
@@ -706,13 +702,19 @@ public partial class GameFlowManager : MonoBehaviour
         else
         {
             var cell = endpoints.GenerateSinglePoint(allEnds, false);
-            if (cell != Vector3Int.zero)
+            if (endpoints.LastGenerated)
             {
                 allEnds.Add(cell);
                 _challengeCell    = cell;
                 _challengeIsStart = false;
             }
         }
+
+        // The environment keeps its fog and far haze clear round the endpoints, but
+        // only hears about the board when a block is placed. A new endpoint out past
+        // the cleared ring sat inside the haze until then — which read as the
+        // endpoint never having been made.
+        LevelEnvironmentDriver.NotifyBoard(gridSystem);
 
         roundIndex++;
     }
@@ -878,7 +880,8 @@ public partial class GameFlowManager : MonoBehaviour
 
                         ArpeggiatorManager.Instance.PlayAmbientNote(deg, oct, 0.28f,
                             inst.visualObject);
-                        BackgroundReactor.Instance?.OnNote(0.2f);
+                        // No sky pulse per lit block for now: the scan reads on the
+                        // board and in the notes; the sky blinking along was a distraction.
 
                         if (inst.visualObject != null)
                             StartCoroutine(ScanFlashBlock(inst.visualObject, stepSec * 0.7f));
@@ -995,6 +998,8 @@ public partial class GameFlowManager : MonoBehaviour
         // losing its support mid-combat must stop firing mid-combat.
         BoardValidity.Reconcile(gridSystem, allStarts, allEnds);
         ChapterEnvironmentController.Instance?.RefreshBoard();
+        // Contact shadows follow the neighbours; age follows the block (BlockSurface).
+        BlockSurface.Refresh(gridSystem);
 
         var path = FindCurrentPath();
         _currentPathLength = path != null ? path.Count : 0;
@@ -1011,10 +1016,14 @@ public partial class GameFlowManager : MonoBehaviour
                 ResourceManager.Instance?.SetCombatActive(false);
                 phase = GamePhase.Build;
                 // No live line yet — will appear on next block placement.
+                PathFlowManager.Instance?.SyncFlows(FindAllSpawnPaths(), addMissing: false);
+                return;
             }
             // Path still valid while running — re-route live enemies so anything the
             // newly-placed block blocked finds a fresh way to the end.
             enemyBaseManager?.RerouteActive(graph, CurrentEndFaces());
+            // …and the route lines follow them: old routes' lines go, new ones appear.
+            PathFlowManager.Instance?.SyncFlows(FindAllSpawnPaths(), addMissing: true);
             return;
         }
 
@@ -1022,7 +1031,13 @@ public partial class GameFlowManager : MonoBehaviour
         // point, not just the challenge path (multi-spawn rounds redraw all routes).
         // Not while the board is still hidden for the intro — a route drawn over
         // blocks that haven't appeared yet; the release redraws it.
-        if (!_routeLinesHeld) PathFlowManager.Instance?.UpdateLiveLines(FindAllSpawnPaths());
+        if (!_routeLinesHeld)
+        {
+            var routes = FindAllSpawnPaths();
+            PathFlowManager.Instance?.UpdateLiveLines(routes);
+            // Last wave's route lines stay only where the route still runs.
+            PathFlowManager.Instance?.SyncFlows(routes, addMissing: false);
+        }
         phase = path != null ? GamePhase.ReadyToRun : GamePhase.Build;
     }
 
@@ -1055,10 +1070,12 @@ public partial class GameFlowManager : MonoBehaviour
         if (spawnPaths.Count == 0) spawnPaths.Add(path);   // safety net
 
         // Live preview line → tracked loop lines, one per active route so the
-        // player can see where every wave of enemies will come from.
+        // player can see where every wave of enemies will come from. The combat
+        // ripple below takes the board down and grows it back, so every line is
+        // wiped now and drawn afresh once the blocks are standing again (a line
+        // hanging over a board that isn't there yet reads as a glitch).
         PathFlowManager.Instance?.ClearLiveLine();
-        foreach (var p in spawnPaths)
-            PathFlowManager.Instance?.AddFlow(p);
+        PathFlowManager.Instance?.SyncFlows(null, addMissing: false);
 
         // No more music SurfaceUnit — combat timing is driven by the enemy
         // wave. EndRunningPhase fires when EnemyBaseManager.OnWaveCompleted.
@@ -1074,7 +1091,13 @@ public partial class GameFlowManager : MonoBehaviour
         // Combat ripple is a one-shot grow animation that touches every cube;
         // run it once on the challenge path (running it per-route would have
         // multiple coroutines fighting over the same cube scales).
-        placement.TriggerCombatRipple(path);                // wave grows along path, then off-path blocks bloom
+        placement.TriggerCombatRipple(path, () =>           // wave grows along path, then off-path blocks bloom
+        {
+            // The routes as they stand once it has grown back (the player may
+            // have built meanwhile); nothing if the wave is already over.
+            if (phase == GamePhase.Running)
+                PathFlowManager.Instance?.SyncFlows(FindAllSpawnPaths(), addMissing: true);
+        });
     }
 
     // Lazy run-scoped RNG. First call rolls a fresh seed if runSeed==0 so the

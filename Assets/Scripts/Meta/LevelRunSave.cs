@@ -16,7 +16,7 @@ public class LevelRunSave
     public string savedAt;
 
     // ── The board ────────────────────────────────────────────────────────────
-    public GridSnapshot board;               // blocks (+ inherited / sealed), endpoints, round counters, camera
+    public GridSnapshot board;               // blocks (+ sealed), endpoints, round counters, camera
     public Vector3Int   challengeCell;
     public bool         challengeIsStart;
 
@@ -34,7 +34,7 @@ public class LevelRunSave
 
     // ── Progress trackers ────────────────────────────────────────────────────
     public int          tutorialStep = -1;   // -1 = not a tutorial / nothing to resume
-    public int          objKills, objLeaks, objPlaced, objMaxSynergies, objMaxTurretLevel;
+    public int          objKills, objLeaks, objPlaced, objMaxSynergies, objMaxTurretLevel, objChaosDestroyed;
     public int          statKills, statBlocks;
     public float        statElapsed;
     public List<string> ownedCards = new();  // UpgradeCard asset names

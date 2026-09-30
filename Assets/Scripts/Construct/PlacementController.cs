@@ -135,6 +135,8 @@ public partial class PlacementController : MonoBehaviour
     private int lastBasicBurstUpgradeLevel;
     private int lastAoeFireUpgradeLevel;
     private int lastAoeGravityUpgradeLevel;
+    // Carried through a pickup so a moved block is still as old as it was (BlockSurface wear).
+    private int  lastAge;
 
     // Tray tracking kept so we can show/hide tokens on edit mode enter/exit.
     private List<GameObject> trayBlocks = new();
@@ -318,6 +320,26 @@ public partial class PlacementController : MonoBehaviour
         _popupMsg      = msg;
         _popupDuration = duration;
         _popupExpire   = Time.unscaledTime + duration;
+    }
+
+    // Tutorial: the shop holds just this one block (TutorialStep.shopOnlyTarget).
+    public void StockShopWith(BlockData block, BlockColor color)
+    {
+        var shop = ShopController.Instance;
+        if (shop == null || block == null) return;
+        shop.SetShopItems(new[] { block }, new BlockData[0], new[] { color }, new BlockColor[0], cubePrefab, grid);
+    }
+
+    // A re-roll that costs nothing and doesn't raise the refresh price
+    // (TutorialStep.freeRefreshAfter). Not reported as ShopRefreshed — the player
+    // didn't refresh, so a tutorial "refresh the shop" step mustn't count it.
+    public void FreeRefreshShop()
+    {
+        var gfm  = GameFlowManager.Instance;
+        var shop = ShopController.Instance;
+        if (gfm == null || shop == null) return;
+        shop.ClearItems();
+        SpawnRoundBlocks(gfm.blocksPerTurn, gfm.turretsPerTurn);
     }
 
     public bool TryRefreshShop()
@@ -604,7 +626,13 @@ public partial class PlacementController : MonoBehaviour
 
         if (!_mouseRotation.Active && (Input.GetMouseButtonDown(0) || VirtualCursor.ConfirmPressedThisFrame))
         {
-            if (IsPointerOverSelectionPanel() || HudSidePanels.PointerOver || PointerOverInfoPanel()
+            if (ShopController.Instance != null && ShopController.Instance.TryHandleClick())
+            {
+                // The shop strip took the click (a purchase, or just a click on the
+                // strip). FIRST: the strip is UGUI, so the generic "pointer over any
+                // UI" test below would otherwise swallow every purchase.
+            }
+            else if (IsPointerOverSelectionPanel() || HudSidePanels.PointerOver || PointerOverInfoPanel()
                 || MultiSelectPanel.IsPointerOver(VirtualCursor.Position))
             {
                 // Click landed on an HUD panel (info / synergies / controls) or the
@@ -618,10 +646,6 @@ public partial class PlacementController : MonoBehaviour
             else if (mode == PlacementMode.Edit)
             {
                 if (currentBlock != null) TryPlace();
-            }
-            else if (ShopController.Instance != null && ShopController.Instance.TryHandleClick())
-            {
-                // Shop viewport consumed the click don't run main-camera selection.
             }
             else if (mode == PlacementMode.Select && Input.GetMouseButtonDown(0))
             {
@@ -952,6 +976,7 @@ public partial class PlacementController : MonoBehaviour
         lastBasicBurstUpgradeLevel = selectedInstance.basicBurstUpgradeLevel;
         lastAoeFireUpgradeLevel = selectedInstance.aoeFireUpgradeLevel;
         lastAoeGravityUpgradeLevel = selectedInstance.aoeGravityUpgradeLevel;
+        lastAge       = selectedInstance.age;
 
         // Keep the original height plane (and steady the camera focus), but let the
         // block follow the cursor directly — no offset back to its old cell.
@@ -982,15 +1007,20 @@ public partial class PlacementController : MonoBehaviour
         {
             CancelAndReturnObject();
         }
-        else if (activePhysicsObject != null && _pendingShopPrice > 0)
+        else if (activePhysicsObject != null)
         {
-            // Player grabbed a shop item but cancelled before placing give it back.
+            // Player grabbed a shop item but cancelled before placing — give it back.
+            // Any price: a free item (price 0, e.g. a tutorial's opening hand) used to
+            // skip this and stay hidden, still "in hand".
             ShopController.Instance?.RestoreItem(activePhysicsObject);
-            _pendingShopPrice   = 0;
-            currentBlock        = null;
-            activePhysicsObject = null;
         }
 
+        // Nothing is held once edit mode is left. A cancelled pick-up used to keep
+        // its block as currentBlock, and the shop then took every later click for
+        // "something already in hand" — the shop looked open but wouldn't sell.
+        _pendingShopPrice   = 0;
+        currentBlock        = null;
+        activePhysicsObject = null;
 
         _heldRainGranted = false;
         mode = PlacementMode.Select;
@@ -1243,7 +1273,7 @@ public partial class PlacementController : MonoBehaviour
     int ComputeSellRefund(PlacedBlockInstance ins)
     {
         if (ins?.data == null || ResourceManager.Instance == null) return 0;
-        if (ins.inherited || ins.rainGranted) return 0;   // paid for in an earlier level — see PlacedBlockInstance.inherited
+        if (ins.rainGranted) return 0;   // Free weather supply cannot be sold for currency.
         int basePrice = ResourceManager.Instance.ComputePrice(ins.data, 1f);
         float fraction = Mathf.Max(0f, Modifiers.Eval(Stat.SellRefund, 1f) * sellRefundFraction);
         return Mathf.Max(1, Mathf.RoundToInt(basePrice * fraction));
@@ -1564,6 +1594,18 @@ public partial class PlacementController : MonoBehaviour
             upAoeFire    = isPickingUpObject ? lastAoeFireUpgradeLevel    : 0,
             upAoeGravity = isPickingUpObject ? lastAoeGravityUpgradeLevel : 0,
         });
+
+        // The place command builds a fresh instance; a moved block keeps its age
+        // (the command doesn't carry it).
+        if (isPickingUpObject && grid != null)
+        {
+            var moved = grid.GetInstanceAt(placedCells[0]);
+            if (moved != null)
+            {
+                moved.age       = lastAge;
+                BlockSurface.Refresh(grid);
+            }
+        }
 
         // ── Push undo record ──────────────────────────────────────────────────
         if (isPickingUpObject)   // reposition: remember where it came from
@@ -2288,7 +2330,7 @@ public partial class PlacementController : MonoBehaviour
         _ghostAnchorSnap    = true;   // appear at the cursor, don't glide in from the last hold
         currentColor        = sb.color != BlockColor.None
             ? BlockColorPalette.Get(sb.color)
-            : MpbColor.Get(sb.GetComponentInChildren<Renderer>());
+            : sb.displayColor;
         activePhysicsObject = sb.gameObject;
         selectedInstance    = null;
         isPickingUpObject   = false;   // new purchase, not a reposition
@@ -2340,6 +2382,7 @@ public partial class PlacementController : MonoBehaviour
                 basicBurstUpgradeLevel = lastBasicBurstUpgradeLevel,
                 aoeFireUpgradeLevel = lastAoeFireUpgradeLevel,
                 aoeGravityUpgradeLevel = lastAoeGravityUpgradeLevel,
+                age          = lastAge,
             };
 
             foreach (var c in lastObjectCells)

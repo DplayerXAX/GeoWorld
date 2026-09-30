@@ -46,6 +46,10 @@ public class MistBank : MonoBehaviour
         [Range(0f, 6f)] public float edgeWarp;
         [Tooltip("Frequency of the clumps, per world unit. Lower = bigger, softer masses. 0 keeps the shader's default.")]
         [Range(0f, 1f)] public float noiseScale;
+        [Tooltip("For a bank lifted off the ground whose underside and sides are seen: fades the sides gradually, and the underside over the whole depth with a rolling, edge-raised floor, so it melts away instead of ending in a flat slab. 0 = the plain ground-mist profile.")]
+        [Range(0f, 1f)] public float soften;
+        [Tooltip("Takes away the mist's veil (its flat colour laid over what is behind) and keeps only the light it scatters — sunlit shafts through clear-looking air. 0 = ordinary mist, 1 = light only.")]
+        [Range(0f, 1f)] public float clarity;
 
         public static Settings Default => new()
         {
@@ -270,6 +274,8 @@ public class MistBank : MonoBehaviour
         _mat = new Material(sh) { name = "Mist (runtime)" };
         _mat.SetFloat("_Floor", Mathf.Clamp(floor, 0.02f, 0.9f));
         _mat.SetFloat("_Falloff", s.falloff > 0f ? s.falloff : 1.1f);
+        _mat.SetFloat("_Soften", s.soften);
+        _mat.SetFloat("_Clarity", s.clarity);
         _mat.SetFloat("_SkyBlend", s.skyBlend);
         _mat.SetTexture("_Mask", _mask);
         _mat.SetVector("_BoxSize", size);
@@ -281,7 +287,7 @@ public class MistBank : MonoBehaviour
         _mat.SetFloat("_Density", s.density);
         _mat.SetFloat("_Scatter", s.scatter);
         _mat.SetFloat("_Anisotropy", s.anisotropy);
-        _mat.SetFloat("_Steps", Mathf.Clamp(s.steps, 6, 48));
+        _mat.SetFloat("_Steps", Mathf.Clamp(Mathf.RoundToInt(s.steps * GraphicsQuality.FogSteps), 6, 48));
         // Noise is sampled in WORLD space, so without this every bank on the map
         // would show the identical cloud pattern wherever it overlapped.
         var rng = new System.Random(seed);

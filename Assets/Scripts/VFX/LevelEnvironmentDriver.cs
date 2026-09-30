@@ -1,0 +1,433 @@
+using System.Collections.Generic;
+using UnityEngine;
+
+// Puts a LevelEnvironment into the scene for the length of a level: the block
+// overlay's globals (GeoWorld/BlockWeather) and the rain soaking into them, the
+// sky, the sun, the height fog and far haze, the scenery, the rain and motes, the
+// ambience. Created by GameFlowManager at level start; what it changed on things
+// that outlive it (the sun, a shared sky material) is put back when it goes.
+//
+// The board tells it when it changes (BlockSurface → BoardChanged): the fog keeps
+// the board clear and follows its lowest block, the far haze keeps its clear ring
+// round everything built, the splashes land on the tops open to the sky.
+public partial class LevelEnvironmentDriver : MonoBehaviour
+{
+    public static LevelEnvironment Current { get; private set; }
+    public static LevelEnvironmentDriver Instance { get; private set; }
+
+    LevelEnvironment _env;
+    float _t;
+
+    Light      _sun;
+    float      _sunIntensity0;
+    Color      _sunColor0;
+    Quaternion _sunRot0;
+
+    Material _skyOriginal;   // only set when WE cloned the sky (no BackgroundReactor did)
+    Material _skyClone;
+
+    HeightFog _heightFog;
+    MistBank  _haze;
+    Rect      _hazeRect;
+    bool      _hasHaze;
+
+    OrbitCamera _orbit;
+    float _cs = 1f;
+    readonly List<Vector3> _tops = new();   // tops of blocks open to the sky
+
+    static readonly int WearTint   = Shader.PropertyToID("_GeoWearTint");
+    static readonly int WearStr    = Shader.PropertyToID("_GeoWearStrength");
+    static readonly int CrackStr   = Shader.PropertyToID("_GeoCrackStrength");
+    static readonly int AOStr      = Shader.PropertyToID("_GeoAOStrength");
+    static readonly int AORadius   = Shader.PropertyToID("_GeoAORadius");
+    static readonly int Wetness    = Shader.PropertyToID("_GeoWetness");
+    static readonly int Flood      = Shader.PropertyToID("_GeoFlood");
+    static readonly int Puddles    = Shader.PropertyToID("_GeoPuddles");
+    static readonly int RainId     = Shader.PropertyToID("_GeoRain");
+    static readonly int Streaks    = Shader.PropertyToID("_GeoStreaks");
+    static readonly int Corrosion  = Shader.PropertyToID("_GeoCorrosion");
+
+    public static LevelEnvironmentDriver Apply(LevelEnvironment env)
+    {
+        var d = new GameObject("LevelEnvironment").AddComponent<LevelEnvironmentDriver>();
+        d.Init(env != null ? env : LevelEnvironment.Default);
+        return d;
+    }
+
+    void Init(LevelEnvironment env)
+    {
+        _env = env;
+        Current  = env;
+        Instance = this;
+        _cs = GridSystem.instance != null ? GridSystem.instance.cellSize : 1f;
+
+        Shader.SetGlobalColor(WearTint, env.wearTint);
+        Shader.SetGlobalFloat(WearStr,  env.wearStrength);
+        Shader.SetGlobalFloat(CrackStr, env.crackStrength);
+        Shader.SetGlobalFloat(AOStr,    env.contactShadow);
+        Shader.SetGlobalFloat(AORadius, env.contactRadius);
+        Shader.SetGlobalFloat(Streaks,  env.streaks);
+        Shader.SetGlobalFloat(Corrosion, env.corrosion);
+        Shader.SetGlobalFloat(Puddles,  env.puddles);
+        Shader.SetGlobalFloat(RainId,   env.rain ? Mathf.Clamp01(env.rainIntensity) : 0f);
+        UpdateWet();
+
+        ApplySun();
+        ApplySky();
+
+        if (env.heightFogEnabled)
+            _heightFog = HeightFog.Create(transform, env.heightFog, FloorY(null), _cs);
+
+        if (env.rain && env.rainIntensity > 0f)
+        {
+            BuildRain();
+            if (env.splashes) BuildSplashes();
+        }
+        if (env.motes != LevelEnvironment.Motes.None && env.moteDensity > 0f) BuildMotes();
+
+        if (env.ambience != null && env.ambience.IsValid()) env.ambience.Post(gameObject);
+    }
+
+    // After GameFlowManager.Start has placed the board and pointed the camera at it.
+    void Start()
+    {
+        bool scenery = _env.backdrop != LevelEnvironment.Backdrop.None && _env.backdropCount > 0;
+        if (!scenery && !_env.sunGlow) return;
+
+        var grid = GridSystem.instance;
+        if (grid != null) BoardChanged(grid);
+        Vector3 centre = BoardCentre();
+        if (scenery) _backdrop = EnvironmentBackdrop.Build(transform, _env, centre, FloorY(grid), _cs);
+        if (_backdrop != null && _env.backdropBloomOn != BlockColor.None && SynergyEvaluator.Instance != null)
+        {
+            _synergy = SynergyEvaluator.Instance;
+            _synergy.OnTierChanged += OnSynergyTier;
+            // A resumed run rebuilds its board before this runs, so the synergy
+            // may already be up with no 0 → n change left to hear. The land
+            // still grows in, the same way, once the intro lets it.
+            foreach (var a in _synergy.Actives)
+                if (a != null && a.rule != null && a.rule.color == _env.backdropBloomOn && a.tier > 0)
+                { _bloomPending = true; break; }
+        }
+
+        if (_env.sunGlow)
+        {
+            // Out toward where the light comes FROM, dropped onto the horizon a
+            // little so a high sun still blooms low behind the scenery.
+            Vector3 toward = _sun != null ? -_sun.transform.forward
+                           : Quaternion.Euler(_env.sunPitch, _env.sunYaw + 180f, 0f) * Vector3.back;
+            toward.y = Mathf.Min(toward.y, 0.25f);
+            EnvironmentBackdrop.BuildSunGlow(transform, _env, new Vector3(centre.x, FloorY(grid), centre.z), toward, _cs);
+        }
+    }
+
+    // ── Scenery answering the board ──────────────────────────────────────────
+    EnvironmentBackdrop _backdrop;
+    SynergyEvaluator    _synergy;
+    bool _bloomPending;
+
+    void OnSynergyTier(SynergyRule rule, int oldTier, int newTier)
+    {
+        if (rule != null && rule.color == _env.backdropBloomOn && oldTier == 0 && newTier > 0) _bloomPending = true;
+    }
+
+    void UpdateBloom()
+    {
+        // Held while the level's own board is still hidden for the intro — the land
+        // answers once the player can see what it's answering.
+        if (!_bloomPending || _backdrop == null || SynergyVisualFX.Held) return;
+        _bloomPending = false;
+        var c = BlockColorPalette.Get(_env.backdropBloomOn);
+        Color.RGBToHSV(c, out float h, out float s, out float v);
+        var petals = new[]
+        {
+            c,
+            Color.HSVToRGB(Mathf.Repeat(h + 0.06f, 1f), s * 0.85f, Mathf.Min(1f, v * 1.05f)),
+            Color.HSVToRGB(Mathf.Repeat(h - 0.06f, 1f), s, v * 0.92f),
+            Color.Lerp(c, Color.white, 0.45f),
+        };
+        _backdrop.Bloom(petals, _env.backdropLeafColor);
+        if (_synergy != null) { _synergy.OnTierChanged -= OnSynergyTier; _synergy = null; }
+    }
+
+    void Update()
+    {
+        _t += Time.deltaTime;
+        UpdateBloom();
+        UpdateWet();
+        UpdateSplashes();
+    }
+
+    void LateUpdate()
+    {
+        FollowCamera();
+    }
+
+    // ── Rain soaking in ──────────────────────────────────────────────────────
+    // Dry → soaked over wetUpSeconds (from wetAtStart); only then does water
+    // stand, rising over floodSeconds — Lagarde's order: a surface has to be wet
+    // through before it can puddle.
+    void UpdateWet()
+    {
+        if (_env.wetness <= 0f)
+        {
+            Shader.SetGlobalFloat(Wetness, 0f);
+            Shader.SetGlobalFloat(Flood, 0f);
+            return;
+        }
+        float soak  = _env.wetUpSeconds <= 0f ? 1f
+                    : Mathf.Lerp(_env.wetAtStart, 1f, _t / _env.wetUpSeconds);
+        float flood = 0f;
+        if (_env.puddles > 0f && _t > _env.wetUpSeconds)
+            flood = _env.floodSeconds <= 0f ? 1f : Mathf.Clamp01((_t - _env.wetUpSeconds) / _env.floodSeconds);
+
+        Shader.SetGlobalFloat(Wetness, _env.wetness * Mathf.SmoothStep(0f, 1f, soak));
+        Shader.SetGlobalFloat(Flood,   Mathf.SmoothStep(0f, 1f, flood));
+    }
+
+    // ── Sun ──────────────────────────────────────────────────────────────────
+    void ApplySun()
+    {
+        _sun = RenderSettings.sun;
+        if (_sun == null)
+            foreach (var l in FindObjectsByType<Light>(FindObjectsSortMode.None))
+                if (l.type == LightType.Directional) { _sun = l; break; }
+        if (_sun == null) return;
+
+        _sunIntensity0 = _sun.intensity;
+        _sunColor0     = _sun.color;
+        _sunRot0       = _sun.transform.rotation;
+        _sun.intensity = _sunIntensity0 * _env.sunIntensity;
+        _sun.color     = _sunColor0 * _env.sunTint;
+        // Light travels AWAY from where it comes from.
+        if (_env.overrideSunDirection)
+            _sun.transform.rotation = Quaternion.Euler(_env.sunPitch, _env.sunYaw + 180f, 0f);
+    }
+
+    // ── Sky ──────────────────────────────────────────────────────────────────
+    void ApplySky()
+    {
+        if (_env.paintedSky && ApplyPaintedSky()) return;
+        if (_env.useLandscapeSky && ApplyLandscapeSky()) return;
+
+        bool density = !Mathf.Approximately(_env.skyHazeDensity, 1f);
+        if (!_env.overrideSky && !density) return;
+
+        var sky = RenderSettings.skybox;
+        if (sky == null || sky.shader == null || sky.shader.name != "Custom/ManifoldSkybox") return;
+
+        // BackgroundReactor normally hands the scene a runtime copy already; if it
+        // didn't, make one — never write into the project's material asset.
+        if (!sky.name.EndsWith("(runtime)"))
+        {
+            _skyOriginal = sky;
+            _skyClone    = new Material(sky) { name = sky.name + " (runtime)" };
+            RenderSettings.skybox = sky = _skyClone;
+        }
+
+        if (_env.overrideSky)
+        {
+            sky.SetColor("_ZenithColor",  _env.skyZenith);
+            sky.SetColor("_HorizonColor", _env.skyHorizon);
+            sky.SetColor("_FogColor",     _env.skyHaze);
+            sky.SetColor("_GridColor",    _env.skyGrid);
+            sky.SetFloat("_HueRange",     _env.skyHueRange);
+        }
+        if (density) sky.SetFloat("_FogDensity", sky.GetFloat("_FogDensity") * _env.skyHazeDensity);
+        DynamicGI.UpdateEnvironment();   // ambient light comes from the sky
+    }
+
+    // The plain landscape sky in place of the scene's own (put back in OnDestroy
+    // through the same _skyOriginal / _skyClone pair).
+    bool ApplyLandscapeSky()
+    {
+        var sh = Shader.Find("GeoWorld/LandscapeSky");
+        if (sh == null) { Debug.LogWarning("[Environment] GeoWorld/LandscapeSky shader not found — keeping the default sky."); return false; }
+        _skyOriginal = RenderSettings.skybox;
+        _skyClone = new Material(sh) { name = "LandscapeSky (runtime)" };
+        _skyClone.SetColor("_Zenith",     _env.skyZenith);
+        _skyClone.SetColor("_Horizon",    _env.skyHorizon);
+        _skyClone.SetColor("_Band",       _env.skyHaze);
+        _skyClone.SetColor("_Ground",     _env.skyGround);
+        _skyClone.SetColor("_Sun",        _env.skySun);
+        _skyClone.SetColor("_Cloud",      _env.skyCloud);
+        _skyClone.SetColor("_CloudShade", _env.skyCloudShade);
+        _skyClone.SetFloat("_Cover",      _env.skyCloudCover);
+        RenderSettings.skybox = _skyClone;
+        DynamicGI.UpdateEnvironment();   // ambient light comes from the sky
+        return true;
+    }
+
+    // The painted sky in place of the scene's own. BackgroundReactor follows it
+    // (it drives whatever runtime sky is on screen), so combat, clearing and
+    // damage still move it.
+    bool ApplyPaintedSky()
+    {
+        var sh = Shader.Find("GeoWorld/PaintedSky");
+        if (sh == null) { Debug.LogWarning("[Environment] GeoWorld/PaintedSky shader not found — keeping the default sky."); return false; }
+        _skyOriginal = RenderSettings.skybox;
+        _skyClone = new Material(sh) { name = "PaintedSky (runtime)" };
+        _skyClone.SetColor("_Deep",   _env.paintDeep);
+        _skyClone.SetColor("_Blue",   _env.paintBlue);
+        _skyClone.SetColor("_Teal",   _env.paintTeal);
+        _skyClone.SetColor("_Cream",  _env.paintCream);
+        _skyClone.SetColor("_Warm",   _env.paintWarm);
+        _skyClone.SetColor("_Hot",    _env.paintHot);
+        _skyClone.SetColor("_Ground", _env.skyGround);
+        _skyClone.SetColor("_Sun",    _env.skySun);
+        _skyClone.SetFloat("_StrokeScale", _env.paintStrokeScale);
+        _skyClone.SetFloat("_Swirl",       _env.paintSwirl);
+        _skyClone.SetFloat("_Warmth",      _env.paintWarmth);
+        _skyClone.SetFloat("_Layers",      GraphicsQuality.SkyLayers);
+        GraphicsQuality.Changed += RefreshSkyQuality;
+        RenderSettings.skybox = _skyClone;
+        DynamicGI.UpdateEnvironment();   // ambient light comes from the sky
+        return true;
+    }
+
+    void RefreshSkyQuality()
+    {
+        if (_skyClone != null && _skyClone.HasProperty("_Layers")) _skyClone.SetFloat("_Layers", GraphicsQuality.SkyLayers);
+    }
+
+    // ── Board ────────────────────────────────────────────────────────────────
+    /// <summary>Called by BlockSurface after every board edit.</summary>
+    public static void NotifyBoard(GridSystem grid)
+    {
+        if (Instance != null) Instance.BoardChanged(grid);
+    }
+
+    void BoardChanged(GridSystem grid)
+    {
+        if (grid == null) return;
+        _cs = grid.cellSize;
+
+        _tops.Clear();
+        foreach (var ins in grid.GetAllInstances())
+        {
+            if (ins == null) continue;
+            foreach (var c in ins.occupiedCells)
+                if (!grid.IsOccupied(c + Vector3Int.up))
+                    _tops.Add(grid.GridToWorld(c) + Vector3.up * (_cs * 0.5f));
+        }
+
+        bool fog = _heightFog != null || _env.farHazeEnabled;
+        if (!fog) return;
+
+        // What must stay clear: every block top, and the endpoints.
+        var keep = new List<Vector3>(_tops);
+        var gfm = GameFlowManager.Instance;
+        if (gfm != null)
+        {
+            foreach (var c in gfm.AllStarts) keep.Add(grid.GridToWorld(c) + Vector3.up * (_cs * 0.5f));
+            foreach (var c in gfm.AllEnds)   keep.Add(grid.GridToWorld(c) + Vector3.up * (_cs * 0.5f));
+        }
+        // Chaos blocks too: they're targets, and a target lost in the haze can't be aimed at.
+        foreach (var c in ChaosBlockController.Cells) keep.Add(grid.GridToWorld(c) + Vector3.up * (_cs * 0.5f));
+        MistBank.SetProtected(keep, _cs);
+
+        float floor = FloorY(grid);
+        if (_heightFog != null) _heightFog.Apply(_env.heightFog, floor, _cs);
+
+        if (_env.farHazeEnabled && keep.Count > 0) UpdateHaze(keep, floor);
+    }
+
+    // The far haze keeps a clear ring round everything built. Rebuilt only when the
+    // board reaches toward the edge of that ring, not on every edit.
+    void UpdateHaze(List<Vector3> keep, float floor)
+    {
+        float minX = float.MaxValue, minZ = float.MaxValue, maxX = float.MinValue, maxZ = float.MinValue;
+        foreach (var p in keep)
+        {
+            minX = Mathf.Min(minX, p.x); maxX = Mathf.Max(maxX, p.x);
+            minZ = Mathf.Min(minZ, p.z); maxZ = Mathf.Max(maxZ, p.z);
+        }
+        float guard = 2f * _cs;
+        if (_hasHaze && minX >= _hazeRect.xMin + guard && maxX <= _hazeRect.xMax - guard
+                     && minZ >= _hazeRect.yMin + guard && maxZ <= _hazeRect.yMax - guard) return;
+
+        float pad = _env.farHazeClear * _cs;
+        _hazeRect = Rect.MinMaxRect(minX - pad, minZ - pad, maxX + pad, maxZ + pad);
+        _hasHaze  = true;
+
+        // Clear ground: the whole rectangle, a point a cell, at the board's floor.
+        var clear = new List<Vector3>();
+        float y = floor + _cs;
+        for (float x = _hazeRect.xMin; x <= _hazeRect.xMax; x += _cs)
+            for (float z = _hazeRect.yMin; z <= _hazeRect.yMax; z += _cs)
+                clear.Add(new Vector3(x, y, z));
+
+        if (_haze != null) Destroy(_haze.gameObject);
+        _haze = MistBank.CreateHorizon(transform, "FarHaze", clear, clear, _cs, _env.farHaze,
+                                       _env.farHazeMargin, 104729, null, 0f, _env.farHazeSink);
+    }
+
+    // Underside of the lowest thing on the board (blocks, endpoints, chaos blocks) — the height
+    // fog's top is measured from it, like the level map's.
+    float FloorY(GridSystem grid)
+    {
+        if (grid == null) grid = GridSystem.instance;
+        if (grid == null) return 0f;
+        int minY = int.MaxValue;
+        foreach (var ins in grid.GetAllInstances())
+            if (ins != null) foreach (var c in ins.occupiedCells) minY = Mathf.Min(minY, c.y);
+        var gfm = GameFlowManager.Instance;
+        if (gfm != null)
+        {
+            foreach (var c in gfm.AllStarts) minY = Mathf.Min(minY, c.y);
+            foreach (var c in gfm.AllEnds)   minY = Mathf.Min(minY, c.y);
+        }
+        // Chaos blocks count too. They can spawn below everything built; the fog
+        // top is measured from this floor, so one sitting lower than every block
+        // stood in the fog (and came clear only once a block was built down to it).
+        foreach (var c in ChaosBlockController.Cells) minY = Mathf.Min(minY, c.y);
+        if (minY == int.MaxValue) minY = 0;
+        return grid.Origin.y + minY * grid.cellSize;
+    }
+
+    Vector3 BoardCentre()
+    {
+        if (_tops.Count > 0)
+        {
+            Vector3 lo = _tops[0], hi = _tops[0];
+            foreach (var p in _tops) { lo = Vector3.Min(lo, p); hi = Vector3.Max(hi, p); }
+            return (lo + hi) * 0.5f;
+        }
+        if (_orbit == null) _orbit = FindFirstObjectByType<OrbitCamera>();
+        return _orbit != null ? _orbit.FocusPoint : Vector3.zero;
+    }
+
+    Vector3 Focus()
+    {
+        if (_orbit == null) _orbit = FindFirstObjectByType<OrbitCamera>();
+        return _orbit != null ? _orbit.FocusPoint
+             : (Camera.main != null ? Camera.main.transform.position : Vector3.zero);
+    }
+
+    void OnDestroy()
+    {
+        GraphicsQuality.Changed -= RefreshSkyQuality;
+        if (_synergy != null) _synergy.OnTierChanged -= OnSynergyTier;
+        if (_sun != null)
+        {
+            _sun.intensity = _sunIntensity0;
+            _sun.color     = _sunColor0;
+            _sun.transform.rotation = _sunRot0;
+        }
+        if (_skyClone != null && RenderSettings.skybox == _skyClone) RenderSettings.skybox = _skyOriginal;
+        if (_skyClone != null) Destroy(_skyClone);
+        if (_env != null && _env.ambience != null && _env.ambience.IsValid()) _env.ambience.Stop(gameObject);
+        DestroyParticleMaterials();
+        if (_heightFog != null || (_env != null && _env.farHazeEnabled)) MistBank.SetProtected(null, _cs);
+
+        // Neutral for whatever comes next (no AO / wear / water leaking into another scene).
+        Shader.SetGlobalFloat(AOStr, 0f);
+        Shader.SetGlobalFloat(Wetness, 0f);
+        Shader.SetGlobalFloat(Flood, 0f);
+        Shader.SetGlobalFloat(RainId, 0f);
+        Shader.SetGlobalFloat(Streaks, 0f);
+        Shader.SetGlobalFloat(Corrosion, 0f);
+        if (Current == _env) Current = null;
+        if (Instance == this) Instance = null;
+    }
+}

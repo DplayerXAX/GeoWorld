@@ -114,12 +114,12 @@ MonoBehaviour:
       isStart: 0
       blockAssetName: L4
       rotation: {x: 0.00000046997945, y: 2.5928037e-30, z: -1, w: -1.7656408e-22}
-      synergyColor: 6
+      synergyColor: 2
     - cells:
       - {x: 13, y: 3, z: 3}
       color: {r: 0.75, g: 0.6, b: 0.95, a: 1}
       blockTypeName: Home
-      levelId: 
+      levelId: 1-5
       isStart: 0
       blockAssetName: Single
       rotation: {x: 0, y: 0, z: 0, w: 1}
@@ -129,7 +129,7 @@ MonoBehaviour:
       - {x: 13, y: 2, z: 9}
       color: {r: 0.95, g: 0.75, b: 0.35, a: 1}
       blockTypeName: Home
-      levelId: 
+      levelId: 1-4
       isStart: 0
       blockAssetName: I2
       rotation: {x: 0, y: 0, z: 0, w: 1}

@@ -10,8 +10,6 @@ public class LevelDefinition : ScriptableObject
     [Header("Identity")]
     [Tooltip("Stable key used in the save file (unlocks / records). Don't rename casually.")]
     public string levelId;
-    [Header("Chapter environment (shared across the chapter)")]
-    public ChapterEnvironmentProfile environment;
     public string displayName;
     [TextArea] public string description;
 
@@ -69,6 +67,9 @@ public class LevelDefinition : ScriptableObject
 
     public bool AllowsTurret(BlockType t) =>
         turretPool == null || turretPool.Length == 0 || System.Array.IndexOf(turretPool, t) >= 0;
+
+    [Tooltip("This level's world: weather (rain…), light, and what block age looks like here (moss, rust, corrosion). Prebuilt blocks start at its prebuiltAge. Empty = a plain, dry world.")]
+    public LevelEnvironment environment;
 
     [Tooltip("Blocks GUARANTEED in the very first build phase's shop — the rest of the slots still roll randomly, and every later round is fully random. Turret entries fill the turret row, everything else the block row; extras beyond a row's size are dropped. Use it to hand-set an opening hand (a tutorial's ORANGE block, a level that must open with an AOE turret, ...) instead of leaning on runSeed to luck into it. Empty = fully random opening shop.")]
     public ShopEntry[] startingShop;
@@ -130,62 +131,18 @@ public class LevelDefinition : ScriptableObject
     [Tooltip("Hide this level's region of the map until that level is cleared. Empty = visible from the start.")]
     public LevelDefinition revealAfter;
 
-    [Header("Chapter inheritance")]
-    // A chapter is one growing base. This level starts from the board the player
-    // most recently CLEARED `inheritFrom` with — the keepsake DoLevelClear already
-    // writes into LevelRecord.buildSnapshot on every clear. Replaying that earlier
-    // level therefore changes where this one starts.
-    //
-    // The blocks carry over, and (inheritCores) so do the CORES the player was
-    // defending: the base is the same place, defended from the same spots. The spawn
-    // points do not — this level opens a new one out beyond the edge of the build,
-    // away from the cores and from where the last level's monsters came from, so
-    // every level attacks the same base from a new direction.
-    //
-    // Within a chapter this is automatic: level "C-N" inherits from "C-(N-1)" (see
-    // InheritSource). A chapter opener ("C-1") and any id not in that form — the
-    // Tutorial, Test — have no previous level and start fresh. `inheritFrom` still
-    // overrides the automatic choice, and `autoInherit` turns it off for one level.
-    [Tooltip("Start from the board the player last cleared THIS level with, instead of the automatic previous level of the chapter. Empty = automatic (see autoInherit).")]
-    public LevelDefinition inheritFrom;
+    [Header("Random starting blocks")]
+    [Tooltip("Blocks dropped at level start somewhere between the first start and end points — each a random small shop shape in randomStartColor, and none touching another block, so they can't already form a synergy. Fixed like the authored layout (they can't be moved or sold). 0 = none.")]
+    [Min(0)] public int randomStartBlocks = 0;
+    public BlockColor randomStartColor = BlockColor.Universal;
+    [Tooltip("A turret of this type placed at level start on top of one of the random start blocks (randomStartBlocks), so the first wave already has something to fight with. Empty = none.")]
+    public BlockType randomStartTurret = BlockType.Empty;
 
-    [Tooltip("When inheritFrom is empty, inherit from the previous level of the same chapter by id — \"1-3\" from \"1-2\". Off = this level starts fresh unless inheritFrom is set.")]
-    public bool autoInherit = true;
-
-    /// <summary>The level this one inherits its board from, or null to start fresh.</summary>
-    public LevelDefinition InheritSource
-    {
-        get
-        {
-            if (inheritFrom != null) return inheritFrom;
-            if (!autoInherit) return null;
-            var prev = PreviousInChapter(levelId);
-            return prev != null ? LevelRegistry.Find(prev) : null;
-        }
-    }
-
-    // "1-3" → "1-2". Null for a chapter opener ("1-1") or an id not shaped C-N.
-    public static string PreviousInChapter(string id)
-    {
-        if (string.IsNullOrEmpty(id)) return null;
-        int dash = id.LastIndexOf('-');
-        if (dash <= 0 || dash >= id.Length - 1) return null;
-        if (!int.TryParse(id.Substring(0, dash), out int chapter)) return null;
-        if (!int.TryParse(id.Substring(dash + 1), out int n) || n <= 1) return null;
-        return $"{chapter}-{n - 1}";
-    }
-
-    [Tooltip("How far beyond the edge of the inherited build the new spawn and defence points appear, in cells. This is how much the board grows per level.")]
-    [Min(1f)] public float inheritRing = 4f;
-
-    [Tooltip("Carry TURRETS over with the rest of the build. Off = only the blocks come across; the player arms the new level afresh.")]
-    public bool inheritTurrets = false;
-
-    [Tooltip("Carry turret upgrade levels over with the turrets (only matters with inheritTurrets on).")]
-    public bool inheritUpgrades = true;
-
-    [Tooltip("Keep the cores (the points you defend) where the last level had them — all of them, including any that appeared mid-level. Only a new spawn point is generated. Off = both a new spawn and a new core are generated around the inherited build.")]
-    public bool inheritCores = true;
+    [Header("Chaos Block (if the level has the mechanic)")]
+    [Tooltip("Aside bubble shown the first time a chaos block appears in this level. Blank = none.")]
+    [TextArea] public string chaosFirstAside = "";
+    public DialogueCharacter chaosFirstAsideSpeaker;
+    [Min(0.5f)] public float chaosFirstAsideSeconds = 3.5f;
 
     [Header("Starting layout")]
     [Tooltip("Optional pre-built blocks placed on the grid at level start, authored with LevelMapAuthor "
@@ -247,6 +204,8 @@ public enum ObjectiveType
     KeepLivesAtLeast,   // finish with AT LEAST `target` lives
     BuildPathLength,    // build an enemy path of AT LEAST `target` faces long (each block face = 1)
     UpgradeTurretToLevel, // upgrade any turret branch to AT LEAST `target`
+    DefeatBoss,         // destroy the level's boss (BossMechanicConfig); `target` is ignored
+    DestroyChaosBlocks, // destroy `target` chaos blocks (ChaosBlockMechanicConfig). Appended: serialized as an int
 }
 
 [System.Serializable]
@@ -270,6 +229,8 @@ public class LevelObjective
         ObjectiveType.KeepLivesAtLeast  => $"Finish with {target}+ lives",
         ObjectiveType.BuildPathLength   => $"Build a path {target}+ long",
         ObjectiveType.UpgradeTurretToLevel => $"Upgrade a turret to level {target}",
+        ObjectiveType.DefeatBoss        => "Destroy the boss",
+        ObjectiveType.DestroyChaosBlocks => $"Destroy {target} chaos blocks",
         _                               => "",
     };
 
@@ -359,6 +320,13 @@ public class TutorialStep
     public bool freeOperations = false;
     [Tooltip("Hide & disable this step during combat (Running phase): its dialogue/hint hides, gating lifts, and it won't advance until combat ends.")]
     public bool hideInCombat = false;
+
+    [Header("Shop")]
+    [Tooltip("Purchase-kind step: when it begins, the shop is restocked with ONLY this step's `block`, in shopOnlyColor — nothing else on the shelf to pick by mistake.")]
+    public bool shopOnlyTarget = false;
+    public BlockColor shopOnlyColor = BlockColor.None;
+    [Tooltip("When this step is completed, the shop re-rolls once for free (the refresh price doesn't go up).")]
+    public bool freeRefreshAfter = false;
 
     [Header("Wave gating")]
     [Tooltip("If > 0, this step won't begin (ghost/camera/dialogue/hint) until GameFlowManager.UpcomingWaveNumber reaches this value — i.e. the player has already cleared enough earlier waves. 0 = no gate, step begins as soon as the previous one completes.")]

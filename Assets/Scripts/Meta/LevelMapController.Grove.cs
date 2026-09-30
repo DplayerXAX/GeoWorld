@@ -99,14 +99,16 @@ public class HarmonyGroveConfig : MapDecorConfig
     public Color leafDeep  = new(0.20f, 0.52f, 0.30f);
     public Color leafLight = new(0.47f, 0.80f, 0.42f);
 
-    [Header("Ground mist")]
-    [Tooltip("A low, thin mist lying in the wood. It is lit through the shadow map, so the trees throw shafts of shade through it and the sun between them stands out as light beams — the Tyndall look. Needs Cast Shadows on.")]
+    [Header("Canopy mist")]
+    [Tooltip("A thin mist hanging among the trees' crowns rather than on the floor. The bank is densest just BELOW its ground line: `offset` lifts that line (in cells) to the middle of the crowns, `depth` is how far down the dense band reaches, `height` how far the thinning wisps rise above it. Clear air under the trunks. It is lit through the shadow map, so the trees throw shafts of shade through it and the sun between them stands out as light beams — the Tyndall look. Needs Cast Shadows on.")]
     public bool groundMist = true;
+    [Tooltip("ON: the mist's footprint is the trees themselves — it gathers round the crowns and groups, with clear air over the paths and clearings. OFF: one bank over the whole wood.")]
+    public bool mistAroundTrees = true;
     public MistBank.Settings groundMistStyle = new()
     {
-        color = new Color(0.86f, 0.90f, 0.84f), strength = 0.7f, density = 0.7f,
-        height = 5f, scatter = 2.6f, anisotropy = 0.6f, steps = 24,
-        edge = 2.5f, clearance = 0f, edgeWarp = 1.2f,
+        color = new Color(0.86f, 0.90f, 0.84f), strength = 0.8f, density = 0.9f,
+        height = 2.4f, depth = 1.4f, offset = 3.4f, scatter = 3.6f, anisotropy = 0.6f, steps = 24,
+        edge = 3.6f, clearance = 0f, edgeWarp = 1.4f, soften = 1f, clarity = 0.6f,
     };
 
     [Header("Render")]
@@ -146,6 +148,9 @@ public class HarmonyGroveConfig : MapDecorConfig
     [System.NonSerialized] public bool    HasFarm;
     [System.NonSerialized] public Vector2 FarmCentre;             // cell space
     [System.NonSerialized] public Vector2 FarmHalf;               // half-extent to the cell EDGES
+    // The farm's organic outline (MapDecorConfig.InOutline). Its footprint's
+    // corners fall outside it, and the wood fills those like any other gap.
+    [System.NonSerialized] public System.Func<Vector2Int, bool> FarmOutline;
     [System.NonSerialized] public Vector2 Outward;                // unit: the farm's far side
 
     [System.NonSerialized] HashSet<Vector2Int> _paths;
@@ -209,7 +214,8 @@ public class HarmonyGroveConfig : MapDecorConfig
         Vector2 u = v / dist;
 
         float d = dist - ToEdge(u);
-        if (d <= -1f) return false;               // deeper inside the farm than its rim
+        // Deeper inside the farm than its rim, unless the farm's outline leaves it open.
+        if (d <= -1f && (FarmOutline == null || FarmOutline(c))) return false;
 
         float reach = DepthAt(u);
         return reach > 0.5f && d <= reach;
@@ -364,6 +370,7 @@ public partial class LevelMapController : MonoBehaviour
         g.HasFarm    = f.enabled;
         g.FarmCentre = new Vector2(fo.x + (fe.x - 1) * 0.5f, fo.y + (fe.y - 1) * 0.5f);
         g.FarmHalf   = new Vector2(fe.x * 0.5f, fe.y * 0.5f);
+        g.FarmOutline = f.InOutline;
 
         // Off limits: every column that already has ground, and each plot's
         // interior. The farm's interior only — its outermost row is left for the
@@ -377,12 +384,19 @@ public partial class LevelMapController : MonoBehaviour
             var e = (p.cfg.rotationSteps & 1) == 1 ? new Vector2Int(p.cfg.size.y, p.cfg.size.x) : p.cfg.size;
             for (int x = 1; x < e.x - 1; x++)
                 for (int z = 1; z < e.y - 1; z++)
-                    blocked.Add(new Vector2Int(p.cfg.origin.x + x, p.cfg.origin.z + z));
+                {
+                    // Inside its outline only: past that it is open ground.
+                    var col = new Vector2Int(p.cfg.origin.x + x, p.cfg.origin.z + z);
+                    if (p.cfg.CoverageAt(col) > 0f) blocked.Add(col);
+                }
         }
         if (!farmUp)
             for (int x = 0; x < fe.x; x++)
                 for (int z = 0; z < fe.y; z++)
-                    blocked.Add(new Vector2Int(fo.x + x, fo.y + z));
+                {
+                    var col = new Vector2Int(fo.x + x, fo.y + z);
+                    if (f.InOutline(col)) blocked.Add(col);
+                }
         g.Blocked = blocked;
 
         // The far side: away from the centroid of everything else on the map — the
@@ -454,7 +468,7 @@ public partial class LevelMapController : MonoBehaviour
             {
                 var mesh = TreeMesh.Build(GroveTint(TreeMesh.Recipe.Elder(), cfg), rng.Next());
                 PlantGrove(root, mesh, mat, GroveGround(p, colTop, cfg, cs),
-                           cfg.elderScale, (float)rng.NextDouble() * 360f, cfg.castShadows, "ElderTree");
+                           cfg.elderScale, (float)rng.NextDouble() * 360f, cfg.castShadows && GraphicsQuality.TreeShadows, "ElderTree");
                 taken.Add(p);
                 elder = p;
             }
@@ -480,14 +494,16 @@ public partial class LevelMapController : MonoBehaviour
             for (int k = 0; k < cfg.treesPerGrove; k++)
                 TryPlant(root, mat, cfg, colTop, paths, cs, rng, taken, elder, trees,
                          hub + Random2(rng) * 1.4f, 1, cfg.spacing,
-                         new Vector2(0.8f, 1.35f), cfg.castShadows, "Tree");
+                         new Vector2(0.8f, 1.35f), cfg.castShadows && GraphicsQuality.TreeShadows, "Tree");
         }
+
+        int treeCount = taken.Count;   // the elder, the avenue and the groves — before undergrowth joins the list
 
         // ── 4. Undergrowth ───────────────────────────────────────────────────
         Fill(root, mat, cfg, colTop, paths, cs, rng, taken, elder, shrubs, coveredCols,
-             cfg.shrubs, verge: true,  cfg.spacing * 0.6f,  new Vector2(0.8f, 1.4f), "Shrub");
+             GraphicsQuality.Scaled(cfg.shrubs), verge: true,  cfg.spacing * 0.6f,  new Vector2(0.8f, 1.4f), "Shrub");
         Fill(root, mat, cfg, colTop, paths, cs, rng, taken, elder, tufts, coveredCols,
-             cfg.tufts,  verge: false, cfg.spacing * 0.35f, new Vector2(0.7f, 1.3f), "Tuft");
+             GraphicsQuality.Scaled(cfg.tufts),  verge: false, cfg.spacing * 0.35f, new Vector2(0.7f, 1.3f), "Tuft");
 
         BuildWayMarkers(root, cfg, colTop, paths, cs, rng);
 
@@ -497,7 +513,10 @@ public partial class LevelMapController : MonoBehaviour
         if (cfg.groundMist)
         {
             var pts = new List<Vector3>(coveredCols.Count);
-            foreach (var c in coveredCols) pts.Add(GroveGround(new Vector2(c.x, c.y), colTop, cfg, cs));
+            if (cfg.mistAroundTrees && treeCount > 0)
+                for (int i = 0; i < treeCount; i++) pts.Add(GroveGround(taken[i], colTop, cfg, cs));
+            else
+                foreach (var c in coveredCols) pts.Add(GroveGround(new Vector2(c.x, c.y), colTop, cfg, cs));
             MistBank.Create(root, "GroundMist", pts, cs, cfg.groundMistStyle, rng.Next());
         }
     }
@@ -535,7 +554,7 @@ public partial class LevelMapController : MonoBehaviour
                 if (elder.HasValue && Vector2.Distance(p, elder.Value) < cfg.clearing * 0.7f) continue;
 
                 TryPlant(root, mat, cfg, colTop, paths, cs, rng, taken, null, meshes,
-                         p, 0, step * 0.6f, new Vector2(0.95f, 1.12f), cfg.castShadows, "AvenueTree");
+                         p, 0, step * 0.6f, new Vector2(0.95f, 1.12f), cfg.castShadows && GraphicsQuality.TreeShadows, "AvenueTree");
             }
         }
     }
@@ -683,6 +702,9 @@ public partial class LevelMapController : MonoBehaviour
     void PlantGrove(Transform root, Mesh mesh, Material mat, Vector3 pos,
                     float scale, float yaw, bool shadows, string label)
     {
+        // A tree's trunk blocks its column; undergrowth (shrubs, tufts, scrub) doesn't.
+        if (label.Contains("Tree") || label.StartsWith("Charred")) Obstacle(pos);
+
         var go = new GameObject(label);
         go.transform.SetParent(root, false);
         go.transform.SetPositionAndRotation(

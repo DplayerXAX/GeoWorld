@@ -12,7 +12,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: c9e7f2a46062486ca83baf11f611a123, type: 3}
   m_Name: RandomBlockDestructionMechanic1-2
   m_EditorClassIdentifier: Assembly-CSharp::RandomBlockDestructionMechanicConfig
-  firstTriggerAfterTurn: 2
-  turnInterval: 2
+  firstTriggerAfterTurn: 1
+  turnInterval: 1
+  minPerTrigger: 1
+  maxPerTrigger: 2
+  dissolveSeconds: 1.4
   canDestroyTurrets: 1
   preserveTurretSupport: 1

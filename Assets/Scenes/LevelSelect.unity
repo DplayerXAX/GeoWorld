@@ -1267,6 +1267,7 @@ MonoBehaviour:
   trailMaterial: {fileID: 0}
   trailColor: {r: 1, g: 0.95, b: 0.75, a: 0.9}
   trailWidth: 0.07
+  followPawn: 1
   mapPanSpeed: 8
   entryPullBack: 3.2
   rewardFocusPullBack: 2.5
@@ -1275,12 +1276,14 @@ MonoBehaviour:
   cameraFocus: 1
   cameraLerp: 4
   focusViewportX: 0.4
-  focusViewportY: 0.25
+  focusViewportY: 0
   middleDragAdjustsFocus: 1
   focusDragSpeed: 0.6
   scrollZoomsFov: 1
+  mapFov: 35
+  occludableLitShader: {fileID: 4800000, guid: df59feb508284ff5b88e7645e6092bfc, type: 3}
   minFov: 25
-  maxFov: 100
+  maxFov: 50
   fovScrollSpeed: 60
   fovSmoothSpeed: 8
   buildableBlocks:
@@ -1323,8 +1326,11 @@ MonoBehaviour:
     - {x: 8, y: -3, z: 8}
     blockAssetName: corner
     rotation: {x: 0, y: 0, z: 0, w: 1}
+  buildTray: {fileID: 1719833672}
   trayExpandSpeed: 9
   defaultCharacter: {fileID: 11400000, guid: 80993e3c86b4337429c2d6273c8eedc2, type: 2}
+  unfinishedLevelText: You have an unfinished level. Find it, and see it through.
+  unfinishedLevelSeconds: 4.5
   rewardSuggestColor: {r: 1, g: 1, b: 1, a: 0.6}
   rewardSuggestOverscale: 1.08
   rewardSuggestZoom: 5
@@ -1335,6 +1341,10 @@ MonoBehaviour:
     origin: {x: -10, y: 2, z: 0}
     size: {x: 12, y: 11}
     rotationSteps: 3
+    organic: 0.45
+    outlineSeed: 1
+    foundation: 0
+    foundationColor: {r: 0.46, g: 0.43, b: 0.4, a: 1}
     soilColor: {r: 0.34, g: 0.26, b: 0.18, a: 1}
     soilJitter: 0.12
     growRiseHeight: 3
@@ -1368,12 +1378,22 @@ MonoBehaviour:
     towerColor: {r: 0.88, g: 0.85, b: 0.78, a: 1}
     accentColor: {r: 0.98, g: 0.8, b: 0.3, a: 1}
     signCount: 4
+    barrenBeforeGate: 1
+    barrenAfterLevelId: Tutorial
+    barrenSoilColor: {r: 0.47, g: 0.41, b: 0.34, a: 1}
+    barrenCropColor: {r: 0.58, g: 0.53, b: 0.43, a: 1}
+    reviveDuration: 2.6
+    windmillSpinUp: 3
   workshop:
     enabled: 1
     gateLevelId: 1-2
-    origin: {x: 3, y: 2, z: 10}
-    size: {x: 11, y: 10}
+    origin: {x: -5, y: 2, z: 12}
+    size: {x: 27, y: 13}
     rotationSteps: 0
+    organic: 0.4
+    outlineSeed: 2
+    foundation: 0
+    foundationColor: {r: 0.46, g: 0.43, b: 0.4, a: 1}
     soilColor: {r: 0.32, g: 0.33, b: 0.36, a: 1}
     soilJitter: 0.1
     growRiseHeight: 3
@@ -1394,20 +1414,38 @@ MonoBehaviour:
     wallColor: {r: 0.62, g: 0.63, b: 0.66, a: 1}
     roofColor: {r: 0.29, g: 0.31, b: 0.36, a: 1}
     trimColor: {r: 0.86, g: 0.87, b: 0.9, a: 1}
-    yardGears: 10
+    yardGears: 18
     wallGears: 4
     gearSize: 0.62
     gearBaseSpin: 55
     gearColor: {r: 0.55, g: 0.57, b: 0.62, a: 1}
     gearAccent: {r: 0.93, g: 0.72, b: 0.24, a: 1}
     chimneys: 2
-    pipes: 5
+    pipes: 8
+    smokePuffs: 6
+    smokeColor: {r: 0.8, g: 0.8, b: 0.82, a: 1}
+    plateColor: {r: 0.39, g: 0.4, b: 0.43, a: 1}
+    hazardColor: {r: 0.88, g: 0.66, b: 0.16, a: 1}
+    railEnabled: 1
+    conveyorEnabled: 1
+    craneEnabled: 1
+    waterTowerEnabled: 1
+    sheds: 2
+    crates: 16
+    lamps: 9
+    crateColor: {r: 0.58, g: 0.42, b: 0.26, a: 1}
+    barrelColor: {r: 0.62, g: 0.22, b: 0.18, a: 1}
+    lampColor: {r: 1.6, g: 1.2, b: 0.6, a: 1}
   observatory:
     enabled: 1
     gateLevelId: 1-3
-    origin: {x: 13, y: 3, z: 10}
+    origin: {x: -12, y: 6, z: 23}
     size: {x: 10, y: 10}
     rotationSteps: 0
+    organic: 0.5
+    outlineSeed: 3
+    foundation: 4
+    foundationColor: {r: 0.46, g: 0.43, b: 0.4, a: 1}
     soilColor: {r: 0.26, g: 0.27, b: 0.33, a: 1}
     soilJitter: 0.09
     growRiseHeight: 3
@@ -1441,12 +1479,35 @@ MonoBehaviour:
     constellationLinks: 10
     linkColor: {r: 0.55, g: 0.7, b: 1, a: 1}
     meridianSegments: 14
+    plazaRadius: 0.5
+    pathColor: {r: 0.6, g: 0.58, b: 0.54, a: 1}
+    gardenColor: {r: 0.24, g: 0.33, b: 0.28, a: 1}
+    orrery: 1
+    sundial: 1
+    annex: 1
+    lanterns: 6
+    hedges: 12
+    gardenTrees: 6
+    flowers: 28
+    lanternColor: {r: 1.5, g: 1.25, b: 0.7, a: 1}
+    leafDeep: {r: 0.16, g: 0.3, b: 0.26, a: 1}
+    leafLight: {r: 0.34, g: 0.52, b: 0.42, a: 1}
+    bark: {r: 0.46, g: 0.4, b: 0.38, a: 1}
+    flowerPalette:
+    - {r: 0.62, g: 0.72, b: 1, a: 1}
+    - {r: 0.88, g: 0.9, b: 1, a: 1}
+    - {r: 0.7, g: 0.55, b: 0.95, a: 1}
+    - {r: 0.98, g: 0.92, b: 0.65, a: 1}
   grove:
     enabled: 1
     gateLevelId: 1-1
     origin: {x: -30, y: 2, z: -14}
     size: {x: 40, y: 40}
     rotationSteps: 0
+    organic: 0.45
+    outlineSeed: 1
+    foundation: 0
+    foundationColor: {r: 0.46, g: 0.43, b: 0.4, a: 1}
     soilColor: {r: 0.16, g: 0.29, b: 0.21, a: 1}
     soilJitter: 0.12
     growRiseHeight: 3
@@ -1485,24 +1546,174 @@ MonoBehaviour:
     leafDeep: {r: 0.2, g: 0.52, b: 0.3, a: 1}
     leafLight: {r: 0.47, g: 0.8, b: 0.42, a: 1}
     groundMist: 1
+    mistAroundTrees: 1
     groundMistStyle:
       color: {r: 0.86, g: 0.9, b: 0.84, a: 1}
-      strength: 0.7
-      density: 0.7
-      height: 5
-      depth: 0
-      offset: 0
+      strength: 0.8
+      density: 0.9
+      height: 2.4
+      depth: 1.4
+      offset: 3.4
       falloff: 0
       skyBlend: 0
-      scatter: 2.6
+      scatter: 3.6
       anisotropy: 0.6
       steps: 24
-      edge: 2.5
+      edge: 3.6
       clearance: 0
-      edgeWarp: 1.2
+      edgeWarp: 1.4
       noiseScale: 0
+      soften: 1
+      clarity: 0.6
     variants: 6
     castShadows: 1
+  volcano:
+    enabled: 1
+    gateLevelId: 2-1
+    origin: {x: 23, y: 2, z: 9}
+    size: {x: 29, y: 29}
+    rotationSteps: 0
+    organic: 0.7
+    outlineSeed: 4
+    foundation: 0
+    foundationColor: {r: 0.46, g: 0.43, b: 0.4, a: 1}
+    soilColor: {r: 0.24, g: 0.21, b: 0.21, a: 1}
+    soilJitter: 0.12
+    growRiseHeight: 14
+    growRiseDuration: 1.8
+    growHoldSeconds: 1.4
+    growZoom: 0
+    growYawOffset: 30
+    transitionFadeDuration: 0.6
+    growAsideText: Past the last machine the ground runs hot underfoot. Something
+      below is still being made.
+    growAsideSeconds: 4.5
+    npc: {fileID: 0}
+    minigame: {fileID: 0}
+    minigamePedestalLift: 2
+    coneHeight: 12
+    coneRadius: 0.78
+    craterRadius: 0.17
+    craterDepth: 2
+    slopeCurve: 1.35
+    lavaRivers: 5
+    riverWidth: 1.1
+    lavaColor: {r: 2.6, g: 0.75, b: 0.12, a: 1}
+    lavaDim: {r: 1.3, g: 0.28, b: 0.06, a: 1}
+    crustColor: {r: 0.28, g: 0.12, b: 0.08, a: 1}
+    rockColor: {r: 0.24, g: 0.21, b: 0.21, a: 1}
+    ashColor: {r: 0.4, g: 0.37, b: 0.36, a: 1}
+    scorchColor: {r: 0.33, g: 0.25, b: 0.19, a: 1}
+    smokePuffs: 16
+    embers: 34
+    boulders: 28
+    basaltClusters: 10
+    charredTrees: 20
+    obsidianShards: 12
+    pilgrimStair: 1
+    smokeColor: {r: 0.3, g: 0.28, b: 0.29, a: 1}
+    obsidianColor: {r: 0.12, g: 0.09, b: 0.16, a: 1}
+    gateColor: {r: 0.58, g: 0.13, b: 0.1, a: 1}
+  desert:
+    enabled: 1
+    gateLevelId: 4-1
+    origin: {x: 39, y: 2, z: -2}
+    size: {x: 19, y: 16}
+    rotationSteps: 0
+    organic: 0.55
+    outlineSeed: 5
+    foundation: 0
+    foundationColor: {r: 0.46, g: 0.43, b: 0.4, a: 1}
+    soilColor: {r: 0.9, g: 0.74, b: 0.49, a: 1}
+    soilJitter: 0.05
+    growRiseHeight: 6
+    growRiseDuration: 1.8
+    growHoldSeconds: 1.4
+    growZoom: 0
+    growYawOffset: -40
+    transitionFadeDuration: 0.6
+    growAsideText: Beyond the fire the land dried to sand, and the sand kept everything
+      it was given.
+    growAsideSeconds: 4.5
+    npc: {fileID: 0}
+    minigame: {fileID: 0}
+    minigamePedestalLift: 2
+    sandColor: {r: 0.9, g: 0.74, b: 0.49, a: 1}
+    sandShade: {r: 0.8, g: 0.6, b: 0.38, a: 1}
+    duneHeight: 2
+    duneSpacing: 6.5
+    mesas: 2
+    mesaHeight: 4
+    mesaRadius: 0.16
+    mesaColor: {r: 0.74, g: 0.4, b: 0.26, a: 1}
+    strataColor: {r: 0.86, g: 0.58, b: 0.38, a: 1}
+    pyramid: 1
+    pyramidSteps: 3
+    pyramidAt: {x: 0.42, y: -0.3}
+    stoneColor: {r: 0.92, g: 0.82, b: 0.6, a: 1}
+    capColor: {r: 1, g: 0.82, b: 0.32, a: 1}
+    oasis: 1
+    oasisAt: {x: -0.38, y: 0.3}
+    oasisRadius: 0.17
+    waterColor: {r: 0.22, g: 0.58, b: 0.64, a: 1}
+    grassColor: {r: 0.45, g: 0.58, b: 0.26, a: 1}
+    cacti: 14
+    palms: 6
+    ruins: 5
+    scrub: 8
+    camels: 3
+    cactusColor: {r: 0.3, g: 0.52, b: 0.3, a: 1}
+    palmLeaf: {r: 0.3, g: 0.56, b: 0.24, a: 1}
+    palmTrunk: {r: 0.52, g: 0.38, b: 0.24, a: 1}
+    camelColor: {r: 0.76, g: 0.56, b: 0.34, a: 1}
+  ocean:
+    enabled: 1
+    gateLevelId: 3-1
+    origin: {x: 12, y: 1, z: -5}
+    size: {x: 32, y: 18}
+    rotationSteps: 0
+    organic: 0.5
+    outlineSeed: 6
+    foundation: 0
+    foundationColor: {r: 0.46, g: 0.43, b: 0.4, a: 1}
+    soilColor: {r: 0.1, g: 0.3, b: 0.52, a: 1}
+    soilJitter: 0.04
+    growRiseHeight: 3
+    growRiseDuration: 1.8
+    growHoldSeconds: 1.4
+    growZoom: 0
+    growYawOffset: 150
+    transitionFadeDuration: 0.6
+    growAsideText: At the foot of the fire the land ran out, and the sea began.
+    growAsideSeconds: 4.5
+    npc: {fileID: 0}
+    minigame: {fileID: 0}
+    minigamePedestalLift: 2
+    deepColor: {r: 0.1, g: 0.3, b: 0.52, a: 1}
+    shallowColor: {r: 0.22, g: 0.6, b: 0.7, a: 1}
+    foamColor: {r: 0.92, g: 0.97, b: 1, a: 1}
+    islands:
+    - {x: -0.3, y: 0.05, z: 0.24}
+    - {x: 0.42, y: 0.42, z: 0.14}
+    - {x: 0.55, y: -0.45, z: 0.11}
+    - {x: -0.02, y: -0.6, z: 0.1}
+    sandColor: {r: 0.92, g: 0.84, b: 0.62, a: 1}
+    grassColor: {r: 0.4, g: 0.62, b: 0.32, a: 1}
+    cliffColor: {r: 0.52, g: 0.5, b: 0.48, a: 1}
+    lighthouse: 1
+    stripeA: {r: 0.92, g: 0.92, b: 0.9, a: 1}
+    stripeB: {r: 0.78, g: 0.2, b: 0.18, a: 1}
+    lampColor: {r: 2.2, g: 1.9, b: 1.1, a: 1}
+    boats: 4
+    buoys: 8
+    foam: 26
+    seaRocks: 9
+    gulls: 5
+    islandPalms: 8
+    hullColor: {r: 0.55, g: 0.36, b: 0.22, a: 1}
+    sailColor: {r: 0.96, g: 0.94, b: 0.86, a: 1}
+  logBuildTimes: 0
+  previewAllRegions: 0
   monumentMaterial: {fileID: 0}
   monumentScale: 1
   monumentLight: 1.6
@@ -1536,6 +1747,8 @@ MonoBehaviour:
     clearance: 1.4
     edgeWarp: 1.4
     noiseScale: 0
+    soften: 0
+    clarity: 0
   mistDisperse: 1.4
   mistLead: 0.6
   heightFogEnabled: 1
@@ -1569,6 +1782,8 @@ MonoBehaviour:
     clearance: 2.5
     edgeWarp: 3
     noiseScale: 0.1
+    soften: 0
+    clarity: 0
   hazeMargin: 30
   hazeAtBanks: 0.4
   hazeSink:
@@ -1798,7 +2013,7 @@ MonoBehaviour:
   orthoSize: 5
   orthoZoomSpeed: 2
   orthoAngle: {x: 35, y: 45, z: 0}
-  focusViewport: {x: 0.5, y: 0.2}
+  focusViewport: {x: 0.5, y: 0.1}
   gamepadLookScale: 1
   gamepadZoomSpeed: 12
   projectionToggleKey: 289
@@ -1807,6 +2022,17 @@ MonoBehaviour:
   minFocusY: -Infinity
   minCameraY: -Infinity
   myCam: {fileID: 1386953392}
+--- !u!114 &1719833672 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 1542761928029896093, guid: c3c893c5a4437a84eb4c849b9071b29a, type: 3}
+  m_PrefabInstance: {fileID: 7178993309848827023}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9bccc1e61978d9142a049d344846a775, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::BuildTrayView
 --- !u!1 &1911354781
 GameObject:
   m_ObjectHideFlags: 0
@@ -2287,6 +2513,155 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 2060175657}
   m_CullTransparentMesh: 1
+--- !u!1001 &7178993309848827023
+PrefabInstance:
+  m_ObjectHideFlags: 0
+  serializedVersion: 2
+  m_Modification:
+    serializedVersion: 3
+    m_TransformParent: {fileID: 0}
+    m_Modifications:
+    - target: {fileID: 2433685378167010811, guid: c3c893c5a4437a84eb4c849b9071b29a, type: 3}
+      propertyPath: m_AdditionalShaderChannelsFlag
+      value: 25
+      objectReference: {fileID: 0}
+    - target: {fileID: 2758972421566511543, guid: c3c893c5a4437a84eb4c849b9071b29a, type: 3}
+      propertyPath: m_Name
+      value: BuildTrayUI
+      objectReference: {fileID: 0}
+    - target: {fileID: 4104950135613657009, guid: c3c893c5a4437a84eb4c849b9071b29a, type: 3}
+      propertyPath: m_AnchorMax.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 4104950135613657009, guid: c3c893c5a4437a84eb4c849b9071b29a, type: 3}
+      propertyPath: m_AnchorMax.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 4104950135613657009, guid: c3c893c5a4437a84eb4c849b9071b29a, type: 3}
+      propertyPath: m_AnchorMin.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 4104950135613657009, guid: c3c893c5a4437a84eb4c849b9071b29a, type: 3}
+      propertyPath: m_AnchorMin.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 4104950135613657009, guid: c3c893c5a4437a84eb4c849b9071b29a, type: 3}
+      propertyPath: m_SizeDelta.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 4104950135613657009, guid: c3c893c5a4437a84eb4c849b9071b29a, type: 3}
+      propertyPath: m_SizeDelta.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 4104950135613657009, guid: c3c893c5a4437a84eb4c849b9071b29a, type: 3}
+      propertyPath: m_AnchoredPosition.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 4104950135613657009, guid: c3c893c5a4437a84eb4c849b9071b29a, type: 3}
+      propertyPath: m_AnchoredPosition.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 5611547001607028592, guid: c3c893c5a4437a84eb4c849b9071b29a, type: 3}
+      propertyPath: m_SizeDelta.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 5611547001607028592, guid: c3c893c5a4437a84eb4c849b9071b29a, type: 3}
+      propertyPath: m_SizeDelta.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 6347029433476542373, guid: c3c893c5a4437a84eb4c849b9071b29a, type: 3}
+      propertyPath: m_Pivot.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 6347029433476542373, guid: c3c893c5a4437a84eb4c849b9071b29a, type: 3}
+      propertyPath: m_Pivot.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 6347029433476542373, guid: c3c893c5a4437a84eb4c849b9071b29a, type: 3}
+      propertyPath: m_AnchorMax.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 6347029433476542373, guid: c3c893c5a4437a84eb4c849b9071b29a, type: 3}
+      propertyPath: m_AnchorMax.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 6347029433476542373, guid: c3c893c5a4437a84eb4c849b9071b29a, type: 3}
+      propertyPath: m_AnchorMin.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 6347029433476542373, guid: c3c893c5a4437a84eb4c849b9071b29a, type: 3}
+      propertyPath: m_AnchorMin.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 6347029433476542373, guid: c3c893c5a4437a84eb4c849b9071b29a, type: 3}
+      propertyPath: m_SizeDelta.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 6347029433476542373, guid: c3c893c5a4437a84eb4c849b9071b29a, type: 3}
+      propertyPath: m_SizeDelta.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 6347029433476542373, guid: c3c893c5a4437a84eb4c849b9071b29a, type: 3}
+      propertyPath: m_LocalPosition.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 6347029433476542373, guid: c3c893c5a4437a84eb4c849b9071b29a, type: 3}
+      propertyPath: m_LocalPosition.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 6347029433476542373, guid: c3c893c5a4437a84eb4c849b9071b29a, type: 3}
+      propertyPath: m_LocalPosition.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 6347029433476542373, guid: c3c893c5a4437a84eb4c849b9071b29a, type: 3}
+      propertyPath: m_LocalRotation.w
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 6347029433476542373, guid: c3c893c5a4437a84eb4c849b9071b29a, type: 3}
+      propertyPath: m_LocalRotation.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 6347029433476542373, guid: c3c893c5a4437a84eb4c849b9071b29a, type: 3}
+      propertyPath: m_LocalRotation.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 6347029433476542373, guid: c3c893c5a4437a84eb4c849b9071b29a, type: 3}
+      propertyPath: m_LocalRotation.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 6347029433476542373, guid: c3c893c5a4437a84eb4c849b9071b29a, type: 3}
+      propertyPath: m_AnchoredPosition.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 6347029433476542373, guid: c3c893c5a4437a84eb4c849b9071b29a, type: 3}
+      propertyPath: m_AnchoredPosition.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 6347029433476542373, guid: c3c893c5a4437a84eb4c849b9071b29a, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 6347029433476542373, guid: c3c893c5a4437a84eb4c849b9071b29a, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 6347029433476542373, guid: c3c893c5a4437a84eb4c849b9071b29a, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 7641200881670044561, guid: c3c893c5a4437a84eb4c849b9071b29a, type: 3}
+      propertyPath: m_fontColor32.rgba
+      value: 4293979115
+      objectReference: {fileID: 0}
+    - target: {fileID: 7641200881670044561, guid: c3c893c5a4437a84eb4c849b9071b29a, type: 3}
+      propertyPath: m_TextStyleHashCode
+      value: -1183493901
+      objectReference: {fileID: 0}
+    m_RemovedComponents: []
+    m_RemovedGameObjects: []
+    m_AddedGameObjects: []
+    m_AddedComponents: []
+  m_SourcePrefab: {fileID: 100100000, guid: c3c893c5a4437a84eb4c849b9071b29a, type: 3}
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0
@@ -2302,3 +2677,4 @@ SceneRoots:
   - {fileID: 906724471}
   - {fileID: 1911354783}
   - {fileID: 1965468296}
+  - {fileID: 7178993309848827023}

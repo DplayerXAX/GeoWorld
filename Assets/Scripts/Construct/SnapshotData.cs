@@ -14,9 +14,9 @@ public class BlockSnapshot
     public Vector3Int[] occupiedCells;
 
     // ── v2 ───────────────────────────────────────────────────────────────────
-    // A snapshot is no longer only a keepsake: the next level in a chapter is
-    // BUILT from it (LevelDefinition.inheritFrom). That turns three omissions from
-    // cosmetic into real bugs, so they are stored now.
+    // A snapshot is no longer only a keepsake: a mid-level save is BUILT back from
+    // it. That turns three omissions from cosmetic into real bugs, so they are
+    // stored now.
 
     // The exact BlockData asset. v1 resolved blocks by BlockType alone, and when two
     // assets share a type that silently returns whichever comes first — right
@@ -27,14 +27,15 @@ public class BlockSnapshot
     // back with every piece untagged and not one synergy able to form.
     public BlockColor synergyColor;
 
-    // Turret upgrade levels, so an inherited turret is the turret you left.
+    // Turret upgrade levels, so a restored turret is the turret you left.
     public int upBasicPower, upBasicBurst, upAoeFire, upAoeGravity;
 
-    // Per-piece flags a mid-level save must bring back as they were: an inherited
-    // block refunds nothing when removed, a sealed one can't be sold.
-    public bool inherited;
+    // Free weather supply keeps its no-refund provenance when restored.
     public bool rainGranted;
     public bool sealedByEnemy;
+
+    // PlacedBlockInstance.age — a resume keeps it.
+    public int age;
 }
 
 [Serializable]

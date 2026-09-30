@@ -60,6 +60,21 @@ public class OrderRig : MonoBehaviour
 
     public int   shiftEveryBeats = 8;      // gears reverse every N beats (0 = never)
 
+    // ── Industrial pipework ──────────────────────────────────────────────────
+    // A pipe run traced round the piece's outline, low on its side faces, with a
+    // brass flange at every joint and an elbow at every outside corner. Bright
+    // collars travel round it, the flow inside, all the same way round. One run
+    // has a riser with a valve wheel that turns on the beat and vents a puff of
+    // steam every few beats.
+    public bool  showPipes      = true;
+    public float pipeRadiusFrac = 0.055f;   // pipe radius / cellSize
+    public float pipeHeightFrac = -0.38f;   // pipe centre, from the cell centre / cellSize (low, under the cogs)
+    public Color pipeColor      = new Color(0.30f, 0.32f, 0.36f, 1f);
+    public Color flangeColor    = new Color(0.78f, 0.60f, 0.24f, 1f);
+    public float flowSpeed      = 0.9f;     // collar trips per second along each face-length run
+    public bool  showValve      = true;
+    public int   steamEveryBeats = 4;
+
     // ── Animation ────────────────────────────────────────────────────────────
     public float fadeInDuration = 0.5f;
     public float witherDuration = 0.3f;
@@ -102,6 +117,18 @@ public class OrderRig : MonoBehaviour
     float                    _loopLength;
     float                    _runnerWorldSize;
     float                    _runnerWorldSpeed;
+
+    // Pipework
+    sealed class Flow
+    {
+        public Transform t; public MeshRenderer mr; public MaterialPropertyBlock mpb;
+        public Vector3 a, b; public float phase;
+    }
+    Transform          _pipeRoot, _valve;
+    readonly List<Flow>      _flows = new();
+    readonly List<Transform> _steam = new();
+    Vector3            _steamBase;
+    float              _pipeR;
 
     // Gear shift
     int   _lastShiftBlock;
@@ -150,6 +177,7 @@ public class OrderRig : MonoBehaviour
         Vector3 mxL = (mx - center) + new Vector3(half, half, half);
         if (showScan) BuildScan(mnL, mxL);
         if (showRunners) BuildRunners(mnL, mxL, cellSize);
+        if (showPipes) BuildPipes(cellCentersWorld, center, cellSize, half);
 
         _lastShiftBlock = 0;
         _shiftFlashAt   = -999f;
@@ -284,6 +312,38 @@ public class OrderRig : MonoBehaviour
             if (_scanMr != null) SetCol(_scanMr, _scanMpb, sc);
         }
 
+        // Pipework: assembles with the rig; flow collars ride round the outline;
+        // the valve turns on the beat and vents steam every few beats.
+        if (_pipeRoot != null)
+        {
+            _pipeRoot.localScale = Vector3.one * Mathf.Max(0.02f, fade);
+            for (int i = 0; i < _flows.Count; i++)
+            {
+                var f = _flows[i];
+                if (f.t == null) continue;
+                float u = Mathf.Repeat((now - _born) * flowSpeed + f.phase, 1f);
+                f.t.localPosition = Vector3.Lerp(f.a, f.b, u);
+                Color c = _lineColor * 1.4f;
+                c.a = Mathf.Sin(u * Mathf.PI) * 0.85f * fade;
+                SetCol(f.mr, f.mpb, c);
+            }
+            if (_valve != null)
+                _valve.localRotation = Quaternion.Euler(0f, GearTurns(beatsGlobal, 0f) * 45f, 0f);
+            for (int i = 0; i < _steam.Count; i++)
+            {
+                var s = _steam[i];
+                if (s == null) continue;
+                float cycle = Mathf.Max(1, steamEveryBeats);
+                float p = Mathf.Repeat(beatsGlobal / cycle - i * 0.08f, 1f) * cycle;   // 0..cycle beats
+                bool puffing = p < 1.2f && !_retiring;
+                s.gameObject.SetActive(puffing);
+                if (!puffing) continue;
+                float k = p / 1.2f;
+                s.localPosition = _steamBase + Vector3.up * (k * _refCell * 0.55f) + Vector3.right * (i - 1) * _pipeR * 0.8f * k;
+                s.localScale    = Vector3.one * Mathf.Max(0.02f, _pipeR * 2.6f * Mathf.Sin(k * Mathf.PI) * (0.6f + k));
+            }
+        }
+
         // Circuit runners: constant-speed nodes tracing the base perimeter.
         if (_runners.Count > 0 && _loop != null && _loopLength > 1e-4f)
         {
@@ -308,6 +368,145 @@ public class OrderRig : MonoBehaviour
         float frac = beats - step;
         float snap = snapFraction > 1e-3f ? Mathf.Clamp01(frac / snapFraction) : 1f;
         return step + EaseOutBack(snap);   // quick snap, slight clack, then hold
+    }
+
+    // ── Pipework ─────────────────────────────────────────────────────────────
+    // Runs along every side face that isn't against another cell of the piece,
+    // each just proud of the face and a touch longer than it, so neighbouring
+    // runs meet flush along a wall and cross cleanly at an outside corner (where
+    // an elbow covers the join). Runs against an unclaimed neighbouring block end
+    // up inside that block, out of sight. Each run's direction is up × its face
+    // normal, which goes the same way round the whole outline, so the flow reads
+    // as circulating.
+    void BuildPipes(Vector3[] cells, Vector3 center, float cs, float half)
+    {
+        _pipeRoot = new GameObject("Pipes").transform;
+        _pipeRoot.SetParent(transform, false);
+
+        var keys = new HashSet<Vector3Int>();
+        foreach (var c in cells) keys.Add(Vector3Int.FloorToInt(c / cs));
+
+        float r   = pipeRadiusFrac * cs;
+        float off = half + r * 0.7f;
+        float y   = pipeHeightFrac * cs;
+        float len = cs + 2f * (off - half);
+        _pipeR = r;
+
+        var pipe  = GetPipeMesh();
+        var fill  = GetGearFillMaterial();
+        var holo  = GetHoloMaterial();
+        Vector3Int[] dirs = { Vector3Int.right, Vector3Int.left, new Vector3Int(0, 0, 1), new Vector3Int(0, 0, -1) };
+
+        var runs = new List<(Vector3 mid, Vector3 tan)>();
+        for (int i = 0; i < cells.Length; i++)
+        {
+            var key   = Vector3Int.FloorToInt(cells[i] / cs);
+            var local = cells[i] - center;
+            for (int k = 0; k < 4; k++)
+            {
+                if (keys.Contains(key + dirs[k])) continue;
+                Vector3 n   = dirs[k];
+                Vector3 tan = Vector3.Cross(Vector3.up, n);
+                Vector3 mid = local + n * off + Vector3.up * y;
+                var rot = Quaternion.LookRotation(tan, Vector3.up);
+                Piece(_pipeRoot, "Pipe", pipe, fill, mid, rot, new Vector3(r * 2f, r * 2f, len), pipeColor);
+                Piece(_pipeRoot, "Flange", pipe, fill, mid - tan * half, rot, new Vector3(r * 3.2f, r * 3.2f, r * 0.9f), flangeColor);
+                runs.Add((mid, tan));
+
+                // Outside corner: the next side round is open as well.
+                for (int j = k + 1; j < 4; j++)
+                {
+                    if (dirs[j].x * dirs[k].x + dirs[j].z * dirs[k].z != 0) continue;   // parallel, not a corner
+                    if (keys.Contains(key + dirs[j])) continue;
+                    Vector3 corner = local + ((Vector3)dirs[k] + (Vector3)dirs[j]) * off + Vector3.up * y;
+                    Piece(_pipeRoot, "Elbow", GetNodeMesh(), fill, corner, Quaternion.Euler(0f, 45f, 0f),
+                          Vector3.one * (r * 1.5f), Color.Lerp(pipeColor, flangeColor, 0.35f));
+                }
+            }
+        }
+
+        // The flow: one bright collar per run, all travelling round the same way.
+        for (int i = 0; i < runs.Count; i++)
+        {
+            var (mid, tan) = runs[i];
+            var t = Piece(_pipeRoot, "Flow", pipe, holo, mid, Quaternion.LookRotation(tan, Vector3.up),
+                          new Vector3(r * 2.7f, r * 2.7f, r * 1.4f), _lineColor);
+            var mr = t.GetComponent<MeshRenderer>();
+            _flows.Add(new Flow { t = t, mr = mr, mpb = new MaterialPropertyBlock(),
+                                  a = mid - tan * half, b = mid + tan * half, phase = Hash01(i * 7919 + cells.Length) });
+        }
+
+        // One riser off a run, with a valve wheel on top and steam above that.
+        if (showValve && runs.Count > 0)
+        {
+            var (mid, _) = runs[Mathf.FloorToInt(Hash01(cells.Length * 131 + 7) * runs.Count) % runs.Count];
+            float rise = cs * 0.34f;
+            Piece(_pipeRoot, "Riser", pipe, fill, mid + Vector3.up * (rise * 0.5f), Quaternion.FromToRotation(Vector3.forward, Vector3.up),
+                  new Vector3(r * 1.8f, r * 1.8f, rise), pipeColor);
+            _valve = Piece(_pipeRoot, "Valve", GetSolidGearMesh(6), fill, mid + Vector3.up * (rise + r * 0.4f), Quaternion.identity,
+                           Vector3.one * (r * 2.4f), flangeColor);
+            _steamBase = mid + Vector3.up * (rise + r * 2f);
+            for (int i = 0; i < 3; i++)
+            {
+                var puff = Piece(_pipeRoot, $"Steam{i}", GetNodeMesh(), fill, _steamBase, Quaternion.Euler(0f, i * 30f, 0f),
+                                 Vector3.one * 0.02f, new Color(0.88f, 0.9f, 0.92f, 1f));
+                puff.gameObject.SetActive(false);
+                _steam.Add(puff);
+            }
+        }
+    }
+
+    Transform Piece(Transform parent, string name, Mesh mesh, Material mat, Vector3 localPos, Quaternion rot, Vector3 scale, Color color)
+    {
+        var go = new GameObject(name);
+        go.transform.SetParent(parent, false);
+        go.transform.localPosition = localPos;
+        go.transform.localRotation = rot;
+        go.transform.localScale    = scale;
+        go.AddComponent<MeshFilter>().sharedMesh = mesh;
+        var mr = go.AddComponent<MeshRenderer>();
+        mr.sharedMaterial = mat;
+        ConfigRenderer(mr);
+        SetCol(mr, new MaterialPropertyBlock(), color);
+        return go.transform;
+    }
+
+    // An octagonal pipe along +Z: unit length, unit diameter, capped both ends.
+    static Mesh _pipeMesh;
+    static Mesh GetPipeMesh()
+    {
+        if (_pipeMesh != null) return _pipeMesh;
+        var v = new List<Vector3>();
+        var n = new List<Vector3>();
+        var t = new List<int>();
+        const int sides = 8;
+        void Tri(Vector3 a, Vector3 b, Vector3 c, Vector3 nrm)
+        {
+            int s = v.Count;
+            v.Add(a); v.Add(b); v.Add(c);
+            n.Add(nrm); n.Add(nrm); n.Add(nrm);
+            // Wound to face along nrm (Unity: clockwise seen from the front).
+            if (Vector3.Dot(Vector3.Cross(b - a, c - a), nrm) >= 0f) { t.Add(s); t.Add(s + 1); t.Add(s + 2); }
+            else                                                      { t.Add(s); t.Add(s + 2); t.Add(s + 1); }
+        }
+        for (int i = 0; i < sides; i++)
+        {
+            float a0 = i * Mathf.PI * 2f / sides, a1 = (i + 1) * Mathf.PI * 2f / sides;
+            var d0 = new Vector3(Mathf.Cos(a0), Mathf.Sin(a0), 0f) * 0.5f;
+            var d1 = new Vector3(Mathf.Cos(a1), Mathf.Sin(a1), 0f) * 0.5f;
+            var back = new Vector3(0f, 0f, -0.5f); var front = new Vector3(0f, 0f, 0.5f);
+            var side = ((d0 + d1) * 0.5f).normalized;
+            Tri(d0 + back, d1 + back, d1 + front, side);
+            Tri(d0 + back, d1 + front, d0 + front, side);
+            Tri(front, d0 + front, d1 + front, Vector3.forward);
+            Tri(back, d1 + back, d0 + back, Vector3.back);
+        }
+        _pipeMesh = new Mesh { name = "OrderPipe" };
+        _pipeMesh.SetVertices(v);
+        _pipeMesh.SetNormals(n);
+        _pipeMesh.SetTriangles(t, 0);
+        _pipeMesh.RecalculateBounds();
+        return _pipeMesh;
     }
 
     // ── Wireframe (cube edges + brackets + ticks) as ONE Lines mesh ──────────
@@ -619,6 +818,11 @@ public class OrderRig : MonoBehaviour
 
         if (_scan != null)     { Destroy(_scan.gameObject); _scan = null; _scanMr = null; }
         if (_scanMesh != null) { Destroy(_scanMesh); _scanMesh = null; }
+
+        if (_pipeRoot != null) { Destroy(_pipeRoot.gameObject); _pipeRoot = null; }
+        _valve = null;
+        _flows.Clear();
+        _steam.Clear();
 
         if (_wireMr != null)   { Destroy(_wireMr.gameObject); _wireMr = null; }
         if (_wireMesh != null) { Destroy(_wireMesh); _wireMesh = null; }   // per-rig mesh (gear/node meshes are shared, never destroyed)

@@ -65,10 +65,9 @@ public static class ChapterEnvironmentChecks
             gun.name = "EnvironmentTestGun"; gun.blockType = BlockType.Turret; gun.cells = new[] { Vector3Int.zero };
             pc.blocks = new[] { ground, gun };
             var level = ScriptableObject.CreateInstance<LevelDefinition>(); assets.Add(level);
-            level.environment = profile;
             RunConfig.Mode = GameMode.Level; RunConfig.Level = level;
             flow.endlessEnvironment = profile;
-            Check(ChapterEnvironmentController.Ensure(flow) == null, "formal levels excluded even with a profile");
+            Check(ChapterEnvironmentController.Ensure(flow) == null, "formal levels excluded even with an Endless profile");
             RunConfig.SetEndless();
             flow.endlessEnvironment = null;
             Check(ChapterEnvironmentController.Ensure(flow) == null, "empty Endless profile disables weather");
@@ -190,7 +189,9 @@ public static class ChapterEnvironmentChecks
             foreach (int n in new[] { 1, 2, 3 })
             {
                 var authored = AssetDatabase.LoadAssetAtPath<LevelDefinition>($"Assets/scriptableObject/Level/Level_{n}.asset");
-                Check(authored != null && authored.environment == null, "formal level has no environment binding " + n);
+                Check(authored != null, "formal level asset retained " + n);
+                RunConfig.SetLevel(authored);
+                Check(ChapterEnvironmentController.Ensure(flow) == null, "formal level excludes Endless weather " + n);
             }
             var material = Resources.Load<Material>("GeoWorldShaderKeepalive/EnvironmentMarker_keep");
             Check(material != null && !ShaderUtil.ShaderHasError(material.shader), "marker shader retained and valid");

@@ -37,10 +37,6 @@ public class DialogueRunner : MonoBehaviour
     public float   fadeSpeed   = 12f;
     [Range(0f, 1f)] public float portraitDim = 0.45f;
     public KeyCode advanceKey  = KeyCode.Space;
-    [Tooltip("Opacity the passive tutorial dialogue box fades to while the shop is expanded (F).")]
-    [Range(0f, 1f)] public float passiveShopDim = 0.25f;
-    [Tooltip("Opacity while the player is placing a block (any dialogue, not just gated).")]
-    [Range(0f, 1f)] public float editDim = 0.3f;
 
     // ── Events (for game hooks) ──────────────────────────────────────────────────
     public event Action<DialogueConversation> OnFinished;
@@ -184,20 +180,13 @@ public class DialogueRunner : MonoBehaviour
     {
         if (_group == null) return;
 
-        // Passive tutorial dialogue dims (doesn't hide) while the shop is expanded, so
-        // the opaque letterbox bars (rendered above this canvas) don't fight it for
-        // attention — same box, same position, just lower opacity.
-        float dimMul = 1f;
-        if (Gated && ShopController.Instance != null && ShopController.Instance.IsExpanded)
-            dimMul = passiveShopDim;
-
-        // Not limited to gated lines — any dialogue is in the way while editing.
+        // Still read while placing — it just stops taking clicks (below), so the
+        // player can place straight through it.
         bool editing = EditingAnywhere();
-        if (editing) dimMul = Mathf.Min(dimMul, editDim);
 
         bool peeking = PeekWorld.Held;   // Shift held — see PeekWorld
 
-        float targetAlpha = peeking ? 0f : _alphaTarget * dimMul;
+        float targetAlpha = peeking ? 0f : _alphaTarget;
         _group.alpha = Mathf.MoveTowards(_group.alpha, targetAlpha, fadeSpeed * Time.unscaledDeltaTime);
 
         // Gated dialogue must NOT block the game — the player needs to interact

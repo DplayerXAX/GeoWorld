@@ -142,6 +142,25 @@ public static class SaveSystem
         return null;
     }
 
+    // A slot saved by an older build (ProfileData.CurrentVersion) — the title warns
+    // before playing it.
+    public static bool SlotIsOutdated(int slot)
+    {
+        if (!SlotHasData(slot)) return false;
+        var p = PeekSlot(slot);
+        return p != null && p.version < ProfileData.CurrentVersion;
+    }
+
+    // The player chose to keep playing an older slot: stamp it current so the
+    // warning isn't repeated every time.
+    public static void MarkActiveSlotCurrent()
+    {
+        var p = Profile;
+        if (p == null || p.version >= ProfileData.CurrentVersion) return;
+        p.version = ProfileData.CurrentVersion;
+        Save();
+    }
+
     public static bool SlotHasData(int slot)
     {
         MigrateLegacyOnce();
