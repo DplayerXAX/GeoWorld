@@ -70,6 +70,15 @@ public class ResourceManager : MonoBehaviour
     /// <summary>Fires when a purchase attempt fails due to insufficient funds.</summary>
     public event Action<BlockType> OnInsufficientFunds;
 
+    // Roguelite hooks. Static: items subscribe without finding the manager first, and
+    // the events outlive a scene reload only until the item that holds them releases.
+    /// <summary>Block currency coming IN as income — round income, kills, harvests (not refunds or undo).</summary>
+    public static event Action<int>            BlockEarned;
+    /// <summary>A shop purchase went through: the list price, and what it was.</summary>
+    public static event Action<int, BlockType> Purchased;
+    /// <summary>Round income has just been paid.</summary>
+    public static event Action                 IncomeGranted;
+
     // ── Properties ────────────────────────────────────────────────────────────
     //
     // Unqualified BlockCurrency/TurretCurrency mean THIS machine's player. Every
@@ -211,7 +220,7 @@ public class ResourceManager : MonoBehaviour
     {
         if (!_combatActive) return;
 
-        _turretRegenAccum += turretRegenPerSecond * Time.deltaTime;
+        _turretRegenAccum += turretRegenPerSecond * Modifiers.Eval(Stat.TurretRegen, 1f) * Time.deltaTime;
         if (_turretRegenAccum >= 1f)
         {
             int gain = Mathf.FloorToInt(_turretRegenAccum);
@@ -237,13 +246,25 @@ public class ResourceManager : MonoBehaviour
     /// <summary>Called by GameFlowManager.StartTurn() at the start of each build phase.</summary>
     public void GrantRoundIncome()
     {
-        int round = GameFlowManager.Instance != null ? GameFlowManager.Instance.RoundIndex : 0;
+        int round = GameFlowManager.Instance != null ? GameFlowManager.Instance.EconomyRound : 0;
         int blockInc = balance != null
             ? balance.GetBlockIncomeForRound(round)
             : blockCurrencyPerRound;
         int turretInc = balance != null
             ? balance.GetTurretIncomeForRound(round)
             : turretCurrencyPerRound;
+
+        // The roguelite has its own income curve, by wave rather than by endpoint.
+        if (RunConfig.Mode == GameMode.Rogue)
+        {
+            var rc = RogueRun.Config;
+            blockInc  = rc.BlockIncome(round);
+            turretInc = rc.TurretIncome(round);
+        }
+
+        // Items: (income + flat) × multiplier. Both are the identity with none held.
+        blockInc  = Mathf.Max(0, Mathf.RoundToInt(Modifiers.Eval(Stat.BlockIncome,  blockInc)));
+        turretInc = Mathf.Max(0, Mathf.RoundToInt(Modifiers.Eval(Stat.TurretIncome, turretInc)));
 
         int blockShare  = Split(blockInc);
         int turretShare = Split(turretInc);
@@ -254,6 +275,8 @@ public class ResourceManager : MonoBehaviour
             _turret[i] += turretShare;
         }
         RaiseLocal();
+        if (blockShare > 0) BlockEarned?.Invoke(blockShare);
+        IncomeGranted?.Invoke();
     }
 
     // ── Block shop ────────────────────────────────────────────────────────────
@@ -279,6 +302,8 @@ public class ResourceManager : MonoBehaviour
         BlockType.SlowTurret => 0.9f,
         BlockType.AoeTurret  => 1.2f,
         BlockType.DebuffTurret => 0.6f,   // the Prayer turret
+        BlockType.LaserTurret => 1.3f,
+        BlockType.GravityTurret => 1.5f,
         _                    => 1.0f
     };
 
@@ -301,7 +326,7 @@ public class ResourceManager : MonoBehaviour
 
     int ComputeBasePrice(BlockData data, float fluctuation)
     {
-        int round = GameFlowManager.Instance?.RoundIndex ?? 0;
+        int round = GameFlowManager.Instance?.EconomyRound ?? 0;
 
         // Route through the balance asset's identical formula when wired.
         if (balance != null) return balance.ComputePrice(data, round, fluctuation);
@@ -389,6 +414,73 @@ public class ResourceManager : MonoBehaviour
         return true;
     }
 
+    // ── Shop purchases (roguelite perks) ─────────────────────────────────────
+    //
+    // The ONE place a shop purchase is paid for, and the one place its perks live:
+    // Trader Joy (a free purchase) and Morphos (block currency standing in for turret
+    // currency). Refreshes, upgrades and every other charge keep using TryBuy, so
+    // "the next purchase is free" cannot be spent on a re-roll by accident.
+
+    /// <summary>Could this purchase go through, perks included?</summary>
+    public bool CanAffordShop(int price, BlockType type)
+    {
+        if (CanAfford(price, type)) return true;
+        if (!RogueRun.Active) return false;
+        if (RogueRun.FreePurchases > 0) return true;
+        if (RogueRun.MorphosActive && TurretTypes.Is(type)) return CanMorph(MultiplayerSession.LocalId, price);
+        return false;
+    }
+
+    bool CanMorph(int playerId, int price)
+    {
+        if (!Valid(playerId)) return false;
+        int deficit = Mathf.Max(0, price - _turret[playerId]);
+        return _block[playerId] >= deficit * RogueRun.MorphosRate;
+    }
+
+    /// <summary>Pays for a NEW shop purchase, with perks. Same contract as <see cref="TryBuy(int,int,BlockType)"/>.</summary>
+    public bool TryBuyShop(int playerId, int price, BlockType type)
+    {
+        if (InfiniteResources) return true;
+        if (!Valid(playerId)) return false;
+
+        bool local = playerId == MultiplayerSession.LocalId;
+
+        if (RogueRun.Active && local && RogueRun.FreePurchases > 0 && price > 0)
+        {
+            RogueRun.ConsumeFreePurchase();
+            Purchased?.Invoke(price, type);
+            return true;
+        }
+
+        if (RogueRun.Active && RogueRun.MorphosActive && TurretTypes.Is(type)
+            && _turret[playerId] < price && CanMorph(playerId, price))
+        {
+            int deficit = price - _turret[playerId];
+            _turret[playerId] = 0;
+            _block[playerId] -= deficit * RogueRun.MorphosRate;
+            RaiseIfLocal(playerId, turret: true);
+            RaiseIfLocal(playerId, turret: false);
+            if (local) Purchased?.Invoke(price, type);
+            return true;
+        }
+
+        bool ok = TryBuy(playerId, price, type);
+        if (ok && local) Purchased?.Invoke(price, type);
+        return ok;
+    }
+
+    /// <summary>For purchases made outside the block shop (the relic market): tells subscribers (Recurrence) one happened.</summary>
+    public static void NotifyPurchased(int price, BlockType type) => Purchased?.Invoke(price, type);
+
+    /// <summary>Wallets reset to a run's own starting purse (the roguelite's, not the scene's).</summary>
+    public void SetStartingWallets(int block, int turret)
+    {
+        int b = Split(Mathf.Max(0, block)), t = Split(Mathf.Max(0, turret));
+        for (int i = 0; i < MultiplayerSession.MaxPlayers; i++) { _block[i] = b; _turret[i] = t; }
+        RaiseLocal();
+    }
+
     // ── Placed-count tracking (for price scaling) ─────────────────────────────
     /// <summary>
     /// Call when ANY block is successfully placed on the grid (new purchase or reposition).
@@ -451,6 +543,7 @@ public class ResourceManager : MonoBehaviour
         if (share == 0) return;
         for (int i = 0; i < MultiplayerSession.MaxPlayers; i++) _block[i] += share;
         RaiseLocal();
+        BlockEarned?.Invoke(share);
     }
 
     /// <summary>Pays exactly one player — for anything genuinely theirs alone.</summary>
@@ -459,6 +552,7 @@ public class ResourceManager : MonoBehaviour
         if (amount == 0 || !Valid(playerId)) return;
         _block[playerId] += amount;
         RaiseIfLocal(playerId, turret: false);
+        if (amount > 0 && playerId == MultiplayerSession.LocalId) BlockEarned?.Invoke(amount);
     }
 
     /// <summary>Subtracts <paramref name="amount"/> from block currency, clamped at 0.

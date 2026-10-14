@@ -276,6 +276,8 @@ public partial class LevelMapController : MonoBehaviour
             foreach (var p in PlotFootprint(cfg)) Add(key, p);
         }
 
+        ExtendMistCover(cover);   // the land between hidden regions lies under their mist too (World.cs)
+
         // Everything already on show — the level blocks standing from the start, the
         // player's own builds, and the plots already grown. The mist is carved away
         // around these whatever it was asked to cover: a padded plot footprint or a
@@ -318,7 +320,7 @@ public partial class LevelMapController : MonoBehaviour
         foreach (var kv in cover)
         {
             var bank = MistBank.Create(transform, "Mist_" + kv.Key, kv.Value,
-                                       gridSystem.cellSize, mistStyle, 7919 * seed++, avoid);
+                                       gridSystem.cellSize, mistStyle, 7919 * (worldIntegration ? 1 : seed++), avoid);
             if (bank != null) _mist[kv.Key] = bank;
         }
     }

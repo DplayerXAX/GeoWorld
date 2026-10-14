@@ -3,6 +3,10 @@ using UnityEngine;
 
 public enum Rarity { Common, Uncommon, Rare }
 
+// What kind of thing a relic is. Purely descriptive (the relic bar and the market
+// group and colour by it); no rule reads it.
+public enum ItemCategory { Economic, Buff, Chaotic, Special, Trash, Healing }
+
 // One upgrade choice the player can pick at wave end.
 //
 // Cards are the SECONDARY rogue layer — the primary one is block-tag
@@ -19,6 +23,13 @@ public class UpgradeCard : ScriptableObject
 
     [Header("Classification")]
     public Rarity rarity = Rarity.Common;
+    public ItemCategory category = ItemCategory.Buff;
+    [Tooltip("Roguelite: block currency to buy it at the relic market (0 = by rarity).")]
+    [Min(0)] public int basePrice = 0;
+    [Tooltip("Roguelite: furthest wave any run must have reached before this can appear. 0 = from the start.")]
+    [Min(0)] public int unlockWave = 0;
+    [Tooltip("Roguelite: may be offered as a starting relic.")]
+    public bool starter = false;
     [Tooltip("Theme colors this card relates to (e.g. card that boosts Order synergies). Drives future card↔synergy interactions — purely metadata for now.")]
     public List<BlockColor> tags = new();
 

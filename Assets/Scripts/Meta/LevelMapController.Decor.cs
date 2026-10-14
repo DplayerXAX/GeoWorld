@@ -496,6 +496,11 @@ public partial class LevelMapController : MonoBehaviour
             // player's own blocks) wins: plots can be laid out overlapping and the
             // later one simply gives way, instead of two stacks of cubes fighting.
             if (_columnTop.ContainsKey(worldCol)) continue;
+            // A carved gap stays a gap, whatever plot runs over it (decorKeepClear).
+            if (KeptClear(worldCol)) continue;
+            // A level whose block has not come up yet, or is about to rise, owns its
+            // columns: paved over, its block would rise out of (and into) the field.
+            if (_veiledCols.Contains(worldCol) || _risingCols.Contains(worldCol)) continue;
 
             var kind = farm != null ? RowKindAt(iz) : RowKind.Flower;
             // Lanes are deliberately MORE likely to be covered — they're the
@@ -577,13 +582,16 @@ public partial class LevelMapController : MonoBehaviour
         // BlockRenderer instantiates one cube per cell in array order, so the Nth
         // renderer is shownArr[N]. Read the renderers BEFORE anything else is
         // parented under the root, so later props can't shift the mapping.
+        var edgeD = EdgeDistances(coveredCols);   // blended edges (World.cs); null when off
         var soilRenderers = plot.root.GetComponentsInChildren<Renderer>();
         for (int i = 0; i < soilRenderers.Length && i < shownArr.Length; i++)
         {
             var c = shownArr[i];
             float k = Mathf.Lerp(1f - cfg.soilJitter, 1f + cfg.soilJitter,
                                   Hash01(DecorHash(c.x, c.z) ^ (c.y * 92821)));
-            var alive = Tint(c.y < cfg.origin.y ? cfg.foundationColor : cfg.CellColor(c), k);
+            var baseCol = c.y < cfg.origin.y ? cfg.foundationColor : cfg.CellColor(c);
+            if (edgeD != null && c.y >= cfg.origin.y) baseCol = BlendEdge(baseCol, new Vector2Int(c.x, c.z), edgeD);
+            var alive = Tint(baseCol, k);
             MpbColor.Set(soilRenderers[i], alive);
             if (_revive != null) ReviveTint(soilRenderers[i], alive, Tint(farm.barrenSoilColor, k));
         }
@@ -977,6 +985,7 @@ public partial class LevelMapController : MonoBehaviour
             {
                 var ncol = new Vector2Int(col.x + dir.x, col.y + dir.y);
                 if (coveredCols.Contains(ncol)) continue;   // interior — no boundary here
+                if (KeptClear(ncol)) continue;              // the edge of a level's moat stays open: the bridge lands here
 
                 int gate = DecorHash(col.x * 131 + dir.x * 7, col.y * 131 + dir.y * 7);
                 if (Hash01(gate ^ unchecked((int)0xb5297a4d)) > decor.fenceCoverage) continue;

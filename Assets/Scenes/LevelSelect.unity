@@ -1281,7 +1281,6 @@ MonoBehaviour:
   focusDragSpeed: 0.6
   scrollZoomsFov: 1
   mapFov: 35
-  occludableLitShader: {fileID: 4800000, guid: df59feb508284ff5b88e7645e6092bfc, type: 3}
   minFov: 25
   maxFov: 50
   fovScrollSpeed: 60
@@ -1303,29 +1302,32 @@ MonoBehaviour:
   autoReward: 0
   editorAutoFillBlocks:
   - cells:
-    - {x: 3, y: 2, z: 9}
-    - {x: 3, y: 2, z: 8}
-    - {x: 3, y: 2, z: 7}
+    - {x: 2, y: 2, z: 7}
+    - {x: 2, y: 2, z: 8}
+    - {x: 1, y: 2, z: 7}
+    - {x: 2, y: 3, z: 7}
     blockAssetName: corner
     rotation: {x: 0, y: 0, z: 0, w: 1}
   - cells:
-    - {x: 6, y: 2, z: 9}
-    - {x: 6, y: 1, z: 9}
-    - {x: 7, y: 1, z: 9}
-    blockAssetName: L3
-    rotation: {x: 0, y: 0, z: 0, w: 1}
-  - cells:
-    - {x: 8, y: -1, z: 9}
-    - {x: 8, y: 0, z: 9}
+    - {x: -6, y: 2, z: 12}
+    - {x: -6, y: 2, z: 13}
     blockAssetName: I2
     rotation: {x: 0, y: 0, z: 0, w: 1}
   - cells:
-    - {x: 7, y: -3, z: 9}
-    - {x: 8, y: -3, z: 9}
-    - {x: 8, y: -2, z: 9}
-    - {x: 8, y: -3, z: 8}
-    blockAssetName: corner
+    - {x: -9, y: 3, z: 2}
+    - {x: -8, y: 3, z: 2}
+    blockAssetName: I2
     rotation: {x: 0, y: 0, z: 0, w: 1}
+  - cells:
+    - {x: -4, y: 2, z: 0}
+    - {x: -4, y: 2, z: -1}
+    blockAssetName: I2
+    rotation: {x: 0, y: 0, z: 0, w: 1}
+  decorKeepClear:
+  - min: {x: 3, y: -4}
+    size: {x: 6, y: 11}
+    note: Start courtyard - start, stairs and Tutorial stay low, the farm steps round
+      them
   buildTray: {fileID: 1719833672}
   trayExpandSpeed: 9
   defaultCharacter: {fileID: 11400000, guid: 80993e3c86b4337429c2d6273c8eedc2, type: 2}
@@ -1335,12 +1337,18 @@ MonoBehaviour:
   rewardSuggestOverscale: 1.08
   rewardSuggestZoom: 5
   rewardSuggestPullBack: 2.5
+  followLag: 0.12
+  followHeightLag: 0.8
+  followHeightDeadzone: 0.75
+  ghostScrollSpeed: 3
+  ghostMinDepth: 2
+  ghostMaxDepth: 40
   decor:
     enabled: 1
     gateLevelId: 1-1
-    origin: {x: -10, y: 2, z: 0}
+    origin: {x: -11, y: 2, z: 0}
     size: {x: 12, y: 11}
-    rotationSteps: 3
+    rotationSteps: 0
     organic: 0.45
     outlineSeed: 1
     foundation: 0
@@ -1351,13 +1359,13 @@ MonoBehaviour:
     growRiseDuration: 1.8
     growHoldSeconds: 1.4
     growZoom: 0
-    growYawOffset: -90
+    growYawOffset: 90
     transitionFadeDuration: 0.6
     growAsideText: As Abundance returned, a small farm blossomed where countless
       wishes had been sown.
     growAsideSeconds: 4.5
-    npc: {fileID: 11400000, guid: 7e14b8039fa25c34ab6d7051e93c26fb, type: 2}
-    minigame: {fileID: 11400000, guid: 9b6f2ad4715e08c4c8a3f19d64e70b25, type: 2}
+    npc: {fileID: 0}
+    minigame: {fileID: 0}
     minigamePedestalLift: 2
     coverage: 0.82
     terrace: 1
@@ -1406,7 +1414,7 @@ MonoBehaviour:
       and a workshop rose to keep it."
     growAsideSeconds: 4.5
     npc: {fileID: 0}
-    minigame: {fileID: 11400000, guid: f83e834aaa1e46f5a73968afcbb457f3, type: 2}
+    minigame: {fileID: 0}
     minigamePedestalLift: 2
     houseSize: {x: 4, y: 3}
     wallHeight: 1.6
@@ -1447,7 +1455,7 @@ MonoBehaviour:
     foundation: 4
     foundationColor: {r: 0.46, g: 0.43, b: 0.4, a: 1}
     soilColor: {r: 0.26, g: 0.27, b: 0.33, a: 1}
-    soilJitter: 0.09
+    soilJitter: 0.06
     growRiseHeight: 3
     growRiseDuration: 1.8
     growHoldSeconds: 1.4
@@ -1458,7 +1466,7 @@ MonoBehaviour:
       for nothing else.
     growAsideSeconds: 4.5
     npc: {fileID: 0}
-    minigame: {fileID: 11400000, guid: c47b9e0a3d16482fb1e5a8d20c93f671, type: 2}
+    minigame: {fileID: 0}
     minigamePedestalLift: 2
     drumHeight: 1.7
     domeRadius: 1.25
@@ -1713,24 +1721,31 @@ MonoBehaviour:
     hullColor: {r: 0.55, g: 0.36, b: 0.22, a: 1}
     sailColor: {r: 0.96, g: 0.94, b: 0.86, a: 1}
   logBuildTimes: 0
-  previewAllRegions: 0
+  previewAllRegions: 1
   monumentMaterial: {fileID: 0}
   monumentScale: 1
   monumentLight: 1.6
-  monumentSink: 0.35
+  monumentSink: 0.25
   windMaterial: {fileID: 0}
   windColor: {r: 0.91, g: 0.698, b: 0.227, a: 1}
   windWidth: 0.3
   windLift: 0.08
   windFadeSpeed: 2.5
-  revealWholeMap: 0
+  seeThrough: 1
+  seeThroughRadius: 2
+  seeThroughSoft: 1.4
+  seeThroughMargin: 0.8
+  seeThroughFloor: 0.2
+  occludableLitShader: {fileID: 0}
+  revealWholeMap: 1
   revealRiseHeight: 3
   revealCubeDuration: 0.6
   revealCubeInterval: 0.05
   revealShuffle: 2.5
   revealMaxSpread: 3.5
   revealOvershoot: 0.08
-  mistEnabled: 0
+  revealFov: 65
+  mistEnabled: 1
   mistStyle:
     color: {r: 0.94, g: 0.91, b: 0.86, a: 1}
     strength: 0.92
@@ -1755,17 +1770,17 @@ MonoBehaviour:
   heightFogStyle:
     color: {r: 0.9, g: 0.89, b: 0.87, a: 1}
     density: 0.35
-    topOffset: 0.2
+    topOffset: -0.5
     falloff: 0.8
     wave: 0.6
-    maxDistance: 25
+    maxDistance: 400
     skyBlend: 0.7
     scatter: 0.8
     anisotropy: 0.5
     mapClear: 1
     clearFrom: 0
     clearTo: 0.6
-  hazeEnabled: 0
+  hazeEnabled: 1
   hazeStyle:
     color: {r: 0.93, g: 0.9, b: 0.86, a: 1}
     strength: 0.95
@@ -1791,6 +1806,34 @@ MonoBehaviour:
     rate: 0.35
     max: 12
     soft: 8
+  mapRain: 1
+  mapRainAfterLevelId: 1-2
+  mapRainMin: {x: -20, y: -8}
+  mapRainSize: {x: 62, y: 34}
+  mapRainBaseLayer: 3
+  mapRainHeight: 9
+  mapRainDensity: 0.9
+  mapRainRampSeconds: 6
+  mapRainColor: {r: 0.72, g: 0.78, b: 0.86, a: 0.35}
+  worldIntegration: 1
+  bedrockEnabled: 1
+  bedrockClose: 5
+  bedrockDepth: 8
+  moatTrench: 1
+  bedrockCliff: {r: 0.46, g: 0.43, b: 0.4, a: 1}
+  lowlandShade: 0.8
+  blendBand: 4
+  blendStrength: 0.6
+  spineRoad: 1
+  roadWidth: 0.62
+  roadSkipLevels:
+  - Test
+  roadRegions:
+  - OrderWorkshop
+  - Observatory
+  - Ocean
+  - Volcano
+  roadGhostColor: {r: 1, g: 0.93, b: 0.7, a: 0.6}
 --- !u!114 &1293787489
 MonoBehaviour:
   m_ObjectHideFlags: 0

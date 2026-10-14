@@ -21,7 +21,7 @@ public class TurretBullet : MonoBehaviour
         _target = target;
         _turret = turret;
         _speed = turret.bulletSpeed;
-        _damage = turret.EffectiveBulletDamage;   // base × reversible shrine-aura buff (base untouched)
+        _damage = turret.RollDamage();   // base × every modifier, with the fractional part carried
         _life = turret.bulletLifetime;
 
         SetupBulletCollider();
@@ -80,7 +80,7 @@ public class TurretBullet : MonoBehaviour
     {
         if (_turret == null)
         {
-            enemy.TakeDamage(_damage);
+            enemy.TakeDamage(_damage, _turret);
             return;
         }
 
@@ -91,7 +91,7 @@ public class TurretBullet : MonoBehaviour
             // mode is switched mid-flight would otherwise fall through to plain
             // damage and silently drop the debuff.
             case TurretController.Mode.Slow:
-                enemy.TakeDamage(_damage);
+                enemy.TakeDamage(_damage, _turret);
                 EnemySlowEffect.Apply(enemy, _turret.slowDuration, _turret.slowMultiplier);
                 break;
 
@@ -114,12 +114,12 @@ public class TurretBullet : MonoBehaviour
                     for (int i = 0; i < enemies.Count; i++)
                     {
                         var e = enemies[i];
-                        if (e != null && e.CurrentHealth > 0
+                        if (e != null && e.CurrentHealth > 0 && !e.IsAlly
                             && (e.transform.position - blastCenter).sqrMagnitude <= r2)
                             _aoeBuffer.Add(e);
                     }
                     for (int i = 0; i < _aoeBuffer.Count; i++)
-                        if (_aoeBuffer[i] != null) _aoeBuffer[i].TakeDamage(_damage);
+                        if (_aoeBuffer[i] != null) _aoeBuffer[i].TakeDamage(_damage, _turret);
                 }
 
                 if (_turret.AoeBurnGroundEnabled)
@@ -145,7 +145,7 @@ public class TurretBullet : MonoBehaviour
             }
 
             default:
-                enemy.TakeDamage(_damage);
+                enemy.TakeDamage(_damage, _turret);
                 break;
         }
     }

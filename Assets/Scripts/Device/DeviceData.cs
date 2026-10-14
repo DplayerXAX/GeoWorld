@@ -27,6 +27,16 @@ public enum DeviceKind
     // on purpose — a one-shot that deletes an elite or a boss is either useless or
     // absurd depending on the wave, and neither is interesting.
     Trap,
+
+    // Teleports the first enemy to step on it a few nodes along its own route - forward
+    // or back, at random. The odds are the device's whole character: a help half the
+    // time, a hindrance the other half, and the player decides where the gamble sits.
+    Spring,
+
+    // The first enemy to step on it turns against its side: it walks back the way it
+    // came and strikes the enemies it meets, and costs a life to nobody when it runs
+    // out of road.
+    Turncoat,
 }
 
 [CreateAssetMenu(menuName = "Game/Device", fileName = "Device")]
@@ -53,6 +63,14 @@ public class DeviceData : ScriptableObject
     public string pairKey = "A";
     [Tooltip("Extra path cost, in hops, for stepping through. 0 = free, which makes any portal strictly better than walking and removes the decision.")]
     [Min(0)] public int traversalCost = 2;
+
+    [Header("Spring")]
+    [Tooltip("Furthest it can throw an enemy along its route, in nodes (either way).")]
+    [Range(1, 12)] public int springRange = 5;
+
+    [Header("Turncoat")]
+    [Tooltip("Damage per contact tick the turned enemy deals to the enemies it meets.")]
+    [Min(1)] public int turncoatDamage = 3;
 
     [Header("Trap")]
     [Tooltip("Enemies with more than this max health are ignored — that's what 'ordinary' means here.")]

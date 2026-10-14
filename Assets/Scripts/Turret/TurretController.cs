@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 public enum BasicTurretUpgradePath { Power, Burst }
@@ -10,7 +11,7 @@ public class TurretController : MonoBehaviour
     const float BasicUpgradePercent = 0.33f;
 
     // Append only — Mode indexes per-type arrays (e.g. AudioManager's rate limiter).
-    public enum Mode { Basic, Slow, Aoe, Debuff }
+    public enum Mode { Basic, Slow, Aoe, Debuff, Laser, Gravity }
 
     [Header("Balance")]
     [Tooltip("Central balance asset. When set, Configure(BlockType) overrides damage / range / fireRate / slow / AOE stats from BalanceTable.GetTurretStats(mode). Leave empty to use the Inspector defaults below.")]
@@ -531,6 +532,33 @@ public class TurretController : MonoBehaviour
         return col.transform == root || col.transform.IsChildOf(root);
     }
 
+    // Every turret in the scene, for items that compare turrets with each other.
+    public static readonly List<TurretController> All = new();
+    // (turret, what it fired at) — every shot of every type.
+    public static event System.Action<TurretController, EnemySurfaceUnit> AnyFired;
+
+    void OnEnable()  { if (!All.Contains(this)) All.Add(this); }
+    void OnDisable() { All.Remove(this); }
+
+    // Damage fractions are CARRIED, not rounded away. Damage is a whole number per
+    // hit and the common turret does 1, so a "+10%" that simply rounded would do
+    // nothing until it reached +50%. Instead each turret keeps the remainder: at ×1.1
+    // every tenth shot does 2, and over time the bonus is exactly what it says.
+    float _damageCarry;
+
+    /// <summary>The damage of ONE shot fired right now (carries the fractional part).</summary>
+    public int RollDamage()
+    {
+        float v = Modifiers.Eval(Stat.TurretDamage, bulletDamage, Mods);
+        if (RogueRun.Active) v *= RogueRun.ShotMult(this);
+        if (v <= 0f) return 0;
+
+        float due = v + _damageCarry;
+        int d = Mathf.FloorToInt(due);
+        _damageCarry = due - d;
+        return d;
+    }
+
     void Awake()
     {
         ResolveBulletPrefab();
@@ -545,12 +573,17 @@ public class TurretController : MonoBehaviour
         // unsupported turret should visibly wind down whenever it happens.
         if (Visual != null) Visual.Powered = Supported;
 
+        // The laser draws its aim line in the build phase too, so it handles every
+        // phase itself.
+        if (mode == Mode.Laser) { TickLaser(); return; }
+
         var flow = GameFlowManager.Instance;
         if (flow == null || flow.phase != GamePhase.Running) { ReportTarget(null); return; }
         if (!Supported) { _target = null; ReportTarget(null); return; }
 
         // The Debuff turret never fires: its whole effect is the field.
         if (mode == Mode.Debuff) { TickDebuffField(); return; }
+        if (mode == Mode.Gravity) { TickGravity(); return; }
 
         _fireTimer -= Time.deltaTime;
         if (_fireTimer > 0f) return;   // not ready — skip the (expensive) target search entirely
@@ -608,6 +641,167 @@ public class TurretController : MonoBehaviour
         ReportTarget(nearest);   // the animator knows when something is in the field
     }
 
+    // ── Gravity Generator (Mode.Gravity) ─────────────────────────────────────────
+    // A field with one rule: an enemy inside it that is NOT standing on a top face —
+    // it has been led up a wall, round an edge, under a ledge — loses its footing and
+    // is destroyed. Bosses and elites are only hurt: a slice of their health per tick.
+    // It rewards routing enemies OFF the flat, which is the one thing the other turrets
+    // never ask of the route.
+    float _gravityTimer;
+
+    /// <summary>The slice of a boss's or elite's max health the field takes each second, in percent.</summary>
+    public float GravityHeavyPctPerSecond
+    {
+        get
+        {
+            var t = balance != null ? balance : BalanceTable.Active;
+            return t != null ? t.gravityHeavyPct / Mathf.Max(0.05f, t.gravityTickSeconds) * 100f : 8f;
+        }
+    }
+
+    void TickGravity()
+    {
+        var mgr = EnemyBaseManager.Instance;
+        var enemies = mgr != null ? mgr.ActiveEnemies : null;
+        if (enemies == null) { ReportTarget(null); return; }
+
+        var   table = balance != null ? balance : BalanceTable.Active;
+        float tick  = table != null ? Mathf.Max(0.05f, table.gravityTickSeconds) : 0.5f;
+        float heavy = table != null ? table.gravityHeavyPct : 0.04f;
+
+        _gravityTimer -= Time.deltaTime;
+        bool strike = _gravityTimer <= 0f;
+        if (strike) _gravityTimer = tick;
+
+        float range = EffectiveRange, r2 = range * range, best = float.MaxValue;
+        EnemySurfaceUnit nearest = null;
+
+        // Iterate backwards: a kill removes the enemy from the live list.
+        for (int i = enemies.Count - 1; i >= 0; i--)
+        {
+            var e = enemies[i];
+            if (e == null || e.CurrentHealth <= 0 || e.IsAlly) continue;
+            float d = (e.transform.position - Origin).sqrMagnitude;
+            if (d > r2) continue;
+
+            var n = e.CurrentNormal;
+            if (n == null || n.Value.y >= 0.9f) continue;       // on a top face: it stands
+
+            if (d < best) { best = d; nearest = e; }
+            if (!strike) continue;
+
+            bool big = e.leakBonus > 0 || e.GetComponent<BossController>() != null;
+            int dmg  = big ? Mathf.Max(1, Mathf.CeilToInt(e.maxHealth * heavy)) : e.CurrentHealth;
+            e.TakeDamage(dmg, this);
+            if (Visual != null) Visual.OnFire(e.transform.position);
+        }
+        ReportTarget(nearest);
+    }
+
+    // ── Laser (Mode.Laser) ───────────────────────────────────────────────────────
+    // A beam down one axis — the one the turret was placed facing — that pierces
+    // every enemy in it and stops at the first block (see LaserBeam). Fires a pulse
+    // at fireRate while anything is in the beam; the pulse hits all of it.
+    LaserBeamView _beam;
+    static readonly List<EnemySurfaceUnit> _laserHits = new();
+
+    public Vector3Int LaserAxis
+    {
+        get
+        {
+            Transform root = transform.parent != null ? transform.parent : transform;
+            return LaserBeam.Axis(root.forward);
+        }
+    }
+
+    // The beam as it stands now: its world segment, and whether a block cuts it short.
+    public bool TryGetLaserSegment(out Vector3 a, out Vector3 b, out bool blocked)
+    {
+        a = b = Origin; blocked = false;
+        var grid = GridSystem.instance;
+        if (grid == null) return false;
+        var cell  = grid.WorldToGrid(Origin);
+        int cells = Mathf.Max(1, Mathf.FloorToInt(EffectiveRange / Mathf.Max(0.01f, grid.cellSize)));
+        LaserBeam.Segment(grid, cell, LaserAxis, cells, out a, out b, out blocked);
+        return true;
+    }
+
+    void TickLaser()
+    {
+        var grid  = GridSystem.instance;
+        var flow  = GameFlowManager.Instance;
+        bool live = Supported && transform.lossyScale.x > 0.02f;   // not mid pop-in/out
+        if (!live || grid == null || !TryGetLaserSegment(out var a, out var b, out bool blocked))
+        {
+            if (_beam != null) _beam.Hide();
+            ReportTarget(null);
+            return;
+        }
+
+        bool fighting = flow != null && flow.phase == GamePhase.Running;
+        if (_beam == null) _beam = LaserBeamView.Create(TurretTypes.DisplayColor(Mode.Laser));
+        _beam.Show(a, b, blocked, fighting ? LaserBeamView.State.Armed : LaserBeamView.State.Aim, grid.cellSize);
+
+        if (!fighting) { ReportTarget(null); return; }
+
+        _fireTimer -= Time.deltaTime;
+        if (_fireTimer > 0f) return;
+
+        var mgr     = EnemyBaseManager.Instance;
+        var enemies = mgr != null ? mgr.ActiveEnemies : null;
+        if (enemies == null) { ReportTarget(null); return; }
+
+        // Everything in the beam. Gathered first, damaged after: a kill removes the
+        // enemy from the live list mid-loop.
+        _laserHits.Clear();
+        float radius = grid.cellSize * 0.55f;
+        EnemySurfaceUnit nearest = null; float bestSqr = float.MaxValue;
+        for (int i = 0; i < enemies.Count; i++)
+        {
+            var e = enemies[i];
+            if (e == null || e.CurrentHealth <= 0) continue;
+            if (e.IsAlly) continue;
+            if (LaserBeam.DistanceToSegment(e.transform.position, a, b) > radius) continue;
+            _laserHits.Add(e);
+            float sqr = (e.transform.position - a).sqrMagnitude;
+            if (sqr < bestSqr) { bestSqr = sqr; nearest = e; }
+        }
+        ReportTarget(nearest);
+        if (_laserHits.Count == 0) return;   // nothing yet: look again next frame, fire the moment something steps in
+
+        int dmg = RollDamage();
+        for (int i = 0; i < _laserHits.Count; i++)
+            if (_laserHits[i] != null) _laserHits[i].TakeDamage(dmg, this);
+        AnyFired?.Invoke(this, nearest);
+        _beam.Pulse();
+        if (Visual != null && nearest != null) Visual.OnFire(nearest.transform.position);
+        var audio = AudioManager.Instance;
+        if (audio != null) audio.PlayTurretFire(mode, gameObject);
+        _fireTimer = fireInterval / FireRateMultiplier;
+    }
+
+    // Could this turret hit an enemy standing at `point`? Range and line of sight for
+    // the shooting turrets; the beam's own line for the laser. Feeds the route
+    // coverage readout (RouteCoverage). The Prayer turret never shoots, so never covers.
+    public bool Covers(Vector3 point)
+    {
+        if (!Supported || mode == Mode.Debuff || mode == Mode.Gravity) return false;
+        if (mode == Mode.Laser)
+        {
+            var grid = GridSystem.instance;
+            if (grid == null || !TryGetLaserSegment(out var a, out var b, out _)) return false;
+            return LaserBeam.DistanceToSegment(point, a, b) <= grid.cellSize * 0.6f;
+        }
+        float r = EffectiveRange;
+        if ((point - Origin).sqrMagnitude > r * r) return false;
+        return !IsShotBlocked(MuzzlePosition, point);
+    }
+
+    void OnDestroy()
+    {
+        if (_beam != null) Destroy(_beam.gameObject);
+    }
+
     static bool _killBonusHooked;
     static void HookKillBonus()
     {
@@ -655,6 +849,7 @@ public class TurretController : MonoBehaviour
             var e = enemies[i];
             if (e == null || e.CurrentHealth <= 0) continue;
 
+            if (e.IsAlly) continue;       // a defector fights for us now
             if (!CanShoot(e)) continue;   // InRange short-circuits before the LOS raycast
 
             float sqr = (e.transform.position - Origin).sqrMagnitude;
@@ -682,6 +877,7 @@ public class TurretController : MonoBehaviour
 
     void Fire(EnemySurfaceUnit target)
     {
+        AnyFired?.Invoke(this, target);
         if (Visual != null) Visual.OnFire(target.transform.position);
         var audio = AudioManager.Instance;
         if (audio != null) audio.PlayTurretFire(mode, gameObject);
@@ -696,7 +892,7 @@ public class TurretController : MonoBehaviour
             // is the stack itself discharging, so it leaves from where the stack is.
             Vector3 from = Visual != null ? Visual.WorldCenter : Origin;
             TurretShotFx.Beam(from, target.transform.position);
-            target.TakeDamage(EffectiveBulletDamage);
+            target.TakeDamage(RollDamage(), this);
             EnemySlowEffect.Apply(target, slowDuration, slowMultiplier);
             return;
         }

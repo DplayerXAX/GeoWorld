@@ -100,4 +100,8 @@ public class SpawnGroup
 
     [Tooltip("Seconds to wait before the first spawn of this group. Lets you stagger sub-groups within a wave.")]
     [Min(0f)] public float preDelay = 0f;
+
+    // Set by the roguelite's wave builder (RogueWaves). 0 = a plain group.
+    [HideInInspector] public int rogueEntry;   // 1-based roster index, or the act (1-based) for a boss
+    [HideInInspector] public int affix;        // RogueAffix
 }

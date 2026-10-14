@@ -115,6 +115,10 @@ public class BalanceTable : ScriptableObject
     public float aoeTurretTypeMult = 1.2f;
     [Tooltip("Prayer turret price multiplier. 0.6 ≈ 6 for a 1-cell turret — it does no damage itself, so it's the cheapest turret.")]
     public float debuffTurretTypeMult = 0.6f;
+    [Tooltip("Laser turret price multiplier. 1.3 ≈ 13 for a 1-cell turret — it pierces everything in its line, but ONLY its line.")]
+    public float laserTurretTypeMult = 1.3f;
+    [Tooltip("Gravity Generator price multiplier (roguelite only). 1.5 ≈ 15 for a 1-cell turret.")]
+    public float gravityTurretTypeMult = 1.5f;
     // Every non-turret block type uses 1.0 implicitly.
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -217,6 +221,24 @@ public class BalanceTable : ScriptableObject
         cost = 8, damage = 1.8f, range = 3.5f, fireRate = 0.6f,
         aoeRadius = 1.5f,
     };
+
+    [Header("Turret — Laser (a beam down one axis: hits everything in its line, stopped by the first block)")]
+    [Tooltip("damage = per pulse, to EVERY enemy in the beam.  range = beam length in cells.  fireRate = pulses per second.")]
+    public TurretRecord laserTurret = new()
+    {
+        cost = 6, damage = 1.0f, range = 6.0f, fireRate = 2.0f,
+    };
+
+    [Header("Turret — Gravity Generator (roguelite: a field that destroys enemies NOT standing on a top face)")]
+    [Tooltip("Only `range` matters. Bosses and elites are not destroyed — they lose gravityHeavyPct of max health per tick.")]
+    public TurretRecord gravityTurret = new()
+    {
+        cost = 9, damage = 0f, range = 2.5f, fireRate = 0f,
+    };
+    [Tooltip("Seconds between the field's ticks.")]
+    [Min(0.05f)] public float gravityTickSeconds = 0.5f;
+    [Tooltip("Fraction of a boss's / elite's MAX health taken per tick (0.04 = 4% every tick).")]
+    [Range(0f, 0.5f)] public float gravityHeavyPct = 0.04f;
 
     [Header("Turret — Prayer (no attack; a field in which enemies take more damage)")]
     [Tooltip("Only `range` matters — it never fires, so damage / fireRate are unused.")]
@@ -348,6 +370,8 @@ public class BalanceTable : ScriptableObject
         TurretController.Mode.Slow => slowTurret,
         TurretController.Mode.Aoe  => aoeTurret,
         TurretController.Mode.Debuff => debuffTurret,
+        TurretController.Mode.Laser  => laserTurret,
+        TurretController.Mode.Gravity => gravityTurret,
         _                          => basicTurret,
     };
 
@@ -389,6 +413,8 @@ public class BalanceTable : ScriptableObject
         BlockType.SlowTurret => slowTurretTypeMult,
         BlockType.AoeTurret  => aoeTurretTypeMult,
         BlockType.DebuffTurret => debuffTurretTypeMult,
+        BlockType.LaserTurret => laserTurretTypeMult,
+        BlockType.GravityTurret => gravityTurretTypeMult,
         _                    => 1f,
     };
 

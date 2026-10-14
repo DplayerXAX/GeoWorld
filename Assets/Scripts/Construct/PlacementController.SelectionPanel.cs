@@ -196,6 +196,25 @@ public partial class PlacementController
                 return sb.ToString().TrimEnd();
             }
 
+            // A field with one rule: off a top face, it ends you.
+            if (t.mode == TurretController.Mode.Gravity)
+            {
+                sb.AppendLine($"Range      <b>{t.EffectiveRange:0.#}</b>");
+                sb.AppendLine($"Off a top face  <b>destroyed</b>  <color=#F54D9E>(in range)</color>");
+                sb.AppendLine($"Bosses / elites <b>-{t.GravityHeavyPctPerSecond:0.#}%/s</b>  <color=#F54D9E>(max health)</color>");
+                return sb.ToString().TrimEnd();
+            }
+
+            // A beam, not a shot: what it does is a line, so say what the line does.
+            if (t.mode == TurretController.Mode.Laser)
+            {
+                float pulses = t.EffectiveFireRate;
+                sb.AppendLine($"Damage     <b>{t.EffectiveBulletDamage}</b>  <color=#6A9A6A>(every enemy in the beam)</color>");
+                sb.AppendLine($"Reach      <b>{t.EffectiveRange:0.#}</b>  <color=#6A9A6A>(stops at the first block)</color>");
+                sb.AppendLine($"Pulses     <b>{pulses:0.0}/s</b>");
+                return sb.ToString().TrimEnd();
+            }
+
             float fireRate = t.fireInterval > 0.0001f ? 1f / t.fireInterval : 0f;
             sb.AppendLine($"Damage     <b>{t.bulletDamage}</b>");
             sb.AppendLine($"Range      <b>{t.EffectiveRange:0.#}</b>");
@@ -519,7 +538,8 @@ public partial class PlacementController
             else
             {
                 rows = 3;   // Damage, Range, Fire rate
-                if      (t.mode == TurretController.Mode.Debuff) { }   // Range, Damage taken, Kill bonus — also 3
+                if      (t.mode == TurretController.Mode.Debuff || t.mode == TurretController.Mode.Gravity) { }   // Range, Damage taken, Kill bonus — also 3
+                else if (t.mode == TurretController.Mode.Laser)  { }   // Damage, Reach, Pulses — also 3
                 else if (t.mode == TurretController.Mode.Slow) rows += 2;
                 else if (t.mode == TurretController.Mode.Aoe)
                 {
@@ -673,6 +693,14 @@ public partial class PlacementController
             PanelRow("Range",        turret.EffectiveRange.ToString("0.#"));
             PanelRow("Damage taken", "+" + ampPct + "% (in range)");
             PanelRow("Kill bonus", "+" + bonus + " turret ¤");
+            return;
+        }
+
+        if (turret.mode == TurretController.Mode.Gravity)
+        {
+            PanelRow("Range",   turret.EffectiveRange.ToString("0.#"));
+            PanelRow("Off a top face", "destroyed");
+            PanelRow("Bosses / elites", "-" + turret.GravityHeavyPctPerSecond.ToString("0.#") + "%/s");
             return;
         }
 

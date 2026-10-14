@@ -167,6 +167,20 @@ public class SynergyEvaluator : MonoBehaviour
         OnClaimChanged?.Invoke(active.rule, active);
     }
 
+    /// <summary>
+    /// Re-evaluates every rule from scratch against the board as it is now. For when a
+    /// RULE changed rather than a piece (an item that lets one colour count as
+    /// another): nothing on the board moved, so no version bumped, so nothing would.
+    /// </summary>
+    public void ForceReEvaluate()
+    {
+        if (rules != null)
+            for (int i = 0; i < rules.Count; i++)
+                if (rules[i] != null) rules[i].LastEvalVersion = -1;
+        for (int i = 0; i < _actives.Count; i++) _actives[i].dirty = true;
+        ReEvaluate();
+    }
+
     public void ResetForNewRun()
     {
         RevokeAll();

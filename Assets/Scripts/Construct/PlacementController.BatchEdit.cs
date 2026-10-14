@@ -375,7 +375,8 @@ public partial class PlacementController
 
         if (!_mouseRotation.Active && Input.GetMouseButtonDown(0))
         {
-            if (IsPointerOverSelectionPanel() || HudSidePanels.PointerOver || PointerOverInfoPanel())
+            if (IsPointerOverSelectionPanel() || HudSidePanels.PointerOver || PointerOverInfoPanel()
+                || RogueUiGate.BlocksWorld(VirtualCursor.Position))
             {
                 // click landed on UI — ignore, keep holding the batch
             }

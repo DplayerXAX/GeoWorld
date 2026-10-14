@@ -17,6 +17,17 @@ public class LevelObjectivesTracker : MonoBehaviour
     // True once the tracker is live (so callers don't treat the vacuous
     // "no tracker → AllRequiredSatisfied = true" as a real completion).
     public static bool Tracking => _inst != null;
+
+    // Where the panel ends, as a distance below the top of the screen in canvas units
+    // (0 when there is no panel). Other top-left HUD pieces stack under it.
+    public static float PanelBottom
+    {
+        get
+        {
+            if (_inst == null || _inst._panelRt == null || !_inst._panelRt.gameObject.activeInHierarchy) return 0f;
+            return -_inst._panelRt.anchoredPosition.y + _inst._panelRt.rect.height;
+        }
+    }
     // True when every non-optional objective is currently satisfied (gates the clear
     // if the level has requireAllObjectives).
     public static bool AllRequiredSatisfied
@@ -57,6 +68,7 @@ public class LevelObjectivesTracker : MonoBehaviour
     int _kills, _leaks, _placed, _maxSynergies, _maxTurretUpgradeLevel, _chaosDestroyed;
 
     Canvas    _canvas;
+    RectTransform _panelRt;
     TMP_Text[] _rows;
 
     // ── Spawn ───────────────────────────────────────────────────────────────────
@@ -203,6 +215,7 @@ public class LevelObjectivesTracker : MonoBehaviour
         sc.matchWidthOrHeight = 1f;
 
         var panel = NewRect("Panel", go.transform);
+        _panelRt = panel;
         panel.anchorMin = panel.anchorMax = panel.pivot = new Vector2(0f, 1f);   // top-left
         panel.anchoredPosition = new Vector2(16f, -200f);
         var bg = panel.gameObject.AddComponent<Image>();

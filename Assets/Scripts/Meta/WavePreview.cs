@@ -165,8 +165,8 @@ public class WavePreviewRig : MonoBehaviour
         {
             if (g.prefab == null) continue;
             sb.AppendLine();
-            sb.AppendLine($"<b>{g.name}</b>  ×{g.count}   <size=80%><color=#6A6A6A>{g.prefab.maxHealth} HP</color></size>");
-            sb.Append($"<size=80%><color=#6A6A6A>{EnemyDossier.Mechanic(g.prefab)}</color></size>");
+            sb.AppendLine($"<b>{g.name}</b>  ×{g.count}   <size=80%><color=#6A6A6A>{(g.hp > 0 ? g.hp : g.prefab.maxHealth)} HP</color></size>");
+            sb.Append($"<size=80%><color=#6A6A6A>{EnemyDossier.Mechanic(g.prefab)}{(string.IsNullOrEmpty(g.note) ? "" : "\n" + g.note)}</color></size>");
         }
         t.text = sb.ToString().TrimEnd();
 

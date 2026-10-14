@@ -6,13 +6,17 @@ public static class TurretTypes
         type == BlockType.Turret
         || type == BlockType.SlowTurret
         || type == BlockType.AoeTurret
-        || type == BlockType.DebuffTurret;
+        || type == BlockType.DebuffTurret
+        || type == BlockType.LaserTurret
+        || type == BlockType.GravityTurret;
 
     public static TurretController.Mode Mode(BlockType type) => type switch
     {
         BlockType.SlowTurret => TurretController.Mode.Slow,
         BlockType.AoeTurret  => TurretController.Mode.Aoe,
         BlockType.DebuffTurret => TurretController.Mode.Debuff,
+        BlockType.LaserTurret => TurretController.Mode.Laser,
+        BlockType.GravityTurret => TurretController.Mode.Gravity,
         _                    => TurretController.Mode.Basic,
     };
 
@@ -21,6 +25,8 @@ public static class TurretTypes
         BlockType.SlowTurret => "Slow Turret",
         BlockType.AoeTurret  => "AOE Turret",
         BlockType.DebuffTurret => "Prayer Turret",
+        BlockType.LaserTurret => "Laser Turret",
+        BlockType.GravityTurret => "Gravity Generator",
         BlockType.Turret     => "Basic Turret",
         _                    => type.ToString(),
     };
@@ -35,11 +41,14 @@ public static class TurretTypes
     //   Slow  → ice blue     (frost)
     //   Aoe   → hot orange   (explosive)
     //   Debuff → violet      (a curse — the one hue none of the others is near)
+    //   Laser → lime green   (a beam — the one hue left)
     public static Color DisplayColor(TurretController.Mode mode) => mode switch
     {
         TurretController.Mode.Slow => new Color(0.30f, 0.68f, 1.00f),
         TurretController.Mode.Aoe  => new Color(1.00f, 0.42f, 0.18f),
         TurretController.Mode.Debuff => new Color(0.66f, 0.36f, 0.95f),
+        TurretController.Mode.Laser => new Color(0.42f, 0.98f, 0.45f),
+        TurretController.Mode.Gravity => new Color(0.96f, 0.30f, 0.62f),   // magenta — gravity
         _                          => new Color(0.88f, 0.91f, 0.95f),
     };
 }

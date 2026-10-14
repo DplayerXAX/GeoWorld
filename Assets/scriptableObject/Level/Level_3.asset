@@ -25,7 +25,7 @@ MonoBehaviour:
   synergyEnabled: 1
   allowedColors: 010000000400000002000000
   turretPool: 
-  environment: {fileID: 0}
+  environment: {fileID: 11400000, guid: 71fe97475a0540a788498eba0c8f3a71, type: 2}
   startingShop: []
   waves:
   - {fileID: 11400000, guid: 080e4b2a67c19904bbbfdce56bfad1ae, type: 2}
@@ -200,6 +200,7 @@ MonoBehaviour:
     speakerSlot: 1
     speakerPortrait: 
   revealAfter: {fileID: 11400000, guid: fb1db61d4cd59c545b71466b020d5f0e, type: 2}
+  mapMoatWidth: 2
   randomStartBlocks: 0
   randomStartColor: 1
   randomStartTurret: 5

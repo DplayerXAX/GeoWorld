@@ -7,6 +7,10 @@ public class EnemyBaseManager : MonoBehaviour
 {
     public static EnemyBaseManager Instance;
 
+    // Roguelite hooks. SpawnModifier runs on every enemy right after its stats are set;
+    // PathTransform may rewrite a route (Labyrinth).
+    public static Action<EnemySurfaceUnit, SpawnGroup> SpawnModifier;
+
     [Header("Wave (fallback when no WaveDefinition is supplied)")]
     [Tooltip("Default enemy prefab used by the legacy spawn path (no SpawnGroup list supplied) AND by any SpawnGroup that has a null prefab. With the prefab-only enemy design this field is REQUIRED — leaving it empty will skip spawns and log a warning.")]
     public EnemySurfaceUnit enemyPrefab;
@@ -96,7 +100,7 @@ public class EnemyBaseManager : MonoBehaviour
         if (paths != null)
             foreach (var p in paths)
                 if (p != null && p.Count > 0)
-                    valid.Add(new List<FaceNode>(p));
+                    valid.Add(TransformPath(new List<FaceNode>(p)));
 
         if (valid.Count == 0)
         {
@@ -174,7 +178,7 @@ public class EnemyBaseManager : MonoBehaviour
                 {
                     if (!_waveActive) yield break;
 
-                    SpawnEnemy(group.prefab);
+                    SpawnEnemy(group.prefab, group);
                     _spawnedCount++;
 
                     bool last = (i == n - 1);
@@ -193,7 +197,7 @@ public class EnemyBaseManager : MonoBehaviour
 
             while (_spawnedCount < count && _waveActive)
             {
-                SpawnEnemy(null);
+                SpawnEnemy(null, null);
                 _spawnedCount++;
 
                 if (_spawnedCount < count && delay > 0f)
@@ -206,7 +210,15 @@ public class EnemyBaseManager : MonoBehaviour
         _spawnRoutine = null;
     }
 
-    void SpawnEnemy(EnemySurfaceUnit prefabOverride)
+    static List<FaceNode> TransformPath(List<FaceNode> path)
+    {
+        var f = RogueRun.PathTransform;
+        if (f == null || path == null || path.Count < 3) return path;
+        var t = f(path);
+        return t != null && t.Count >= path.Count ? t : path;
+    }
+
+    void SpawnEnemy(EnemySurfaceUnit prefabOverride, SpawnGroup group)
     {
         if (_currentPaths == null || _currentPaths.Count == 0) return;
 
@@ -227,7 +239,7 @@ public class EnemyBaseManager : MonoBehaviour
         {
             var path = _currentPaths[i];
             if (path != null && path.Count > 0)
-                SpawnOneEnemy(source, path);
+                SpawnOneEnemy(source, path, group);
         }
     }
 
@@ -300,12 +312,15 @@ public class EnemyBaseManager : MonoBehaviour
     }
 
     // Instantiates and launches a single enemy of `source` along `path`.
-    void SpawnOneEnemy(EnemySurfaceUnit source, List<FaceNode> path)
+    void SpawnOneEnemy(EnemySurfaceUnit source, List<FaceNode> path, SpawnGroup group = null)
     {
         // Spectators never spawn. Their enemies arrive as snapshots.
         if (CombatSync.IsSpectator) return;
 
         EnemySurfaceUnit enemy = Instantiate(source);
+        // A template built in code is kept inactive so its clone can be set up before
+        // its own Awake runs (RogueBoss); a prefab is already active, a no-op.
+        if (!enemy.gameObject.activeSelf) enemy.gameObject.SetActive(true);
         // Prefabs can be lean: drop in EnemyChaoticVisual + BlockOutlineApplier
         // with empty material slots and we fill them with the manager's
         // defaults here. Each prefab MAY override materials individually
@@ -333,6 +348,13 @@ public class EnemyBaseManager : MonoBehaviour
             enemy.baseSpeedMultiplier = Mathf.Max(0.01f, record.speedMultiplier);
             enemy.targetPriority      = record.targetPriority;
         }
+
+        // The mode's own say over what this enemy is (the roguelite's roster, elites,
+        // bosses), then the global health multiplier items can set (Mirror).
+        SpawnModifier?.Invoke(enemy, group);
+        float hpStat = Modifiers.Mul(Stat.EnemyHealth);
+        if (!Mathf.Approximately(hpStat, 1f))
+            enemy.SetMaxHealth(Mathf.Max(1, Mathf.RoundToInt(enemy.maxHealth * hpStat)));
 
         var first = path[0];
         enemy.transform.position = GridSystem.instance.GridToWorld(first.cell)
@@ -362,7 +384,7 @@ public class EnemyBaseManager : MonoBehaviour
 
             var path = SurfacePathfinding.FindPath(new List<FaceNode> { startFace }, endFaces);
             if (path != null && path.Count > 0)
-                e.SetPath(path, enemyBpm, enemyMoveRatio);
+                e.SetPath(e.IsAlly ? path : TransformPath(path), enemyBpm, enemyMoveRatio);
         }
     }
 
@@ -435,7 +457,10 @@ public class EnemyBaseManager : MonoBehaviour
         {
             // Rounded: lives are whole. A stat of 0 (an item that zeroes it) means
             // the leak costs nothing — TakeDamage ignores amounts <= 0.
-            int loss = Mathf.Max(0, Mathf.RoundToInt(Modifiers.Eval(Stat.LeakDamage, 1f)));
+            int loss = Mathf.Max(0, Mathf.RoundToInt(Modifiers.Eval(Stat.LeakDamage, 1f + (enemy != null ? enemy.leakBonus : 0))));
+            // Mirror: sometimes a leak costs nothing.
+            if (RogueRun.LeakNegateChance > 0f && UnityEngine.Random.value < RogueRun.LeakNegateChance) loss = 0;
+            if (RogueRun.Active) RogueRun.Leaks++;
             PlayerHealth.Instance.TakeDamage(loss);
             Debug.Log($"[EnemyBaseManager] Enemy escaped. Lives → {PlayerHealth.Instance.CurrentLives}");
         }
@@ -455,8 +480,14 @@ public class EnemyBaseManager : MonoBehaviour
         //                        clearing waves feeds the building budget.
         if (enemy != null && enemy.rewardOnKill > 0 && ResourceManager.Instance != null)
         {
-            ResourceManager.Instance.AddBlockCurrency(enemy.rewardOnKill);
-            CurrencyFlyFx.Fly(enemy.transform.position, isTurret: false, enemy.rewardOnKill);
+            int reward = enemy.rewardOnKill;
+            if (RogueRun.Active)   // Bounty Board and kin: a multiplier on kill money
+                reward = Mathf.Max(0, RogueRun.Gain(Modifiers.Eval(Stat.KillReward, reward)));
+            if (reward > 0)
+            {
+                ResourceManager.Instance.AddBlockCurrency(reward);
+                CurrencyFlyFx.Fly(enemy.transform.position, isTurret: false, reward);
+            }
         }
 
         // Sampled BEFORE RemoveEnemy destroys the GameObject, so the burst is

@@ -43,6 +43,14 @@ public sealed class BoardSnapshot
     public int VersionFor(BlockColor c)
         => _versionByColor.TryGetValue(c, out var v) ? v : 0;
 
+    // "Pieces of colour `extra` also count as colour `rule`" - an item's rule bend
+    // (Tender Sprout). Static, like the item that sets it: it is the run's rule, and
+    // the item removes its own entries when it is released.
+    static readonly List<(BlockColor rule, BlockColor extra)> _aliases = new();
+    public static void AddAlias(BlockColor rule, BlockColor extra)    { if (!_aliases.Contains((rule, extra))) _aliases.Add((rule, extra)); }
+    public static void RemoveAlias(BlockColor rule, BlockColor extra) => _aliases.Remove((rule, extra));
+    public static void ClearAliases() => _aliases.Clear();
+
     // ── Mutation ────────────────────────────────────────────────────────
 
     // Returns false if any of the piece's cells are already occupied.
@@ -108,6 +116,9 @@ public sealed class BoardSnapshot
         else if (pieceColor != BlockColor.None)
         {
             BumpOne(pieceColor);
+            // A rule that also accepts this colour has a changed pool too.
+            for (int i = 0; i < _aliases.Count; i++)
+                if (_aliases[i].extra == pieceColor) BumpOne(_aliases[i].rule);
         }
     }
 
@@ -141,6 +152,14 @@ public sealed class BoardSnapshot
 
         var exact = BucketFor(c);
         for (int i = 0; i < exact.Count; i++) yield return exact[i];
+
+        // Pieces of a colour the rule has been told to accept as its own.
+        for (int a = 0; a < _aliases.Count; a++)
+        {
+            if (_aliases[a].rule != c) continue;
+            var extra = BucketFor(_aliases[a].extra);
+            for (int i = 0; i < extra.Count; i++) yield return extra[i];
+        }
 
         if (includeJoker && c != BlockColor.Universal)
         {

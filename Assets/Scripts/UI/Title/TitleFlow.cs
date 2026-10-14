@@ -112,6 +112,7 @@ public class TitleFlow : MonoBehaviour
 
     // ── Menu actions (wire the menu buttons to these) ──────────────────────────
     public void PlayEndless()    { RunConfig.SetEndless(); LoadingScreen.Go(gameplayScene); }
+    public void PlayRogue()      { RunConfig.SetRogue();   LoadingScreen.Go(gameplayScene); }
     public void OpenSettings()   { SettingsScreen.Open = true; }
     public void LoadLevelSelect(){ LoadingScreen.Go(levelSelectScene); }   // save slots → world select
     public void GoToGallery()    { LoadingScreen.Go(galleryScene); }       // its own scene, not a Face

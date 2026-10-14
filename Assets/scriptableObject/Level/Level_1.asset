@@ -56,8 +56,8 @@ MonoBehaviour:
   - {fileID: 11400000, guid: 7d867ce72998a0f4689850dd5dd2258e, type: 2}
   rewardConversation: {fileID: 11400000, guid: d7f3117c472edc0489f5ccda3a1f1e1a, type: 2}
   rewardSuggestCubeSide: 1
-  rewardSuggestOrigin: {x: 4, y: 2, z: 7}
-  rewardSuggestRotation90: {x: 0, y: 0, z: 90}
+  rewardSuggestOrigin: {x: 2, y: 2, z: 7}
+  rewardSuggestRotation90: {x: 0, y: 3, z: 0}
   isTutorial: 1
   fixedEndpoints: 1
   startCell: {x: -3, y: 2, z: -1}

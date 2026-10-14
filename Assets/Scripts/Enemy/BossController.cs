@@ -56,6 +56,7 @@ public class BossController : MonoBehaviour
     BossMechanicConfig _cfg;
     EnemySurfaceUnit   _unit;
     Transform _root, _body, _ring, _eye;
+    WatcherModel _model;   // the built model (see WatcherModel); null = the plain template look
     GameObject _marker;
     Material _flatMat, _beamMat;
     LineRenderer _line;
@@ -417,6 +418,7 @@ public class BossController : MonoBehaviour
         var grid  = GridSystem.instance;
         var target = _target;
         CancelCharge();
+        if (_model != null) _model.Pulse();
         if (grid == null || target == null) return;
 
         var blocker = FirstBlocker(grid, from, to, target);
@@ -466,7 +468,9 @@ public class BossController : MonoBehaviour
         return n > 0 ? sum / n : Vector3.zero;
     }
 
-    Vector3 EyePosition() => _eye != null ? _eye.position : _root.position;
+    // The beam leaves from the lens when the model has one, else from the middle.
+    Vector3 EyePosition() => _model != null && _model.Muzzle != null ? _model.Muzzle.position
+                           : _eye != null ? _eye.position : _root.position;
 
     // Walks the beam through the grid. The first occupied cell that isn't the
     // boss's own, its perch, or part of the targeted set is what takes the hit.
@@ -574,6 +578,10 @@ public class BossController : MonoBehaviour
     // Idle: the body turns slowly, the ring of shards orbits, the whole thing bobs.
     void Animate()
     {
+        // The model keeps its own time; what it needs from here is how close to firing it is.
+        if (_model != null)
+            _model.Tick(Time.deltaTime, _chargeT >= 0f ? Mathf.Clamp01(_chargeT / Mathf.Max(0.01f, _cfg.laserCharge)) : 0f);
+
         if (_body != null) _body.Rotate(0f, 20f * Time.deltaTime, 0f, Space.World);
         if (_ring != null) _ring.Rotate(0f, -45f * Time.deltaTime, 0f, Space.Self);
         if (_marker != null) _marker.transform.Rotate(0f, 60f * Time.deltaTime, 0f, Space.World);
@@ -604,6 +612,16 @@ public class BossController : MonoBehaviour
         else
         {
             _root = new GameObject("Boss").transform;
+            float s = _cfg.size * cs;
+
+            // The modelled Watcher (WatcherModel); the plain template below is the
+            // fallback if its shader is missing.
+            _model = WatcherModel.Build(_root, s, (_cfg.hover + 0.48f) * cs, _cfg);
+            if (_model != null) _eye = _model.Eye;
+        }
+
+        if (visualPrefab == null && _model == null)
+        {
             float s = _cfg.size * cs;
 
             _body = Part(PrimitiveType.Cube, _root, Vector3.zero, Vector3.one * (s * 0.62f), _cfg.bodyColor);

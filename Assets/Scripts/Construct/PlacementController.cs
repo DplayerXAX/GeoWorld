@@ -33,6 +33,8 @@ public partial class PlacementController : MonoBehaviour
     public static event System.Action<BlockData> BlockSelected;
     // Fired when the selected block is sold.
     public static event System.Action<BlockData> BlockSold;
+    // The synergy colour of the last block sold — Affinity leans the shop toward it.
+    public static BlockColor LastSoldColor = BlockColor.None;
     // Fired when the shop is successfully refreshed.
     public static event System.Action ShopRefreshed;
     // Fired when a selected turret is successfully upgraded.
@@ -448,6 +450,7 @@ public partial class PlacementController : MonoBehaviour
         foreach (var b in blocks)
         {
             if (b == null) continue;
+            if (b.rogueOnly && RunConfig.Mode != GameMode.Rogue) continue;
             if (TurretTypes.Is(b.blockType))
             {
                 if (level == null || level.AllowsTurret(b.blockType)) turretTypes.Add(b);
@@ -539,7 +542,14 @@ public partial class PlacementController : MonoBehaviour
         for (int i = 0; i < count; i++)
         {
             if (isTurret || dist == null || rng == null) arr[i] = BlockColor.None;
-            else                                          arr[i] = dist.Pick(rng);
+            else
+            {
+                arr[i] = dist.Pick(rng);
+                // Affinity: a slot may take the colour you last sold instead.
+                if (RogueRun.AffinityChance > 0f && LastSoldColor != BlockColor.None
+                    && rng.NextFloat() < RogueRun.AffinityChance)
+                    arr[i] = LastSoldColor;
+            }
         }
         return arr;
     }
@@ -630,7 +640,8 @@ public partial class PlacementController : MonoBehaviour
                 // UI" test below would otherwise swallow every purchase.
             }
             else if (IsPointerOverSelectionPanel() || HudSidePanels.PointerOver || PointerOverInfoPanel()
-                || MultiSelectPanel.IsPointerOver(VirtualCursor.Position))
+                || MultiSelectPanel.IsPointerOver(VirtualCursor.Position)
+                || RogueUiGate.BlocksWorld(VirtualCursor.Position))
             {
                 // Click landed on an HUD panel (info / synergies / controls) or the
                 // UGUI selection panel — it handles the click. Skip world
@@ -1264,7 +1275,8 @@ public partial class PlacementController : MonoBehaviour
         if (ins?.data == null || ResourceManager.Instance == null) return 0;
         int basePrice = ResourceManager.Instance.ComputePrice(ins.data, 1f);
         float fraction = Mathf.Max(0f, Modifiers.Eval(Stat.SellRefund, 1f) * sellRefundFraction);
-        return Mathf.Max(1, Mathf.RoundToInt(basePrice * fraction));
+        if (RogueRun.FullRefund) fraction = 1f;
+        return Mathf.Max(1, RogueRun.Gain(basePrice * fraction));
     }
 
     // Upgrading a turret costs turret currency equal to the turret's own price
@@ -1440,6 +1452,7 @@ public partial class PlacementController : MonoBehaviour
 
         GameFlowManager.Instance?.EvaluateGrid();
         ShowPlacementPopup(refund > 0 ? $"Sold for +{refund}" : "Cleared");
+        LastSoldColor = ins.color;
         BlockSold?.Invoke(ins.data);
     }
 
@@ -1517,7 +1530,7 @@ public partial class PlacementController : MonoBehaviour
         bool isNewBlock   = !isPickingUpObject;
         int  priceForUndo = _pendingShopPrice;
         if (isNewBlock && ResourceManager.Instance != null
-            && !ResourceManager.Instance.CanAfford(_pendingShopPrice, currentBlock.blockType))
+            && !ResourceManager.Instance.CanAffordShop(_pendingShopPrice, currentBlock.blockType))
         {
             ShowPlacementPopup(ReasonToMessage(PlaceFailureReason.InsufficientFunds));
             StartCoroutine(FlashPreviewRed());
@@ -1666,11 +1679,33 @@ public partial class PlacementController : MonoBehaviour
         SetTrayVisible(true);
     }
 
+    // A held laser turret's aim line: where its beam would run from the cell the
+    // ghost is over, and what would stop it. So the turn is made BEFORE it is placed.
+    LaserBeamView _laserGhost;
+
+    void UpdateLaserGhost(Vector3Int[] cells)
+    {
+        bool want = currentBlock != null && currentBlock.blockType == BlockType.LaserTurret
+                 && mode == PlacementMode.Edit && cells != null && cells.Length > 0 && grid != null;
+        if (!want) { if (_laserGhost != null) _laserGhost.Hide(); return; }
+
+        var table = BalanceTable.Active;
+        float range = table != null ? table.laserTurret.range : 6f;
+        int maxCells = Mathf.Max(1, Mathf.FloorToInt(range / Mathf.Max(0.01f, grid.cellSize)));
+        var cell = currentGridPos + cells[0];
+        var axis = LaserBeam.Axis(_currentRotation * Vector3.forward);
+        LaserBeam.Segment(grid, cell, axis, maxCells, out var a, out var b, out bool blocked);
+
+        if (_laserGhost == null) _laserGhost = LaserBeamView.Create(TurretTypes.DisplayColor(TurretController.Mode.Laser));
+        _laserGhost.Show(a, b, blocked, LaserBeamView.State.Aim, grid.cellSize);
+    }
+
     void UpdatePreview()
     {
         if (currentBlock == null || mode != PlacementMode.Edit)
         {
             previewParent.gameObject.SetActive(false);
+            if (_laserGhost != null) _laserGhost.Hide();
             return;
         }
 
@@ -1727,6 +1762,8 @@ public partial class PlacementController : MonoBehaviour
                 _ghostVisualAnchor + (grid.GridToWorld(currentGridPos + cells[i]) - targetAnchor);
             previewCubes[i].GetComponent<Renderer>().material.color = tint;
         }
+
+        UpdateLaserGhost(cells);
     }
 
     static Vector3Int[] WorldCells(Vector3Int basePos, Vector3Int[] rel)
@@ -1861,7 +1898,7 @@ public partial class PlacementController : MonoBehaviour
         // buyer's — or four players would each see a different balance.
         if (cmd.price > 0)
         {
-            ResourceManager.Instance?.TryBuy(cmd.playerId, cmd.price, data.blockType);
+            ResourceManager.Instance?.TryBuyShop(cmd.playerId, cmd.price, data.blockType);
             PlayerSpend.Add(cmd.playerId, cmd.price);
         }
         ResourceManager.Instance?.OnBlockPlaced(data.blockType);
@@ -1923,6 +1960,8 @@ public partial class PlacementController : MonoBehaviour
     public BlockData FindBlockData(BlockType type)
     {
         if (blocks == null) return null;
+        foreach (var b in blocks)
+            if (b != null && b.blockType == type && !b.rogueOnly) return b;
         foreach (var b in blocks)
             if (b != null && b.blockType == type) return b;
         return null;

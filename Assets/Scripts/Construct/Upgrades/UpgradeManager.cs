@@ -33,6 +33,12 @@ public class UpgradeManager : MonoBehaviour
     [Tooltip("If true and there are zero eligible cards, OfferEndOfWave silently skips. If false, logs a warning.")]
     public bool silentWhenEmpty = true;
 
+    [Tooltip("OFF: GameFlowManager's end-of-wave offer does nothing and something else (the roguelite director) decides when and what to offer.")]
+    public bool autoOffer = true;
+
+    // Extra gate on what can be offered (unlocks, run rules). Null = everything.
+    public Func<UpgradeCard, bool> eligibility;
+
     // Run-scoped ownership state.
     readonly List<UpgradeCard> _owned = new();
     readonly List<ItemEffectInstance> _instances = new();
@@ -43,6 +49,37 @@ public class UpgradeManager : MonoBehaviour
         => (c != null && _ownedCounts.TryGetValue(c, out var n)) ? n : 0;
 
     public event Action<UpgradeCard> OnCardPicked;
+
+    // The live effect instances, in pick order — the relic bar reads Status / CanUse.
+    public IReadOnlyList<ItemEffectInstance> Instances => _instances;
+
+    public ItemEffectInstance InstanceOf(UpgradeCard card)
+    {
+        for (int i = 0; i < _instances.Count; i++)
+            if (_instances[i] != null && _instances[i].Card == card) return _instances[i];
+        return null;
+    }
+
+    // Hand a card over directly — a reward, a purchase.
+    public void Grant(UpgradeCard card) => OnCardChosen(card);
+
+    // Take a card back out and undo it (a consumed item, a swap).
+    public bool Remove(UpgradeCard card)
+    {
+        if (card == null || !_owned.Contains(card)) return false;
+        var inst = InstanceOf(card);
+        if (inst != null) { inst.Release(GameFlowManager.Instance); _instances.Remove(inst); }
+        _owned.Remove(card);
+        if (_ownedCounts.TryGetValue(card, out int n)) { if (n <= 1) _ownedCounts.Remove(card); else _ownedCounts[card] = n - 1; }
+        RogueRun.RaiseRelicsChanged();
+        return true;
+    }
+
+    void Update()
+    {
+        float dt = Time.deltaTime;
+        for (int i = 0; i < _instances.Count; i++) _instances[i]?.Tick(dt);
+    }
 
     void Awake()
     {
@@ -74,6 +111,7 @@ public class UpgradeManager : MonoBehaviour
     // Top-level entry point. Called by GameFlowManager once a wave is done.
     public void OfferEndOfWave(Xoshiro256StarStar rng)
     {
+        if (!autoOffer) return;
         if (rng == null)
         {
             Debug.LogWarning("[UpgradeManager] OfferEndOfWave called with null RNG.");
@@ -125,17 +163,28 @@ public class UpgradeManager : MonoBehaviour
         }
 
         OnCardPicked?.Invoke(card);
+        RogueRun.RaiseRelicsChanged();
     }
 
     // Weighted sampling without replacement.
-    public List<UpgradeCard> RollOffer(Xoshiro256StarStar rng)
+    public List<UpgradeCard> RollOffer(Xoshiro256StarStar rng) => RollOffer(rng, offerCount, null);
+
+    // `weightOf`: replaces a card's own weight (the roguelite weights by rarity per
+    // source). Cards it answers 0 for are skipped.
+    public List<UpgradeCard> RollOffer(Xoshiro256StarStar rng, int count, Func<UpgradeCard, float> weightOf,
+                                       ICollection<UpgradeCard> exclude = null)
     {
         var eligible = GetEligibleCards();
+        if (exclude != null) eligible.RemoveAll(c => exclude.Contains(c));
         var offer = new List<UpgradeCard>();
-        int n = Mathf.Min(offerCount, eligible.Count);
 
         var weights = new List<float>(eligible.Count);
-        for (int i = 0; i < eligible.Count; i++) weights.Add(eligible[i].weight);
+        for (int i = 0; i < eligible.Count; i++)
+            weights.Add(weightOf != null ? Mathf.Max(0f, weightOf(eligible[i])) : eligible[i].weight);
+        for (int i = eligible.Count - 1; i >= 0; i--)
+            if (weights[i] <= 0f) { eligible.RemoveAt(i); weights.RemoveAt(i); }
+
+        int n = Mathf.Min(count, eligible.Count);
 
         for (int i = 0; i < n; i++)
         {
@@ -161,6 +210,7 @@ public class UpgradeManager : MonoBehaviour
             int owned = 0;
             _ownedCounts.TryGetValue(c, out owned);
             if (c.maxCopies > 0 && owned >= c.maxCopies) continue;
+            if (eligibility != null && !eligibility(c)) continue;
 
             list.Add(c);
         }
@@ -172,6 +222,7 @@ public class UpgradeManager : MonoBehaviour
         ReleaseAll();
         _owned.Clear();
         _ownedCounts.Clear();
+        RogueRun.RaiseRelicsChanged();
     }
 
     // A scene unloading mid-run never calls ResetForNewRun, and an item subscribed

@@ -15,7 +15,7 @@ using UnityEngine.UI;
 // with a mouse, a gamepad, and with the game paused (no physics involved — the old
 // 3D shop's colliders weren't synced while paused, so a refresh during a pause left
 // new items unclickable until the game resumed).
-public class ShopController : MonoBehaviour
+public partial class ShopController : MonoBehaviour
 {
     public static ShopController Instance;
 
@@ -162,6 +162,7 @@ public class ShopController : MonoBehaviour
         Animate();
         UpdateHover();
         UpdateItems();
+        UpdateRelicSlots();   // roguelite: the relics on the shelf (ShopController.Relics.cs)
         UpdateTooltip();
         UpdateChrome();
         if (_cantAffordFlash > 0f) _cantAffordFlash -= Time.unscaledDeltaTime;
@@ -341,9 +342,9 @@ public class ShopController : MonoBehaviour
             if (v.price != null && item.sb != null)
             {
                 int  price  = item.sb.cachedPrice;
-                bool afford = rm == null || rm.CanAfford(price, item.sb.data.blockType);
+                bool afford = rm == null || rm.CanAffordShop(price, item.sb.data.blockType);
                 string sfx  = item.isTurret ? "T" : "B";
-                v.price.text  = $"{price}¤{sfx}";
+                v.price.text  = RogueRun.FreePurchases > 0 && price > 0 ? "FREE" : $"{price}¤{sfx}";
                 v.price.color = afford ? v.affordableColor : v.unaffordableColor;
             }
 
@@ -366,6 +367,7 @@ public class ShopController : MonoBehaviour
     void UpdateHover()
     {
         _hovered = null;
+        _hoveredRelic = null;
         if (!IsMouseInShopView()) return;
         Vector2 p = VirtualCursor.Position;
         foreach (var item in _items)
@@ -378,6 +380,7 @@ public class ShopController : MonoBehaviour
                 return;
             }
         }
+        HoverRelics(p);
     }
 
     Camera UICamera() =>
@@ -389,6 +392,7 @@ public class ShopController : MonoBehaviour
     void UpdateTooltip()
     {
         if (view.tooltip == null) return;
+        if (ShowRelicTooltip()) return;   // hovering a relic: its own card
         bool show = _hovered != null && _openT > 0.5f && _hovered.view != null;
         if (view.tooltip.gameObject.activeSelf != show) view.tooltip.gameObject.SetActive(show);
         if (!show) return;
@@ -397,10 +401,11 @@ public class ShopController : MonoBehaviour
         var data = _hovered.sb.data;
         BlockType type = data.blockType;
         int  price  = _hovered.sb.cachedPrice;
-        bool afford = rm == null || rm.CanAfford(price, type);
+        bool afford = rm == null || rm.CanAffordShop(price, type);
         int  pool   = rm == null ? 0 : (TurretTypes.Is(type) ? rm.TurretCurrency : rm.BlockCurrency);
 
-        string shape = TurretTypes.Is(type) ? TurretTypes.DisplayName(type) : data.ShapeName;
+        string shape = TurretTypes.Is(type) ? TurretTypes.DisplayName(type)
+                     : data.device != null ? data.device.Title : data.ShapeName;
         if (string.IsNullOrEmpty(shape)) shape = "Block";
         bool hasTheme = _hovered.sb.color != BlockColor.None;
         if (view.tooltipTitle != null)
@@ -456,7 +461,9 @@ public class ShopController : MonoBehaviour
 
     public bool TryHandleClick()
     {
+        if (RogueUiGate.ModalOpen) return IsMouseInShopView();   // a choice is up: the strip does nothing under it
         if (!IsMouseInShopView()) return false;
+        if (_hovered == null && _hoveredRelic != null) { ClickRelic(_hoveredRelic); return true; }
         if (_hovered == null) return true;   // over the strip: swallow (buttons handle themselves)
 
         // Something already in hand — don't swap it out from under the player.
@@ -464,7 +471,7 @@ public class ShopController : MonoBehaviour
         if (pc != null && pc.mode == PlacementMode.Edit && pc.currentBlock != null) return true;
 
         var rm = ResourceManager.Instance;
-        if (rm != null && !rm.CanAfford(_hovered.sb.cachedPrice, _hovered.sb.data.blockType))
+        if (rm != null && !rm.CanAffordShop(_hovered.sb.cachedPrice, _hovered.sb.data.blockType))
         {
             _cantAffordFlash = 0.55f;
             return true;
@@ -503,7 +510,7 @@ public class ShopController : MonoBehaviour
         {
             if (it?.sb == null || it.sb.data == null) continue;
             if (it.root == null || !it.root.activeInHierarchy) continue;
-            if (rm != null && !rm.CanAfford(it.sb.cachedPrice, it.sb.data.blockType)) continue;
+            if (rm != null && !rm.CanAffordShop(it.sb.cachedPrice, it.sb.data.blockType)) continue;
             if (!TutorialDirector.CanPurchase(it.sb.data)) continue;
             pool.Add(it.sb);
         }
@@ -512,6 +519,14 @@ public class ShopController : MonoBehaviour
     }
 
     public bool HasItems => _items.Count > 0;
+
+    /// <summary>Multiplies every price currently on the shelf (a discount item). Rounded, at least 1.</summary>
+    public void ScalePrices(float mult)
+    {
+        foreach (var it in _items)
+            if (it?.sb != null && it.sb.cachedPrice > 0)
+                it.sb.cachedPrice = Mathf.Max(1, Mathf.RoundToInt(it.sb.cachedPrice * mult));
+    }
 
     // ── Mid-level save (GameFlowManager.RunSave) ─────────────────────────────
     public List<ShopItemSave> CaptureItems()
@@ -625,9 +640,10 @@ public class ShopController : MonoBehaviour
             int price = item.sb.cachedPrice;
             result.Add(new ShopItemInfo
             {
-                displayName = TurretTypes.Is(item.sb.data.blockType) ? TurretTypes.DisplayName(item.sb.data.blockType) : item.sb.data.DisplayName,
+                displayName = TurretTypes.Is(item.sb.data.blockType) ? TurretTypes.DisplayName(item.sb.data.blockType)
+                            : item.sb.data.device != null ? item.sb.data.device.Title : item.sb.data.DisplayName,
                 price       = price,
-                affordable  = rm != null && rm.CanAfford(price, item.sb.data.blockType),
+                affordable  = rm != null && rm.CanAffordShop(price, item.sb.data.blockType),
             });
         }
         return result;

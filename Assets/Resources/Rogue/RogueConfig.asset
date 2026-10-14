@@ -1,0 +1,200 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c3a91e5d7b2f4a6e8d0b1f4c92e7a563, type: 3}
+  m_Name: RogueConfig
+  m_EditorClassIdentifier: Assembly-CSharp::RogueConfig
+  acts: 3
+  wavesPerAct: 5
+  eliteWaveInAct: 3
+  startBlockCurrency: 190
+  startTurretCurrency: 14
+  startLives: 10
+  starterChoices: 3
+  wavesPerEndpoint: 3
+  blockIncomeBase: 32
+  blockIncomePerWave: 5
+  turretIncomeBase: 4
+  turretIncomePerWave: 0.45
+  budgetBase: 14
+  budgetPerWave: 6.5
+  budgetQuadratic: 0.5
+  budgetMax: 420
+  budgetVariance: 0.1
+  perRouteExponent: 0.75
+  hpPerWave: 0.07
+  speedPerWave: 0.004
+  speedCap: 0.35
+  groupSpacing: 1.8
+  affordSlack: 1.25
+  eliteBudgetShare: 0.35
+  eliteHpMult: 2.2
+  eliteScale: 1.3
+  eliteRewardMult: 3
+  swiftMult: 1.45
+  regenSeconds: 1.6
+  vengefulLeak: 2
+  bossHp:
+  - 150
+  - 400
+  - 850
+  bossHpGrowth: 1.9
+  bossSpeed: 0.55
+  bossScale: 1.7
+  bossLeakDamage: 5
+  bossReward: 45
+  bossHeal: 3
+  bossEscortShare: 0.5
+  bossAbilityInterval: 8
+  bossAbilityDuration: 5
+  weightsStarter: {x: 70, y: 28, z: 2}
+  weightsElite: {x: 40, y: 45, z: 15}
+  weightsBoss: {x: 10, y: 50, z: 40}
+  weightsMarket: {x: 58, y: 34, z: 8}
+  marketSlots: 3
+  priceCommon: 90
+  priceUncommon: 170
+  priceRare: 300
+  priceWaveScale: 0.04
+  rerollBase: 25
+  rerollStep: 15
+  skipBonus: 35
+  roster:
+  - name: Runner
+    prefab: {fileID: 1000000000000000004, guid: 8e112c6d7d9b44b29b6d28b4cf5a5401, type: 3}
+    hp: 4
+    speed: 1.5
+    reward: 1
+    scale: 1.0
+    cost: 2
+    minWave: 0
+    weight: 2.0
+    groupMin: 3
+    groupMax: 6
+    interval: 0.5
+    eliteOk: 1
+  - name: Swarm
+    prefab: {fileID: 1000000000000000004, guid: 8e112c6d7d9b44b29b6d28b4cf5a5401, type: 3}
+    hp: 2
+    speed: 1.9
+    reward: 1
+    scale: 0.75
+    cost: 1
+    minWave: 1
+    weight: 1.5
+    groupMin: 8
+    groupMax: 14
+    interval: 0.22
+    eliteOk: 0
+  - name: Taunt
+    prefab: {fileID: 2000000000000000004, guid: 9cd11ec29906452fae87b242eaa57704, type: 3}
+    hp: 7
+    speed: 1.3
+    reward: 1
+    scale: 1.0
+    cost: 3
+    minWave: 1
+    weight: 1.4
+    groupMin: 2
+    groupMax: 5
+    interval: 0.6
+    eliteOk: 1
+  - name: Brute
+    prefab: {fileID: 1000000000000000004, guid: 8e112c6d7d9b44b29b6d28b4cf5a5401, type: 3}
+    hp: 16
+    speed: 0.7
+    reward: 4
+    scale: 1.45
+    cost: 8
+    minWave: 2
+    weight: 1.0
+    groupMin: 1
+    groupMax: 3
+    interval: 1.2
+    eliteOk: 1
+  - name: Rusher
+    prefab: {fileID: 2400000000000000004, guid: 5a9d2c7e4f8b41630e6c1a85d37b940e, type: 3}
+    hp: 6
+    speed: 1.1
+    reward: 2
+    scale: 1.0
+    cost: 4
+    minWave: 2
+    weight: 1.0
+    groupMin: 2
+    groupMax: 4
+    interval: 0.8
+    eliteOk: 1
+  - name: Splitter
+    prefab: {fileID: 3000000000000000004, guid: 7f9459c0f939e624c8b042b0ee3c0803, type: 3}
+    hp: 9
+    speed: 0.85
+    reward: 2
+    scale: 1.0
+    cost: 5
+    minWave: 3
+    weight: 0.9
+    groupMin: 1
+    groupMax: 3
+    interval: 1.0
+    eliteOk: 1
+  - name: Healer
+    prefab: {fileID: 2100000000000000004, guid: 4b8e1d6a3c9f47205ea8b13c96d7f402, type: 3}
+    hp: 8
+    speed: 0.85
+    reward: 2
+    scale: 1.0
+    cost: 6
+    minWave: 4
+    weight: 0.8
+    groupMin: 1
+    groupMax: 2
+    interval: 1.2
+    eliteOk: 0
+  - name: Suppressor
+    prefab: {fileID: 2300000000000000004, guid: 1d7b3e9a4f6c48512c0e85b7a93f6c20, type: 3}
+    hp: 9
+    speed: 0.9
+    reward: 3
+    scale: 1.0
+    cost: 7
+    minWave: 5
+    weight: 0.7
+    groupMin: 1
+    groupMax: 2
+    interval: 1.5
+    eliteOk: 1
+  - name: Sealer
+    prefab: {fileID: 2200000000000000004, guid: 6f2a9c5b8d1e43704b6c9a2f85e31d09, type: 3}
+    hp: 7
+    speed: 0.9
+    reward: 3
+    scale: 1.0
+    cost: 6
+    minWave: 6
+    weight: 0.7
+    groupMin: 1
+    groupMax: 2
+    interval: 1.5
+    eliteOk: 1
+  - name: Jammer
+    prefab: {fileID: 2500000000000000004, guid: 7b4f1e8c3a6d495207c9b2f6e185d340, type: 3}
+    hp: 8
+    speed: 0.9
+    reward: 3
+    scale: 1.0
+    cost: 7
+    minWave: 7
+    weight: 0.6
+    groupMin: 1
+    groupMax: 2
+    interval: 1.5
+    eliteOk: 1

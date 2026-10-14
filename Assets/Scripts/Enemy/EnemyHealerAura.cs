@@ -45,7 +45,7 @@ public class EnemyHealerAura : MonoBehaviour
 
         _timer -= Time.deltaTime;
         if (_timer > 0f) return;
-        _timer = healInterval;
+        _timer = healInterval * RogueRun.AbilityCooldownScale(_self);   // Compressor lengthens it
         Pulse();
     }
 

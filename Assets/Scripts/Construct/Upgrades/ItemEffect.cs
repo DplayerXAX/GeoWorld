@@ -44,6 +44,20 @@ public abstract class ItemEffectInstance
     // express. Most items never need it.
     protected virtual void OnRelease(GameFlowManager game) { }
 
+    // Every frame while held (UpgradeManager.Update). For items that watch the
+    // board; keep it cheap, or throttle it yourself.
+    protected virtual void OnTick(float dt) { }
+
+    // ── Active items ─────────────────────────────────────────────────────────
+    // Most items are passive. A few are used by the player, once: the relic bar shows
+    // them as a button while CanUse is true.
+    public virtual bool   HasActive => false;
+    public virtual bool   CanUse    => false;
+    public virtual void   Use(GameFlowManager game) { }
+
+    // A short readout on the relic's badge — "3/5", "READY", "spent".
+    public virtual string Status => null;
+
     // Bend a stat for as long as this item is held. `target` defaults to the whole
     // run; pass a turret's Mods to bend that turret only. Calling again for the same
     // stat and target replaces the previous value rather than stacking on it.
@@ -67,6 +81,13 @@ public abstract class ItemEffectInstance
     protected void Track(Action undo)
     {
         if (undo != null) _undo.Add(undo);
+    }
+
+    internal void Tick(float dt)
+    {
+        if (!_live) return;
+        try { OnTick(dt); }
+        catch (Exception e) { Debug.LogError($"[Item] OnTick threw on '{Card?.displayName}': {e}"); }
     }
 
     internal void Acquire(GameFlowManager game)
@@ -96,6 +117,15 @@ public abstract class ItemEffectInstance
         foreach (var (set, stat) in _mods) set.Remove(stat, this);
         _mods.Clear();
     }
+}
+
+// An item whose behaviour is a class in code (RogueItems). The ScriptableObject is
+// created at runtime — there is no asset to author — and only carries the factory,
+// so every pick still gets its own instance.
+public sealed class CodeItem : ItemEffect
+{
+    public Func<ItemEffectInstance> factory;
+    public override ItemEffectInstance CreateInstance() => factory != null ? factory() : null;
 }
 
 // The common case, with no code: "+20% turret damage", "turrets cost 15% less".

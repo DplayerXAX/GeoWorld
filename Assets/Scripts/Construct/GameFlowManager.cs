@@ -24,6 +24,8 @@ public partial class GameFlowManager : MonoBehaviour
     // Fired at the start of each Build phase (end of StartTurn). Per-turn synergy
     // effects (e.g. Abundance harvest income) subscribe to pay out once per turn.
     public static event System.Action OnTurnStarted;
+    // A wave has just begun (the Running phase, spawning about to start).
+    public static event System.Action OnWaveBegan;
     [Header("Turn")]
     public int blocksPerTurn  = 8;
     public int turretsPerTurn = 3;
@@ -73,6 +75,10 @@ public partial class GameFlowManager : MonoBehaviour
     public int  ActiveLoopCount         => loopingUnits.Count;
     public int  RunsSinceLastEndpoint   => _runsSinceLastEndpoint;
     public int  RoundIndex              => roundIndex;
+    // The counter prices and income scale with. The endless mode ties difficulty to
+    // endpoints (roundIndex, which moves every few waves); the roguelite ties it to
+    // waves cleared, so the economy and the threat climb on the same clock.
+    public int  EconomyRound            => RunConfig.Mode == GameMode.Rogue ? _wavesCompleted : roundIndex;
     public int  WavesCleared            => _wavesCompleted;
     // Length (in faces, each block face = 1) of the current start→end enemy path.
     // 0 when no path connects. Refreshed by EvaluateGrid on every grid change.
@@ -230,7 +236,7 @@ public partial class GameFlowManager : MonoBehaviour
 
         var pool = new List<BlockData>();
         foreach (var b in pc.blocks)
-            if (b != null && b.cells != null && b.cells.Length > 0 && b.cells.Length <= 4 && !TurretTypes.Is(b.blockType))
+            if (b != null && !b.rogueOnly && b.cells != null && b.cells.Length > 0 && b.cells.Length <= 4 && !TurretTypes.Is(b.blockType))
                 pool.Add(b);
         if (pool.Count == 0) return;
 
@@ -396,6 +402,10 @@ public partial class GameFlowManager : MonoBehaviour
         SynergyEvaluator.Enabled = RunConfig.Mode != GameMode.Level
             || RunConfig.Level == null || RunConfig.Level.synergyEnabled;
 
+        // The roguelite sets its own pace: a new endpoint every few waves.
+        if (RunConfig.Mode == GameMode.Rogue)
+            runsPerEndpoint = Mathf.Max(1, RogueRun.Config.wavesPerEndpoint);
+
         if (RunConfig.Mode == GameMode.Level && RunConfig.Level != null)
         {
             var lv = RunConfig.Level;
@@ -414,6 +424,14 @@ public partial class GameFlowManager : MonoBehaviour
     bool HandleWaveProgress()
     {
         _wavesCompleted++;
+
+        if (RunConfig.Mode == GameMode.Rogue)
+        {
+            // The director decides what a cleared wave means (rewards, an act's end).
+            RogueRun.RaiseWaveCleared(_wavesCompleted);
+            SaveSystem.RecordRogue(_wavesCompleted, RogueRun.Score(_wavesCompleted));
+            return false;
+        }
 
         if (RunConfig.Mode == GameMode.Level && RunConfig.Level != null
             && RunConfig.Level.wavesToClear > 0
@@ -712,6 +730,35 @@ public partial class GameFlowManager : MonoBehaviour
         roundIndex++;
     }
 
+    /// <summary>
+    /// Takes a START point off the board (Nuke). The last one is never removed - a board
+    /// with nowhere for enemies to come from cannot run a wave. Returns whether it went.
+    /// </summary>
+    public bool RemoveStartAt(Vector3Int cell)
+    {
+        if (!allStarts.Contains(cell) || allStarts.Count <= 1) return false;
+        allStarts.Remove(cell);
+
+        if (endpoints != null && gridSystem != null)
+        {
+            Vector3 at = gridSystem.GridToWorld(cell);
+            for (int i = endpoints.allEndpoints.Count - 1; i >= 0; i--)
+            {
+                var go = endpoints.allEndpoints[i];
+                if (go == null) { endpoints.allEndpoints.RemoveAt(i); continue; }
+                if ((go.transform.position - at).sqrMagnitude > 0.01f) continue;
+                endpoints.allEndpoints.RemoveAt(i);
+                Destroy(go);
+                break;
+            }
+            gridSystem.ClearOccupied(cell);
+        }
+
+        LevelEnvironmentDriver.NotifyBoard(gridSystem);
+        EvaluateGrid();
+        return true;
+    }
+
     // ── Per-frame logic ───────────────────────────────────────────────────────
 
     void Update()
@@ -735,7 +782,7 @@ public partial class GameFlowManager : MonoBehaviour
         {
             // Space: declare THIS player ready. With one player that is the same
             // frame as running; with four it is the wave gate below.
-            if (Input.GetKeyDown(KeyCode.Space) && TutorialDirector.CanRun())
+            if (Input.GetKeyDown(KeyCode.Space) && TutorialDirector.CanRun() && !RogueUiGate.ModalOpen)
                 CommandBus.Submit(new GameCommand { kind = GameCommandKind.StartWave });
 
             // P: manual re-evaluate (force-refresh live preview line)
@@ -759,7 +806,7 @@ public partial class GameFlowManager : MonoBehaviour
         if (phase == GamePhase.ReadyToRun)
         {
             // Space confirms from preview state; B cancels back to build
-            if (Input.GetKeyDown(KeyCode.Space) && TutorialDirector.CanRun())
+            if (Input.GetKeyDown(KeyCode.Space) && TutorialDirector.CanRun() && !RogueUiGate.ModalOpen)
                 CommandBus.Submit(new GameCommand { kind = GameCommandKind.StartWave });
 
             if (Input.GetKeyDown(KeyCode.B))
@@ -1024,7 +1071,10 @@ public partial class GameFlowManager : MonoBehaviour
         if (!_routeLinesHeld)
         {
             var routes = FindAllSpawnPaths();
-            PathFlowManager.Instance?.UpdateLiveLines(routes);
+            // How much of each route the turrets can hit (RouteCoverage) — the live
+            // line is drawn in colours by it, and the wave panel reads the summary.
+            var coverage = RouteCoverage.Compute(routes);
+            PathFlowManager.Instance?.UpdateLiveLines(routes, coverage);
             // Last wave's route lines stay only where the route still runs.
             PathFlowManager.Instance?.SyncFlows(routes, addMissing: false);
         }
@@ -1072,6 +1122,8 @@ public partial class GameFlowManager : MonoBehaviour
         currentUnit = null;
 
         phase = GamePhase.Running;
+        OnWaveBegan?.Invoke();
+        RogueRun.RaiseWaveStarted(_wavesCompleted);
         enemyBaseManager?.BeginWave(spawnPaths, PickWaveForThisRound());
         ResourceManager.Instance?.SetCombatActive(true);   // start turret currency regen
         ShopController.Instance?.OnCombatStart();           // collapse and hide shop
@@ -1125,6 +1177,13 @@ public partial class GameFlowManager : MonoBehaviour
     // `roundIndex` here with your own field that increments each Run().
     IList<SpawnGroup> PickWaveForThisRound()
     {
+        // The roguelite's waves come from its own curve (RogueWaves), by waves cleared.
+        if (RunConfig.Mode == GameMode.Rogue)
+        {
+            EnsureRng();
+            return RogueWaves.Build(_wavesCompleted, Mathf.Max(1, FindAllSpawnPaths().Count), runSeed);
+        }
+
         // 1. Authored override
         if (waves != null && waves.Count > 0)
         {
@@ -1180,6 +1239,18 @@ public partial class GameFlowManager : MonoBehaviour
             totalCount = 0,
             groups     = new List<WaveGenerator.WaveForecastGroup>(),
         };
+
+        // 0. The roguelite: the same builder as the wave itself, so the forecast is exact.
+        if (RunConfig.Mode == GameMode.Rogue)
+        {
+            EnsureRng();
+            var list = new List<WaveGenerator.WaveForecastGroup>();
+            RogueWaves.Build(_wavesCompleted, Mathf.Max(1, FindAllSpawnPaths().Count), runSeed, list);
+            fc.groups     = list;
+            fc.totalCount = SumCounts(list);
+            fc.valid      = list.Count > 0;
+            return fc;
+        }
 
         // 1. Authored override for this round.
         if (waves != null && waves.Count > 0)

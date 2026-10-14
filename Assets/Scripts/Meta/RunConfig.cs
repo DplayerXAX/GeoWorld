@@ -5,7 +5,7 @@ using UnityEngine;
 //
 // Static on purpose: a plain static class survives a scene load with zero
 // serialization or DontDestroyOnLoad plumbing — it's just process memory.
-public enum GameMode { Level, Endless }
+public enum GameMode { Level, Endless, Rogue }
 
 public static class RunConfig
 {
@@ -36,6 +36,14 @@ public static class RunConfig
         Mode  = GameMode.Level;
         Level = level;
         Seed  = level != null ? level.runSeed : 0UL;
+    }
+
+    // The roguelite run: acts, elites and bosses, relics (see Scripts/Rogue).
+    public static void SetRogue(ulong seed = 0UL)
+    {
+        Mode  = GameMode.Rogue;
+        Level = null;
+        Seed  = seed;
     }
 
     public static void SetEndless(ulong seed = 0UL)

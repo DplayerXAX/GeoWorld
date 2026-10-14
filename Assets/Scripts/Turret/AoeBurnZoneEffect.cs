@@ -143,6 +143,6 @@ public class AoeBurnZoneEffect : MonoBehaviour
         }
 
         for (int i = 0; i < _targets.Count; i++)
-            if (_targets[i] != null) _targets[i].TakeDamage(_damagePerTick);
+            if (_targets[i] != null) { _targets[i].MarkDebuff(EnemySurfaceUnit.Debuff.Burning, 1.2f); _targets[i].TakeDamage(_damagePerTick); }
     }
 }

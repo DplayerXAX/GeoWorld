@@ -99,17 +99,52 @@ public class PathFlowManager : MonoBehaviour
 
     // Shows a live preview line for EVERY spawn-point path (so all routes redraw on
     // each block placement, not just the last one). Pass null/empty to hide.
-    public void UpdateLiveLines(List<List<FaceNode>> paths)
+    public void UpdateLiveLines(List<List<FaceNode>> paths) => UpdateLiveLines(paths, null);
+
+    // `coverage`: per route, per node, how many turrets can hit an enemy there
+    // (RouteCoverage). When given, each route is drawn in runs coloured by it — red
+    // where nothing can hit, amber for one turret, green for two or more — so the
+    // route doubles as the answer to "is my defence where the enemies are".
+    public void UpdateLiveLines(List<List<FaceNode>> paths, List<int[]> coverage)
     {
         ClearLiveLine();
         if (laserMaterial == null || paths == null) return;
 
-        foreach (var path in paths)
+        for (int pi = 0; pi < paths.Count; pi++)
         {
+            var path = paths[pi];
             if (path == null || path.Count < 2) continue;
-            var lr = MakeLine("PathLaser_Live", livePathColor, out GameObject go);
-            _liveGOs.Add(go);
-            _liveCoroutines.Add(StartCoroutine(RevealLine(lr, BuildPositions(path))));
+
+            int[] cov = coverage != null && pi < coverage.Count ? coverage[pi] : null;
+            if (cov == null || cov.Length != path.Count)
+            {
+                var lr0 = MakeLine("PathLaser_Live", livePathColor, out GameObject go0);
+                _liveGOs.Add(go0);
+                _liveCoroutines.Add(StartCoroutine(RevealLine(lr0, BuildPositions(path))));
+                continue;
+            }
+
+            var pts = BuildPositionsMapped(path, out int[] posIdx);
+            int a = 0;
+            while (a < path.Count)
+            {
+                int cls = RouteCoverage.Class(cov[a]);
+                int b = a;
+                while (b + 1 < path.Count && RouteCoverage.Class(cov[b + 1]) == cls) b++;
+
+                // A run starts where the previous one ended, so the line stays whole.
+                int from = a == 0 ? 0 : posIdx[a - 1];
+                int to   = posIdx[b];
+                if (to > from)
+                {
+                    var seg = new Vector3[to - from + 1];
+                    System.Array.Copy(pts, from, seg, 0, seg.Length);
+                    var lr = MakeCoverageLine(cls, out GameObject go);
+                    _liveGOs.Add(go);
+                    _liveCoroutines.Add(StartCoroutine(RevealLine(lr, seg)));
+                }
+                a = b + 1;
+            }
         }
     }
 
@@ -207,10 +242,45 @@ public class PathFlowManager : MonoBehaviour
         return lr;
     }
 
+    // The coverage runs share ONE material per class (a route is cut into many runs
+    // and is redrawn on every board edit — an instance each would pile up).
+    readonly Material[] _covMats = new Material[3];
+
+    LineRenderer MakeCoverageLine(int cls, out GameObject go)
+    {
+        go = new GameObject("PathLaser_Live");
+        go.transform.SetParent(transform, false);
+
+        if (_covMats[cls] == null)
+        {
+            var m = new Material(laserMaterial);
+            m.SetColor("_Color", RouteCoverage.ColorOf(cls));
+            m.SetFloat(ZTestId, _xrayActive ? ZTestXray : ZTestNormal);
+            _lineMats.Add(m);   // so the x-ray toggle reaches it too
+            _covMats[cls] = m;
+        }
+
+        var lr = go.AddComponent<LineRenderer>();
+        lr.sharedMaterial    = _covMats[cls];
+        lr.useWorldSpace     = true;
+        lr.positionCount     = 0;
+        lr.startWidth        = lineWidth;
+        lr.endWidth          = lineWidth;
+        lr.numCapVertices    = 6;
+        lr.numCornerVertices = 6;
+        lr.textureMode       = LineTextureMode.Tile;
+        return lr;
+    }
+
     // FaceNode path -> world-position array, inserting corner points where
     // the normal changes.
-    Vector3[] BuildPositions(List<FaceNode> path)
+    Vector3[] BuildPositions(List<FaceNode> path) => BuildPositionsMapped(path, out _);
+
+    // As BuildPositions, and posIdx[i] = where in the result path node i landed (the
+    // corner points inserted between nodes mean it is not simply i).
+    Vector3[] BuildPositionsMapped(List<FaceNode> path, out int[] posIdx)
     {
+        posIdx = new int[path.Count];
         var   gs   = GridSystem.instance;
         float fOff = gs.cellSize * 0.5f + heightOffset;
 
@@ -219,6 +289,7 @@ public class PathFlowManager : MonoBehaviour
             raw[i] = gs.GridToWorld(path[i].cell) + path[i].normal * fOff;
 
         var pts = new List<Vector3> { raw[0] };
+        posIdx[0] = 0;
         for (int i = 1; i < raw.Length; i++)
         {
             Vector3 nA = path[i - 1].normal;
@@ -234,6 +305,7 @@ public class PathFlowManager : MonoBehaviour
                 pts.Add(nAcomp + nBcomp + edgeComp);
             }
             pts.Add(raw[i]);
+            posIdx[i] = pts.Count - 1;
         }
         return pts.ToArray();
     }

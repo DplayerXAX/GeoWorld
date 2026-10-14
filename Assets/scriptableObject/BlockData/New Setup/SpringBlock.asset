@@ -1,0 +1,32 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: fbe5136a9b37fed449b8e7de0efe530a, type: 3}
+  m_Name: SpringBlock
+  m_EditorClassIdentifier: Assembly-CSharp::BlockData
+  blockType: 0
+  rarity: 0
+  blockShape: 1
+  cells:
+  - {x: 0, y: 0, z: 0}
+  turretPrefab: {fileID: 3219352080381510957, guid: 6a6e3a68fbf8c6b47a1a0ffde276fa3f, type: 3}
+  bulletPrefab: {fileID: 0}
+  bulletScale: 0
+  device: {fileID: 11400000, guid: e7c4a1b9d2f64a58b3e0c6a1f8d92b74, type: 2}
+  onStepEvent:
+    idInternal: 0
+    valueGuidInternal: 
+    WwiseObjectReference: {fileID: 0}
+  previewEvent:
+    idInternal: 0
+    valueGuidInternal: 
+    WwiseObjectReference: {fileID: 0}
+  rogueOnly: 1

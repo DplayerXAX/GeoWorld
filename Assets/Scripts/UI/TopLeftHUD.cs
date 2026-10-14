@@ -131,6 +131,7 @@ public class TopLeftHUD : MonoBehaviour
             int total = lv != null && lv.wavesToClear > 0 ? lv.wavesToClear : 0;
             string lblHex = ColorUtility.ToHtmlStringRGB(waveLabelColor);
             string count  = total > 0 ? $"{Mathf.Min(wave, total)}/{total}" : wave.ToString();
+            if (RunConfig.Mode == GameMode.Rogue) count = RogueRun.WaveLabel(wave - 1);   // "2-3", "1-5 BOSS"
             view.waveValue.text = $"<color=#{lblHex}>Wave</color>  <b>{count}</b>";
         }
         if (view.blockValue   != null) view.blockValue.text   = (rm != null ? rm.BlockCurrency  : 0).ToString();

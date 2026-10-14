@@ -20,12 +20,14 @@ MonoBehaviour:
   endPointWaves: 
   blocksPerTurn: 3
   startingBlockCurrencyMult: 1
-  environment: {fileID: 11400000, guid: 71fe97475a0540a788498eba0c8f3a71, type: 2}
+  environment: {fileID: 11400000, guid: c7e1a4f9b3d24e6a8f0b5c2d9e7a1b36, type: 2}
   turretsPerTurn: 3
   synergyEnabled: 1
   allowedColors: 0100000004000000
   startingShop:
   - block: {fileID: 11400000, guid: 5ff950918e984f5cb64c122b9cf0efda, type: 2}
+    color: 0
+  - block: {fileID: 11400000, guid: a4d7c19e5b3f46d8b2e0f1a9c6d57b83, type: 2}
     color: 0
   waves:
   - {fileID: 11400000, guid: 080e4b2a67c19904bbbfdce56bfad1ae, type: 2}
@@ -144,6 +146,27 @@ MonoBehaviour:
     cameraFocus: 0
     focusZoom: 0
     openPanel: 0
+    hint: 'A new gun has arrived, My Lord: the Laser Turret. Hold Alt and scroll to turn it before you set it down. It burns everything in its line until a block gets in the way.'
+    conversation: {fileID: 0}
+    speaker: {fileID: 11400000, guid: 80993e3c86b4337429c2d6273c8eedc2, type: 2}
+    speakerSlot: 1
+    speakerPortrait: 
+  - kind: 5
+    block: {fileID: 0}
+    origin: {x: 0, y: 0, z: 0}
+    rotation90: {x: 0, y: 0, z: 0}
+    cellsOverride: []
+    waitSeconds: 0
+    count: 1
+    inputKey: 323
+    pathLength: 0
+    freeOperations: 1
+    hideInCombat: 0
+    requiredWave: 0
+    unlocksOps: 
+    cameraFocus: 0
+    focusZoom: 0
+    openPanel: 0
     hint: 'A new instrument has reached us, My Lord. The Prayer Turret strikes no one, yet any foe inside its reach takes more harm from all our turrets.'
     conversation: {fileID: 0}
     speaker: {fileID: 11400000, guid: 80993e3c86b4337429c2d6273c8eedc2, type: 2}
@@ -192,6 +215,7 @@ MonoBehaviour:
     speakerSlot: 1
     speakerPortrait: 
   revealAfter: {fileID: 11400000, guid: 1b45f2b9e94ad084180100d47c626f51, type: 2}
+  mapMoatWidth: 2
   startingLayout: {fileID: 0}
   randomStartBlocks: 3
   randomStartColor: 1

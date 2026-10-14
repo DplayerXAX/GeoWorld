@@ -67,6 +67,11 @@ public class PlayerHealth : MonoBehaviour
         if (amount <= 0 || _lives <= 0) return;
 
         _lives = Mathf.Max(0, _lives - amount);
+
+        // A held item can turn the last life lost into a second chance.
+        if (_lives == 0 && RogueRun.Active && RogueRun.TryDeathSave(out int saved))
+            _lives = Mathf.Clamp(saved, 1, maxLives);
+
         OnLivesChanged?.Invoke(_lives);
         AudioManager.Instance?.PlayDamage();
         AudioManager.Instance?.PulseHurt();
@@ -76,6 +81,43 @@ public class PlayerHealth : MonoBehaviour
         // jolt lands in the same frame, and OrbitCamera.Shake keeps the stronger
         // of the two rather than letting this small one dilute it.
         if (_lives == 0) OnGameOver?.Invoke();
+    }
+
+    // ── Roguelite: healing, max-HP, soft losses ──────────────────────────────
+
+    /// <summary>Restores up to `amount` lives (never past max, never revives). Returns how many.</summary>
+    public int Heal(int amount)
+    {
+        if (CombatSync.IsSpectator || amount <= 0 || _lives <= 0 || _lives >= maxLives) return 0;
+        int before = _lives;
+        _lives = Mathf.Min(maxLives, _lives + amount);
+        if (_lives != before) OnLivesChanged?.Invoke(_lives);
+        return _lives - before;
+    }
+
+    /// <summary>Raises (or lowers) the maximum. A raise also fills the new slots when `fill`.</summary>
+    public void AddMaxLives(int amount, bool fill = false)
+    {
+        maxLives = Mathf.Max(1, maxLives + amount);
+        if (amount > 0 && fill) _lives = Mathf.Min(maxLives, _lives + amount);
+        _lives = Mathf.Clamp(_lives, Mathf.Min(1, maxLives), maxLives);
+        OnLivesChanged?.Invoke(_lives);
+    }
+
+    /// <summary>
+    /// A price paid in lives that cannot kill: lowers the count by up to `amount`,
+    /// stopping at `floor`. Returns how many were lost. Hurts like a hit (sound,
+    /// shake) but never reaches game over.
+    /// </summary>
+    public int Sacrifice(int amount, int floor = 1)
+    {
+        if (CombatSync.IsSpectator || amount <= 0 || _lives <= floor) return 0;
+        int before = _lives;
+        _lives = Mathf.Max(floor, _lives - amount);
+        OnLivesChanged?.Invoke(_lives);
+        AudioManager.Instance?.PlayDamage();
+        CameraShake.Damage();
+        return before - _lives;
     }
 
     public void ResetLives()

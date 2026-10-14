@@ -130,6 +130,8 @@ public class LevelDefinition : ScriptableObject
     // should be visible; this does.
     [Tooltip("Hide this level's region of the map until that level is cleared. Empty = visible from the start.")]
     public LevelDefinition revealAfter;
+    [Tooltip("Columns of clear ground kept round this level's block on the map — a moat no decor plot (the farm the level stands in) may pave over. The block then sits on an island in the field, and the reward block of the level before it has to bridge the gap: the road-building the map is built on, inside ground that is otherwise walkable. 0 = none.")]
+    [Min(0)] public int mapMoatWidth = 0;
 
     [Header("Random starting blocks")]
     [Tooltip("Blocks dropped at level start somewhere between the first start and end points — each a random small shop shape in randomStartColor, and none touching another block, so they can't already form a synergy. Fixed like the authored layout (they can't be moved or sold). 0 = none.")]

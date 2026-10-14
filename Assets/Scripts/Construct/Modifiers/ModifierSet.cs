@@ -22,6 +22,14 @@ public enum Stat
 
     // Player.
     LeakDamage,       // EnemyBaseManager — lives lost per enemy that reaches an end point. Rounded.
+
+    // Enemies and income (the roguelite's items; read wherever noted).
+    EnemySpeed,       // EnemySurfaceUnit.EffectiveSpeedMultiplier — base 1, global only
+    EnemyHealth,      // EnemyBaseManager.SpawnOneEnemy — base 1, scales max HP at spawn
+    BlockIncome,      // ResourceManager.GrantRoundIncome — the round's block currency
+    TurretIncome,     // ResourceManager.GrantRoundIncome — the round's turret currency
+    KillReward,       // EnemyBaseManager.HandleEnemyDied — block currency per kill, base 1
+    TurretRegen,      // ResourceManager.Update — turret currency regenerated in combat, base 1
 }
 
 // A stack of modifiers on one thing — the whole run (Modifiers.Global), or one

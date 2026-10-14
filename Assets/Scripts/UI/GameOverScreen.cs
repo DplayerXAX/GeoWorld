@@ -256,6 +256,17 @@ public class GameOverScreen : MonoBehaviour
         trt.anchoredPosition = new Vector2(0f, 70f);
         trt.sizeDelta = new Vector2(1200f, 160f);
 
+        // A roguelite run ends with its tally, not just GAME OVER.
+        if (RunConfig.Mode == GameMode.Rogue && GameFlowManager.Instance != null)
+        {
+            var sub = NewText("Run", cardRt, 28f, GeoPalette.WithAlpha(GeoPalette.Paper, 0.85f), FontStyles.Normal);
+            sub.text = RogueRun.SummaryLine(GameFlowManager.Instance.WavesCleared);
+            var srt = sub.rectTransform;
+            srt.anchorMin = srt.anchorMax = srt.pivot = new Vector2(0.5f, 0.5f);
+            srt.anchoredPosition = new Vector2(0f, -2f);
+            srt.sizeDelta = new Vector2(1500f, 48f);
+        }
+
         BuildRestartButton(cardRt);
 
         // Above everything, including the card — the restart wipe.

@@ -116,6 +116,54 @@ public partial class LevelMapController : MonoBehaviour
     [Tooltip("The bridge blocks removed from the Select map and handed out as level rewards — restored by Auto Fill so testing can reach every level. Cells are absolute (LevelSelect grid space).")]
     public List<PlacedMapBlock> editorAutoFillBlocks = new();
 
+    // Columns no decor plot may lay ground on. A plot's footprint can run right
+    // over the levels (the farm now holds 1-1 and 1-2), and plots are walkable —
+    // so without these a plot would quietly pave over the gaps the player is meant
+    // to BRIDGE with each clear's reward block, and the start's low courtyard.
+    [System.Serializable]
+    public struct DecorCarve
+    {
+        [Tooltip("Lowest (x, z) column of the carve.")]
+        public Vector2Int min;
+        [Tooltip("Width (x) and depth (z) in columns.")]
+        public Vector2Int size;
+        public string note;
+        public bool Contains(Vector2Int c) =>
+            c.x >= min.x && c.x < min.x + size.x && c.y >= min.y && c.y < min.y + size.y;
+    }
+    [Header("Decor carve-outs")]
+    [Tooltip("Ground no decor plot may cover, by hand: the start's courtyard, where the farm must step round the start and its stairs. (The moats round the levels come from LevelDefinition.mapMoatWidth.)")]
+    public List<DecorCarve> decorKeepClear = new();
+
+    // Columns within each moated level's mapMoatWidth of its block — built once,
+    // from the authored level blocks, revealed or not (a veiled level keeps its
+    // moat: the field must not close over a level that has yet to rise).
+    readonly HashSet<Vector2Int> _moatCols = new();
+
+    void BuildMoats()
+    {
+        _moatCols.Clear();
+        void Ring(LevelNode n)
+        {
+            if (n == null || n.level == null || n.level.mapMoatWidth <= 0 || n.cells == null) return;
+            int w = n.level.mapMoatWidth;
+            foreach (var c in n.cells)
+                for (int dx = -w; dx <= w; dx++)
+                    for (int dz = -w; dz <= w; dz++)
+                        _moatCols.Add(new Vector2Int(c.x + dx, c.z + dz));
+        }
+        foreach (var n in _nodes)  Ring(n);
+        foreach (var n in _veiled) Ring(n);
+    }
+
+    bool KeptClear(Vector2Int column)
+    {
+        if (_moatCols.Contains(column)) return true;
+        for (int i = 0; i < decorKeepClear.Count; i++)
+            if (decorKeepClear[i].Contains(column)) return true;
+        return false;
+    }
+
     readonly List<LevelNode> _nodes = new();
     LevelNode _current, _selected;
     bool      _moving;
@@ -262,6 +310,7 @@ public partial class LevelMapController : MonoBehaviour
         // Before anything links, surfaces or replays onto the map: a region that has
         // not been revealed yet must not be walkable ground for any of that.
         VeilUnrevealedRegions();
+        PrepareBiomes();            // from the configs alone: a restored bridge takes the road's colour (World.cs)
 
         RebuildPlacedMapBlocks();   // replay the player's own map-building from the save
         MaybeEditorAutoFill();      // editor/QA: restore the carved bridge blocks so everything's reachable
@@ -280,12 +329,17 @@ public partial class LevelMapController : MonoBehaviour
         // cleared — in which case the grow-in cutscene below plays before any dialogue.
         // The decor plots are the heavy part: one a frame, so the loading page's
         // spinner keeps turning while they go up.
+        BuildMoats();   // before any plot is laid: the field steps round the levels' islands
         yield return null;
         var decorGrowthPending = new List<DecorPlot>();
         yield return BuildDecorsSliced(decorGrowthPending);
+        PrepareBiomes();              // the wood has been placed round the farm now
         CollectInteractableSpots();   // after the surface — the spots snap onto it
         SinkRisingRegions();          // after markers and spots are placed at full height — see there
+        BuildBedrock();               // one landmass under every region — before the mist, which covers its gaps (World.cs)
         BuildMist();                  // over everything still hidden, and what is about to rise
+        BuildMapRain();               // once chapter one's weather has turned (Weather.cs)
+        StartCoroutine(RoadRoutine());   // the road, redrawn whenever the map changes (World.cs)
 
         // Resume on the cell the pawn last left from, if it still exists — a block
         // the player picked up since then leaves nothing to stand on, so fall back
@@ -706,13 +760,54 @@ public partial class LevelMapController : MonoBehaviour
     // conversation (the tutorial and reward beats point the camera while they
     // talk), a minigame. Then it glides back. Height comes from the cell the
     // pawn stands on, not the pawn itself, so the idle bob doesn't rock the view.
+    [Header("Follow smoothing")]
+    [Tooltip("Seconds the camera trails the pawn sideways. 0 = locked on.")]
+    [Range(0f, 1f)] public float followLag = 0.12f;
+    [Tooltip("Seconds the camera takes to settle onto a new height. Much slower than sideways: a pawn running up and down terraces changes height with every step, and following each one bounces the view. The camera rides the average instead.")]
+    [Range(0f, 2f)] public float followHeightLag = 0.8f;
+    [Tooltip("Height the pawn can rise or drop, in cells, before the camera moves at all. A single terrace step is inside it, so going up and down one doesn't move the view; a real climb does.")]
+    [Range(0f, 2f)] public float followHeightDeadzone = 0.75f;
+
+    bool    _followInit;
+    Vector2 _followXZ, _followXZVel;
+    float   _followY, _followYGoal, _followYVel;
+
     void UpdateFollow()
     {
         if (!followPawn || _orbit == null || pawn == null) return;
-        if (_decorCutscenePlaying || MinigameStage.AnyActive || BlockTetris3D.Active) return;
-        if (DialogueRunner.Instance != null && DialogueRunner.Instance.IsPlaying) return;
-        var at = pawn.position;
-        at.y = SurfaceTop(_currentCell).y;
+        if (_decorCutscenePlaying || MinigameStage.AnyActive || BlockTetris3D.Active
+            || (DialogueRunner.Instance != null && DialogueRunner.Instance.IsPlaying))
+        {
+            _followInit = false;   // something else is framing the shot: start from the pawn again afterwards
+            return;
+        }
+
+        float cs = gridSystem != null ? gridSystem.cellSize : 1f;
+        float surfaceY = SurfaceTop(_currentCell).y;
+        var   pawnXZ = new Vector2(pawn.position.x, pawn.position.z);
+        if (!_followInit)
+        {
+            _followInit = true;
+            _followXZ = pawnXZ; _followXZVel = Vector2.zero;
+            _followY = _followYGoal = surfaceY; _followYVel = 0f;
+        }
+
+        // Sideways: a short trail behind the pawn.
+        _followXZ = followLag > 0.001f
+            ? Vector2.SmoothDamp(_followXZ, pawnXZ, ref _followXZVel, followLag)
+            : pawnXZ;
+
+        // Height: a dead zone round the goal (it only moves when the pawn is really
+        // higher or lower than it, and then only as far as keeps the pawn inside it),
+        // then a slow ease to the goal.
+        float dz = followHeightDeadzone * cs;
+        if (surfaceY > _followYGoal + dz)      _followYGoal = surfaceY - dz;
+        else if (surfaceY < _followYGoal - dz) _followYGoal = surfaceY + dz;
+        _followY = followHeightLag > 0.001f
+            ? Mathf.SmoothDamp(_followY, _followYGoal, ref _followYVel, followHeightLag)
+            : _followYGoal;
+
+        var at = new Vector3(_followXZ.x, _followY, _followXZ.y);
         _orbit.FocusOnPoint(PulledBack(at, entryPullBack), snap: false);
     }
 
@@ -894,7 +989,7 @@ public partial class LevelMapController : MonoBehaviour
         ln.cells         = absCells;
         ln.level         = null;
         ln.isStart       = false;
-        ln.themeColor    = playerBuiltColor;
+        ln.themeColor    = BuiltPieceColor(absCells);
         ln.sourceBlock   = block;
         ln.builtRotation = rotation;
         _nodes.Add(ln);
@@ -1521,6 +1616,7 @@ public partial class LevelMapController : MonoBehaviour
         MarkConnectivity();
         foreach (var n in _nodes) if (n != null) n.Refresh();
         RebuildWindLinks();   // the lit-up roads follow whatever connectivity just found
+        _roadDirty = true;    // and the road itself is redrawn (World.cs)
     }
 
     // Flood the walkable surface out from the START node and flag which nodes it

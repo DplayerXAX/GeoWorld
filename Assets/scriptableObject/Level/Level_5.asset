@@ -14,6 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::LevelDefinition
   levelId: 1-5
   displayName: 1-5
+  environment: {fileID: 11400000, guid: 71fe97475a0540a788498eba0c8f3a71, type: 2}
   description: Something vast has come to rest on our works.
   runSeed: 67
   blocksPerTurn: 4
@@ -314,6 +315,7 @@ MonoBehaviour:
     speakerSlot: 1
     speakerPortrait:
   revealAfter: {fileID: 11400000, guid: d5d6c27eaf7f4d78b8db685181d6c6cd, type: 2}
+  mapMoatWidth: 2
   startingLayout: {fileID: 11400000, guid: 9843050dd6dbe5841a144ca40094ed6a, type: 2}
   overrideEndpointDistance: 1
   endpointMinDistance: 8

@@ -17,7 +17,9 @@ public enum BlockType
     Empty,
     SlowTurret,
     AoeTurret,
-    DebuffTurret   // appended: BlockType is serialized as an int, so new values go at the END
+    DebuffTurret,  // appended: BlockType is serialized as an int, so new values go at the END
+    LaserTurret,
+    GravityTurret  // roguelite only — see BlockData.rogueOnly
 }
 
 public enum BlockShape
@@ -80,6 +82,9 @@ public class BlockData : ScriptableObject
 
     [Tooltip("Optional DEVICE behaviour (oscillator / portal / trap). When set, placing this block also attaches the device — see PlacedDevice.Attach. Null for ordinary blocks and turrets.")]
     public DeviceData device;
+
+    [Tooltip("Only offered in the roguelite mode's shop. Level and endless runs skip it — it is for pieces whose design assumes the relic economy (Spring, Turncoat, the Gravity Generator).")]
+    public bool rogueOnly;
 
     [Header("Audio")]
     public AK.Wwise.Event onStepEvent;

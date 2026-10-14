@@ -34,6 +34,8 @@ public abstract class PlacedDevice : MonoBehaviour
             DeviceKind.Oscillator => host.AddComponent<OscillatorDevice>(),
             DeviceKind.Portal     => host.AddComponent<PortalDevice>(),
             DeviceKind.Trap       => host.AddComponent<TrapDevice>(),
+            DeviceKind.Spring     => host.AddComponent<SpringDevice>(),
+            DeviceKind.Turncoat   => host.AddComponent<TurncoatDevice>(),
             _                     => null,
         };
         d?.Init(data, cell);
@@ -157,7 +159,7 @@ public class TrapDevice : PlacedDevice
     /// Returns true when the trap fired on this enemy. Called from the enemy's
     /// per-cell step hook (see EnemySurfaceUnit.StepToNode).
     /// </summary>
-    public bool TryTrigger(EnemySurfaceUnit enemy)
+    public virtual bool TryTrigger(EnemySurfaceUnit enemy)
     {
         if (_charges <= 0 || enemy == null || enemy.CurrentHealth <= 0) return false;
         if (enemy.maxHealth > Data.maxTargetHealth) return false;   // not "ordinary"
@@ -178,9 +180,62 @@ public class TrapDevice : PlacedDevice
     // Spent traps stay on the board as terrain — removing the block would tear a
     // hole in the path the player built, which is a far bigger consequence than
     // the trap was worth. It just greys out.
-    void Spend()
+    protected void Spend()
     {
         foreach (var r in GetComponentsInChildren<Renderer>())
             MpbColor.Set(r, new Color(0.35f, 0.35f, 0.38f));
+    }
+
+    protected int Charges { get => _charges; set => _charges = value; }
+}
+
+// =============================================================================
+// Spring - throws an enemy somewhere else along its route.
+// =============================================================================
+// Rides the trap registry (one device per cell, found by the enemy's step hook), so
+// it needs no hook of its own. Reusable: it is not spent.
+public class SpringDevice : TrapDevice
+{
+    float _cooldown;
+
+    public override bool TryTrigger(EnemySurfaceUnit enemy)
+    {
+        if (enemy == null || enemy.CurrentHealth <= 0 || enemy.IsAlly) return false;
+        if (Time.time < _cooldown) return false;          // one throw per enemy-step, not a stutter
+        _cooldown = Time.time + 0.35f;
+
+        int range = Mathf.Max(1, Data.springRange);
+        int delta = Random.Range(-range, range + 1);
+        if (delta == 0) delta = Random.value < 0.5f ? -1 : 1;
+        enemy.TeleportAlongPath(delta);
+
+        SynergyBuffFx.Mote(enemy.transform.position, new Color(0.55f, 0.95f, 1f),
+                           GridSystem.instance != null ? GridSystem.instance.cellSize * 0.6f : 0.6f);
+        return true;
+    }
+}
+
+// =============================================================================
+// Turncoat - turns the first enemy against its own.
+// =============================================================================
+public class TurncoatDevice : TrapDevice
+{
+    public override bool TryTrigger(EnemySurfaceUnit enemy)
+    {
+        if (Charges <= 0 || enemy == null || enemy.CurrentHealth <= 0 || enemy.IsAlly) return false;
+        if (enemy.GetComponent<RogueBossBehaviour>() != null) return false;   // a boss does not defect
+        if (enemy.GetComponent<ChaosBlockUnit>() != null) return false;
+
+        Charges--;
+        enemy.TurnCoat(Data.turncoatDamage);
+        SynergyBuffFx.Mote(enemy.transform.position, new Color(1f, 0.85f, 0.3f),
+                           GridSystem.instance != null ? GridSystem.instance.cellSize * 0.7f : 0.7f);
+
+        if (Charges <= 0)
+        {
+            DeviceRegistry.UnregisterTrap(Cell, this);
+            Spend();
+        }
+        return true;
     }
 }

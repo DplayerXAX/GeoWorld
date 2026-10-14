@@ -61,6 +61,7 @@ public class AoeGravityWellEffect : MonoBehaviour
 
             float distance01 = Mathf.Clamp01(Mathf.Sqrt(sqr) / _radius);
             float strength = 1f - distance01;
+            enemy.MarkDebuff(EnemySurfaceUnit.Debuff.Pulled, 0.4f);
             enemy.AddExternalDisplacement(toCenter.normalized * (_pullSpeed * strength * Time.deltaTime));
         }
     }

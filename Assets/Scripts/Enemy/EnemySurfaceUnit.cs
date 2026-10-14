@@ -28,7 +28,14 @@ public class EnemySurfaceUnit : MonoBehaviour
 
     // Global hooks (for objectives / score / stats) — fire for ANY enemy.
     public static event Action<EnemySurfaceUnit> AnyDied;
+    // (who, how much was actually taken, which turret dealt it — null for an area
+    // effect, a trap or anything else with no turret behind it). The battle report
+    // is built from this.
+    public static event Action<EnemySurfaceUnit, int, TurretController> AnyDamaged;
     public static event Action<EnemySurfaceUnit> AnyReachedEnd;
+
+    [Tooltip("Extra lives lost when this one reaches an end point (on top of the usual 1). Set by elites and bosses.")]
+    public int leakBonus;
 
     public int CurrentHealth => _health;
     public IReadOnlyList<FaceNode> Path => _path;
@@ -146,7 +153,7 @@ public class EnemySurfaceUnit : MonoBehaviour
         Destroy(gameObject);
     }
 
-    public void TakeDamage(int amount)
+    public void TakeDamage(int amount, TurretController source = null)
     {
         // Damage is the host's business. A client that also applied it would kill
         // enemies the host still considers alive, and the next snapshot would raise
@@ -164,7 +171,9 @@ public class EnemySurfaceUnit : MonoBehaviour
             _prayerCarry = due - amount;
         }
 
+        int healthBefore = _health;
         _health = Mathf.Max(0, _health - amount);
+        if (healthBefore > _health) AnyDamaged?.Invoke(this, healthBefore - _health, source);
 
         // The flinch. Before this, taking a hit and missing looked identical: the
         // health number changed and nothing on the enemy moved until it died. This is
@@ -183,6 +192,8 @@ public class EnemySurfaceUnit : MonoBehaviour
     public int Heal(int amount)
     {
         if (amount <= 0 || _health <= 0 || _health >= maxHealth) return 0;
+        amount = RogueRun.ScaleHeal(this, amount);   // Pain Releaser etc.; identity otherwise
+        if (amount <= 0) return 0;
 
         int before = _health;
         _health = Mathf.Min(maxHealth, _health + amount);
@@ -216,6 +227,111 @@ public class EnemySurfaceUnit : MonoBehaviour
     // authored speed, not a status effect.
     public float TemporarySpeedMultiplier => _temporarySpeedMultiplier;
 
+    // ── Status marks (for items that count an enemy's debuffs) ───────────────
+    public enum Debuff { Burning, Pulled }
+    float _burnUntil = -1f, _pullUntil = -1f;
+
+    public void MarkDebuff(Debuff d, float seconds)
+    {
+        float until = Time.time + seconds;
+        if (d == Debuff.Burning) _burnUntil = Mathf.Max(_burnUntil, until);
+        else                     _pullUntil = Mathf.Max(_pullUntil, until);
+    }
+
+    /// <summary>How many DIFFERENT debuffs it carries now: slowed, in a Prayer field, burning, being pulled.</summary>
+    public int DebuffCount
+    {
+        get
+        {
+            int n = 0;
+            if (_temporarySpeedMultiplier < 0.999f) n++;
+            if (InPrayer) n++;
+            if (Time.time < _burnUntil) n++;
+            if (Time.time < _pullUntil) n++;
+            return n;
+        }
+    }
+
+    // Which node of _path it is on. While it is being stepped onto a node (a device
+    // reacts to that step) `_index` has not been advanced yet and IS that node.
+    bool _stepping, _pathEdited;
+    int CurrentNodeIndex => _stepping ? _index : _index - 1;
+
+    // ── Defection (Turncoat device) ──────────────────────────────────────────
+    /// <summary>Turned against its own side: walks back the way it came and fights what it meets.</summary>
+    public bool IsAlly { get; private set; }
+    float _allyDamage = 3f, _allyTick;
+
+    public void TurnCoat(float contactDamage)
+    {
+        if (IsAlly || _path == null || _health <= 0) return;
+        IsAlly = true;
+        _allyDamage = Mathf.Max(1f, contactDamage);
+
+        // The route back: every node it has stood on, reversed.
+        int cur = Mathf.Clamp(CurrentNodeIndex, 0, _path.Count - 1);
+        var back = new List<FaceNode>(cur + 1);
+        for (int i = cur; i >= 0; i--) back.Add(_path[i]);
+        _path  = back;
+        _index = 1;
+        _pathEdited = true;
+        _temporarySpeedMultiplier = 1f;
+    }
+
+    void TickAlly()
+    {
+        _allyTick -= Time.deltaTime;
+        if (_allyTick > 0f) return;
+        _allyTick = 0.45f;
+
+        var mgr = EnemyBaseManager.Instance;
+        if (mgr == null) return;
+        var list = mgr.ActiveEnemies;
+        float r2 = 0.8f * 0.8f;
+        for (int i = 0; i < list.Count; i++)
+        {
+            var e = list[i];
+            if (e == null || e == this || e.IsAlly || e.CurrentHealth <= 0) continue;
+            if ((e.transform.position - transform.position).sqrMagnitude > r2) continue;
+            e.TakeDamage(Mathf.RoundToInt(_allyDamage));
+            ImpactFx.Hit(e.transform);
+        }
+    }
+
+    // ── Teleport (Magic Spring device) ───────────────────────────────────────
+    /// <summary>Jumps along its own route by `delta` nodes (negative = back toward the start).</summary>
+    public void TeleportAlongPath(int delta)
+    {
+        if (_path == null || _path.Count == 0 || _health <= 0) return;
+        int to = Mathf.Clamp(CurrentNodeIndex + delta, 0, _path.Count - 1);
+        var node = _path[to];
+        transform.position = FaceCenter(node);
+        _prevNode = node;
+        _index = Mathf.Min(_path.Count, to + 1);
+        _pathEdited = true;
+        _isMoving = false;
+        _beatTimer = 0f;
+        _moveFrom = _moveTo = _controlPoint = transform.position;
+    }
+
+    // Is another enemy standing where this one is about to step? (Crowded.)
+    bool NodeTaken(FaceNode node)
+    {
+        var mgr = EnemyBaseManager.Instance;
+        if (mgr == null) return false;
+        var list = mgr.ActiveEnemies;
+        for (int i = 0; i < list.Count; i++)
+        {
+            var e = list[i];
+            if (e == null || e == this || e.IsAlly || e.CurrentHealth <= 0) continue;
+            if (e.GetComponent<ChaosBlockUnit>() != null) continue;
+            var c = e.CurrentCell;
+            if (c.HasValue && c.Value == node.cell && e._prevNode != null && e._prevNode.normal == node.normal)
+                return true;
+        }
+        return false;
+    }
+
     public void AddExternalDisplacement(Vector3 delta)
     {
         if (_health <= 0 || delta.sqrMagnitude <= 0.000001f) return;
@@ -230,21 +346,35 @@ public class EnemySurfaceUnit : MonoBehaviour
     {
         if (IsProxy || _path == null || _health <= 0) return;
 
+        if (IsAlly) TickAlly();
+
         _beatTimer += Time.deltaTime;
         float secPerBeat = _secPerBeat / EffectiveSpeedMultiplier;
         if (_beatTimer >= secPerBeat)
         {
-            _beatTimer -= secPerBeat;
-
-            if (_index < _path.Count)
+            if (_index < _path.Count && RogueRun.AvoidOverlap && !IsAlly && NodeTaken(_path[_index]))
             {
-                StepToNode(_path[_index]);
-                _index++;
+                _beatTimer = secPerBeat;   // wait for the one ahead; look again next frame
             }
             else
             {
-                ReachEnd();
-                return;
+                _beatTimer -= secPerBeat;
+
+                if (_index < _path.Count)
+                {
+                    // A device on the node may rewrite the route under us (a spring,
+                    // a turncoat), in which case _index is already where it should be.
+                    int stepIdx = _index;
+                    _stepping = true; _pathEdited = false;
+                    StepToNode(_path[stepIdx]);
+                    _stepping = false;
+                    if (!_pathEdited) _index++;
+                }
+                else
+                {
+                    ReachEnd();
+                    return;
+                }
             }
         }
 
@@ -303,10 +433,10 @@ public class EnemySurfaceUnit : MonoBehaviour
         _rotTo = Quaternion.LookRotation(forwardOnSurface, node.normal);
 
         RewardBlockPass(node.cell);
+        _prevNode = node;   // before the devices: one may move the enemy, and that wins
         // Devices that react to being stepped on. Kept as a registry lookup rather
         // than an event so nothing has to be subscribed or unsubscribed per enemy.
         DeviceRegistry.TrapAt(node.cell)?.TryTrigger(this);
-        _prevNode = node;
     }
 
     void RewardBlockPass(Vector3Int cell)
@@ -330,6 +460,10 @@ public class EnemySurfaceUnit : MonoBehaviour
 
     void ReachEnd()
     {
+        // A defector reaching the far end of its way back has simply run out of road:
+        // it is not a leak, and costs nothing.
+        if (IsAlly) { Die(); return; }
+
         _path = null;
         OnReachedEnd?.Invoke(this);
         AnyReachedEnd?.Invoke(this);
@@ -342,5 +476,6 @@ public class EnemySurfaceUnit : MonoBehaviour
         AnyDied?.Invoke(this);
     }
 
-    float EffectiveSpeedMultiplier => Mathf.Max(0.01f, baseSpeedMultiplier * _temporarySpeedMultiplier);
+    float EffectiveSpeedMultiplier =>
+        Mathf.Max(0.01f, baseSpeedMultiplier * _temporarySpeedMultiplier * Modifiers.Mul(Stat.EnemySpeed));
 }

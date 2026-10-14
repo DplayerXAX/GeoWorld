@@ -297,6 +297,8 @@ public class WaveGenerator : ScriptableObject
         public string name;
         public int    count;
         public EnemySurfaceUnit prefab;   // for spawning visual-only previews (WavePreview)
+        public int    hp;                  // 0 = read it off the prefab; the roguelite scales it
+        public string note;                // one line the intel panel shows under the name
     }
 }
 

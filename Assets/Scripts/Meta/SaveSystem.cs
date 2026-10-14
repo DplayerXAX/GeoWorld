@@ -251,6 +251,19 @@ public static class SaveSystem
         return firstClear;
     }
 
+    // Called every wave of a roguelite run (so a run abandoned mid-way still counts),
+    // and once more with `won` when the last boss falls.
+    public static void RecordRogue(int wave, int score, bool won = false, bool newRun = false)
+    {
+        var p = Profile;
+        bool changed = false;
+        if (newRun)                  { p.rogueRuns++;  changed = true; }
+        if (won)                     { p.rogueWins++;  changed = true; }
+        if (wave  > p.rogueBestWave)  { p.rogueBestWave  = wave;  changed = true; }
+        if (score > p.rogueBestScore) { p.rogueBestScore = score; changed = true; }
+        if (changed) Save();
+    }
+
     public static void RecordEndless(int wave, int score = 0)
     {
         var p = Profile;

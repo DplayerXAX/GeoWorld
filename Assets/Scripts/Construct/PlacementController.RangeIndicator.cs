@@ -23,7 +23,8 @@ public partial class PlacementController
             && TurretTypes.Is(selectedInstance.data.blockType))
         {
             var turret = selectedInstance.visualObject.GetComponentInChildren<TurretController>();
-            if (turret != null && turret.EffectiveRange > 0f)
+            // The laser has no round range to show: its beam is always on screen.
+            if (turret != null && turret.EffectiveRange > 0f && turret.mode != TurretController.Mode.Laser)
             {
                 Vector3 muzzle = turret.MuzzleWorldPosition;
 

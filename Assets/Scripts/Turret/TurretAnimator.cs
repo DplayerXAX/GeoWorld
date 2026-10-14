@@ -115,6 +115,8 @@ public abstract class TurretAnimator : MonoBehaviour
             TurretController.Mode.Slow => visual.AddComponent<SlowTurretAnimator>(),
             TurretController.Mode.Aoe  => visual.AddComponent<AoeTurretAnimator>(),
             TurretController.Mode.Debuff => visual.AddComponent<DebuffTurretAnimator>(),
+            TurretController.Mode.Laser  => visual.AddComponent<LaserTurretAnimator>(),
+            TurretController.Mode.Gravity => visual.AddComponent<DebuffTurretAnimator>(),   // a field, like Prayer
             _                          => visual.AddComponent<BasicTurretAnimator>(),
         };
     }
